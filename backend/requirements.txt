@@ -1,0 +1,21 @@
+# Core Django Framework
+Django>=4.2,<5.0
+djangorestframework>=3.14.0
+
+# Database & Geospatial (PostgreSQL/PostGIS)
+psycopg2-binary>=2.9.9
+djangorestframework-gis>=1.0
+
+# Real-Time WebSockets & Async
+channels>=4.0.0
+channels-redis>=4.1.0
+daphne>=4.0.0
+redis>=5.0.1
+
+# HTTP & CORS (Frontend Communication)
+django-cors-headers>=4.3.1
+requests>=2.31.0
+
+# Geospatial Utilities
+geopy>=2.4.1       # For Global Search (Nominatim)
+polyline>=2.0.1    # To decode OSRM route strings

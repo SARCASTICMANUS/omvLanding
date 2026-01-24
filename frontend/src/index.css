@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fix Leaflet Map Z-Index issues with Tailwind modals */
+.leaflet-pane {
+    z-index: 10 !important;
+}
+.leaflet-top, .leaflet-bottom {
+    z-index: 20 !important;
+}
+
+html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}

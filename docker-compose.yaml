@@ -1,0 +1,76 @@
+services:
+  db:
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_DB: vayy_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  osrm:
+    image: osrm/osrm-backend
+    container_name: osrm
+    restart: always
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend/osrm-data:/data
+    # AUTOMATED MAP PROCESSING COMMAND
+    # Checks if map.osrm exists. If not, runs extract/partition/customize. Then starts routed.
+    command: >
+      /bin/bash -c "
+      if [ ! -f /data/map.osrm ]; then 
+        echo 'Map data not found. Processing...' &&
+        osrm-extract -p /opt/car.lua /data/map.osm.pbf &&
+        osrm-partition /data/map.osrm &&
+        osrm-customize /data/map.osrm;
+      fi;
+      echo 'Starting OSRM...' &&
+      osrm-routed --algorithm mld /data/map.osrm"
+
+  backend:
+    build: ./backend
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy # Wait for DB to be ready before running migrations
+      redis:
+        condition: service_started
+      osrm:
+        condition: service_started
+    environment:
+      - IN_DOCKER=true
+      - DATABASE_URL=postgis://postgres:password@db:5432/vayy_db
+      - REDIS_URL=redis://redis:6379/0
+      - OSRM_URL=http://osrm:5000
+
+  frontend:
+    build: ./frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:8000
+    stdin_open: true
+
+volumes:
+  postgres_data:
