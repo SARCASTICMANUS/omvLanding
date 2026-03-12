@@ -222,6 +222,7 @@
 // export default MapDriver;
 
 import React, { useState, useRef, useEffect } from "react";
+import { useSelector } from "react-redux";
 import {
   MapContainer,
   TileLayer,
@@ -231,8 +232,8 @@ import {
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
-import axios from "axios";
-import { Play, Navigation, Bus, MapPin } from "lucide-react";
+import api from "../utils/api";
+import { Play, Navigation, Bus, MapPin, Search } from "lucide-react";
 
 // Helper to auto-zoom map
 const MapUpdater = ({ bounds }) => {
@@ -247,9 +248,12 @@ const MapUpdater = ({ bounds }) => {
 };
 
 const MapDriver = ({ onBack }) => {
+  const { user } = useSelector((state) => state.auth);
+
   // State for Route Selection
   const [availableRoutes, setAvailableRoutes] = useState([]);
   const [selectedRouteId, setSelectedRouteId] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   // State for Active Trip
   const [routePath, setRoutePath] = useState(null); // Array of [lat, lon]
@@ -263,42 +267,40 @@ const MapDriver = ({ onBack }) => {
 
   const ws = useRef(null);
 
-  // 1. Fetch Available Routes on Mount
+  // 1. Fetch Available Routes on Mount (Scoped by University)
   useEffect(() => {
-    axios
-      .get("http://localhost:8000/api/driver/routes/")
-      .then((res) => {
-        setAvailableRoutes(res.data);
-      })
-      .catch((err) => console.error("Failed to load routes", err));
+    fetchRoutes();
   }, []);
+
+  const fetchRoutes = async () => {
+    try {
+      const res = await api.get("/api/driver/routes/");
+      setAvailableRoutes(res.data);
+    } catch (err) {
+      console.error("Failed to load routes", err);
+    }
+  };
 
   // 2. Load Selected Route from Backend
   const handleLoadRoute = async () => {
     if (!selectedRouteId) return;
     setLoading(true);
     try {
-      const res = await axios.post(
-        "http://localhost:8000/api/driver/start-trip/",
-        {
-          route_id: selectedRouteId,
-          vehicle_type: "bus", // Defaulting to bus for fixed routes
-        },
-      );
+      const res = await api.post("/api/driver/start-trip/", {
+        route_id: selectedRouteId,
+        vehicle_type: user?.role === "driver" ? "bus" : "car",
+      });
 
-      // Backend now sends [[lat, lon], ...] ready for Leaflet
       const path = res.data.route_geometry;
-
       setRoutePath(path);
       setTripData(res.data);
 
-      // Set initial position to start of route
       if (path && path.length > 0) {
         setCurrentPos(path[0]);
       }
     } catch (err) {
       console.error(err);
-      alert("Error loading route. Make sure OSRM and Backend are running.");
+      alert("Error loading route. Make sure OSRM is running.");
     } finally {
       setLoading(false);
     }
@@ -306,31 +308,30 @@ const MapDriver = ({ onBack }) => {
 
   // 3. Start Driving Simulation & WebSocket
   const startDrive = () => {
-    if (!tripData || !routePath) return;
+    if (!tripData || !routePath || !user?.university) return;
     setIsDriving(true);
 
-    // Connect WebSocket
-    const wsUrl = `ws://localhost:8000/ws/trip/${tripData.trip_id}/driver/`;
+    // Dynamic WS URL: ws/tracking/<univ_id>/driver/<trip_id>/
+    const wsUrl = `ws://localhost:8000/ws/tracking/${user.university}/driver/${tripData.trip_id}/`;
     ws.current = new WebSocket(wsUrl);
 
     ws.current.onopen = () => {
-      console.log("Driver connected to tracking server");
+      console.log("Broadcasting to University Transit Group");
     };
 
     ws.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      // Listen for passenger count updates
       if (data.type === "stats_update") {
         setPassengerCount(data.passenger_count);
       }
     };
 
-    // Simulation Loop: Move along the path array
+    // Simulation Loop
     let index = 0;
     const interval = setInterval(() => {
       if (index >= routePath.length) {
         clearInterval(interval);
-        alert("Trip Complete - Reached Destination");
+        alert("Trip Complete");
         setIsDriving(false);
         ws.current.close();
         return;
@@ -341,113 +342,139 @@ const MapDriver = ({ onBack }) => {
 
       // Broadcast Location
       if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-        ws.current.send(JSON.stringify({ lat: pos[0], lon: pos[1] }));
+        ws.current.send(
+          JSON.stringify({
+            lat: pos[0],
+            lon: pos[1],
+            vehicle_number: user?.email.split("@")[0].toUpperCase(), // Placeholder/Fallback
+          }),
+        );
       }
 
-      // Speed factor: Jump 3 coordinates every 1 second
-      index += 3;
+      index += 2; // Simulation speed
     }, 1000);
   };
 
   useEffect(() => {
     const handleBeforeUnload = () => {
-      // If driving, close the socket immediately to trigger backend disconnect logic
-      if (ws.current) {
-        ws.current.close();
-      }
+      if (ws.current) ws.current.close();
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
   const stopDrive = () => {
-    if (confirm("End this trip? Passengers will be notified.")) {
-      // Close socket -> Triggers 'disconnect' in Backend -> Sets DB is_active=False
+    if (confirm("End this trip?")) {
       if (ws.current) ws.current.close();
-
       setIsDriving(false);
       setRoutePath(null);
       setTripData(null);
-      setPassengerCount(0);
-      // Optional: Notify backend via API to be double sure (redundancy)
-      // axios.post('/api/driver/stop-trip', { trip_id: ... })
     }
   };
 
+  const filteredRoutes = availableRoutes.filter((r) =>
+    r.name.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
   return (
     <div className="h-full relative font-sans">
-      {/* --- Sidebar Control Panel --- */}
-      <div className="absolute top-4 left-4 w-96 bg-white rounded-xl shadow-2xl z-[1000] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
-          <h2 className="font-bold text-lg flex items-center gap-2">
-            <Navigation size={20} /> Driver Console
-          </h2>
-          {onBack && (
+      <div className="absolute top-4 left-4 w-96 bg-white rounded-2xl shadow-2xl z-[1000] overflow-hidden flex flex-col border border-slate-100 ring-1 ring-slate-900/5">
+        <div className="bg-indigo-600 p-5 text-white">
+          <div className="flex justify-between items-center mb-1">
+            <h2 className="font-black text-xl flex items-center gap-2 tracking-tight">
+              <Navigation size={22} className="rotate-45" /> Driver Center
+            </h2>
             <button
               onClick={onBack}
-              className="text-xs hover:underline opacity-80"
+              className="text-[10px] uppercase tracking-widest font-black opacity-70 hover:opacity-100"
             >
               Exit
             </button>
-          )}
+          </div>
+          <p className="text-indigo-100 text-[10px] font-bold uppercase tracking-widest">
+            {user?.university_name || "University Transit"}
+          </p>
         </div>
 
-        <div className="p-5 flex flex-col gap-4">
-          {/* STAGE 1: Route Selection */}
+        <div className="p-6 flex flex-col gap-5">
           {!isDriving && !routePath && (
-            <>
-              <div className="text-sm text-gray-500">
-                Select a pre-defined route to begin your shift.
-              </div>
-
-              <div className="relative">
-                <Bus
-                  className="absolute left-3 top-3 text-gray-400"
+            <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+              <div className="relative group">
+                <Search
+                  className="absolute left-3 top-3.5 text-slate-400 group-focus-within:text-indigo-600 transition-colors"
                   size={18}
                 />
-                <select
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                  value={selectedRouteId}
-                  onChange={(e) => setSelectedRouteId(e.target.value)}
-                >
-                  <option value="">-- Select Route --</option>
-                  {availableRoutes.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
+                <input
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none font-bold text-sm"
+                  placeholder="Search shift route..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                {filteredRoutes.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => setSelectedRouteId(r.id)}
+                    className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-center justify-between ${selectedRouteId === r.id ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm" : "border-slate-50 bg-slate-50/50 hover:border-slate-200 text-slate-600"}`}
+                  >
+                    <div>
+                      <p className="font-black text-xs uppercase tracking-tight">
+                        {r.name}
+                      </p>
+                      <p className="text-[10px] opacity-70 font-bold">
+                        {r.stops_count} Official Stops
+                      </p>
+                    </div>
+                    {selectedRouteId === r.id && (
+                      <div className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse" />
+                    )}
+                  </button>
+                ))}
               </div>
 
               <button
                 onClick={handleLoadRoute}
                 disabled={!selectedRouteId || loading}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition disabled:bg-gray-300"
+                className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 transition shadow-xl hover:shadow-indigo-500/30 disabled:bg-slate-200 disabled:shadow-none"
               >
-                {loading ? "Loading Geometry..." : "Load Route"}
+                {loading ? "Syncing..." : "Assign Vehicle"}
               </button>
-            </>
+            </div>
           )}
 
-          {/* STAGE 2: Ready to Drive */}
           {routePath && !isDriving && (
-            <div className="animate-fade-in">
-              <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg mb-4">
-                <div className="flex items-center gap-2 text-blue-800 font-bold mb-1">
-                  <MapPin size={16} /> Route Loaded
+            <div className="animate-in zoom-in-95 duration-300">
+              <div className="bg-emerald-50 border border-emerald-100 p-5 rounded-2xl mb-5 shadow-sm">
+                <div className="flex items-center gap-2 text-emerald-800 font-black text-xs uppercase tracking-widest mb-2">
+                  <MapPin size={16} /> Route Optimized
                 </div>
-                <div className="text-sm text-blue-600">
-                  Total Distance:{" "}
-                  {(tripData?.total_distance / 1000)?.toFixed(1)} km
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[10px] text-emerald-600 font-black uppercase tracking-tighter">
+                      Distance
+                    </p>
+                    <p className="font-black text-emerald-900 text-lg">
+                      {(tripData?.total_distance / 1000)?.toFixed(1)} km
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-emerald-600 font-black uppercase tracking-tighter">
+                      Est. Time
+                    </p>
+                    <p className="font-black text-emerald-900 text-lg">
+                      ~15 Mins
+                    </p>
+                  </div>
                 </div>
               </div>
 
               <button
                 onClick={startDrive}
-                className="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition flex items-center justify-center gap-2"
+                className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-black transition shadow-2xl flex items-center justify-center gap-3"
               >
-                <Play size={20} fill="currentColor" /> Start Engine
+                <Play size={20} fill="currentColor" /> Go Online
               </button>
 
               <button
@@ -455,113 +482,79 @@ const MapDriver = ({ onBack }) => {
                   setRoutePath(null);
                   setSelectedRouteId("");
                 }}
-                className="w-full mt-2 text-gray-400 text-xs hover:text-red-500"
+                className="w-full mt-4 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:text-red-500 transition"
               >
-                Cancel & Select Different Route
+                Reset Shift
               </button>
             </div>
           )}
 
-          {/* STAGE 3: Driving Mode */}
           {isDriving && (
-            <div className="text-center py-4">
-              <div className="inline-block p-3 bg-blue-100 rounded-full mb-2 animate-pulse">
-                <Navigation size={32} className="text-blue-600" />
+            <div className="text-center py-6 animate-in fade-in duration-500">
+              <div className="relative inline-block mb-6">
+                <div className="absolute inset-0 bg-indigo-500 rounded-full animate-ping opacity-20" />
+                <div className="relative p-6 bg-indigo-100 rounded-full">
+                  <Navigation size={40} className="text-indigo-600" />
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-gray-800">
-                Trip in Progress
+
+              <h3 className="text-2xl font-black text-slate-800 tracking-tight mb-1">
+                Live Tracking
               </h3>
-              <p className="text-sm text-gray-500 mb-6">
-                Broadcasting location to passengers...
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-8">
+                Broadcasting Presence
               </p>
 
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                <p className="text-xs font-bold text-gray-400 uppercase">
-                  Passengers Nearby
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 shadow-inner">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                  Nearby Commuters
                 </p>
-                <p className="text-5xl font-extrabold text-blue-600 mt-1">
+                <p className="text-6xl font-black text-indigo-600 tracking-tighter">
                   {passengerCount}
                 </p>
               </div>
-            </div>
-          )}
 
-          {isDriving && (
-            <div className="mt-4">
               <button
                 onClick={stopDrive}
-                className="w-full bg-red-600 text-white py-3 rounded-lg font-bold hover:bg-red-700 transition shadow-lg animate-pulse"
+                className="w-full mt-8 bg-red-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-red-700 transition shadow-xl hover:shadow-red-500/30"
               >
-                STOP TRIP
+                End Trip
               </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* --- Map View --- */}
       <MapContainer
-        center={[40.7128, -74.006]} // Default view (NYC) if no route
-        zoom={13}
+        center={currentPos || [12.9716, 77.5946]}
+        zoom={15}
         style={{ height: "100%", width: "100%" }}
-        zoomControl={false} // Hide default zoom controls for cleaner look
+        zoomControl={false}
+        attributionControl={false}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-
-        {/* The Route Line */}
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         {routePath && (
           <Polyline
             positions={routePath}
-            color="#2563eb"
-            weight={6}
-            opacity={0.8}
+            color="#4f46e5"
+            weight={8}
+            opacity={0.6}
           />
         )}
-
-        {/* Start/End Markers */}
-        {routePath && routePath.length > 0 && (
-          <>
-            <CircleMarker
-              center={routePath[0]}
-              radius={6}
-              pathOptions={{
-                color: "green",
-                fillColor: "white",
-                fillOpacity: 1,
-              }}
-            >
-              <Popup>Start</Popup>
-            </CircleMarker>
-            <CircleMarker
-              center={routePath[routePath.length - 1]}
-              radius={6}
-              pathOptions={{ color: "red", fillColor: "white", fillOpacity: 1 }}
-            >
-              <Popup>End</Popup>
-            </CircleMarker>
-          </>
-        )}
-
-        {/* The Bus/Car Icon */}
         {currentPos && (
           <CircleMarker
             center={currentPos}
-            radius={10}
+            radius={12}
             pathOptions={{
               color: "white",
-              fillColor: "#2563eb",
+              fillColor: "#4f46e5",
               fillOpacity: 1,
-              weight: 3,
+              weight: 4,
             }}
           >
-            <Popup>You (Vehicle)</Popup>
+            <Popup className="font-sans font-bold">You are here</Popup>
           </CircleMarker>
         )}
-
-        {/* Auto-Zoom Helper */}
         <MapUpdater bounds={routePath} />
       </MapContainer>
     </div>

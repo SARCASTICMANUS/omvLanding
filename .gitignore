@@ -4,8 +4,16 @@ Thumbs.db
 .vscode/
 .idea/
 
+# --- directories ---
+architecture_lld.md
+vayy.zip
+*.pyc
+/__pycache__/
+
+
 # --- Backend (Django) ---
 backend/__pycache__/
+__pycache__/
 backend/*.py[cod]
 backend/*$py.class
 backend/venv/
@@ -17,6 +25,8 @@ backend/static_root/
 
 # --- OSRM Data ---
 # Excludes all .pbf files and processed OSRM routing files
+backend/osrm-data
+backend/osrm-data/*
 backend/osrm-data/*.pbf
 backend/osrm-data/*.osrm*
 backend/osrm-data/*.lua

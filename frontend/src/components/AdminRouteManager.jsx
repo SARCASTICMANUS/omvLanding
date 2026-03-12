@@ -1,368 +1,3 @@
-// import React, { useState, useEffect, useMemo, useRef } from "react";
-// import {
-//   MapContainer,
-//   TileLayer,
-//   Polyline,
-//   Marker,
-//   useMapEvents,
-// } from "react-leaflet";
-// import axios from "axios";
-// import { Trash2, Save, MapPin, Navigation } from "lucide-react";
-// import LocationSearch from "./LocationSearch"; // Reuse existing component
-// import L from "leaflet";
-
-// // --- Draggable Marker Component ---
-// function DraggableMarker({ position, color, onDragEnd }) {
-//   const markerRef = useRef(null);
-
-//   const icon = useMemo(
-//     () =>
-//       new L.DivIcon({
-//         className: "bg-transparent",
-//         html: `<div style="background-color: ${color}; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`,
-//         iconSize: [16, 16],
-//         iconAnchor: [8, 8],
-//       }),
-//     [color],
-//   );
-
-//   const eventHandlers = useMemo(
-//     () => ({
-//       dragend() {
-//         const marker = markerRef.current;
-//         if (marker != null) {
-//           onDragEnd(marker.getLatLng());
-//         }
-//       },
-//     }),
-//     [onDragEnd],
-//   );
-
-//   return (
-//     <Marker
-//       draggable={true}
-//       eventHandlers={eventHandlers}
-//       position={position}
-//       ref={markerRef}
-//       icon={icon}
-//     />
-//   );
-// }
-
-// // --- Map Click Handler ---
-// const MapClicker = ({ onMapClick }) => {
-//   useMapEvents({
-//     click(e) {
-//       onMapClick(e.latlng);
-//     },
-//   });
-//   return null;
-// };
-
-// // --- Main Component ---
-// const AdminRouteManager = ({ onBack }) => {
-//   const [routes, setRoutes] = useState([]);
-//   const [selectedSavedRoute, setSelectedSavedRoute] = useState(null);
-
-//   // Route Creation State
-//   const [newRoutePoints, setNewRoutePoints] = useState({
-//     start: null,
-//     end: null,
-//   });
-//   const [names, setNames] = useState({ start: "", end: "" });
-//   const [loading, setLoading] = useState(false);
-
-//   // Load existing routes
-//   useEffect(() => {
-//     fetchRoutes();
-//   }, []);
-
-//   const fetchRoutes = async () => {
-//     try {
-//       const res = await axios.get("http://localhost:8000/api/admin/routes/");
-//       setRoutes(res.data);
-//     } catch (err) {
-//       console.error("Failed to fetch routes", err);
-//     }
-//   };
-
-//   // Handle Search Selection
-//   const handleSearchSelect = (type, item) => {
-//     const latlng = { lat: parseFloat(item.lat), lng: parseFloat(item.lon) };
-//     if (type === "start") {
-//       setNewRoutePoints((prev) => ({ ...prev, start: latlng }));
-//       setNames((prev) => ({ ...prev, start: item.display_name.split(",")[0] }));
-//     } else {
-//       setNewRoutePoints((prev) => ({ ...prev, end: latlng }));
-//       setNames((prev) => ({ ...prev, end: item.display_name.split(",")[0] }));
-//     }
-//     // Deselect saved route when creating new one
-//     setSelectedSavedRoute(null);
-//   };
-
-//   // Handle Map Clicks
-//   const handleMapClick = (latlng) => {
-//     setSelectedSavedRoute(null); // Clear viewing mode
-//     if (!newRoutePoints.start) {
-//       setNewRoutePoints((prev) => ({ ...prev, start: latlng }));
-//       setNames((prev) => ({ ...prev, start: "Map Point A" }));
-//     } else if (!newRoutePoints.end) {
-//       setNewRoutePoints((prev) => ({ ...prev, end: latlng }));
-//       setNames((prev) => ({ ...prev, end: "Map Point B" }));
-//     }
-//   };
-
-//   // Handle Dragging Pins
-//   const handleDrag = (type, newLatLng) => {
-//     setNewRoutePoints((prev) => ({ ...prev, [type]: newLatLng }));
-//   };
-
-//   const saveRoute = async () => {
-//     if (!newRoutePoints.start || !newRoutePoints.end) return;
-//     setLoading(true);
-//     try {
-//       await axios.post("http://localhost:8000/api/admin/routes/", {
-//         start: { lat: newRoutePoints.start.lat, lon: newRoutePoints.start.lng },
-//         end: { lat: newRoutePoints.end.lat, lon: newRoutePoints.end.lng },
-//         start_name: names.start,
-//         end_name: names.end,
-//       });
-//       fetchRoutes();
-//       // Reset form
-//       setNewRoutePoints({ start: null, end: null });
-//       setNames({ start: "", end: "" });
-//     } catch (err) {
-//       alert("Failed to save route. Ensure OSRM is running.");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   const deleteRoute = async (e, id) => {
-//     e.stopPropagation(); // Prevent clicking the row from selecting it
-//     if (!confirm("Delete this route permanently?")) return;
-//     await axios.delete(`http://localhost:8000/api/admin/routes/?id=${id}`);
-//     fetchRoutes();
-//     if (selectedSavedRoute?.id === id) setSelectedSavedRoute(null);
-//   };
-
-//   return (
-//     <div className="flex h-full font-sans">
-//       {/* Sidebar List */}
-//       <div className="w-96 bg-white border-r shadow-xl z-[500] flex flex-col h-full overflow-hidden">
-//         {/* Header */}
-//         <div className="p-4 bg-gray-900 text-white flex justify-between items-center shadow-md">
-//           <h2 className="font-bold text-lg flex items-center gap-2">
-//             <Navigation size={18} /> Route Admin
-//           </h2>
-//           <button
-//             onClick={onBack}
-//             className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition"
-//           >
-//             Exit
-//           </button>
-//         </div>
-
-//         {/* Creation Form */}
-//         <div className="p-4 bg-gray-50 border-b">
-//           <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
-//             <MapPin size={14} /> Create New Route
-//           </h3>
-
-//           <div className="space-y-3 relative">
-//             {/* Start Search */}
-//             <div className="z-[60]">
-//               <label className="text-xs font-bold text-green-600 ml-1">
-//                 Start Point (A)
-//               </label>
-//               <div className="flex gap-2">
-//                 <LocationSearch
-//                   placeholder="Search Start..."
-//                   onSelect={(item) => handleSearchSelect("start", item)}
-//                 />
-//               </div>
-//               {/* Fallback manual name edit if search isn't used */}
-//               <input
-//                 value={names.start}
-//                 onChange={(e) => setNames({ ...names, start: e.target.value })}
-//                 placeholder="or name manually..."
-//                 className="w-full text-xs mt-1 border-none bg-transparent focus:ring-0 text-gray-500"
-//               />
-//             </div>
-
-//             {/* End Search */}
-//             <div className="z-[50]">
-//               <label className="text-xs font-bold text-red-600 ml-1">
-//                 End Point (B)
-//               </label>
-//               <div className="flex gap-2">
-//                 <LocationSearch
-//                   placeholder="Search End..."
-//                   onSelect={(item) => handleSearchSelect("end", item)}
-//                 />
-//               </div>
-//               <input
-//                 value={names.end}
-//                 onChange={(e) => setNames({ ...names, end: e.target.value })}
-//                 placeholder="or name manually..."
-//                 className="w-full text-xs mt-1 border-none bg-transparent focus:ring-0 text-gray-500"
-//               />
-//             </div>
-
-//             <button
-//               onClick={saveRoute}
-//               disabled={!newRoutePoints.end || loading}
-//               className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 disabled:bg-gray-300 flex justify-center gap-2 items-center transition shadow-sm"
-//             >
-//               <Save size={18} /> {loading ? "Calculating..." : "Save Route"}
-//             </button>
-
-//             {(newRoutePoints.start || newRoutePoints.end) && (
-//               <button
-//                 onClick={() => {
-//                   setNewRoutePoints({ start: null, end: null });
-//                   setNames({ start: "", end: "" });
-//                 }}
-//                 className="text-xs text-red-500 w-full text-center hover:underline"
-//               >
-//                 Clear Map Points
-//               </button>
-//             )}
-//           </div>
-//         </div>
-
-//         {/* Route List */}
-//         <div className="flex-1 overflow-y-auto bg-white">
-//           <div className="p-4 pb-2 text-xs font-bold text-gray-400 uppercase border-b bg-white sticky top-0">
-//             Saved Routes ({routes.length})
-//           </div>
-//           {routes.length === 0 && (
-//             <div className="p-8 text-center text-gray-400 text-sm">
-//               No routes saved yet.
-//             </div>
-//           )}
-//           {routes.map((r) => (
-//             <div
-//               key={r.id}
-//               onClick={() => {
-//                 setSelectedSavedRoute(r);
-//                 setNewRoutePoints({ start: null, end: null });
-//               }}
-//               className={`p-4 border-b cursor-pointer transition flex justify-between items-center group
-//                     ${selectedSavedRoute?.id === r.id ? "bg-blue-50 border-l-4 border-l-blue-600" : "hover:bg-gray-50 border-l-4 border-l-transparent"}
-//                 `}
-//             >
-//               <div>
-//                 <div className="font-bold text-gray-800 text-sm">
-//                   {r.start_name}
-//                 </div>
-//                 <div className="text-gray-400 text-xs my-0.5">to</div>
-//                 <div className="font-bold text-gray-800 text-sm">
-//                   {r.end_name}
-//                 </div>
-//                 <div className="text-xs text-blue-500 mt-1 font-mono">
-//                   {r.distance_km} km
-//                 </div>
-//               </div>
-//               <button
-//                 onClick={(e) => deleteRoute(e, r.id)}
-//                 className="p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition"
-//               >
-//                 <Trash2 size={16} />
-//               </button>
-//             </div>
-//           ))}
-//         </div>
-//       </div>
-
-//       {/* Map Area */}
-//       <div className="flex-1 relative bg-gray-200">
-//         <MapContainer
-//           center={[40.7128, -74.006]}
-//           zoom={12}
-//           style={{ height: "100%", width: "100%" }}
-//         >
-//           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-//           <MapClicker onMapClick={handleMapClick} />
-
-//           {/* --- MODE 1: Creating New Route (Draggable Pins) --- */}
-//           {!selectedSavedRoute && (
-//             <>
-//               {newRoutePoints.start && (
-//                 <DraggableMarker
-//                   position={newRoutePoints.start}
-//                   color="#16a34a" // Green
-//                   onDragEnd={(pos) => handleDrag("start", pos)}
-//                 />
-//               )}
-//               {newRoutePoints.end && (
-//                 <DraggableMarker
-//                   position={newRoutePoints.end}
-//                   color="#dc2626" // Red
-//                   onDragEnd={(pos) => handleDrag("end", pos)}
-//                 />
-//               )}
-
-//               {/* Visual Line connecting points (straight line preview until saved) */}
-//               {newRoutePoints.start && newRoutePoints.end && (
-//                 <Polyline
-//                   positions={[newRoutePoints.start, newRoutePoints.end]}
-//                   pathOptions={{
-//                     color: "gray",
-//                     dashArray: "5, 10",
-//                     weight: 2,
-//                     opacity: 0.5,
-//                   }}
-//                 />
-//               )}
-//             </>
-//           )}
-
-//           {/* --- MODE 2: Viewing Saved Route --- */}
-//           {selectedSavedRoute && (
-//             <>
-//               <Polyline
-//                 positions={selectedSavedRoute.path}
-//                 pathOptions={{ color: "#2563eb", weight: 6, opacity: 0.8 }}
-//               />
-//               {/* Start Marker */}
-//               <Marker
-//                 position={selectedSavedRoute.path[0]}
-//                 icon={
-//                   new L.DivIcon({
-//                     className: "bg-transparent",
-//                     html: `<div style="background-color: #16a34a; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
-//                   })
-//                 }
-//               />
-//               {/* End Marker */}
-//               <Marker
-//                 position={
-//                   selectedSavedRoute.path[selectedSavedRoute.path.length - 1]
-//                 }
-//                 icon={
-//                   new L.DivIcon({
-//                     className: "bg-transparent",
-//                     html: `<div style="background-color: #dc2626; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
-//                   })
-//                 }
-//               />
-//             </>
-//           )}
-//         </MapContainer>
-
-//         {/* Helper Toast */}
-//         {!selectedSavedRoute && !newRoutePoints.start && (
-//           <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow-lg z-[400] text-xs font-bold text-gray-600 border border-white/50">
-//             Click map or use search to set Start Point
-//           </div>
-//         )}
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default AdminRouteManager;
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   MapContainer,
@@ -371,75 +6,53 @@ import {
   Marker,
   useMapEvents,
   useMap,
+  Tooltip,
 } from "react-leaflet";
-import axios from "axios";
-import { Trash2, Save, MapPin, Navigation } from "lucide-react";
-import LocationSearch from "./LocationSearch";
+import api from "../utils/api";
+import {
+  Trash2,
+  Save,
+  MapPin,
+  Navigation,
+  XCircle,
+  Plus,
+  ArrowUp,
+  ArrowDown,
+  School,
+  Bus,
+} from "lucide-react";
+import LocationSearch from "./Shared/LocationSearch";
 import L from "leaflet";
 
-// --- Component to Handle Auto-Zooming ---
-const AutoZoom = ({ selectedRoute, points }) => {
+// --- Helpers ---
+const AutoZoom = ({ selectedRoute, points, stops }) => {
   const map = useMap();
-
   useEffect(() => {
-    // 1. If viewing a saved route, fit to its path
-    if (selectedRoute && selectedRoute.path.length > 0) {
-      const bounds = L.latLngBounds(selectedRoute.path);
+    if (selectedRoute && selectedRoute.path_coords) {
+      const bounds = L.latLngBounds(selectedRoute.path_coords);
       map.fitBounds(bounds, { padding: [50, 50] });
-    }
-    // 2. If creating new route and both points exist, fit bounds to include both
-    else if (points.start && points.end) {
-      const bounds = L.latLngBounds([points.start, points.end]);
+    } else if (points.start && points.end) {
+      const allPoints = [
+        points.start,
+        points.end,
+        ...stops.map((s) => [s.lat, s.lon]),
+      ];
+      const bounds = L.latLngBounds(allPoints);
       map.fitBounds(bounds, { padding: [100, 100] });
     }
-    // 3. If only start point exists (e.g. just searched), fly to it
-    else if (points.start) {
-      map.flyTo(points.start, 14, { duration: 1.5 });
-    }
-  }, [selectedRoute, points, map]);
-
+  }, [selectedRoute, points, stops, map]);
   return null;
 };
 
-// --- Draggable Marker Component ---
-function DraggableMarker({ position, color, onDragEnd }) {
-  const markerRef = useRef(null);
+const StopIcon = (order) =>
+  new L.DivIcon({
+    className: "bg-transparent",
+    html: `<div class="flex items-center justify-center bg-indigo-600 text-white w-6 h-6 rounded-full border-2 border-white shadow-md text-[10px] font-bold">${order + 1}</div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
 
-  const icon = useMemo(
-    () =>
-      new L.DivIcon({
-        className: "bg-transparent",
-        html: `<div style="background-color: ${color}; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`,
-        iconSize: [16, 16],
-        iconAnchor: [8, 8],
-      }),
-    [color],
-  );
-
-  const eventHandlers = useMemo(
-    () => ({
-      dragend() {
-        const marker = markerRef.current;
-        if (marker != null) {
-          onDragEnd(marker.getLatLng());
-        }
-      },
-    }),
-    [onDragEnd],
-  );
-
-  return (
-    <Marker
-      draggable={true}
-      eventHandlers={eventHandlers}
-      position={position}
-      ref={markerRef}
-      icon={icon}
-    />
-  );
-}
-
-// --- Map Click Handler ---
+// --- 3. Helper: Map Click Handler ---
 const MapClicker = ({ onMapClick }) => {
   useMapEvents({
     click(e) {
@@ -451,309 +64,494 @@ const MapClicker = ({ onMapClick }) => {
 
 // --- Main Component ---
 const AdminRouteManager = ({ onBack }) => {
+  const [universities, setUniversities] = useState([]);
+  const [selectedUniv, setSelectedUniv] = useState("");
   const [routes, setRoutes] = useState([]);
-  const [selectedSavedRoute, setSelectedSavedRoute] = useState(null);
+  const [selectedRoute, setSelectedRoute] = useState(null);
 
-  // Route Creation State
-  const [newRoutePoints, setNewRoutePoints] = useState({
-    start: null,
-    end: null,
-  });
-  const [names, setNames] = useState({ start: "", end: "" });
+  // Design State
+  const [newPoints, setNewPoints] = useState({ start: null, end: null });
+  const [stops, setStops] = useState([]); // [{lat, lon, name}]
+  const [names, setNames] = useState({ route: "", start: "", end: "" });
+  const [isAddingStop, setIsAddingStop] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Load existing routes
+  // New: Alternative Routing State
+  const [previews, setPreviews] = useState([]); // [{path, distance, duration}]
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
   useEffect(() => {
-    fetchRoutes();
+    fetchUniversities();
   }, []);
+
+  useEffect(() => {
+    if (selectedUniv) fetchRoutes();
+  }, [selectedUniv]);
+
+  const fetchUniversities = async () => {
+    try {
+      const res = await api.get("/api/universities/");
+      setUniversities(res.data);
+      if (res.data.length > 0) setSelectedUniv(res.data[0].id);
+    } catch (e) {
+      console.error("Failed to load universities", e);
+    }
+  };
 
   const fetchRoutes = async () => {
     try {
-      const res = await axios.get("http://localhost:8000/api/admin/routes/");
+      const res = await api.get(
+        `/api/admin/routes/?university=${selectedUniv}`,
+      );
       setRoutes(res.data);
-    } catch (err) {
-      console.error("Failed to fetch routes", err);
+    } catch (e) {
+      console.error("Failed to load routes", e);
     }
   };
 
-  // Handle Search Selection
-  const handleSearchSelect = (type, item) => {
-    const latlng = { lat: parseFloat(item.lat), lng: parseFloat(item.lon) };
-    if (type === "start") {
-      setNewRoutePoints((prev) => ({ ...prev, start: latlng }));
-      setNames((prev) => ({ ...prev, start: item.display_name.split(",")[0] }));
-    } else {
-      setNewRoutePoints((prev) => ({ ...prev, end: latlng }));
-      setNames((prev) => ({ ...prev, end: item.display_name.split(",")[0] }));
-    }
-    // Deselect saved route when creating new one
-    setSelectedSavedRoute(null);
-  };
-
-  // Handle Map Clicks
   const handleMapClick = (latlng) => {
-    setSelectedSavedRoute(null); // Clear viewing mode
-    if (!newRoutePoints.start) {
-      setNewRoutePoints((prev) => ({ ...prev, start: latlng }));
-      setNames((prev) => ({ ...prev, start: "Map Point A" }));
-    } else if (!newRoutePoints.end) {
-      setNewRoutePoints((prev) => ({ ...prev, end: latlng }));
-      setNames((prev) => ({ ...prev, end: "Map Point B" }));
+    setSelectedRoute(null);
+    if (isAddingStop) {
+      setStops([
+        ...stops,
+        { ...latlng, lon: latlng.lng, name: `Stop ${stops.length + 1}` },
+      ]);
+      setIsAddingStop(false);
+    } else if (!newPoints.start) {
+      setNewPoints({ ...newPoints, start: latlng });
+      setNames({ ...names, start: "Start Point" });
+    } else if (!newPoints.end) {
+      setNewPoints({ ...newPoints, end: latlng });
+      setNames({ ...names, end: "End Point" });
     }
   };
 
-  // Handle Dragging Pins
-  const handleDrag = (type, newLatLng) => {
-    setNewRoutePoints((prev) => ({ ...prev, [type]: newLatLng }));
+  const handleDrag = (type, latlng, index = null) => {
+    if (type === "stop") {
+      const newStops = [...stops];
+      newStops[index] = {
+        ...newStops[index],
+        lat: latlng.lat,
+        lon: latlng.lng,
+      };
+      setStops(newStops);
+    } else {
+      setNewPoints({ ...newPoints, [type]: latlng });
+    }
+  };
+
+  // New: Fetch Route Previews
+  useEffect(() => {
+    if (newPoints.start && newPoints.end) {
+      fetchPreviews();
+    } else {
+      setPreviews([]);
+    }
+  }, [newPoints, stops]);
+
+  const fetchPreviews = async () => {
+    try {
+      const res = await api.post("/api/admin/routes/preview/", {
+        start: { lat: newPoints.start.lat, lon: newPoints.start.lng },
+        end: { lat: newPoints.end.lat, lon: newPoints.end.lng },
+        stops: stops.map((s, i) => ({ ...s, order: i })),
+      });
+      setPreviews(res.data);
+      setSelectedIndex(0); // Default to first (usually shortest/best)
+    } catch (e) {
+      console.error("Preview fetch failed", e);
+    }
+  };
+
+  const reorderStop = (index, dir) => {
+    const newStops = [...stops];
+    const target = index + dir;
+    if (target < 0 || target >= stops.length) return;
+    [newStops[index], newStops[target]] = [newStops[target], newStops[index]];
+    setStops(newStops);
   };
 
   const saveRoute = async () => {
-    if (!newRoutePoints.start || !newRoutePoints.end) return;
+    if (!newPoints.start || !newPoints.end || !selectedUniv) return;
     setLoading(true);
+
+    const activePreview = previews[selectedIndex];
+
     try {
-      await axios.post("http://localhost:8000/api/admin/routes/", {
-        start: { lat: newRoutePoints.start.lat, lon: newRoutePoints.start.lng },
-        end: { lat: newRoutePoints.end.lat, lon: newRoutePoints.end.lng },
+      await api.post("/api/admin/routes/", {
+        university: selectedUniv,
+        name: names.route || "New Route",
         start_name: names.start,
         end_name: names.end,
+        start: { lat: newPoints.start.lat, lon: newPoints.start.lng },
+        end: { lat: newPoints.end.lat, lon: newPoints.end.lng },
+        stops: stops.map((s, i) => ({ ...s, order: i })),
+        // Pass the selected alternative's path
+        path: activePreview?.path,
+        total_distance: activePreview?.distance,
       });
       fetchRoutes();
-      // Reset form
-      setNewRoutePoints({ start: null, end: null });
-      setNames({ start: "", end: "" });
-    } catch (err) {
-      alert("Failed to save route. Ensure OSRM is running.");
+      resetForm();
+    } catch (e) {
+      alert("Failed to save route. Check backend logs.");
     } finally {
       setLoading(false);
     }
   };
 
-  const deleteRoute = async (e, id) => {
-    e.stopPropagation(); // Prevent clicking the row from selecting it
-    if (!confirm("Delete this route permanently?")) return;
-    await axios.delete(`http://localhost:8000/api/admin/routes/?id=${id}`);
-    fetchRoutes();
-    if (selectedSavedRoute?.id === id) setSelectedSavedRoute(null);
+  const resetForm = () => {
+    setNewPoints({ start: null, end: null });
+    setStops([]);
+    setNames({ route: "", start: "", end: "" });
+    setSelectedRoute(null);
+    setPreviews([]);
   };
 
   return (
-    <div className="flex h-full font-sans">
-      {/* Sidebar List */}
-      <div className="w-96 bg-white border-r shadow-xl z-[500] flex flex-col h-full overflow-hidden">
+    <div className="flex h-screen w-full bg-slate-50 overflow-hidden font-sans">
+      {/* --- Sidebar --- */}
+      <div className="w-[400px] bg-white border-r border-slate-200 shadow-xl z-[1000] flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <div className="p-4 bg-gray-900 text-white flex justify-between items-center shadow-md">
-          <h2 className="font-bold text-lg flex items-center gap-2">
-            <Navigation size={18} /> Route Admin
-          </h2>
-          <button
-            onClick={onBack}
-            className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition"
-          >
-            Exit
-          </button>
+        <div className="p-6 bg-slate-900 text-white flex flex-col gap-4 shadow-lg">
+          <div className="flex justify-between items-center">
+            <h2 className="font-bold text-xl flex items-center gap-3 tracking-tight">
+              <School className="text-indigo-400" size={24} /> University
+              Transit
+            </h2>
+            <button
+              onClick={onBack}
+              className="text-[10px] uppercase font-bold text-slate-400 hover:text-white transition tracking-widest"
+            >
+              Exit Admin
+            </button>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+              Selected College
+            </label>
+            <select
+              value={selectedUniv}
+              onChange={(e) => setSelectedUniv(e.target.value)}
+              className="w-full bg-slate-800 border-none text-white text-sm rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition"
+            >
+              <option value="">Select University...</option>
+              {universities.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* Creation Form */}
-        <div className="p-4 bg-gray-50 border-b">
-          <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
-            <MapPin size={14} /> Create New Route
-          </h3>
-
-          <div className="space-y-3 relative">
-            {/* Start Search */}
-            <div className="z-[60]">
-              <label className="text-xs font-bold text-green-600 ml-1">
-                Start Point (A)
+        {/* Form Container */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="p-6 space-y-6">
+            {/* Route Naming */}
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                Route Details
               </label>
-              <div className="flex gap-2">
-                <LocationSearch
-                  placeholder="Search Start..."
-                  onSelect={(item) => handleSearchSelect("start", item)}
-                />
-              </div>
-              {/* Fallback manual name edit if search isn't used */}
               <input
-                value={names.start}
-                onChange={(e) => setNames({ ...names, start: e.target.value })}
-                placeholder="or name manually..."
-                className="w-full text-xs mt-1 border-none bg-transparent focus:ring-0 text-gray-500"
+                value={names.route}
+                onChange={(e) => setNames({ ...names, route: e.target.value })}
+                placeholder="Route Name (e.g. Campus Express)"
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition font-medium"
               />
             </div>
 
-            {/* End Search */}
-            <div className="z-[50]">
-              <label className="text-xs font-bold text-red-600 ml-1">
-                End Point (B)
-              </label>
-              <div className="flex gap-2">
-                <LocationSearch
-                  placeholder="Search End..."
-                  onSelect={(item) => handleSearchSelect("end", item)}
-                />
+            {/* Path Selection */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-1.5 h-16 bg-indigo-200 rounded-full flex flex-col justify-between items-center py-1">
+                  <div className="w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
+                  <div className="w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></div>
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                      Origin
+                    </span>
+                    <input
+                      value={names.start}
+                      onChange={(e) =>
+                        setNames({ ...names, start: e.target.value })
+                      }
+                      placeholder="Start Point A"
+                      className="w-full text-sm font-bold bg-transparent outline-none p-0 focus:text-indigo-600 transition"
+                    />
+                  </div>
+                  <div className="h-px bg-slate-200"></div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                      Destination
+                    </span>
+                    <input
+                      value={names.end}
+                      onChange={(e) =>
+                        setNames({ ...names, end: e.target.value })
+                      }
+                      placeholder="End Point B"
+                      className="w-full text-sm font-bold bg-transparent outline-none p-0 focus:text-indigo-600 transition"
+                    />
+                  </div>
+                </div>
               </div>
-              <input
-                value={names.end}
-                onChange={(e) => setNames({ ...names, end: e.target.value })}
-                placeholder="or name manually..."
-                className="w-full text-xs mt-1 border-none bg-transparent focus:ring-0 text-gray-500"
-              />
+            </div>
+
+            {/* Stop Management */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                  Transit Stops ({stops.length})
+                </label>
+                <button
+                  onClick={() => setIsAddingStop(!isAddingStop)}
+                  className={`flex items-center gap-2 text-[10px] font-bold px-3 py-1.5 rounded-full transition ${isAddingStop ? "bg-red-100 text-red-600" : "bg-indigo-100 text-indigo-600 hover:bg-indigo-200"}`}
+                >
+                  {isAddingStop ? <XCircle size={14} /> : <Plus size={14} />}
+                  {isAddingStop ? "Cancel" : "Add Stop"}
+                </button>
+              </div>
+
+              {isAddingStop && (
+                <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-[11px] text-amber-700 flex items-center gap-2 animate-pulse">
+                  <MapPin size={14} /> Click any point on the map to mark a new
+                  stop.
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {stops.map((stop, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 group hover:shadow-md transition"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                      {i + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <input
+                        value={stop.name}
+                        onChange={(e) => {
+                          const newStops = [...stops];
+                          newStops[i].name = e.target.value;
+                          setStops(newStops);
+                        }}
+                        className="w-full text-sm font-semibold outline-none bg-transparent focus:text-indigo-600"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => reorderStop(i, -1)}
+                        className="p-1.5 hover:bg-slate-100 rounded text-slate-400"
+                      >
+                        <ArrowUp size={14} />
+                      </button>
+                      <button
+                        onClick={() => reorderStop(i, 1)}
+                        className="p-1.5 hover:bg-slate-100 rounded text-slate-400"
+                      >
+                        <ArrowDown size={14} />
+                      </button>
+                      <button
+                        onClick={() =>
+                          setStops(stops.filter((_, idx) => idx !== i))
+                        }
+                        className="p-1.5 hover:bg-red-50 rounded text-red-400"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <button
               onClick={saveRoute}
-              disabled={!newRoutePoints.end || loading}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 disabled:bg-gray-300 flex justify-center gap-2 items-center transition shadow-sm"
+              disabled={!newPoints.end || loading}
+              className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 transition shadow-xl hover:shadow-indigo-500/30 flex justify-center items-center gap-3 disabled:bg-slate-200 disabled:shadow-none disabled:text-slate-400"
             >
-              <Save size={18} /> {loading ? "Calculating..." : "Save Route"}
+              <Save size={18} />{" "}
+              {loading ? "Scaling Transit Path..." : "Save Route Package"}
             </button>
-
-            {(newRoutePoints.start || newRoutePoints.end) && (
-              <button
-                onClick={() => {
-                  setNewRoutePoints({ start: null, end: null });
-                  setNames({ start: "", end: "" });
-                }}
-                className="text-xs text-red-500 w-full text-center hover:underline"
-              >
-                Clear Map Points
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Route List */}
-        <div className="flex-1 overflow-y-auto bg-white">
-          <div className="p-4 pb-2 text-xs font-bold text-gray-400 uppercase border-b bg-white sticky top-0">
-            Saved Routes ({routes.length})
-          </div>
-          {routes.length === 0 && (
-            <div className="p-8 text-center text-gray-400 text-sm">
-              No routes saved yet.
-            </div>
-          )}
-          {routes.map((r) => (
-            <div
-              key={r.id}
-              onClick={() => {
-                setSelectedSavedRoute(r);
-                setNewRoutePoints({ start: null, end: null });
-              }}
-              className={`p-4 border-b cursor-pointer transition flex justify-between items-center group
-                    ${selectedSavedRoute?.id === r.id ? "bg-blue-50 border-l-4 border-l-blue-600" : "hover:bg-gray-50 border-l-4 border-l-transparent"}
-                `}
-            >
-              <div>
-                <div className="font-bold text-gray-800 text-sm">
-                  {r.start_name}
+        {/* Existing Routes */}
+        <div className="h-48 border-t border-slate-100 p-4 bg-slate-50 flex flex-col gap-3">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">
+            Current Library
+          </h3>
+          <div className="overflow-x-auto flex gap-3 pb-2 custom-scrollbar-h">
+            {routes.map((r) => (
+              <div
+                key={r.id}
+                onClick={() => setSelectedRoute(r)}
+                className={`flex-shrink-0 w-40 p-3 rounded-xl cursor-pointer transition border ${selectedRoute?.id === r.id ? "bg-white border-indigo-300 shadow-md ring-1 ring-indigo-200" : "bg-white/60 border-transparent hover:bg-white hover:border-slate-200"}`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <Bus size={12} className="text-indigo-500" />
+                  <span className="text-xs font-bold text-slate-800 truncate">
+                    {r.name}
+                  </span>
                 </div>
-                <div className="text-gray-400 text-xs my-0.5">to</div>
-                <div className="font-bold text-gray-800 text-sm">
-                  {r.end_name}
-                </div>
-                <div className="text-xs text-blue-500 mt-1 font-mono">
-                  {r.distance_km} km
+                <div className="text-[10px] text-slate-400 font-medium truncate">
+                  {r.start_name} → {r.end_name}
                 </div>
               </div>
-              <button
-                onClick={(e) => deleteRoute(e, r.id)}
-                className="p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Map Area */}
-      <div className="flex-1 relative bg-gray-200">
+      {/* --- Map Area --- */}
+      <div className="flex-1 relative">
         <MapContainer
-          center={[40.7128, -74.006]}
-          zoom={12}
+          center={[20.5937, 78.9629]}
+          zoom={5}
           style={{ height: "100%", width: "100%" }}
+          attributionControl={false}
         >
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-          {/* Auto Zoom Controller */}
           <AutoZoom
-            selectedRoute={selectedSavedRoute}
-            points={newRoutePoints}
+            selectedRoute={selectedRoute}
+            points={newPoints}
+            stops={stops}
           />
-
           <MapClicker onMapClick={handleMapClick} />
 
-          {/* --- MODE 1: Creating New Route (Draggable Pins) --- */}
-          {!selectedSavedRoute && (
+          {/* New Route Preview */}
+          {!selectedRoute && (
             <>
-              {newRoutePoints.start && (
-                <DraggableMarker
-                  position={newRoutePoints.start}
-                  color="#16a34a" // Green
-                  onDragEnd={(pos) => handleDrag("start", pos)}
+              {newPoints.start && (
+                <Marker
+                  position={newPoints.start}
+                  icon={
+                    new L.DivIcon({
+                      className: "bg-transparent",
+                      html: `<div class="w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-lg"></div>`,
+                    })
+                  }
+                  draggable={true}
+                  eventHandlers={{
+                    dragend: (e) => handleDrag("start", e.target.getLatLng()),
+                  }}
                 />
               )}
-              {newRoutePoints.end && (
-                <DraggableMarker
-                  position={newRoutePoints.end}
-                  color="#dc2626" // Red
-                  onDragEnd={(pos) => handleDrag("end", pos)}
+              {newPoints.end && (
+                <Marker
+                  position={newPoints.end}
+                  icon={
+                    new L.DivIcon({
+                      className: "bg-transparent",
+                      html: `<div class="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>`,
+                    })
+                  }
+                  eventHandlers={{
+                    dragend: (e) => handleDrag("end", e.target.getLatLng()),
+                  }}
                 />
               )}
 
-              {/* Visual Line connecting points (straight line preview until saved) */}
-              {newRoutePoints.start && newRoutePoints.end && (
+              {/* Alternative Preview Options */}
+              {previews.map((p, idx) => (
                 <Polyline
-                  positions={[newRoutePoints.start, newRoutePoints.end]}
+                  key={`preview-${idx}`}
+                  positions={p.path}
+                  eventHandlers={{
+                    click: () => setSelectedIndex(idx),
+                  }}
+                  pathOptions={{
+                    color: selectedIndex === idx ? "#4f46e5" : "#94a3b8",
+                    weight: selectedIndex === idx ? 7 : 4,
+                    opacity: selectedIndex === idx ? 0.9 : 0.4,
+                  }}
+                >
+                  <Tooltip sticky>
+                    Route Option {idx + 1} ({(p.distance / 1000).toFixed(1)} km)
+                  </Tooltip>
+                </Polyline>
+              ))}
+
+              {!previews.length && newPoints.start && newPoints.end && (
+                <Polyline
+                  positions={[newPoints.start, newPoints.end]}
                   pathOptions={{
                     color: "gray",
-                    dashArray: "5, 10",
+                    dashArray: "10, 10",
                     weight: 2,
                     opacity: 0.5,
                   }}
                 />
               )}
+
+              {stops.map((s, i) => (
+                <Marker
+                  key={i}
+                  position={[s.lat, s.lon]}
+                  icon={StopIcon(i)}
+                  draggable={true}
+                  eventHandlers={{
+                    dragend: (e) => handleDrag("stop", e.target.getLatLng(), i),
+                  }}
+                >
+                  <Tooltip
+                    permanent
+                    direction="top"
+                    offset={[0, -10]}
+                    className="bg-white border-none shadow-lg text-[10px] font-bold rounded-full px-3 py-1 text-slate-700"
+                  >
+                    {s.name}
+                  </Tooltip>
+                </Marker>
+              ))}
             </>
           )}
 
-          {/* --- MODE 2: Viewing Saved Route --- */}
-          {selectedSavedRoute && (
+          {/* Saved Route View */}
+          {selectedRoute && (
             <>
               <Polyline
-                positions={selectedSavedRoute.path}
-                pathOptions={{ color: "#2563eb", weight: 6, opacity: 0.8 }}
+                positions={selectedRoute.path_coords}
+                pathOptions={{ color: "#4f46e5", weight: 6, opacity: 0.8 }}
               />
-              {/* Start Marker */}
-              <Marker
-                position={selectedSavedRoute.path[0]}
-                icon={
-                  new L.DivIcon({
-                    className: "bg-transparent",
-                    html: `<div style="background-color: #16a34a; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
-                  })
-                }
-              />
-              {/* End Marker */}
-              <Marker
-                position={
-                  selectedSavedRoute.path[selectedSavedRoute.path.length - 1]
-                }
-                icon={
-                  new L.DivIcon({
-                    className: "bg-transparent",
-                    html: `<div style="background-color: #dc2626; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
-                  })
-                }
-              />
+              {selectedRoute.stops.map((s, i) => (
+                <Marker key={i} position={[s.lat, s.lon]} icon={StopIcon(i)}>
+                  <Tooltip direction="top" offset={[0, -10]}>
+                    {s.name}
+                  </Tooltip>
+                </Marker>
+              ))}
             </>
           )}
         </MapContainer>
 
-        {/* Helper Toast */}
-        {!selectedSavedRoute && !newRoutePoints.start && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow-lg z-[400] text-xs font-bold text-gray-600 border border-white/50">
-            Search or Click map to set Start Point (A)
+        {/* Floating Help */}
+        <div className="absolute top-6 right-6 flex flex-col items-end gap-3 z-[1000]">
+          <div className="bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-2xl border border-white/50 space-y-2">
+            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">
+              Map Instructions
+            </h4>
+            <ul className="text-[11px] text-slate-600 space-y-1 font-medium">
+              <li className="flex items-center gap-2">
+                🖱️ Click 1: Origin Point
+              </li>
+              <li className="flex items-center gap-2">
+                🖱️ Click 2: Destination Point
+              </li>
+              <li className="flex items-center gap-2">
+                📍 Click "Add Stop" then map to mark stops
+              </li>
+              <li className="flex items-center gap-2">
+                🎯 Drag markers to refine locations
+              </li>
+            </ul>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

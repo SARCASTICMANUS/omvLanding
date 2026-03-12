@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 import os
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -44,6 +45,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.gis",  # Required for PostGIS
+    "rest_framework_simplejwt",
     "rest_framework",
     "rest_framework_gis",
     "corsheaders",
@@ -100,13 +102,13 @@ DATABASES = {
         "ENGINE": "django.contrib.gis.db.backends.postgis",
         "NAME": "vayy_db",
         "USER": "postgres",
-        "PASSWORD": "password" if IN_DOCKER else "1234",
+        "PASSWORD": "password" if IN_DOCKER else 1234,
         # If in Docker, use 'db'. If local, use 'localhost'
         "HOST": "db" if IN_DOCKER else "localhost",
         "PORT": 5432,
     }
 }
-
+print("IN_DOCKER : ", IN_DOCKER)
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
@@ -144,6 +146,20 @@ USE_I18N = True
 
 USE_TZ = True
 
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,  # Issue new refresh token on refresh
+    "BLACKLIST_AFTER_ROTATION": True,  # Blacklist old refresh tokens
+    "UPDATE_LAST_LOGIN": True,  # Update last_login field
+}
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
@@ -155,6 +171,12 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Point to custom user model
+AUTH_USER_MODEL = "core.User"
+
+# Email Config (Console for dev)
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 # WINDOWS LOCAL CONFIGURATION ONLY
 if os.name == "nt":

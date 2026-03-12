@@ -1,603 +1,5 @@
-// import React, { useState, useRef } from "react";
-// import {
-//   MapContainer,
-//   TileLayer,
-//   CircleMarker,
-//   Popup,
-//   useMapEvents,
-// } from "react-leaflet";
-// import LocationSearch from "./LocationSearch";
-// import axios from "axios";
-// import { Loader } from "lucide-react";
-
-// // Component to handle map clicks
-// const LocationSelector = ({ onLocationSelected }) => {
-//   useMapEvents({
-//     click(e) {
-//       onLocationSelected({
-//         lat: e.latlng.lat,
-//         lon: e.latlng.lng,
-//         display_name: "Selected on Map",
-//       });
-//     },
-//   });
-//   return null;
-// };
-
-// const MapPassenger = () => {
-//   const [myPos, setMyPos] = useState(null);
-//   const [matches, setMatches] = useState([]);
-//   const [activeTrip, setActiveTrip] = useState(null);
-//   const [vehiclePos, setVehiclePos] = useState(null);
-//   const [eta, setEta] = useState(null);
-//   const [loading, setLoading] = useState(false);
-
-//   const ws = useRef(null);
-
-//   // 1. Search Logic
-//   const handleCheckForVehicles = async () => {
-//     if (!myPos) return;
-//     setLoading(true);
-//     setMatches([]);
-
-//     try {
-//       const res = await axios.post(
-//         "http://localhost:8000/api/passenger/match/",
-//         {
-//           lat: myPos.lat,
-//           lon: myPos.lon,
-//         },
-//       );
-//       setMatches(res.data); // Returns list of { trip_id, vehicle_type, start, end }
-//     } catch (err) {
-//       console.error(err);
-//       alert("Error finding vehicles.");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   // 2. Connect to Trip
-//   const connectToTrip = (trip) => {
-//     setActiveTrip(trip);
-
-//     const wsUrl = `ws://localhost:8000/ws/trip/${trip.trip_id}/passenger/`;
-//     ws.current = new WebSocket(wsUrl);
-
-//     ws.current.onopen = () => {
-//       // Send initial heartbeat to register presence
-//       ws.current.send(JSON.stringify({ lat: myPos.lat, lon: myPos.lon }));
-//     };
-
-//     ws.current.onmessage = (event) => {
-//       const data = JSON.parse(event.data);
-
-//       if (data.type === "vehicle_update") {
-//         setVehiclePos([data.lat, data.lon]);
-//       }
-//       if (data.type === "eta_update") {
-//         setEta(data.data); // { distance, duration }
-//       }
-//     };
-//   };
-
-//   return (
-//     <div className="h-full relative">
-//       {/* Search Overlay */}
-//       <div className="absolute top-4 left-4 w-96 bg-white rounded-xl shadow-xl z-[1000] p-4 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
-//         {!activeTrip ? (
-//           <>
-//             <h2 className="font-bold text-gray-800">Find a Ride</h2>
-//             <p className="text-xs text-gray-500">
-//               Search below or click on the map to set your location.
-//             </p>
-
-//             <LocationSearch
-//               placeholder="Where are you? (Point C)"
-//               onSelect={setMyPos}
-//             />
-
-//             {myPos && (
-//               <div className="bg-gray-50 p-3 rounded text-sm text-gray-700 border border-gray-200">
-//                 Selected: <strong>{myPos.display_name}</strong>
-//               </div>
-//             )}
-
-//             <button
-//               onClick={handleCheckForVehicles}
-//               disabled={!myPos || loading}
-//               className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 disabled:bg-gray-300 transition flex items-center justify-center gap-2"
-//             >
-//               {loading ? (
-//                 <Loader className="animate-spin" size={18} />
-//               ) : (
-//                 "Scan Road (10m Buffer)"
-//               )}
-//             </button>
-
-//             {/* Results List */}
-//             {matches.length > 0 && (
-//               <div className="mt-2 flex flex-col gap-2">
-//                 <p className="text-xs font-bold text-gray-500 uppercase">
-//                   Found {matches.length} Vehicles
-//                 </p>
-//                 {matches.map((trip) => (
-//                   <button
-//                     key={trip.trip_id}
-//                     onClick={() => connectToTrip(trip)}
-//                     className="text-left bg-green-50 hover:bg-green-100 border border-green-200 p-3 rounded-lg transition"
-//                   >
-//                     <div className="font-bold text-green-800 capitalize">
-//                       {trip.vehicle_type}
-//                     </div>
-//                     <div className="text-xs text-green-600 truncate">
-//                       {trip.start} → {trip.end}
-//                     </div>
-//                   </button>
-//                 ))}
-//               </div>
-//             )}
-//             {matches.length === 0 && !loading && myPos && (
-//               <p className="text-sm text-gray-400 text-center mt-2">
-//                 No active vehicles nearby.
-//               </p>
-//             )}
-//           </>
-//         ) : (
-//           /* Active Trip Status Panel */
-//           <div className="bg-white rounded-lg">
-//             <div className="bg-green-600 text-white p-4 rounded-t-lg">
-//               <h3 className="font-bold text-lg">
-//                 Inbound {activeTrip.vehicle_type}
-//               </h3>
-//               <p className="text-green-100 text-xs">
-//                 {activeTrip.start} to {activeTrip.end}
-//               </p>
-//             </div>
-//             <div className="p-4 border border-t-0 rounded-b-lg shadow-sm">
-//               {eta ? (
-//                 <div className="grid grid-cols-2 gap-4 text-center">
-//                   <div>
-//                     <p className="text-2xl font-bold text-gray-800">
-//                       {Math.ceil(eta.duration / 60)}
-//                     </p>
-//                     <p className="text-xs text-gray-500 uppercase">Minutes</p>
-//                   </div>
-//                   <div>
-//                     <p className="text-2xl font-bold text-gray-800">
-//                       {(eta.distance / 1000).toFixed(1)}
-//                     </p>
-//                     <p className="text-xs text-gray-500 uppercase">Km Away</p>
-//                   </div>
-//                 </div>
-//               ) : (
-//                 <p className="text-center text-gray-500 animate-pulse">
-//                   Calculating ETA...
-//                 </p>
-//               )}
-
-//               <button
-//                 onClick={() => {
-//                   setActiveTrip(null);
-//                   setVehiclePos(null);
-//                   if (ws.current) ws.current.close();
-//                 }}
-//                 className="w-full mt-4 border border-red-200 text-red-600 py-2 rounded text-sm hover:bg-red-50"
-//               >
-//                 Leave Tracker
-//               </button>
-//             </div>
-//           </div>
-//         )}
-//       </div>
-
-//       <MapContainer
-//         center={[40.7128, -74.006]}
-//         zoom={13}
-//         style={{ height: "100%", width: "100%" }}
-//       >
-//         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-//         <LocationSelector onLocationSelected={setMyPos} />
-
-//         {/* My Location - Blue */}
-//         {myPos && (
-//           <CircleMarker
-//             center={[myPos.lat, myPos.lon]}
-//             radius={8}
-//             pathOptions={{
-//               color: "white",
-//               fillColor: "#2563eb",
-//               fillOpacity: 1,
-//             }}
-//           >
-//             <Popup>You</Popup>
-//           </CircleMarker>
-//         )}
-
-//         {/* Vehicle - Red */}
-//         {vehiclePos && (
-//           <CircleMarker
-//             center={vehiclePos}
-//             radius={10}
-//             pathOptions={{
-//               color: "white",
-//               fillColor: "#dc2626",
-//               fillOpacity: 1,
-//             }}
-//           >
-//             <Popup>Vehicle</Popup>
-//           </CircleMarker>
-//         )}
-//       </MapContainer>
-//     </div>
-//   );
-// };
-
-// export default MapPassenger;
-
-// import React, { useState, useRef, useEffect } from "react";
-// import {
-//   MapContainer,
-//   TileLayer,
-//   CircleMarker,
-//   Polyline,
-//   Popup,
-//   useMapEvents,
-//   useMap,
-// } from "react-leaflet";
-// import LocationSearch from "./LocationSearch";
-// import axios from "axios";
-// import { Loader, MapPin, Navigation, AlertCircle } from "lucide-react";
-// import L from "leaflet";
-
-// // --- Helper: Auto Zoom to Match ---
-// const AutoZoom = ({ routePath, myPos }) => {
-//   const map = useMap();
-//   useEffect(() => {
-//     if (routePath && routePath.length > 0) {
-//       // Fit to the route
-//       const bounds = L.latLngBounds(routePath);
-//       // Extend bounds to include user if they are far off
-//       if (myPos) bounds.extend([myPos.lat, myPos.lon]);
-//       map.fitBounds(bounds, { padding: [50, 50] });
-//     }
-//   }, [routePath, myPos, map]);
-//   return null;
-// };
-
-// // --- Component to handle map clicks ---
-// const LocationSelector = ({ onLocationSelected }) => {
-//   useMapEvents({
-//     click(e) {
-//       onLocationSelected({
-//         lat: e.latlng.lat,
-//         lon: e.latlng.lng,
-//         display_name: "Selected Location",
-//       });
-//     },
-//   });
-//   return null;
-// };
-
-// const MapPassenger = ({ onBack }) => {
-//   const [myPos, setMyPos] = useState(null);
-//   const [matches, setMatches] = useState([]);
-//   const [activeTrip, setActiveTrip] = useState(null);
-
-//   // Active Trip Data
-//   const [vehiclePos, setVehiclePos] = useState(null);
-//   const [routePath, setRoutePath] = useState(null); // The LineString of the route
-//   const [eta, setEta] = useState(null);
-//   const [loading, setLoading] = useState(false);
-
-//   const ws = useRef(null);
-
-//   // 1. Search for Active Trips near me
-//   const handleCheckForVehicles = async () => {
-//     if (!myPos) return;
-//     setLoading(true);
-//     setMatches([]);
-
-//     try {
-//       // API checks for Routes within 10m of the passenger that have an ActiveTrip
-//       const res = await axios.post(
-//         "http://localhost:8000/api/passenger/match/",
-//         {
-//           lat: myPos.lat,
-//           lon: myPos.lon,
-//         },
-//       );
-//       setMatches(res.data);
-//     } catch (err) {
-//       console.error(err);
-//       alert("Error scanning for vehicles. Ensure backend is running.");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   // 2. Connect to a specific Trip
-//   // const connectToTrip = async (trip) => {
-//   //   setActiveTrip(trip);
-
-//   //   // We need to fetch the Route Geometry to draw the line
-//   //   // (Assuming the match API returns route ID, we might need a separate call or include it in match response)
-//   //   // For now, let's assume the match endpoint includes basic route details,
-//   //   // but if we want the full path, we might need to query the route detail.
-//   //   // *Optimization: Ideally /match returns the path, or we fetch it here.*
-
-//   //   // For this implementation, let's just clear previous path until we get data
-//   //   // OR we can pass it if the backend provides it.
-//   //   // Let's assume the backend 'match' endpoint returns simplified data, so we might not have the full path immediately.
-//   //   // If you strictly need the path, you would fetch it here: axios.get(`/api/routes/${trip.route_id}`)
-
-//   //   const wsUrl = `ws://localhost:8000/ws/trip/${trip.trip_id}/passenger/`;
-//   //   ws.current = new WebSocket(wsUrl);
-
-//   //   ws.current.onopen = () => {
-//   //     // Send initial heartbeat to register presence
-//   //     ws.current.send(JSON.stringify({ lat: myPos.lat, lon: myPos.lon }));
-//   //   };
-
-//   //   ws.current.onmessage = (event) => {
-//   //     const data = JSON.parse(event.data);
-
-//   //     if (data.type === "vehicle_update") {
-//   //       setVehiclePos([data.lat, data.lon]);
-//   //     }
-//   //     if (data.type === "eta_update") {
-//   //       setEta(data.data); // { distance, duration }
-//   //     }
-//   //   };
-//   // };
-
-//   const connectToTrip = (trip) => {
-//     setActiveTrip(trip);
-//     // ... setup socket ...
-//     const wsUrl = `ws://localhost:8000/ws/trip/${trip.trip_id}/passenger/`;
-//     ws.current = new WebSocket(wsUrl);
-
-//     ws.current.onmessage = (event) => {
-//       const data = JSON.parse(event.data);
-
-//       // Existing handlers
-//       if (data.type === "vehicle_update") setVehiclePos([data.lat, data.lon]);
-//       if (data.type === "eta_update") setEta(data.data);
-
-//       // NEW: Handle Trip End Event
-//       if (data.type === "trip_ended") {
-//         alert("The driver has ended the trip.");
-//         leaveTrip(); // Reset local state
-//       }
-//     };
-
-//     // Handle socket errors or unexpected closures
-//     ws.current.onclose = (e) => {
-//       // If it wasn't a clean close by us
-//       if (activeTrip) {
-//         console.log("Connection lost");
-//         // You might want to try reconnecting or just alert user
-//       }
-//     };
-//   };
-
-//   const leaveTrip = () => {
-//     setActiveTrip(null);
-//     setVehiclePos(null);
-//     setRoutePath(null);
-//     setEta(null);
-//     if (ws.current) ws.current.close();
-//   };
-
-//   return (
-//     <div className="h-full relative font-sans">
-//       {/* --- Sidebar / Overlay Panel --- */}
-//       <div className="absolute top-4 left-4 w-96 bg-white rounded-xl shadow-2xl z-[1000] flex flex-col max-h-[90vh] overflow-hidden">
-//         {/* Header */}
-//         <div className="bg-gray-900 text-white p-4 flex justify-between items-center">
-//           <h2 className="font-bold flex items-center gap-2">
-//             <MapPin size={18} className="text-green-400" /> Passenger View
-//           </h2>
-//           <button onClick={onBack} className="text-xs hover:text-gray-300">
-//             Exit
-//           </button>
-//         </div>
-
-//         <div className="p-4 overflow-y-auto">
-//           {!activeTrip ? (
-//             <>
-//               <div className="mb-4">
-//                 <p className="text-sm text-gray-500 mb-2">
-//                   Set your location to find vehicles passing by on fixed routes.
-//                 </p>
-//                 <LocationSearch
-//                   placeholder="Search your location..."
-//                   onSelect={setMyPos}
-//                 />
-
-//                 {myPos && (
-//                   <div className="mt-2 text-xs bg-blue-50 text-blue-800 p-2 rounded border border-blue-100 flex items-center gap-2">
-//                     <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-//                     Selected:{" "}
-//                     <strong>{myPos.display_name?.split(",")[0]}</strong>
-//                   </div>
-//                 )}
-//               </div>
-
-//               <button
-//                 onClick={handleCheckForVehicles}
-//                 disabled={!myPos || loading}
-//                 className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 disabled:bg-gray-300 transition flex items-center justify-center gap-2 shadow-sm"
-//               >
-//                 {loading ? (
-//                   <Loader className="animate-spin" size={18} />
-//                 ) : (
-//                   "Scan for Vehicles (10m)"
-//                 )}
-//               </button>
-
-//               {/* Results List */}
-//               {matches.length > 0 && (
-//                 <div className="mt-6 flex flex-col gap-2 animate-fade-in">
-//                   <div className="flex justify-between items-center mb-1">
-//                     <p className="text-xs font-bold text-gray-400 uppercase">
-//                       Available Rides
-//                     </p>
-//                     <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
-//                       {matches.length} found
-//                     </span>
-//                   </div>
-
-//                   {matches.map((trip) => (
-//                     <button
-//                       key={trip.trip_id}
-//                       onClick={() => connectToTrip(trip)}
-//                       className="text-left bg-white border border-gray-200 hover:border-blue-500 hover:shadow-md p-3 rounded-lg transition group"
-//                     >
-//                       <div className="flex justify-between items-center mb-1">
-//                         <div className="font-bold text-gray-800 capitalize flex items-center gap-2">
-//                           <Navigation size={14} className="text-blue-600" />{" "}
-//                           {trip.vehicle_type}
-//                         </div>
-//                         <div className="text-xs text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded">
-//                           Live
-//                         </div>
-//                       </div>
-//                       <div className="text-xs text-gray-500 truncate">
-//                         <span className="font-medium text-gray-700">
-//                           {trip.start}
-//                         </span>
-//                         <span className="mx-1">→</span>
-//                         <span className="font-medium text-gray-700">
-//                           {trip.end}
-//                         </span>
-//                       </div>
-//                     </button>
-//                   ))}
-//                 </div>
-//               )}
-
-//               {matches.length === 0 && !loading && myPos && (
-//                 <div className="mt-6 text-center p-4 bg-gray-50 rounded-lg border border-gray-100">
-//                   <AlertCircle
-//                     className="mx-auto text-gray-400 mb-2"
-//                     size={24}
-//                   />
-//                   <p className="text-sm text-gray-600 font-medium">
-//                     No vehicles found nearby.
-//                   </p>
-//                   <p className="text-xs text-gray-400 mt-1">
-//                     Try moving closer to a main road.
-//                   </p>
-//                 </div>
-//               )}
-//             </>
-//           ) : (
-//             /* Active Tracking Panel */
-//             <div className="animate-fade-in">
-//               <div className="bg-green-50 border border-green-200 p-4 rounded-lg mb-4 text-center">
-//                 <h3 className="font-bold text-green-800 text-lg">
-//                   Vehicle En Route
-//                 </h3>
-//                 <p className="text-green-600 text-xs">
-//                   {activeTrip.start} → {activeTrip.end}
-//                 </p>
-//               </div>
-
-//               <div className="grid grid-cols-2 gap-4 mb-6">
-//                 <div className="bg-gray-50 p-3 rounded-lg border text-center">
-//                   <p className="text-3xl font-bold text-gray-800">
-//                     {eta ? Math.ceil(eta.duration / 60) : "--"}
-//                   </p>
-//                   <p className="text-xs text-gray-500 uppercase font-bold">
-//                     Minutes
-//                   </p>
-//                 </div>
-//                 <div className="bg-gray-50 p-3 rounded-lg border text-center">
-//                   <p className="text-3xl font-bold text-gray-800">
-//                     {eta ? (eta.distance / 1000).toFixed(1) : "--"}
-//                   </p>
-//                   <p className="text-xs text-gray-500 uppercase font-bold">
-//                     Km Away
-//                   </p>
-//                 </div>
-//               </div>
-
-//               {!eta && (
-//                 <p className="text-center text-xs text-blue-500 animate-pulse mb-4">
-//                   Connecting to vehicle GPS...
-//                 </p>
-//               )}
-
-//               <button
-//                 onClick={leaveTrip}
-//                 className="w-full border border-red-200 text-red-600 py-3 rounded-lg text-sm font-bold hover:bg-red-50 transition"
-//               >
-//                 Stop Tracking
-//               </button>
-//             </div>
-//           )}
-//         </div>
-//       </div>
-
-//       {/* --- Map View --- */}
-//       <MapContainer
-//         center={[40.7128, -74.006]}
-//         zoom={13}
-//         style={{ height: "100%", width: "100%" }}
-//         zoomControl={false}
-//       >
-//         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
-//         {/* Helper to set my position on map click */}
-//         <LocationSelector onLocationSelected={setMyPos} />
-
-//         {/* Auto Zoom when tracking */}
-//         <AutoZoom routePath={vehiclePos ? [vehiclePos] : null} myPos={myPos} />
-
-//         {/* My Location - Blue */}
-//         {myPos && (
-//           <CircleMarker
-//             center={[myPos.lat, myPos.lon]}
-//             radius={8}
-//             pathOptions={{
-//               color: "white",
-//               fillColor: "#2563eb",
-//               fillOpacity: 1,
-//             }}
-//           >
-//             <Popup>You</Popup>
-//           </CircleMarker>
-//         )}
-
-//         {/* Vehicle - Red with Pulsing Effect */}
-//         {vehiclePos && (
-//           <CircleMarker
-//             center={vehiclePos}
-//             radius={10}
-//             pathOptions={{
-//               color: "white",
-//               fillColor: "#dc2626",
-//               fillOpacity: 1,
-//             }}
-//           >
-//             <Popup>
-//               <div className="text-center">
-//                 <strong>{activeTrip?.vehicle_type}</strong>
-//                 <br />
-//                 {(eta?.distance / 1000).toFixed(1)} km away
-//               </div>
-//             </Popup>
-//           </CircleMarker>
-//         )}
-//       </MapContainer>
-//     </div>
-//   );
-// };
-
-// export default MapPassenger;
-
 import React, { useState, useRef, useEffect } from "react";
+import { useSelector } from "react-redux";
 import {
   MapContainer,
   TileLayer,
@@ -605,360 +7,589 @@ import {
   Popup,
   useMapEvents,
   useMap,
+  Polyline,
 } from "react-leaflet";
-import LocationSearch from "./LocationSearch";
-import axios from "axios";
-import { Loader, MapPin, Navigation, AlertCircle } from "lucide-react";
 import L from "leaflet";
+import api from "../utils/api";
+import {
+  Loader,
+  MapPin,
+  Navigation,
+  AlertCircle,
+  Search,
+  Bus,
+  Info,
+} from "lucide-react";
 
-// --- Helper: Auto Zoom to Match ---
-const AutoZoom = ({ routePath, myPos }) => {
+// --- Helper: Auto Zoom to Bounds ---
+const MapUpdater = ({ bounds }) => {
   const map = useMap();
   useEffect(() => {
-    if (routePath && routePath.length > 0) {
-      const bounds = L.latLngBounds(routePath);
-      if (myPos) bounds.extend([myPos.lat, myPos.lon]);
-      map.fitBounds(bounds, { padding: [50, 50] });
+    if (bounds && bounds.length > 0) {
+      const latLngBounds = L.latLngBounds(bounds);
+      map.fitBounds(latLngBounds, { padding: [50, 50] });
     }
-  }, [routePath, myPos, map]);
-  return null;
-};
-
-// --- Component to handle map clicks ---
-const LocationSelector = ({ onLocationSelected }) => {
-  useMapEvents({
-    click(e) {
-      onLocationSelected({
-        lat: e.latlng.lat,
-        lon: e.latlng.lng,
-        display_name: "Selected Location",
-      });
-    },
-  });
+  }, [bounds, map]);
   return null;
 };
 
 const MapPassenger = ({ onBack }) => {
-  const [myPos, setMyPos] = useState(null);
-  const [matches, setMatches] = useState([]);
-  const [activeTrip, setActiveTrip] = useState(null);
+  const { user } = useSelector((state) => state.auth);
 
-  // Active Trip Data
-  const [vehiclePos, setVehiclePos] = useState(null);
+  const [myPos, setMyPos] = useState(null);
+  const [universityVehicles, setUniversityVehicles] = useState({}); // { trip_id: { lat, lon, vehicle_number } }
+  const [activeTrip, setActiveTrip] = useState(null); // { trip_id, vehicle_number, etc }
+  const [nearbyStops, setNearbyStops] = useState([]);
+  const [selectedStop, setSelectedStop] = useState(null);
+  const [showStops, setShowStops] = useState(false);
+
+  // Tracking State
   const [eta, setEta] = useState(null);
+  const [stopMetrics, setStopMetrics] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [routes, setRoutes] = useState([]);
 
   const ws = useRef(null);
-  const heartbeatRef = useRef(null); // Ref to store the interval ID
+  const heartbeatRef = useRef(null);
 
-  // 1. Search for Active Trips near me
-  const handleCheckForVehicles = async () => {
-    if (!myPos) return;
-    setLoading(true);
-    setMatches([]);
+  // 1. Initial Setup: Fetch Campus Routes & Connect to University Group
+  useEffect(() => {
+    if (user?.university) {
+      fetchRoutes();
+      connectToUniversityGroup();
+    }
+    return () => {
+      if (ws.current) ws.current.close();
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+    };
+  }, [user?.university]);
 
+  // Fetch nearby stops based on position
+  useEffect(() => {
+    if (myPos) {
+      fetchNearbyStops();
+    }
+  }, [myPos]);
+
+  const fetchRoutes = async () => {
     try {
-      const res = await axios.post(
-        "http://localhost:8000/api/passenger/match/",
-        {
-          lat: myPos.lat,
-          lon: myPos.lon,
-        },
-      );
-      setMatches(res.data);
+      const res = await api.get(`/api/routes/?university=${user.university}`);
+      setRoutes(res.data);
     } catch (err) {
-      console.error(err);
-      alert("Error scanning for vehicles. Ensure backend is running.");
-    } finally {
-      setLoading(false);
+      console.error("Failed to load campus routes");
     }
   };
 
-  // 2. Connect to a specific Trip
-  const connectToTrip = (trip) => {
-    setActiveTrip(trip);
+  const fetchNearbyStops = async () => {
+    try {
+      const res = await api.get(
+        `/api/passenger/nearby-stops/?lat=${myPos.lat}&lon=${myPos.lon}`,
+      );
+      setNearbyStops(res.data);
+    } catch (err) {
+      console.error("Failed to fetch nearby stops");
+    }
+  };
 
-    const wsUrl = `ws://localhost:8000/ws/trip/${trip.trip_id}/passenger/`;
+  const connectToUniversityGroup = (tripId = null) => {
+    const wsUrl = `ws://localhost:8000/ws/tracking/${user.university}/student/${tripId ? `${tripId}/` : ""}`;
+
+    if (ws.current) ws.current.close();
     ws.current = new WebSocket(wsUrl);
-
-    ws.current.onopen = () => {
-      console.log("Connected to Trip");
-      // Send initial location immediately
-      sendLocationUpdate();
-
-      // START HEARTBEAT: Send location every 4 seconds to get updated ETA
-      heartbeatRef.current = setInterval(sendLocationUpdate, 4000);
-    };
 
     ws.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
 
-      // Update Vehicle Position on Map
-      if (data.type === "vehicle_update") {
-        setVehiclePos([data.lat, data.lon]);
+      if (
+        data.type === "university_vehicle_update" ||
+        data.type === "vehicle_update"
+      ) {
+        console.log("Vehicle Update Received:", data);
+        setUniversityVehicles((prev) => ({
+          ...prev,
+          [data.trip_id]: {
+            lat: data.lat,
+            lon: data.lon,
+            vehicle_number:
+              data.vehicle_number ||
+              prev[data.trip_id]?.vehicle_number ||
+              "Bus",
+            lastUpdate: Date.now(),
+          },
+        }));
       }
 
-      // Update ETA Display
       if (data.type === "eta_update") {
-        setEta(data.data); // { distance: meters, duration: seconds }
+        setEta(data.data);
+        if (data.stop_metrics) {
+          setStopMetrics(data.stop_metrics);
+        }
       }
 
-      // Handle Driver End Trip
-      if (data.type === "trip_ended") {
-        alert("The driver has ended the trip.");
-        leaveTrip();
+      if (data.type === "vehicle_stopped" || data.type === "trip_ended") {
+        setUniversityVehicles((prev) => {
+          const next = { ...prev };
+          delete next[data.trip_id];
+          return next;
+        });
+        if (activeTrip?.trip_id === data.trip_id) {
+          alert("This vehicle has ended its trip.");
+          stopTracking();
+        }
       }
-    };
-
-    ws.current.onclose = () => {
-      console.log("Connection closed");
     };
   };
 
-  // Helper to send location
-  const sendLocationUpdate = () => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN && myPos) {
-      ws.current.send(
-        JSON.stringify({
-          lat: myPos.lat,
-          lon: myPos.lon,
-        }),
-      );
-    }
-  };
-
-  const leaveTrip = () => {
-    // Clear Interval
-    if (heartbeatRef.current) {
-      clearInterval(heartbeatRef.current);
-      heartbeatRef.current = null;
-    }
-    // Close Socket
-    if (ws.current) ws.current.close();
-
-    setActiveTrip(null);
-    setVehiclePos(null);
+  const startTracking = (tripId, vehicleNumber) => {
+    setActiveTrip({ trip_id: tripId, vehicle_number: vehicleNumber });
     setEta(null);
+    setStopMetrics(null);
+    connectToUniversityGroup(tripId);
+
+    if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+    heartbeatRef.current = setInterval(sendLocationForEta, 4000);
   };
 
-  // Cleanup on Unmount
-  useEffect(() => {
-    return () => {
-      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-      if (ws.current) ws.current.close();
-    };
-  }, []);
+  const sendLocationForEta = () => {
+    if (ws.current?.readyState === WebSocket.OPEN && myPos) {
+      const payload = { lat: myPos.lat, lon: myPos.lon };
+      if (selectedStop) {
+        payload.stop_id = selectedStop.id;
+      }
+      ws.current.send(JSON.stringify(payload));
+    }
+  };
+
+  const stopTracking = () => {
+    setActiveTrip(null);
+    setEta(null);
+    setStopMetrics(null);
+    if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+    if (ws.current) ws.current.close();
+    connectToUniversityGroup();
+  };
+
+  const vehicleList = Object.entries(universityVehicles);
 
   return (
-    <div className="h-full relative font-sans">
-      {/* --- Sidebar / Overlay Panel --- */}
-      <div className="absolute top-4 left-4 w-96 bg-white rounded-xl shadow-2xl z-[1000] flex flex-col max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="bg-gray-900 text-white p-4 flex justify-between items-center">
-          <h2 className="font-bold flex items-center gap-2">
-            <MapPin size={18} className="text-green-400" /> Passenger View
-          </h2>
-          <button
-            onClick={() => {
-              leaveTrip();
-              onBack();
-            }}
-            className="text-xs hover:text-gray-300"
-          >
-            Exit
-          </button>
+    <div className="h-full relative font-sans bg-slate-50">
+      {/* --- Sidebar UI --- */}
+      <div className="absolute top-4 left-4 w-96 bg-white rounded-[2rem] shadow-2xl z-[1000] flex flex-col max-h-[90vh] overflow-hidden border border-slate-100 ring-1 ring-slate-900/5 transition-all">
+        <div className="bg-slate-900 p-6 text-white">
+          <div className="flex justify-between items-center mb-1">
+            <h2 className="font-black text-2xl flex items-center gap-2 tracking-tighter">
+              <Bus size={26} className="text-indigo-400" /> Vayy Passenger
+            </h2>
+            <button
+              onClick={onBack}
+              className="p-2 hover:bg-slate-800 rounded-xl transition"
+            >
+              <Info size={18} className="opacity-60" />
+            </button>
+          </div>
+          <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">
+            {user?.university_name || "Official Transit Network"}
+          </p>
         </div>
 
-        <div className="p-4 overflow-y-auto">
+        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-6">
           {!activeTrip ? (
             <>
-              <div className="mb-4">
-                <p className="text-sm text-gray-500 mb-2">
-                  Set your location to find vehicles passing by on fixed routes.
-                </p>
-                <LocationSearch
-                  placeholder="Search your location..."
-                  onSelect={setMyPos}
-                />
+              {/* Location Context */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">
+                    Your Pickup Context
+                  </p>
+                  {myPos && (
+                    <button
+                      onClick={() => setShowStops(!showStops)}
+                      className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+                    >
+                      {showStops ? "Hide Nearby Stops" : "Find Nearby Stops"}
+                    </button>
+                  )}
+                </div>
 
-                {myPos && (
-                  <div className="mt-2 text-xs bg-blue-50 text-blue-800 p-2 rounded border border-blue-100 flex items-center gap-2">
-                    <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                    Selected:{" "}
-                    <strong>{myPos.display_name?.split(",")[0]}</strong>
+                <div
+                  className={`p-4 rounded-2xl border-2 transition-all ${myPos ? "bg-indigo-50/50 border-indigo-100" : "bg-slate-50 border-slate-100 border-dashed"}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div
+                      className={`p-2 rounded-xl ${myPos ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-400"}`}
+                    >
+                      <MapPin size={20} />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-black text-slate-800">
+                        {myPos ? "Position Locked" : "Identify Yourself"}
+                      </p>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase">
+                        {myPos
+                          ? `${myPos.lat.toFixed(4)}, ${myPos.lon.toFixed(4)}`
+                          : "Tap map to set standby point"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Nearby Stops List */}
+                {showStops && nearbyStops.length > 0 && (
+                  <div className="space-y-2 animate-in slide-in-from-top-4 duration-300">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">
+                      Suggested Stops
+                    </p>
+                    <div className="grid gap-2">
+                      {nearbyStops.map((stop) => (
+                        <button
+                          key={stop.id}
+                          onClick={() => {
+                            setSelectedStop(stop);
+                            setShowStops(false);
+                          }}
+                          className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${selectedStop?.id === stop.id ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" : "bg-white border-slate-100 hover:border-indigo-200"}`}
+                        >
+                          <div
+                            className={`p-1.5 rounded-lg ${selectedStop?.id === stop.id ? "bg-white/20" : "bg-indigo-50 text-indigo-600"}`}
+                          >
+                            <School size={14} />
+                          </div>
+                          <div className="flex-1 overflow-hidden">
+                            <p className="text-xs font-black truncate">
+                              {stop.name}
+                            </p>
+                            <p
+                              className={`text-[9px] font-bold uppercase ${selectedStop?.id === stop.id ? "text-indigo-100" : "text-slate-400"}`}
+                            >
+                              University Stop
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
 
-              <button
-                onClick={handleCheckForVehicles}
-                disabled={!myPos || loading}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 disabled:bg-gray-300 transition flex items-center justify-center gap-2 shadow-sm"
-              >
-                {loading ? (
-                  <Loader className="animate-spin" size={18} />
-                ) : (
-                  "Scan for Vehicles (10m)"
-                )}
-              </button>
+              {/* Active Vehicles */}
+              <div className="space-y-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex justify-between">
+                  Live Campus Fleet <span>{vehicleList.length} Active</span>
+                </p>
 
-              {/* Results List */}
-              {matches.length > 0 && (
-                <div className="mt-6 flex flex-col gap-2 animate-fade-in">
-                  <div className="flex justify-between items-center mb-1">
-                    <p className="text-xs font-bold text-gray-400 uppercase">
-                      Available Rides
-                    </p>
-                    <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
-                      {matches.length} found
-                    </span>
+                {vehicleList.length > 0 ? (
+                  <div className="space-y-3">
+                    {vehicleList.map(([id, v]) => (
+                      <button
+                        key={id}
+                        onClick={() => startTracking(id, v.vehicle_number)}
+                        className="w-full relative overflow-hidden group"
+                      >
+                        <div className="p-5 bg-white border-2 border-slate-100 rounded-3xl group-hover:border-indigo-600 group-hover:shadow-xl transition-all text-left">
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <p className="text-xl font-black text-slate-900 tracking-tighter">
+                                {v.vehicle_number}
+                              </p>
+                              <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-1">
+                                <Navigation
+                                  size={10}
+                                  className="fill-indigo-500"
+                                />{" "}
+                                Active Trip
+                              </p>
+                            </div>
+                            <div className="px-3 py-1 bg-emerald-100 text-emerald-700 text-[9px] font-black rounded-full uppercase">
+                              Live
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 pt-3 border-t border-slate-50">
+                            <div className="flex-1">
+                              <p className="text-[9px] font-black text-slate-400 uppercase">
+                                Route Status
+                              </p>
+                              <p className="text-[11px] font-bold text-slate-600">
+                                En-route to Hub
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[9px] font-black text-slate-400 uppercase">
+                                Action
+                              </p>
+                              <p className="text-[11px] font-black text-indigo-600">
+                                Track Now →
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
                   </div>
-
-                  {matches.map((trip) => (
-                    <button
-                      key={trip.trip_id}
-                      onClick={() => connectToTrip(trip)}
-                      className="text-left bg-white border border-gray-200 hover:border-blue-500 hover:shadow-md p-3 rounded-lg transition group"
-                    >
-                      <div className="flex justify-between items-center mb-1">
-                        <div className="font-bold text-gray-800 capitalize flex items-center gap-2">
-                          <Navigation size={14} className="text-blue-600" />{" "}
-                          {trip.vehicle_type}
-                        </div>
-                        <div className="text-xs text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded">
-                          Live
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-500 truncate">
-                        <span className="font-medium text-gray-700">
-                          {trip.start}
-                        </span>
-                        <span className="mx-1">→</span>
-                        <span className="font-medium text-gray-700">
-                          {trip.end}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {matches.length === 0 && !loading && myPos && (
-                <div className="mt-6 text-center p-4 bg-gray-50 rounded-lg border border-gray-100">
-                  <AlertCircle
-                    className="mx-auto text-gray-400 mb-2"
-                    size={24}
-                  />
-                  <p className="text-sm text-gray-600 font-medium">
-                    No vehicles found nearby.
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Try moving closer to a main road.
-                  </p>
-                </div>
-              )}
+                ) : (
+                  <div className="p-12 text-center bg-slate-50 rounded-[2.5rem] border-4 border-dashed border-slate-100">
+                    <div className="relative w-16 h-16 mx-auto mb-4">
+                      <Bus
+                        className="text-slate-200 absolute inset-0 animate-pulse"
+                        size={64}
+                      />
+                      <Loader
+                        className="text-indigo-600 absolute bottom-0 right-0 animate-spin"
+                        size={24}
+                      />
+                    </div>
+                    <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                      Scanning Fleet Signals...
+                    </p>
+                  </div>
+                )}
+              </div>
             </>
           ) : (
-            /* Active Tracking Panel */
-            <div className="animate-fade-in">
-              <div className="bg-green-50 border border-green-200 p-4 rounded-lg mb-4 text-center">
-                <h3 className="font-bold text-green-800 text-lg">
-                  Vehicle En Route
-                </h3>
-                <p className="text-green-600 text-xs">
-                  {activeTrip.start} → {activeTrip.end}
+            /* Selected Vehicle / ETA View */
+            <div className="space-y-6 animate-in zoom-in-95 duration-500">
+              <div className="bg-slate-900 p-8 rounded-[2.5rem] text-center shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+                <p className="relative text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-4">
+                  Focusing Signal
                 </p>
+                <div className="relative flex justify-center items-center gap-4 mb-2">
+                  <div className="w-12 h-0.5 bg-indigo-500/30"></div>
+                  <h3 className="text-4xl font-black text-white tracking-tighter">
+                    {activeTrip.vehicle_number}
+                  </h3>
+                  <div className="w-12 h-0.5 bg-indigo-500/30"></div>
+                </div>
+                <p className="relative text-xs font-bold text-slate-400 mb-6">
+                  Real-time Telemetry Active
+                </p>
+
+                <div className="relative grid grid-cols-2 gap-4">
+                  <div className="bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-white/10">
+                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">
+                      Time to Stop
+                    </p>
+                    <p className="text-2xl font-black text-white">
+                      {stopMetrics?.vehicle_to_stop
+                        ? Math.ceil(stopMetrics.vehicle_to_stop.duration / 60)
+                        : "--"}
+                      <span className="text-xs ml-1 text-slate-400">m</span>
+                    </p>
+                  </div>
+                  <div className="bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-white/10">
+                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">
+                      Dist to Stop
+                    </p>
+                    <p className="text-2xl font-black text-white">
+                      {stopMetrics?.vehicle_to_stop
+                        ? (
+                            stopMetrics.vehicle_to_stop.total_distance / 1000
+                          ).toFixed(1)
+                        : "--"}
+                      <span className="text-xs ml-1 text-slate-400">km</span>
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-gray-50 p-3 rounded-lg border text-center">
-                  <p className="text-3xl font-bold text-gray-800">
-                    {eta ? Math.ceil(eta.duration / 60) : "--"}
-                  </p>
-                  <p className="text-xs text-gray-500 uppercase font-bold">
-                    Minutes
-                  </p>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg border text-center">
-                  <p className="text-3xl font-bold text-gray-800">
-                    {eta ? (eta.distance / 1000).toFixed(1) : "--"}
-                  </p>
-                  <p className="text-xs text-gray-500 uppercase font-bold">
-                    Km Away
-                  </p>
+              {/* Duel Metric Card */}
+              <div className="space-y-3">
+                <div className="p-6 bg-white border-2 border-slate-100 rounded-3xl shadow-lg">
+                  <div className="flex flex-col gap-6">
+                    {/* Passenger to Stop */}
+                    <div className="flex items-start gap-4">
+                      <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl">
+                        <MapPin size={24} />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          You → {selectedStop?.name || "Target Stop"}
+                        </p>
+                        <div className="flex items-baseline gap-2">
+                          <p className="text-2xl font-black text-slate-800">
+                            {stopMetrics?.me_to_stop
+                              ? (
+                                  stopMetrics.me_to_stop.total_distance / 1000
+                                ).toFixed(2)
+                              : "--"}
+                            <span className="text-sm ml-1 font-bold">km</span>
+                          </p>
+                          <p className="text-xs font-bold text-slate-500">
+                            (
+                            {stopMetrics?.me_to_stop
+                              ? Math.ceil(stopMetrics.me_to_stop.duration / 60)
+                              : "--"}{" "}
+                            min walk)
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Visual Path Connector */}
+                    <div className="flex justify-center ml-12 -my-2">
+                      <div className="w-1 h-8 bg-slate-100 rounded-full flex flex-col justify-between py-1">
+                        <div className="w-full h-1 bg-blue-400 rounded-full"></div>
+                        <div className="w-full h-1 bg-indigo-400 rounded-full"></div>
+                      </div>
+                    </div>
+
+                    {/* Vehicle to Stop */}
+                    <div className="flex items-start gap-4">
+                      <div className="p-3 bg-indigo-100 text-indigo-600 rounded-2xl">
+                        <Bus size={24} />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          Vehicle → Stop
+                        </p>
+                        <div className="flex items-baseline gap-2">
+                          <p className="text-2xl font-black text-slate-800">
+                            {stopMetrics?.vehicle_to_stop
+                              ? (
+                                  stopMetrics.vehicle_to_stop.total_distance /
+                                  1000
+                                ).toFixed(2)
+                              : "--"}
+                            <span className="text-sm ml-1 font-bold">km</span>
+                          </p>
+                          <p className="text-xs font-bold text-slate-500">
+                            (
+                            {stopMetrics?.vehicle_to_stop
+                              ? Math.ceil(
+                                  stopMetrics.vehicle_to_stop.duration / 60,
+                                )
+                              : "--"}{" "}
+                            min drive)
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {!eta && (
-                <div className="flex items-center justify-center gap-2 text-xs text-blue-500 animate-pulse mb-4">
-                  <Loader size={12} className="animate-spin" /> Calculating
-                  ETA...
+              {!myPos && (
+                <div className="p-5 bg-amber-50 border border-amber-100 rounded-3xl flex items-start gap-4">
+                  <div className="p-2 bg-amber-100 text-amber-600 rounded-xl">
+                    <AlertCircle size={20} />
+                  </div>
+                  <p className="text-[11px] font-bold text-amber-800 leading-relaxed text-left">
+                    <span className="font-black uppercase block mb-1 tracking-tighter">
+                      Precision Lost
+                    </span>
+                    Identify your pickup standby point on the map to unlock
+                    accurate wait times.
+                  </p>
                 </div>
               )}
 
               <button
-                onClick={leaveTrip}
-                className="w-full border border-red-200 text-red-600 py-3 rounded-lg text-sm font-bold hover:bg-red-50 transition"
+                onClick={stopTracking}
+                className="w-full bg-slate-100 text-slate-900 py-5 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-200 transition shadow-sm active:scale-95"
               >
-                Stop Tracking
+                Release Signal & Global Tracking
               </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* --- Map View --- */}
       <MapContainer
-        center={[40.7128, -74.006]}
-        zoom={13}
+        center={[12.9716, 77.5946]} // Fallback coords
+        zoom={14}
         style={{ height: "100%", width: "100%" }}
         zoomControl={false}
+        attributionControl={false}
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-        {/* Helper to set my position on map click (Only active if not tracking) */}
-        {!activeTrip && <LocationSelector onLocationSelected={setMyPos} />}
+        <useMapEvents
+          click={(e) => setMyPos({ lat: e.latlng.lat, lon: e.latlng.lng })}
+        />
 
-        {/* Auto Zoom when tracking */}
-        <AutoZoom routePath={vehiclePos ? [vehiclePos] : null} myPos={myPos} />
+        {/* Draw Campus Routes (Static lines) */}
+        {routes.map((r) => (
+          <Polyline
+            key={r.id}
+            positions={r.path_coords}
+            color="#6366f1"
+            weight={3}
+            opacity={0.15}
+          />
+        ))}
 
-        {/* My Location - Blue */}
+        {/* My Position */}
         {myPos && (
           <CircleMarker
             center={[myPos.lat, myPos.lon]}
-            radius={8}
+            radius={10}
             pathOptions={{
               color: "white",
               fillColor: "#2563eb",
               fillOpacity: 1,
+              weight: 4,
             }}
           >
-            <Popup>You</Popup>
+            <Popup className="font-sans font-bold text-xs">Standby Point</Popup>
           </CircleMarker>
         )}
 
-        {/* Vehicle - Red with Pulsing Effect */}
-        {vehiclePos && (
+        {/* Stops */}
+        {nearbyStops.map((stop) => (
           <CircleMarker
-            center={vehiclePos}
-            radius={10}
+            key={stop.id}
+            center={[stop.lat, stop.lon]}
+            radius={selectedStop?.id === stop.id ? 12 : 6}
             pathOptions={{
               color: "white",
-              fillColor: "#dc2626",
+              fillColor: selectedStop?.id === stop.id ? "#4f46e5" : "#94a3b8",
               fillOpacity: 1,
+              weight: 3,
             }}
+            eventHandlers={{ click: () => setSelectedStop(stop) }}
           >
-            <Popup>
-              <div className="text-center">
-                <strong>{activeTrip?.vehicle_type}</strong>
-                <br />
-                {eta
-                  ? `${(eta.distance / 1000).toFixed(1)} km away`
-                  : "Updating..."}
-              </div>
+            <Popup className="font-sans font-black text-[10px] uppercase">
+              {stop.name}
             </Popup>
           </CircleMarker>
-        )}
+        ))}
+
+        {/* Global University Vehicles */}
+        {vehicleList.map(([id, v]) => {
+          if (!v || typeof v.lat !== "number" || typeof v.lon !== "number")
+            return null;
+          return (
+            <CircleMarker
+              key={id}
+              center={[v.lat, v.lon]}
+              radius={activeTrip?.trip_id === id ? 14 : 9}
+              pathOptions={{
+                color: "white",
+                fillColor: activeTrip?.trip_id === id ? "#10b981" : "#475569",
+                fillOpacity: 1,
+                weight: activeTrip?.trip_id === id ? 5 : 2,
+              }}
+              eventHandlers={{
+                click: () => startTracking(id, v.vehicle_number),
+              }}
+            >
+              <Popup className="font-sans font-black text-[10px] uppercase">
+                {v.vehicle_number || "Bus"}
+              </Popup>
+            </CircleMarker>
+          );
+        })}
+
+        <MapUpdater
+          bounds={
+            activeTrip
+              ? [
+                  universityVehicles[activeTrip.trip_id],
+                  myPos,
+                  selectedStop,
+                ].filter(Boolean)
+              : [myPos, ...vehicleList.map((v) => v[1])].filter(Boolean)
+          }
+        />
       </MapContainer>
     </div>
   );

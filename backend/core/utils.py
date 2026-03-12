@@ -11,25 +11,44 @@ OSRM_HOST = (
 )
 
 
-def create_route_geometry(start_coords, end_coords):
-    # start/end: (lon, lat) tuples
-    url = f"{OSRM_HOST}/route/v1/driving/{start_coords[0]},{start_coords[1]};{end_coords[0]},{end_coords[1]}?overview=full&geometries=polyline"
+def create_route_geometry(waypoints, alternatives=False):
+    """
+    waypoints: List of (lon, lat) tuples in order: [start, stop1, ..., stopN, end]
+    alternatives: Boolean to request alternative routes from OSRM
+    """
+    if not waypoints or len(waypoints) < 2:
+        return None
+
+    coords_str = ";".join([f"{lon},{lat}" for lon, lat in waypoints])
+    alt_param = "true" if alternatives else "false"
+
+    # Using OSRM 'route' service with waypoints
+    url = f"{OSRM_HOST}/route/v1/driving/{coords_str}?overview=full&geometries=polyline&alternatives={alt_param}"
+
     try:
-        response = requests.get(url, timeout=2)
+        response = requests.get(url, timeout=5)
         data = response.json()
         if data["code"] != "Ok":
             return None
 
-        route_data = data["routes"][0]
-        decoded = polyline.decode(route_data["geometry"])
-        # Polyline returns (lat, lon), PostGIS needs (lon, lat)
-        path_coords = [(lon, lat) for lat, lon in decoded]
+        results = []
+        for route_data in data["routes"]:
+            decoded = polyline.decode(route_data["geometry"])
+            # PostGIS needs (lon, lat)
+            path_coords = [(lon, lat) for lat, lon in decoded]
 
-        return {
-            "geometry": LineString(path_coords, srid=4326),
-            "distance": route_data["distance"],
-            "duration": route_data["duration"],
-        }
+            results.append(
+                {
+                    "geometry": LineString(path_coords, srid=4326),
+                    "total_distance": route_data["distance"],
+                    "duration": route_data["duration"],
+                    "geometry_polyline": route_data[
+                        "geometry"
+                    ],  # Keep raw for frontend if needed
+                }
+            )
+
+        return results if alternatives else results[0]
     except Exception as e:
         print(f"OSRM Route Error: {e}")
         return None
@@ -45,7 +64,7 @@ def get_eta_osrm(driver_coords, passenger_coords):
             route = data["routes"][0]
             return {
                 "duration": route["duration"],  # seconds
-                "distance": route["distance"],  # meters
+                "total_distance": route["distance"],  # meters
             }
     except Exception:
         return None
