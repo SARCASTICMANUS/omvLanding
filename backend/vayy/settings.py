@@ -29,10 +29,10 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
-import os
-
 # Check if running inside Docker based on an environment variable
 IN_DOCKER = os.environ.get("IN_DOCKER", False)
+
+REDIS_HOST = "redis" if IN_DOCKER else "localhost"
 
 # Application definition
 
@@ -91,9 +91,36 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            # If in Docker, use 'redis'. If local, use 'localhost'
-            "hosts": [("redis" if IN_DOCKER else "localhost", 6379)],
+            "hosts": [(REDIS_HOST, 6379)],
         },
+    },
+}
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": f"redis://{REDIS_HOST}:6379/1",
+    }
+}
+
+# ─── Celery Configuration ──────────────────────────────────────────────────
+CELERY_BROKER_URL = f"redis://{REDIS_HOST}:6379/0"
+CELERY_RESULT_BACKEND = f"redis://{REDIS_HOST}:6379/0"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "UTC"
+
+from celery.schedules import crontab  # noqa: E402
+
+CELERY_BEAT_SCHEDULE = {
+    "cleanup-inactive-trips": {
+        "task": "core.tasks.cleanup_inactive_trips",
+        "schedule": 60.0,  # every 60 seconds
+    },
+    "cleanup-stale-passengers": {
+        "task": "core.tasks.cleanup_stale_passengers",
+        "schedule": 300.0,  # every 5 minutes
     },
 }
 
@@ -154,11 +181,12 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": True,  # Issue new refresh token on refresh
-    "BLACKLIST_AFTER_ROTATION": True,  # Blacklist old refresh tokens
-    "UPDATE_LAST_LOGIN": True,  # Update last_login field
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": False,  # simplejwt blacklist app not installed
+    "UPDATE_LAST_LOGIN": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
 # Static files (CSS, JavaScript, Images)
@@ -178,23 +206,78 @@ AUTH_USER_MODEL = "core.User"
 # Email Config (Console for dev)
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-# WINDOWS LOCAL CONFIGURATION ONLY
-if os.name == "nt":
+# # WINDOWS LOCAL CONFIGURATION ONLY
+# if os.name == "nt":
 
-    OSGEO4W = r"C:\OSGeo4W"  # Check if this folder exists on your C drive
+#     OSGEO4W = r"C:\OSGeo4W"  # Check if this folder exists on your C drive
+#     if os.path.exists(OSGEO4W):
+#         os.environ["OSGEO4W_ROOT"] = OSGEO4W
+#         os.environ["GDAL_DATA"] = os.path.join(OSGEO4W, "share", "gdal")
+#         os.environ["PROJ_LIB"] = os.path.join(OSGEO4W, "share", "proj")
+#         os.environ["PATH"] = os.path.join(OSGEO4W, "bin") + ";" + os.environ["PATH"]
+#         # You might need to check the bin folder to see if it is gdal306.dll or gdal307.dll etc
+#         # and update the line below accordingly:
+#         GDAL_LIBRARY_PATH = os.path.join(OSGEO4W, "bin", "gdal311.dll")
+
+import platform
+
+SYSTEM = platform.system()
+
+# ==============================
+# WINDOWS CONFIGURATION
+# ==============================
+if SYSTEM == "Windows":
+
+    OSGEO4W = r"C:\OSGeo4W"
+
     if os.path.exists(OSGEO4W):
         os.environ["OSGEO4W_ROOT"] = OSGEO4W
         os.environ["GDAL_DATA"] = os.path.join(OSGEO4W, "share", "gdal")
         os.environ["PROJ_LIB"] = os.path.join(OSGEO4W, "share", "proj")
-        os.environ["PATH"] = os.path.join(OSGEO4W, "bin") + ";" + os.environ["PATH"]
-        # You might need to check the bin folder to see if it is gdal306.dll or gdal307.dll etc
-        # and update the line below accordingly:
+
+        os.environ["PATH"] = os.path.join(OSGEO4W, "bin") + ";" + os.environ.get("PATH", "")
+
         GDAL_LIBRARY_PATH = os.path.join(OSGEO4W, "bin", "gdal311.dll")
-
-# GDAL_LIBRARY_PATH = r"C:/OSGeo4W/bin/gdal311.dll"
-# GEOS_LIBRARY_PATH = r"C:/OSGeo4W/bin/geos_c.dll"
+        GEOS_LIBRARY_PATH = os.path.join(OSGEO4W, "bin", "geos_c.dll")
 
 
-# if os.name == "nt":
-#     GDAL_LIBRARY_PATH = os.path.join("C:\\", "OSGeo4W", "bin", "gdal311.dll")
-#     GEOS_LIBRARY_PATH = os.path.join("C:\\", "OSGeo4W", "bin", "geos_c.dll")
+# ==============================
+# macOS CONFIGURATION
+# ==============================
+elif SYSTEM == "Darwin":
+
+    # Homebrew installation path (Apple Silicon)
+    gdal_path = "/opt/homebrew/opt/gdal/lib/libgdal.dylib"
+    geos_path = "/opt/homebrew/opt/geos/lib/libgeos_c.dylib"
+
+    if os.path.exists(gdal_path):
+        GDAL_LIBRARY_PATH = gdal_path
+
+    if os.path.exists(geos_path):
+        GEOS_LIBRARY_PATH = geos_path
+
+
+# ==============================
+# LINUX CONFIGURATION
+# ==============================
+elif SYSTEM == "Linux":
+
+    possible_gdal = [
+        "/usr/lib/libgdal.so",
+        "/usr/lib/x86_64-linux-gnu/libgdal.so",
+    ]
+
+    possible_geos = [
+        "/usr/lib/libgeos_c.so",
+        "/usr/lib/x86_64-linux-gnu/libgeos_c.so",
+    ]
+
+    for path in possible_gdal:
+        if os.path.exists(path):
+            GDAL_LIBRARY_PATH = path
+            break
+
+    for path in possible_geos:
+        if os.path.exists(path):
+            GEOS_LIBRARY_PATH = path
+            break

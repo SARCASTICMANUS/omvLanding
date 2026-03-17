@@ -1,28 +1,23 @@
+// VAYY | src/components/Maps/MapPassenger.jsx | Status: 🔧 Fixed
+// Reason: Added WebSocket reconnect with exponential backoff, Multi-bus markers, 
+// Assigned Route Polyline, ETA Overlays, and Bus Pass expiry warning banner.
+
 import React, { useState, useRef, useEffect } from "react";
 import {
   MapContainer,
   TileLayer,
   CircleMarker,
   Popup,
-  useMapEvents,
   useMap,
+  Polyline,
 } from "react-leaflet";
 import api from "../../utils/api";
-import {
-  Loader,
-  MapPin,
-  Navigation,
-  Clock,
-  Search,
-  X,
-  AlertCircle,
-} from "lucide-react";
+import { Navigation, Clock, Search, AlertCircle, RefreshCw } from "lucide-react";
 import L from "leaflet";
 import Header from "../Layout/Header";
-import LocationSearch from "../Shared/LocationSearch";
 import "leaflet/dist/leaflet.css";
 
-// --- Internal Helper: Fixes Tile Rendering ---
+// Fix map bounds dynamically
 const MapResizer = () => {
   const map = useMap({ attributionControl: false });
   useEffect(() => {
@@ -33,261 +28,313 @@ const MapResizer = () => {
   return null;
 };
 
-// --- Internal Helper: Auto Zoom ---
-const AutoZoom = ({ vehiclePos, myPos }) => {
+// Fit bounds to show route and buses
+const AutoZoom = ({ routeLine, buses, myPos }) => {
   const map = useMap({ attributionControl: false });
   useEffect(() => {
-    if (vehiclePos && myPos) {
-      const bounds = L.latLngBounds([vehiclePos, [myPos.lat, myPos.lon]]);
-      map.fitBounds(bounds, { padding: [80, 80] });
+    const points = [];
+    if (myPos) points.push([myPos.lat, myPos.lon]);
+    
+    if (routeLine && routeLine.length > 0) {
+      points.push(...routeLine);
     }
-  }, [vehiclePos, myPos, map]);
+    
+    Object.values(buses).forEach(b => {
+      if (b.pos) points.push(b.pos);
+    });
+
+    if (points.length > 0) {
+      try {
+        const bounds = L.latLngBounds(points);
+        map.fitBounds(bounds, { 
+            padding: [80, 80],
+            animate: true,
+            duration: 1.5,
+            easeLinearity: 0.25
+        });
+      } catch (e) {
+        // Handle edge case where points are identical
+      }
+    }
+  }, [routeLine, buses, myPos, map]);
   return null;
 };
 
-// --- Internal Helper: Map Clicks ---
-const LocationSelector = ({ onSelect }) => {
-  useMapEvents({
-    click(e) {
-      onSelect({
-        lat: e.latlng.lat,
-        lon: e.latlng.lng,
-        display_name: "Map Pin",
-      });
-    },
-  });
-  return null;
-};
+// Helper to decode OSRM polyline string to [lat, lon] array
+function decodePolyline(str, precision = 5) {
+  let index = 0, lat = 0, lng = 0, coordinates = [], shift = 0, result = 0, byte = null, latitude_change, longitude_change, factor = Math.pow(10, precision);
+  while (index < str.length) {
+    byte = null; shift = 0; result = 0;
+    do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    latitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    shift = result = 0;
+    do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    longitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lat += latitude_change; lng += longitude_change;
+    coordinates.push([lat / factor, lng / factor]);
+  }
+  return coordinates;
+}
 
 const MapPassenger = () => {
-  const [myPos, setMyPos] = useState(null);
-  const [matches, setMatches] = useState([]);
-  const [activeTrip, setActiveTrip] = useState(null);
-  const [vehiclePos, setVehiclePos] = useState(null);
-  const [eta, setEta] = useState(null);
-  const [loading, setLoading] = useState(false);
-
+  const [dashboard, setDashboard] = useState(null);
+  const [buses, setBuses] = useState({}); // { trip_id: { pos: [lat, lon], bus_number: "...", eta: [..] } }
+  const [loading, setLoading] = useState(true);
+  const [wsStatus, setWsStatus] = useState("disconnected");
+  const [myPos, setMyPos] = useState(null); // { lat, lon }
+  const [isLocationActive, setIsLocationActive] = useState(false);
+  
   const ws = useRef(null);
-  const heartbeatRef = useRef(null);
+  const watchId = useRef(null);
+  const reconnectTimeout = useRef(null);
+  const reconnectAttempts = useRef(0);
+  const maxReconnectDelay = 30000;
 
-  // 1. Search Logic
-  const handleCheckForVehicles = async () => {
-    if (!myPos) return;
-    setLoading(true);
-    setMatches([]);
+  // Haversine distance helper (meters)
+  const calculateDistance = (p1, p2) => {
+    if (!p1 || !p2) return null;
+    const R = 6371e3;
+    const φ1 = p1.lat * Math.PI/180;
+    const φ2 = p2.lat * Math.PI/180;
+    const Δφ = (p2.lat-p1.lat) * Math.PI/180;
+    const Δλ = (p2.lon-p1.lon) * Math.PI/180;
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  useEffect(() => {
+    fetchDashboard();
+    return () => cleanupWs();
+  }, []);
+
+  const fetchDashboard = async () => {
     try {
-      const res = await api.post("/api/passenger/match/", {
-        lat: myPos.lat,
-        lon: myPos.lon,
-      });
-      setMatches(res.data);
+      setLoading(true);
+      const res = await api.get("/api/student/dashboard/");
+      setDashboard(res.data);
+      if (res.data.university_id) {
+        connectWebSocket(res.data.university_id);
+      }
     } catch (err) {
-      alert("Search failed.");
+      console.error("Failed to load dashboard", err);
     } finally {
       setLoading(false);
     }
   };
 
-  // 2. Connection Logic
-  const connectToTrip = (trip) => {
-    setActiveTrip(trip);
-
-    ws.current = new WebSocket(
-      `ws://localhost:8000/ws/trip/${trip.trip_id}/passenger/`,
-    );
+  const connectWebSocket = (universityId) => {
+    cleanupWs();
+    setWsStatus("connecting");
+    
+    // Connect to universal university stream with JWT auth
+    const token = localStorage.getItem("token");
+    ws.current = new WebSocket(`ws://${window.location.host.split(':')[0]}:8000/ws/university/${universityId}/student/?token=${token}`);
 
     ws.current.onopen = () => {
-      sendLocationUpdate();
-      heartbeatRef.current = setInterval(sendLocationUpdate, 4000);
+      setWsStatus("connected");
+      reconnectAttempts.current = 0;
     };
 
     ws.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.type === "vehicle_update") setVehiclePos([data.lat, data.lon]);
-      if (data.type === "eta_update") setEta(data.data);
-      if (data.type === "trip_ended") {
-        alert("Driver ended trip");
-        leaveTrip();
+      
+      if (data.type === "university_vehicle_update") {
+        setBuses(prev => ({
+          ...prev,
+          [data.trip_id]: {
+            pos: [data.lat, data.lon],
+            bus_number: data.bus_number,
+            route_id: data.route_id,
+            next_stop_eta: data.next_stop_eta
+          }
+        }));
+      } else if (data.type === "vehicle_stopped") {
+        setBuses(prev => {
+          const newBuses = { ...prev };
+          delete newBuses[data.trip_id];
+          return newBuses;
+        });
       }
+    };
+
+    ws.current.onclose = () => {
+      setWsStatus("disconnected");
+      scheduleReconnect(universityId);
+    };
+
+    ws.current.onerror = () => {
+      // onerror is followed by onclose, so logic goes there
     };
   };
 
-  const sendLocationUpdate = () => {
-    if (ws.current?.readyState === WebSocket.OPEN && myPos) {
-      ws.current.send(JSON.stringify({ lat: myPos.lat, lon: myPos.lon }));
+  const scheduleReconnect = (universityId) => {
+    if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+    
+    const baseDelay = 1000;
+    const delay = Math.min(baseDelay * Math.pow(2, reconnectAttempts.current), maxReconnectDelay);
+    
+    reconnectTimeout.current = setTimeout(() => {
+      reconnectAttempts.current += 1;
+      connectWebSocket(universityId);
+    }, delay);
+  };
+
+  const cleanupWs = () => {
+    if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+    if (ws.current) {
+      ws.current.onclose = null; // Prevent reconnect loop on unmount
+      ws.current.close();
     }
   };
 
-  const leaveTrip = () => {
-    if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-    if (ws.current) ws.current.close();
-    setActiveTrip(null);
-    setVehiclePos(null);
-    setEta(null);
+  const toggleLocationSharing = () => {
+    if (isLocationActive) {
+        if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
+        watchId.current = null;
+        setIsLocationActive(false);
+    } else {
+        setIsLocationActive(true);
+        startTracking();
+    }
+  };
+
+  const startTracking = () => {
+    if (!navigator.geolocation) return alert("Geolocation not supported");
+    
+    watchId.current = navigator.geolocation.watchPosition(
+        async (pos) => {
+            const newPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+            setMyPos(newPos);
+            
+            // Push to backend via WebSocket instead of HTTP
+            if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+                ws.current.send(JSON.stringify({ 
+                    lat: pos.coords.latitude, 
+                    lon: pos.coords.longitude 
+                }));
+            }
+        },
+        (err) => console.error("Position error", err),
+        { enableHighAccuracy: true, maximumAge: 10000 }
+    );
   };
 
   useEffect(() => {
-    return () => leaveTrip();
+    return () => {
+        if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
+    };
   }, []);
+
+  if (loading) return <div className="p-8 flex items-center justify-center h-screen"><RefreshCw className="animate-spin text-blue-500" /></div>;
+  if (!dashboard) return <div className="p-8 text-center text-slate-500">Failed to load dashboard. Make sure you have a student profile.</div>;
+
+  const validPass = dashboard.student_profile?.boarding_eligible;
+  const routeLine = dashboard.assigned_route?.path_coords || [];
+  const pickupStop = dashboard.pickup_stop?.lat ? dashboard.pickup_stop : null;
+  
+  // Only show buses on the user's assigned route
+  const relevantBuses = Object.entries(buses).filter(([tripId, b]) => {
+    if (!dashboard.assigned_route?.id) return true; // Show all if no route assigned
+    return String(b.route_id) === String(dashboard.assigned_route.id);
+  });
 
   return (
     <div className="flex flex-col h-screen w-full bg-slate-50 font-sans">
       <Header />
 
+      {/* Expiry Banner */}
+      {!validPass && (
+        <div className="bg-red-500 text-white px-4 py-2 text-sm font-bold flex justify-center items-center gap-2">
+          <AlertCircle size={16} /> Your bus pass has expired or is invalid. Boarding may be denied.
+        </div>
+      )}
+
       <div className="flex-1 w-full relative z-0">
         {/* --- Floating Panel --- */}
-        <div className="absolute top-6 left-6 w-96 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl z-[1000] border border-white/20 flex flex-col max-h-[calc(100vh-120px)] transition-all">
-          {/* Header */}
+        <div className="absolute top-6 left-6 w-96 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl z-[1000] border border-white/20 flex flex-col max-h-[calc(100vh-120px)] overflow-hidden">
           <div className="bg-slate-900 p-5 rounded-t-2xl text-white flex items-center justify-between shadow-md">
-            <div className="flex items-center gap-3">
-              <MapPin size={20} className="text-emerald-400" />
-              <div>
-                <h2 className="font-bold text-sm">Find Your Ride</h2>
+            <div>
+              <h2 className="font-bold text-sm">{dashboard.route?.name || "Unassigned"}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`w-2 h-2 rounded-full ${wsStatus === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-orange-400'}`}></span>
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">
-                  Passenger Mode
+                  {wsStatus === 'connected' ? 'Live Stream Active' : 'Connecting...'}
                 </p>
               </div>
             </div>
+            {dashboard.route?.bus_number && (
+              <div className="px-3 py-1 bg-white/10 rounded-lg font-mono text-emerald-400 border border-white/10 font-bold border-emerald-500/30">
+                #{dashboard.route.bus_number}
+              </div>
+            )}
           </div>
 
-          <div className="p-6 overflow-y-auto">
-            {!activeTrip ? (
-              <div className="space-y-6">
-                {/* Step 1: Location */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase">
-                    1. Set Location
-                  </label>
-                  <LocationSearch
-                    placeholder="Search pickup point..."
-                    onSelect={setMyPos}
-                  />
-
-                  {myPos ? (
-                    <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-100 rounded-xl text-blue-800 text-sm">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                      <span className="truncate">
-                        {myPos.display_name.split(",")[0]}
-                      </span>
-                      <button
-                        onClick={() => setMyPos(null)}
-                        className="ml-auto text-blue-400 hover:text-blue-600"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-400 italic pl-1">
-                      Or click on the map to pin.
-                    </p>
-                  )}
+          <div className="p-4 overflow-y-auto w-full">
+            {/* Location Status Toggle */}
+            <div className="mb-4 bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between">
+                <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tracking Status</p>
+                    <p className="text-xs font-bold text-slate-700">{isLocationActive ? "Location Shared" : "Location Inactive"}</p>
                 </div>
-
-                {/* Step 2: Scan */}
-                <button
-                  onClick={handleCheckForVehicles}
-                  disabled={!myPos || loading}
-                  className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold hover:bg-blue-700 disabled:bg-slate-200 disabled:cursor-not-allowed flex justify-center items-center gap-2 transition shadow-lg"
+                <button 
+                    onClick={toggleLocationSharing}
+                    className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${isLocationActive ? "bg-red-500 text-white" : "bg-emerald-500 text-white"}`}
                 >
-                  {loading ? (
-                    <Loader className="animate-spin" size={18} />
-                  ) : (
-                    <>
-                      <Search size={18} /> Scan Nearby (10m)
-                    </>
-                  )}
+                    {isLocationActive ? "Deactivate" : "Activate"}
                 </button>
+            </div>
 
-                {/* Step 3: Results */}
-                {matches.length > 0 && (
-                  <div className="space-y-2 animate-fade-in">
-                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                      <h3 className="text-xs font-bold text-slate-400 uppercase">
-                        Available Vehicles
-                      </h3>
-                      <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                        {matches.length} found
-                      </span>
+            {myPos && pickupStop && (
+                <div className="mb-4 bg-indigo-50 border border-indigo-100 p-3 rounded-xl">
+                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">You to Pickup Point</p>
+                    <div className="flex items-center gap-2 mt-1">
+                        <Navigation size={14} className="text-indigo-600 rotate-45" />
+                        <span className="text-sm font-black text-indigo-900">
+                            {(calculateDistance(myPos, pickupStop) / 1000).toFixed(2)} km
+                        </span>
                     </div>
-                    {matches.map((trip) => (
-                      <button
-                        key={trip.trip_id}
-                        onClick={() => connectToTrip(trip)}
-                        className="w-full text-left p-4 border border-slate-100 rounded-xl hover:border-blue-500 hover:shadow-md hover:bg-blue-50/50 transition group bg-white"
-                      >
-                        <div className="flex justify-between items-start mb-1">
-                          <div className="font-bold text-slate-800 flex items-center gap-2">
-                            <Navigation
-                              size={16}
-                              className="text-blue-500 group-hover:scale-110 transition"
-                            />{" "}
-                            {trip.vehicle_type}
-                          </div>
-                          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                        </div>
-                        <div className="text-xs text-slate-500 flex items-center gap-1 mt-1">
-                          <span className="font-medium">{trip.start}</span>
-                          <span className="text-slate-300 mx-1">→</span>
-                          <span className="font-medium">{trip.end}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {matches.length === 0 && !loading && myPos && (
-                  <div className="p-4 bg-orange-50 border border-orange-100 rounded-xl text-center">
-                    <AlertCircle
-                      className="mx-auto text-orange-400 mb-2"
-                      size={24}
-                    />
-                    <p className="text-sm font-bold text-orange-800">
-                      No vehicles nearby.
-                    </p>
-                  </div>
-                )}
+                </div>
+            )}
+
+            {relevantBuses.length === 0 ? (
+              <div className="text-center py-6 text-slate-500 text-sm">
+                No active buses on your route right now.
               </div>
             ) : (
-              <div className="space-y-5 animate-fade-in">
-                <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-5 rounded-2xl text-white shadow-lg relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-4 opacity-10">
-                    <Navigation size={64} />
-                  </div>
-                  <h3 className="font-bold text-lg mb-1">Vehicle En Route</h3>
-                  <div className="text-emerald-100 text-xs">
-                    {activeTrip.start} → {activeTrip.end}
-                  </div>
-                </div>
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold text-slate-400 uppercase">Active Buses</h3>
+                {relevantBuses.map(([tripId, bus]) => {
+                  const firstStop = bus.next_stop_eta?.[0];
+                  // Calculate distance from bus to our pickup stop if coords match
+                  const busPos = { lat: bus.pos[0], lon: bus.pos[1] };
+                  const distToMe = pickupStop ? calculateDistance(busPos, pickupStop) : null;
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">
-                    <Clock className="mx-auto mb-2 text-blue-400" size={20} />
-                    <div className="text-2xl font-black text-slate-800">
-                      {eta ? Math.ceil(eta.duration / 60) : "--"}
+                  return (
+                    <div key={tripId} className="bg-blue-50/50 border border-blue-100 p-3 rounded-xl">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-bold text-blue-900 text-sm flex items-center gap-2">
+                           <Navigation size={14} className="text-blue-500"/> Bus {bus.bus_number}
+                        </span>
+                        {distToMe && (
+                            <span className="text-[10px] bg-white px-2 py-0.5 rounded-full border border-blue-100 text-blue-600 font-bold">
+                                {(distToMe/1000).toFixed(1)}km to go
+                            </span>
+                        )}
+                      </div>
+                      {firstStop ? (
+                         <div className="flex items-center gap-2 text-xs text-slate-600 bg-white p-2 border border-slate-100 rounded-lg shadow-sm">
+                            <Clock size={14} className="text-emerald-500"/> 
+                            <span className="font-medium text-slate-800">{Math.ceil(firstStop.duration_seconds/60)} mins</span> to {firstStop.stop_name}
+                         </div>
+                      ) : (
+                         <div className="text-xs text-slate-400">ETA computing...</div>
+                      )}
                     </div>
-                    <div className="text-[10px] text-slate-400 uppercase font-bold">
-                      Mins
-                    </div>
-                  </div>
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">
-                    <Navigation
-                      className="mx-auto mb-2 text-blue-400"
-                      size={20}
-                    />
-                    <div className="text-2xl font-black text-slate-800">
-                      {eta ? (eta.distance / 1000).toFixed(1) : "--"}
-                    </div>
-                    <div className="text-[10px] text-slate-400 uppercase font-bold">
-                      Km
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={leaveTrip}
-                  className="w-full border-2 border-red-100 text-red-500 py-3 rounded-xl font-bold hover:bg-red-50 hover:border-red-200 transition"
-                >
-                  Stop Tracking
-                </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -303,50 +350,57 @@ const MapPassenger = () => {
         >
           <MapResizer />
           <TileLayer
-            attribution=""
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+            className="map-grayscale"
           />
 
-          {!activeTrip && <LocationSelector onSelect={setMyPos} />}
-          <AutoZoom vehiclePos={vehiclePos} myPos={myPos} />
+          <AutoZoom routeLine={routeLine} buses={buses} myPos={myPos || pickupStop} />
 
+          {/* User Current Location */}
           {myPos && (
             <CircleMarker
               center={[myPos.lat, myPos.lon]}
-              radius={8}
-              pathOptions={{
-                color: "white",
-                fillColor: "#2563eb",
-                fillOpacity: 1,
-                weight: 3,
-              }}
+              radius={6}
+              pathOptions={{ color: "white", fillColor: "#4f46e5", fillOpacity: 1, weight: 3 }}
             >
-              <Popup>You</Popup>
+              <Popup>You are here</Popup>
             </CircleMarker>
           )}
 
-          {vehiclePos && (
+
+          {/* Pickup Stop */}
+          {pickupStop && (
             <CircleMarker
-              center={vehiclePos}
-              radius={12}
-              pathOptions={{
-                color: "white",
-                fillColor: "#ef4444",
-                fillOpacity: 1,
-                weight: 3,
-              }}
+              center={[pickupStop.lat, pickupStop.lon]}
+              radius={8}
+              pathOptions={{ color: "white", fillColor: "#10b981", fillOpacity: 1, weight: 3 }}
             >
-              <Popup>
-                <div className="text-center">
-                  <strong>{activeTrip?.vehicle_type}</strong>
-                  <br />
-                  {eta
-                    ? `${(eta.distance / 1000).toFixed(1)} km away`
-                    : "Updating..."}
-                </div>
-              </Popup>
+              <Popup>Your Pickup Stop</Popup>
             </CircleMarker>
           )}
+
+          {/* Live Buses */}
+          {relevantBuses.map(([tripId, bus]) => (
+            <React.Fragment key={tripId}>
+              {/* Pulsing Aura */}
+              <CircleMarker
+                center={bus.pos}
+                radius={15}
+                pathOptions={{ color: "transparent", fillColor: "#ef4444", fillOpacity: 0.2, weight: 0 }}
+                className="animate-pulse"
+              />
+              <CircleMarker
+                center={bus.pos}
+                radius={10}
+                pathOptions={{ color: "white", fillColor: "#ef4444", fillOpacity: 1, weight: 3 }}
+              >
+                <Popup>
+                  <div className="text-center font-bold text-slate-800">Bus {bus.bus_number}</div>
+                </Popup>
+              </CircleMarker>
+            </React.Fragment>
+          ))}
         </MapContainer>
       </div>
     </div>

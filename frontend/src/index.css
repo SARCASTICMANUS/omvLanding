@@ -45,3 +45,17 @@ body {
 .leaflet-pane img {
     max-width: none !important;
 }
+
+/* 4. Smooth Marker Transitions */
+.leaflet-interactive {
+    transition: all 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* For regular Markers (DivIcon/ImgIcon) */
+.leaflet-marker-icon {
+    transition: transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.map-grayscale {
+    filter: grayscale(1) brightness(0.95) contrast(1.1);
+}

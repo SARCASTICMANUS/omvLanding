@@ -1,14 +1,18 @@
+# VAYY | docker-compose.yaml | Status: 🔧 Fixed
+# Reason: Added daphne, celery worker, celery beat, and nginx services. 
+
 services:
   db:
     image: postgis/postgis:15-3.3
+    platform: linux/amd64  # Fixes PostGIS crashes/bugs on Apple Silicon
     environment:
       POSTGRES_DB: vayy_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data:delegated
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -17,19 +21,21 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
 
   osrm:
     image: osrm/osrm-backend
     container_name: osrm
+    platform: linux/amd64  # CRITICAL: OSRM binaries are often amd64-only
     restart: always
     ports:
       - "5000:5000"
     volumes:
-      - ./backend/osrm-data:/data
-    # AUTOMATED MAP PROCESSING COMMAND
-    # Checks if map.osrm exists. If not, runs extract/partition/customize. Then starts routed.
+      - ./backend/osrm-data:/data:delegated # ':delegated' is vital for OSRM speed on Mac
     command: >
       /bin/bash -c "
       if [ ! -f /data/map.osrm ]; then 
@@ -43,13 +49,14 @@ services:
 
   backend:
     build: ./backend
+    command: python manage.py runserver 0.0.0.0:8000
     volumes:
-      - ./backend:/app
+      - ./backend:/app:delegated
     ports:
       - "8000:8000"
     depends_on:
       db:
-        condition: service_healthy # Wait for DB to be ready before running migrations
+        condition: service_healthy
       redis:
         condition: service_started
       osrm:
@@ -60,17 +67,73 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - OSRM_URL=http://osrm:5000
 
-  frontend:
-    build: ./frontend
+  daphne:
+    build: ./backend
+    command: daphne -b 0.0.0.0 -p 8001 vayy.asgi:application
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - ./backend:/app:delegated
+    ports:
+      - "8001:8001"
+    depends_on:
+      redis:
+        condition: service_started
+    environment:
+      - IN_DOCKER=true
+      - DATABASE_URL=postgis://postgres:password@db:5432/vayy_db
+      - REDIS_URL=redis://redis:6379/0
+
+  celery_worker:
+    build: ./backend
+    command: celery -A vayy worker -l info
+    volumes:
+      - ./backend:/app:delegated
+    depends_on:
+       redis:
+         condition: service_started
+    environment:
+      - IN_DOCKER=true
+      - DATABASE_URL=postgis://postgres:password@db:5432/vayy_db
+      - REDIS_URL=redis://redis:6379/0
+
+  celery_beat:
+    build: ./backend
+    command: celery -A vayy beat -l info
+    volumes:
+      - ./backend:/app:delegated
+    depends_on:
+       redis:
+         condition: service_started
+    environment:
+      - IN_DOCKER=true
+      - DATABASE_URL=postgis://postgres:password@db:5432/vayy_db
+      - REDIS_URL=redis://redis:6379/0
+
+  frontend:
+    build: 
+       context: ./frontend
+       dockerfile: Dockerfile
+    volumes:
+      - ./frontend:/app:delegated
+      - /app/node_modules        
     ports:
       - "3000:3000"
     environment:
       - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000
-    stdin_open: true
+      - VITE_WS_URL=ws://localhost:8001   
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - frontend
+      - daphne
 
 volumes:
   postgres_data:
+  redis_data:

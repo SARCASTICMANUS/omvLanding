@@ -21,3 +21,10 @@ geopy>=2.4.1       # For Global Search (Nominatim)
 polyline>=2.0.1    # To decode OSRM route strings
 
 djangorestframework-simplejwt>=5.3.0
+
+# Celery Task Queue
+celery>=5.3.0
+celery[redis]>=5.3.0
+
+# Excel Parsing (Bulk Upload)
+openpyxl>=3.1.0

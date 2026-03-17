@@ -1,5 +1,12 @@
+# VAYY | core/admin.py | Status: 🔧 Fixed
+# Reason: Updated ActiveTripAdmin to use new fields: status, started_at (renamed from start_time)
+#         Added StudentProfile, DriverProfile, BulkUploadLog to admin.
+
 from django.contrib import admin
-from core.models import University, Route, Stop, Vehicle, StudentAssignment, ActiveTrip
+from core.models import (
+    University, Route, Stop, Vehicle, StudentAssignment,
+    ActiveTrip, StudentProfile, DriverProfile, BulkUploadLog
+)
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -13,9 +20,9 @@ class UniversityAdmin(admin.ModelAdmin):
 
 @admin.register(Route)
 class RouteAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "university", "start_name", "end_name")
+    list_display = ("id", "name", "bus_number", "university", "start_name", "end_name")
     list_filter = ("university",)
-    search_fields = ("name", "start_name", "end_name")
+    search_fields = ("name", "bus_number", "start_name", "end_name")
 
 
 @admin.register(Stop)
@@ -42,26 +49,37 @@ class StudentAssignmentAdmin(admin.ModelAdmin):
 class ActiveTripAdmin(admin.ModelAdmin):
     list_display = (
         "id",
-        "vehicle",
-        "route",
         "driver",
-        "is_active",
-        "start_time",
+        "route",
+        "status",
+        "started_at",
+        "last_updated",
     )
-
-    list_filter = (
-        "is_active",
-        "vehicle__vehicle_type",
-    )
-
+    list_filter = ("status",)
     search_fields = (
         "id",
         "driver__email",
-        "vehicle__vehicle_number",
         "route__name",
     )
+    readonly_fields = ("id", "started_at", "last_updated")
 
-    readonly_fields = ("id", "start_time")
+
+@admin.register(StudentProfile)
+class StudentProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "student_name", "student_id", "bus_pass_id", "bus_pass_validity")
+    search_fields = ("user__email", "student_name", "student_id")
+
+
+@admin.register(DriverProfile)
+class DriverProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "driver_name", "license_number", "vehicle_number", "vehicle_type")
+    search_fields = ("user__email", "driver_name", "license_number")
+
+
+@admin.register(BulkUploadLog)
+class BulkUploadLogAdmin(admin.ModelAdmin):
+    list_display = ("id", "uploaded_by", "file_name", "total_rows", "success_count", "error_count", "created_at")
+    readonly_fields = ("errors",)
 
 
 admin.site.register(User)

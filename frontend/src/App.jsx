@@ -128,14 +128,16 @@
 
 // export default App;
 
-import React from "react";
+import React, { useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { logout } from "./features/auth/authSlice";
+import { jwtDecode } from "jwt-decode";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
 } from "react-router-dom";
-import { useSelector } from "react-redux";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import MapDriver from "./components/Maps/MapDriver";
@@ -203,7 +205,34 @@ const PublicRoute = ({ children }) => {
   return children;
 };
 
+
 function App() {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      try {
+        const decoded = jwtDecode(token);
+        const currentTime = Date.now() / 1000;
+        
+        // If token explicitly expired (without relying solely on interceptor)
+        if (decoded.exp < currentTime) {
+          // The api.js interceptor will try to use the refresh token on the next request.
+          // Or we can pre-emptively try refreshing here, but for simplicity, 
+          // letting the interceptor catch the 401 is usually sufficient. 
+          // However, if we know it's expired and we don't have a refresh token:
+          if (!localStorage.getItem("refreshToken")) {
+             dispatch(logout());
+          }
+        }
+      } catch (e) {
+        // Invalid token format
+        dispatch(logout());
+      }
+    }
+  }, [dispatch]);
+
   return (
     <Router>
       <Routes>

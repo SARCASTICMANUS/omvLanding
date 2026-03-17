@@ -1,14 +1,20 @@
+// VAYY | src/main.jsx | Status: 🔧 Fixed
+// Reason: Added PersistGate so the React tree waits for local storage rehydration before rendering.
+
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { Provider } from "react-redux";
-import { store } from "./app/store";
+import { PersistGate } from "redux-persist/integration/react";
+import { store, persistor } from "./app/store";
 import App from "./App";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <Provider store={store}>
-      <App />
+      <PersistGate loading={null} persistor={persistor}>
+        <App />
+      </PersistGate>
     </Provider>
   </React.StrictMode>,
 );

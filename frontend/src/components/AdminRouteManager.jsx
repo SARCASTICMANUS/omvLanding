@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import LocationSearch from "./Shared/LocationSearch";
 import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 // --- Helpers ---
 const AutoZoom = ({ selectedRoute, points, stops }) => {
@@ -63,9 +64,9 @@ const MapClicker = ({ onMapClick }) => {
 };
 
 // --- Main Component ---
-const AdminRouteManager = ({ onBack }) => {
+const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
   const [universities, setUniversities] = useState([]);
-  const [selectedUniv, setSelectedUniv] = useState("");
+  const [selectedUniv, setSelectedUniv] = useState(preSelectedUniv || "");
   const [routes, setRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
 
@@ -92,7 +93,7 @@ const AdminRouteManager = ({ onBack }) => {
     try {
       const res = await api.get("/api/universities/");
       setUniversities(res.data);
-      if (res.data.length > 0) setSelectedUniv(res.data[0].id);
+      if (!selectedUniv && res.data.length > 0) setSelectedUniv(res.data[0].id);
     } catch (e) {
       console.error("Failed to load universities", e);
     }
