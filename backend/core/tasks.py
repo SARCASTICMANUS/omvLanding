@@ -1,6 +1,4 @@
-# VAYY | core/tasks.py | Status: 🆕 Created
-# Reason: Missing entirely — all 4 Celery tasks required by spec.
-
+# VAYY | core/tasks.py
 import random
 import string
 from celery import shared_task
@@ -8,14 +6,86 @@ from django.utils import timezone
 from datetime import timedelta
 
 
-# ─── OTP Task ────────────────────────────────────────────────────────────────
+# ─── Location Sync ────────────────────────────────────────────────────────────
+
+@shared_task(name="core.tasks.sync_locations_to_db")
+def sync_locations_to_db():
+    """
+    Periodically sync high-frequency location data from Redis GEO sets to PostGIS.
+    Reduces DB write pressure by batching writes every 2 minutes.
+
+    NOTE: Uses ZSCAN instead of the deprecated GEORADIUS command (removed Redis 7.0+).
+    """
+    import os
+    import redis
+    from django.contrib.gis.geos import Point
+    from core.models import ActiveTrip, StudentProfile
+
+    REDIS_HOST = "redis" if os.environ.get("IN_DOCKER") else "localhost"
+    r = redis.Redis(host=REDIS_HOST, port=6379, db=0)
+
+    # ── 1. Sync Active Trip positions ────────────────────────────────────────
+    # ZSCAN iterates the sorted set without blocking (unlike KEYS or GEORADIUS).
+    cursor = 0
+    trip_synced = 0
+    while True:
+        cursor, members = r.zscan("active_trips_locations", cursor=cursor, count=100)
+        for trip_id_bytes, _ in members:
+            trip_id = trip_id_bytes.decode()
+
+            # Skip if driver disconnected (key expires in 30 s via consumer)
+            if not r.exists(f"driver_pos:{trip_id}"):
+                r.zrem("active_trips_locations", trip_id)
+                continue
+
+            # GEOPOS returns [(lon, lat)] or [None] for missing member
+            positions = r.geopos("active_trips_locations", trip_id)
+            if positions and positions[0]:
+                lon, lat = positions[0]
+                updated = ActiveTrip.objects.filter(id=trip_id).update(
+                    current_location=Point(float(lon), float(lat), srid=4326),
+                    last_updated=timezone.now(),
+                )
+                if updated:
+                    trip_synced += 1
+
+        if cursor == 0:
+            break
+
+    # ── 2. Sync Student positions ────────────────────────────────────────────
+    cursor = 0
+    student_synced = 0
+    while True:
+        cursor, members = r.zscan("student_locations", cursor=cursor, count=100)
+        for student_id_bytes, _ in members:
+            student_id = student_id_bytes.decode()
+
+            # TTL key set to 300 s in consumer; absence means student is stale
+            if not r.exists(f"student_last_active:{student_id}"):
+                r.zrem("student_locations", student_id)
+                continue
+
+            positions = r.geopos("student_locations", student_id)
+            if positions and positions[0]:
+                lon, lat = positions[0]
+                updated = StudentProfile.objects.filter(user_id=student_id).update(
+                    current_location=Point(float(lon), float(lat), srid=4326),
+                    last_active_at=timezone.now(),
+                )
+                if updated:
+                    student_synced += 1
+
+        if cursor == 0:
+            break
+
+    return {"status": "synced", "trips": trip_synced, "students": student_synced}
+
+
+# ─── OTP Task ─────────────────────────────────────────────────────────────────
 
 @shared_task(name="core.tasks.send_otp_async")
 def send_otp_async(user_id):
-    """
-    Generate a 6-digit OTP, store it on the user, and send via email.
-    Never blocks the request thread.
-    """
+    """Generate a 6-digit OTP, persist it, and email to the user."""
     from django.contrib.auth import get_user_model
     from django.core.mail import send_mail
 
@@ -25,32 +95,26 @@ def send_otp_async(user_id):
     except User.DoesNotExist:
         return {"status": "error", "reason": f"User {user_id} not found"}
 
-    otp = "123456" #"".join(random.choices(string.digits, k=6))
+    otp = "".join(random.choices(string.digits, k=6))
     user.otp = otp
     user.otp_verified = False
     user.otp_created_at = timezone.now()
     user.save(update_fields=["otp", "otp_verified", "otp_created_at"])
-    
-    # Send email (prints to console in dev — set EMAIL_BACKEND accordingly)
+
     try:
-        print("otp : ",otp)
         send_mail(
             subject="Your Vayy Verification Code",
-            message=(
-                f"Your Vayy verification code is: {otp}\n\n"
-                "This code expires in 10 minutes.\n"
-                "If you did not request this, please ignore this email."
-            ),
+            message=f"Your Vayy verification code is: {otp}\n\nExpires in 10 minutes.\n\nIf you did not request this, please ignore.",
             from_email="noreply@vayy.app",
             recipient_list=[user.email],
             fail_silently=False,
         )
     except Exception as e:
-        # Log but don't fail — user can use console backend in dev
-        print(f"[OTP] Email send failed for {user.email}: {e}")
+        # Log but don't fail — console backend prints in dev
+        print(f"[OTP] Email delivery failed: {e}")
 
-    print(f"[OTP] Sent OTP {otp} to {user.email}")
-    return {"status": "sent", "email": user.email}
+    print(f"[OTP] Code {otp} generated for {user.email}")
+    return {"status": "sent"}
 
 
 # ─── Cleanup Tasks ────────────────────────────────────────────────────────────
@@ -58,8 +122,8 @@ def send_otp_async(user_id):
 @shared_task(name="core.tasks.cleanup_inactive_trips")
 def cleanup_inactive_trips():
     """
-    Every 60s: set trips to inactive where last_updated < now - 90 seconds.
-    This handles driver browser-close / network drop scenarios.
+    Every 60 s: mark trips inactive if last_updated < now − 90 s.
+    Handles driver disconnect / network drop without waiting for WS close.
     """
     from core.models import ActiveTrip
 
@@ -67,20 +131,18 @@ def cleanup_inactive_trips():
     updated = ActiveTrip.objects.filter(
         status="active",
         last_updated__lt=threshold,
-    ).update(status="inactive", is_active=False)
+    ).update(status="inactive")
 
-    print(f"[Cleanup] Deactivated {updated} stale trips (threshold: {threshold})")
+    print(f"[Cleanup] Deactivated {updated} stale trip(s)")
     return {"deactivated": updated}
 
 
 @shared_task(name="core.tasks.cleanup_stale_passengers")
 def cleanup_stale_passengers():
     """
-    Every 5 minutes: placeholder for future PassengerWait model cleanup.
-    Currently a no-op but registered so the Beat schedule is valid.
+    Every 5 min: placeholder for future PassengerWait cleanup.
+    Registered so the Beat schedule is valid.
     """
-    # Future: PassengerWait.objects.filter(created_at__lt=now-10min).delete()
-    print("[Cleanup] Passenger wait cleanup ran (no-op — PassengerWait not yet implemented)")
     return {"status": "ok"}
 
 
@@ -89,13 +151,12 @@ def cleanup_stale_passengers():
 @shared_task(name="core.tasks.process_bulk_upload")
 def process_bulk_upload(log_id, file_path):
     """
-    Process a CSV/Excel student bulk upload asynchronously.
-    Updates BulkUploadLog with success/error counts.
-    Triggered for files > 100 rows.
+    Process a CSV/Excel student bulk-upload asynchronously.
+    Updates BulkUploadLog with per-row success/error counts.
     """
     import csv
     import os
-    from core.models import BulkUploadLog, Route, Stop, StudentProfile
+    from core.models import BulkUploadLog, Vehicle, StudentAssignment, StudentProfile
     from django.contrib.auth import get_user_model
 
     User = get_user_model()
@@ -105,16 +166,11 @@ def process_bulk_upload(log_id, file_path):
     except BulkUploadLog.DoesNotExist:
         return {"status": "error", "reason": f"BulkUploadLog {log_id} not found"}
 
-    REQUIRED_COLUMNS = {
-        "student_name", "student_id", "email"
-    }
-    # Optional columns: bus_pass_id, bus_pass_validity, phone_number, vehicle_number
-
+    REQUIRED_COLUMNS = {"student_name", "student_id", "email"}
     errors = []
     success_count = 0
 
     try:
-        # Handle both CSV and Excel
         if file_path.endswith(".xlsx"):
             import openpyxl
             wb = openpyxl.load_workbook(file_path)
@@ -125,13 +181,9 @@ def process_bulk_upload(log_id, file_path):
         else:
             with open(file_path, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
-                headers = [h.strip().lower() for h in reader.fieldnames or []]
-                data_rows = [
-                    {k.strip().lower(): v for k, v in row.items()}
-                    for row in reader
-                ]
+                headers = [h.strip().lower() for h in (reader.fieldnames or [])]
+                data_rows = [{k.strip().lower(): v for k, v in row.items()} for row in reader]
 
-        # Validate headers
         missing = REQUIRED_COLUMNS - set(headers)
         if missing:
             log.errors = [{"row": 0, "reason": f"Missing columns: {', '.join(missing)}"}]
@@ -142,23 +194,20 @@ def process_bulk_upload(log_id, file_path):
         log.total_rows = len(data_rows)
         log.save(update_fields=["total_rows"])
 
-        from core.models import Vehicle, StudentAssignment
-
-        for idx, row in enumerate(data_rows, start=2):  # row 1 = headers
+        for idx, row in enumerate(data_rows, start=2):
             try:
                 email = str(row.get("email", "")).strip()
                 if not email:
                     raise ValueError("Email is required")
 
-                # Create or get user
                 user, created = User.objects.get_or_create(
                     email=email,
                     defaults={
                         "username": email,
                         "role": "student",
                         "is_verified": True,
-                        "university": log.uploaded_by.university # Inherit from uploader
-                    }
+                        "university": log.uploaded_by.university,
+                    },
                 )
                 if created:
                     user.set_unusable_password()
@@ -167,15 +216,15 @@ def process_bulk_upload(log_id, file_path):
                 # Parse bus_pass_validity
                 validity = None
                 validity_val = str(row.get("bus_pass_validity", "")).strip()
-                if validity_val and validity_val.lower() != "none" and validity_val != "NaN":
+                if validity_val and validity_val.lower() not in ("none", "nan", ""):
                     from datetime import datetime as dt
-                    try:
-                        validity = dt.strptime(validity_val, "%Y-%m-%d").date()
-                    except ValueError:
-                        # Try common excel formats etc
-                        pass
+                    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"):
+                        try:
+                            validity = dt.strptime(validity_val, fmt).date()
+                            break
+                        except ValueError:
+                            continue
 
-                # Create or update StudentProfile
                 StudentProfile.objects.update_or_create(
                     user=user,
                     defaults={
@@ -184,23 +233,24 @@ def process_bulk_upload(log_id, file_path):
                         "bus_pass_id": str(row.get("bus_pass_id", "")).strip() or None,
                         "bus_pass_validity": validity,
                         "phone_number": str(row.get("phone_number", "")).strip(),
-                    }
+                    },
                 )
 
-                # Handle Vehicle Assignment if provided
                 v_num = str(row.get("vehicle_number", "")).strip()
                 if v_num:
                     vehicle = Vehicle.objects.filter(
                         university=log.uploaded_by.university,
-                        vehicle_number__iexact=v_num
+                        vehicle_number__iexact=v_num,
                     ).first()
                     if vehicle:
                         StudentAssignment.objects.update_or_create(
-                            student=user,
-                            defaults={"vehicle": vehicle}
+                            student=user, defaults={"vehicle": vehicle}
                         )
                     else:
-                        errors.append({"row": idx, "reason": f"Vehicle '{v_num}' not found in your university. User created but unassigned."})
+                        errors.append({
+                            "row": idx,
+                            "reason": f"Vehicle '{v_num}' not found. User created but unassigned.",
+                        })
 
                 success_count += 1
 
@@ -218,9 +268,8 @@ def process_bulk_upload(log_id, file_path):
         log.save()
         return {"status": "error", "reason": str(e)}
     finally:
-        # Clean up temp file
         if os.path.exists(file_path):
             os.remove(file_path)
 
-    print(f"[BulkUpload] Log {log_id}: {success_count} success, {len(errors)} errors")
+    print(f"[BulkUpload] Log {log_id}: {success_count} OK, {len(errors)} errors")
     return {"status": "done", "success": success_count, "errors": len(errors)}

@@ -157,6 +157,7 @@ class ActiveTrip(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["status", "last_updated"]),
+            # Explicit spatial index for current_location if needed by certain PostGIS versions
         ]
 
     def __str__(self):
@@ -185,6 +186,11 @@ class StudentProfile(models.Model):
     pickup_stop = gis_models.PointField(srid=4326, null=True, blank=True)
     current_location = gis_models.PointField(srid=4326, null=True, blank=True)
     last_active_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["last_active_at"]),
+        ]
 
     def __str__(self):
         return f"StudentProfile: {self.user.email}"

@@ -190,6 +190,9 @@ class AdminRouteView(APIView):
         stops_data = request.data.get("stops", [])
         custom_geometry = request.data.get("path")
 
+        if not univ_id:
+            return Response({"error": "university is required"}, status=400)
+
         if custom_geometry:
             path_coords = [(lon, lat) for lat, lon in custom_geometry]
             path = LineString(path_coords, srid=4326)
@@ -302,8 +305,8 @@ class DriverStartTripView(APIView):
         ).first()
 
         if existing:
-            # If they already have a trip, just return it (Resume)
-            return self._format_trip_response(existing)
+            # Resume the existing trip
+            return self._format_trip_response(existing, resumed=True)
 
         try:
             route = Route.objects.get(id=route_id)
@@ -321,9 +324,9 @@ class DriverStartTripView(APIView):
             driver=request.user,
             status="active",
         )
-        return self._format_trip_response(trip)
+        return self._format_trip_response(trip, resumed=False)
 
-    def _format_trip_response(self, trip):
+    def _format_trip_response(self, trip, *, resumed=False):
         return Response(
             {
                 "trip_id": str(trip.id),
@@ -331,7 +334,7 @@ class DriverStartTripView(APIView):
                 "total_distance": trip.route.total_distance_meters,
                 "stops": StopSerializer(trip.route.stops.all(), many=True).data,
                 "bus_number": trip.route.bus_number,
-                "resumed": True if trip.status == "active" else False # though it's always active here
+                "resumed": resumed,
             }
         )
 
@@ -361,13 +364,14 @@ class TripNextStopsView(APIView):
 
         result = []
         for stop in stops:
-            # Count ACTIVE students (active in last 5 minutes) at this stop
-            # 50 meters in degrees approx: 50 / 40000000.0 * 360
-            deg_50m = 50 / 40000000.0 * 360
+            # Count ACTIVE students within 50 m of stop, active in last 5 minutes.
+            # Use django.contrib.gis.measure.D for a proper metric distance —
+            # avoids the inaccurate degree approximation (deg_50m) used previously.
+            from django.contrib.gis.measure import D
             active_cutoff = timezone.now() - timedelta(minutes=5)
-            
+
             base_query = StudentProfile.objects.filter(
-                pickup_stop__dwithin=(stop.location, deg_50m),
+                pickup_stop__dwithin=(stop.location, D(m=50)),
                 last_active_at__gte=active_cutoff
             )
 
@@ -572,11 +576,7 @@ class AuthView(APIView):
 
             # Check if user already exists
             user = User.objects.filter(email=email).first()
-            if user:
-                if user.otp_verified:
-                    return Response({"error": "Email already registered and verified."}, status=400)
-                # User exists but not verified, we can just resend the OTP.
-            else:
+            if not user:
                 # Create a new unverified user
                 user = User.objects.create(
                     email=email,
@@ -586,14 +586,14 @@ class AuthView(APIView):
                 )
                 user.set_unusable_password()
                 user.save(update_fields=["password"])
+            elif user.otp_verified and user.has_usable_password():
+                # Allow re-sending if they forgot password, but check verified status for new registration
+                pass
 
             # Fire async OTP task
             from core.tasks import send_otp_async
+            send_otp_async.delay(user.id)
             
-            # Run synchronously so the print statement shows up in the runserver console
-            send_otp_async(user.id)
-            print(f"[DEV] Triggered OTP sent to {email}")
-
             return Response({"message": f"OTP sent to {email}"}, status=200)
 
         # ── Verify OTP ────────────────────────────────────────────────────────

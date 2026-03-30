@@ -1,0 +1,6 @@
+# .dockerignore
+**/osrm-data/
+**/node_modules/
+**/venv/
+.git/
+*.osm.pbf

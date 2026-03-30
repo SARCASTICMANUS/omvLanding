@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
+import environ
 from pathlib import Path
 import os
 from datetime import timedelta
@@ -17,17 +18,24 @@ from datetime import timedelta
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+env = environ.Env(
+    DEBUG=(bool, False),
+    SECRET_KEY=(str, "django-insecure-vayy-fallback-key-change-me"),
+    ALLOWED_HOSTS=(list, []),
+)
+# Load .env file if it exists
+environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-5o)n8v51%*yn-r7714+m0*_@al1w0jad(39xix@jf@*rfr#n9r"
+SECRET_KEY = env("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env("DEBUG")
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 
 # Check if running inside Docker based on an environment variable
 IN_DOCKER = os.environ.get("IN_DOCKER", False)
@@ -122,6 +130,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.tasks.cleanup_stale_passengers",
         "schedule": 300.0,  # every 5 minutes
     },
+    "sync-locations-redis-to-db": {
+        "task": "core.tasks.sync_locations_to_db",
+        "schedule": 120.0, # Every 2 minutes
+    }
 }
 
 DATABASES = {
@@ -129,15 +141,16 @@ DATABASES = {
         "ENGINE": "django.contrib.gis.db.backends.postgis",
         "NAME": "vayy_db",
         "USER": "postgres",
-        "PASSWORD": "password" if IN_DOCKER else 1234,
+        "PASSWORD": "password" if IN_DOCKER else "1234",
         # If in Docker, use 'db'. If local, use 'localhost'
         "HOST": "db" if IN_DOCKER else "localhost",
         "PORT": 5432,
     }
 }
-print("IN_DOCKER : ", IN_DOCKER)
-CORS_ALLOW_ALL_ORIGINS = True
+
+CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:3000"])
 CORS_ALLOW_CREDENTIALS = True
+
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
@@ -178,6 +191,16 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/day",
+        "user": "1000/hour",
+    },
 }
 
 SIMPLE_JWT = {
