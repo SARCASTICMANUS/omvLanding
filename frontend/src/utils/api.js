@@ -1,6 +1,8 @@
 // VAYY | src/utils/api.js | Status: 🔧 Fixed
 // Reason: Added 401 interceptor for automatic access token refresh handling.
 import axios from "axios";
+import { store } from "../app/store";
+import { logout, refreshTokenSuccess } from "../features/auth/authSlice";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
@@ -38,6 +40,7 @@ api.interceptors.response.use(
           
           if (res.data.access) {
             localStorage.setItem("token", res.data.access);
+            store.dispatch(refreshTokenSuccess({ token: res.data.access }));
             originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
             return api(originalRequest); // retry original
           }
@@ -46,11 +49,9 @@ api.interceptors.response.use(
         }
       }
 
-      // If we got here, refresh failed or doesn't exist. Clear auth and redirect.
-      localStorage.removeItem("token");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("user");
-      window.location.href = "/login";
+      // If we got here, refresh failed or doesn't exist. Clear auth.
+      // App.jsx will handle the redirect because isAuthenticated will become false.
+      store.dispatch(logout());
     }
     
     return Promise.reject(error);

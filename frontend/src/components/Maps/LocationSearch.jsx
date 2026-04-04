@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import api from "../../utils/api";
 import { Search } from "lucide-react";
 
 // Using a debounce to prevent API spam
@@ -21,8 +21,8 @@ const LocationSearch = ({ placeholder, onSelect }) => {
   useEffect(() => {
     if (debouncedQuery.length > 2) {
       // Call Backend Global Search
-      axios
-        .get(`http://localhost:8000/api/global-search/?q=${debouncedQuery}`)
+      api
+        .get(`/api/global-search/?q=${debouncedQuery}`)
         .then((res) => {
           setResults(res.data);
           setIsOpen(true);

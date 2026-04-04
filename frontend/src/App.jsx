@@ -1,133 +1,3 @@
-// import React, { useState } from "react";
-// import RoleSelection from "./components/RoleSelection";
-// import MapDriver from "./components/MapDriver";
-// import MapPassenger from "./components/MapPassenger";
-// import "leaflet/dist/leaflet.css";
-// import AdminRouteManager from './components/AdminRouteManager';
-
-// function App() {
-//   const [view, setView] = useState("home"); // 'home', 'driver', 'passenger'
-
-//   const renderView = () => {
-//     switch (view) {
-//       case "driver":
-//         return <MapDriver onBack={() => setView("home")} />;
-//       case "passenger":
-//         return <MapPassenger onBack={() => setView("home")} />;
-//       case 'admin': return <AdminRouteManager onBack={() => setView('home')} />;
-//       default:
-//         return <RoleSelection onSelect={setView} />;
-//     }
-//   };
-
-//   return (
-//     <div className="h-screen w-full bg-gray-100 flex flex-col font-sans overflow-hidden">
-//       {/* Global Header */}
-//       <header className="bg-white shadow-sm h-14 flex items-center px-6 justify-between z-20">
-//         <div
-//           className="flex items-center gap-2 cursor-pointer"
-//           onClick={() => setView("home")}
-//         >
-//           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
-//             V
-//           </div>
-//           <span className="text-xl font-bold text-gray-800 tracking-tight">
-//             Vayy
-//           </span>
-//         </div>
-//         {view !== "home" && (
-//           <button
-//             onClick={() => setView("home")}
-//             className="text-sm text-gray-500 hover:text-gray-800"
-//           >
-//             Exit {view === "driver" ? "Driver" : "Passenger"} Mode
-//           </button>
-//         )}
-//       </header>
-
-//       {/* Main Content Area */}
-//       <main className="flex-1 relative">{renderView()}</main>
-//     </div>
-//   );
-// }
-
-// export default App;
-// import React, { useState } from "react";
-// import RoleSelection from "./components/RoleSelection";
-// import MapDriver from "./components/MapDriver";
-// import MapPassenger from "./components/MapPassenger";
-// import AdminRouteManager from "./components/AdminRouteManager";
-// import "leaflet/dist/leaflet.css";
-
-// function App() {
-//   const [view, setView] = useState("home"); // 'home', 'driver', 'passenger', 'admin'
-
-//   const renderView = () => {
-//     switch (view) {
-//       case "driver":
-//         return <MapDriver onBack={() => setView("home")} />;
-//       case "passenger":
-//         return <MapPassenger onBack={() => setView("home")} />;
-//       case "admin":
-//         return <AdminRouteManager onBack={() => setView("home")} />;
-//       default:
-//         return (
-//           <div className="relative h-full w-full">
-//             <RoleSelection onSelect={setView} />
-
-//             {/* Admin Toggle Button (Bottom Right) */}
-//             <div className="absolute bottom-6 right-6 z-50">
-//               <button
-//                 onClick={() => setView("admin")}
-//                 className="bg-gray-800 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg hover:bg-black transition-all opacity-70 hover:opacity-100 flex items-center gap-2"
-//               >
-//                 <span>🔧</span> Admin Panel
-//               </button>
-//             </div>
-//           </div>
-//         );
-//     }
-//   };
-
-//   return (
-//     <div className="h-screen w-full bg-gray-100 flex flex-col font-sans overflow-hidden">
-//       {/* Global Header */}
-//       <header className="bg-white shadow-sm h-14 flex items-center px-6 justify-between z-20">
-//         <div
-//           className="flex items-center gap-2 cursor-pointer"
-//           onClick={() => setView("home")}
-//         >
-//           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
-//             V
-//           </div>
-//           <span className="text-xl font-bold text-gray-800 tracking-tight">
-//             Vayy
-//           </span>
-//         </div>
-//         {view !== "home" && (
-//           <button
-//             onClick={() => setView("home")}
-//             className="text-sm text-gray-500 hover:text-gray-800 font-medium"
-//           >
-//             Exit{" "}
-//             {view === "admin"
-//               ? "Admin"
-//               : view === "driver"
-//                 ? "Driver"
-//                 : "Passenger"}{" "}
-//             Mode
-//           </button>
-//         )}
-//       </header>
-
-//       {/* Main Content Area */}
-//       <main className="flex-1 relative">{renderView()}</main>
-//     </div>
-//   );
-// }
-
-// export default App;
-
 import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { logout } from "./features/auth/authSlice";
@@ -148,23 +18,18 @@ import AdminPanel from "./pages/AdminPanel";
 const DashboardRouter = () => {
   const { user, isAuthenticated } = useSelector((state) => state.auth);
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // Safety check: if authenticated but user object is missing (rare edge case)
-  if (!user || !user.role) {
+  if (!isAuthenticated || !user || !user.role) {
     return <Navigate to="/login" replace />;
   }
 
   switch (user.role) {
     case "admin":
-    case "university_admin":
+    case "city_admin":
       return <Navigate to="/admin" replace />;
     case "driver":
       return <MapDriver />;
     case "passenger":
-    case "student":
+    case "student": // legacy compat
       return <MapPassenger />;
     default:
       return (
@@ -190,9 +55,12 @@ const DashboardRouter = () => {
 const ProtectedAdmin = ({ children }) => {
   const { user, isAuthenticated } = useSelector((state) => state.auth);
 
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
 
-  const isAdmin = user?.role === "admin" || user?.role === "university_admin";
+  const isAdmin =
+    user?.role === "admin" ||
+    user?.role === "city_admin" ||
+    user?.role === "university_admin"; // legacy compat
   if (!isAdmin) return <Navigate to="/" replace />;
 
   return children;
@@ -200,8 +68,11 @@ const ProtectedAdmin = ({ children }) => {
 
 // Public Route (Redirects if already logged in)
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated } = useSelector((state) => state.auth);
-  if (isAuthenticated) return <Navigate to="/" replace />;
+  const { user, isAuthenticated } = useSelector((state) => state.auth);
+  // Only redirect if FULLY authenticated with a role
+  if (isAuthenticated && user && user.role) {
+    return <Navigate to="/" replace />;
+  }
   return children;
 };
 
@@ -215,7 +86,7 @@ function App() {
       try {
         const decoded = jwtDecode(token);
         const currentTime = Date.now() / 1000;
-        
+
         // If token explicitly expired (without relying solely on interceptor)
         if (decoded.exp < currentTime) {
           // The api.js interceptor will try to use the refresh token on the next request.
@@ -223,7 +94,7 @@ function App() {
           // letting the interceptor catch the 401 is usually sufficient. 
           // However, if we know it's expired and we don't have a refresh token:
           if (!localStorage.getItem("refreshToken")) {
-             dispatch(logout());
+            dispatch(logout());
           }
         }
       } catch (e) {

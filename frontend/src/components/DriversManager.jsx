@@ -2,12 +2,11 @@ import React, { useState, useEffect } from "react";
 import { User as UserIcon, Plus, Trash2, Edit, ShieldCheck, X, Save, Loader2, Mail, Phone, Info } from "lucide-react";
 import api from "../utils/api";
 
-const DriversManager = ({ universityId }) => {
-  const [drivers, setDrivers] = useState([]); // User objects with profiles
-  const [routes, setRoutes] = useState([]);
+const DriversManager = ({ cityId }) => {
+  const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentDriver, setCurrentDriver] = useState(null); // The User object
+  const [currentDriver, setCurrentDriver] = useState(null);
   const [formData, setFormData] = useState({
     email: "",
     first_name: "",
@@ -19,17 +18,14 @@ const DriversManager = ({ universityId }) => {
 
   useEffect(() => {
     fetchData();
-  }, [universityId]);
+  }, [cityId]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [uRes, rRes] = await Promise.all([
-        api.get(`/api/users/?university=${universityId}&role=driver`),
-        api.get(`/api/admin/routes/?university=${universityId}`),
-      ]);
-      setDrivers(uRes.data);
-      setRoutes(rRes.data);
+      const uRes = await api.get(`/api/users/?city=${cityId}&role=driver`);
+      const data = Array.isArray(uRes.data) ? uRes.data : uRes.data.results || [];
+      setDrivers(data);
     } catch (error) {
       console.error("Error fetching driver data:", error);
     } finally {
@@ -67,64 +63,23 @@ const DriversManager = ({ universityId }) => {
     e.preventDefault();
     try {
       if (currentDriver) {
-        // Update User
+        // We only allow name updates from the frontend easily
+        // Usually, profile updates require a specific endpoint but we'll stick to user logic for this MVP
         await api.patch(`/api/users/${currentDriver.id}/`, {
           first_name: formData.first_name,
           last_name: formData.last_name,
         });
-
-        // Update or Create Profile (assuming a standard endpoint or handled by user update)
-        // For simplicity, let's assume we have a way to update the profile directly.
-        // Actually, let's check if the backend UserSerializer handles profile updates.
-        // If not, we use the DriverProfileViewSet.
-        
-        if (currentDriver.profile) {
-            // Find profile ID or use a detail endpoint
-            // Looking at models, profile is OneToOne.
-            // Let's try to find the profile via DriverProfileViewSet filtered by user
-            const profileRes = await api.get(`/api/driver-profiles/?user=${currentDriver.id}`);
-            if (profileRes.data.length > 0) {
-                await api.patch(`/api/driver-profiles/${profileRes.data[0].id}/`, {
-                    license_number: formData.license_number,
-                    vehicle_number: formData.vehicle_number,
-                    vehicle_type: formData.vehicle_type,
-                });
-            }
-        } else {
-            // Create profile
-            await api.post("/api/driver-profiles/", {
-                user: currentDriver.id,
-                driver_name: `${formData.first_name} ${formData.last_name}`,
-                license_number: formData.license_number,
-                vehicle_number: formData.vehicle_number,
-                vehicle_type: formData.vehicle_type,
-            });
-        }
       } else {
-        // Create new user (role driver)
-        // Using Register or a dedicated user creation endpoint
-        const res = await api.post("/api/auth/register/", {
+        await api.post("/api/auth/register/", {
             email: formData.email,
-            password: "ChangeMe123!", // Default password, they should reset it
+            password: "ChangeMe123!",
             role: "driver",
-            university: universityId,
+            city: cityId,
             first_name: formData.first_name,
             last_name: formData.last_name,
+            license_number: formData.license_number,
+            vehicle_type: formData.vehicle_type,
         });
-        
-        // Profile is usually auto-created in RegisterSerializer
-        // Update it with specific fields
-        const newUser = res.data.user;
-        const profileRes = await api.get(`/api/driver-profiles/?university=${universityId}`);
-        const profile = profileRes.data.find(p => p.user_email === formData.email || p.driver_name.includes(formData.first_name));
-        
-        if (profile) {
-            await api.patch(`/api/driver-profiles/${profile.id}/`, {
-                license_number: formData.license_number,
-                vehicle_number: formData.vehicle_number,
-                vehicle_type: formData.vehicle_type,
-            });
-        }
       }
       setIsModalOpen(false);
       fetchData();
@@ -135,7 +90,7 @@ const DriversManager = ({ universityId }) => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this driver? (This removes the user account)")) {
+    if (window.confirm("Are you sure you want to delete this driver?")) {
       try {
         await api.delete(`/api/users/${id}/`);
         fetchData();
@@ -151,7 +106,7 @@ const DriversManager = ({ universityId }) => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-black text-slate-800">Driver Management</h1>
-            <p className="text-slate-500 mt-2">Manage driver profiles, licenses, and assignments.</p>
+            <p className="text-slate-500 mt-2">Manage driver profiles and licenses.</p>
           </div>
           <button 
             onClick={() => handleOpenModal()}
@@ -171,9 +126,6 @@ const DriversManager = ({ universityId }) => {
               <div key={d.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition group relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="flex gap-1">
-                        <button onClick={() => handleOpenModal(d)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-400">
-                          <Edit size={16} />
-                        </button>
                         <button onClick={() => handleDelete(d.id)} className="p-2 hover:bg-red-50 rounded-xl text-red-500">
                           <Trash2 size={16} />
                         </button>
@@ -203,12 +155,12 @@ const DriversManager = ({ universityId }) => {
                         <span className="text-slate-700 font-black">{d.profile?.license_number || "PENDING"}</span>
                     </div>
                     <div className="flex justify-between text-xs">
-                        <span className="text-slate-400 font-medium tracking-tight">Active Vehicle</span>
-                        <span className="text-indigo-600 font-black uppercase">{d.profile?.vehicle_number || "NONE"}</span>
+                        <span className="text-slate-400 font-medium tracking-tight">Vehicle #</span>
+                        <span className="text-indigo-600 font-black uppercase">{d.profile?.vehicle_number || "UNASSIGNED"}</span>
                     </div>
                     <div className="flex justify-between text-xs">
-                        <span className="text-slate-400 font-medium tracking-tight">Assigned Route</span>
-                        <span className="text-slate-700 font-bold uppercase truncate max-w-[120px]">{d.profile?.current_route_name || "NOT SET"}</span>
+                        <span className="text-slate-400 font-medium tracking-tight">Route</span>
+                        <span className="text-slate-700 font-bold uppercase truncate max-w-[120px]">{d.profile?.assigned_route_name || "N/A"}</span>
                     </div>
                   </div>
                 </div>
@@ -217,14 +169,13 @@ const DriversManager = ({ universityId }) => {
             {drivers.length === 0 && (
                 <div className="col-span-full py-12 text-center bg-white rounded-3xl border border-dashed border-slate-200">
                    <Info className="mx-auto text-slate-300 mb-2" size={32} />
-                   <p className="text-slate-400 font-bold">No drivers found for this university.</p>
+                   <p className="text-slate-400 font-bold">No drivers found for this city.</p>
                 </div>
             )}
           </div>
         )}
       </div>
 
-      {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[2000] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden">
@@ -243,7 +194,7 @@ const DriversManager = ({ universityId }) => {
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="driver@university.edu"
+                    placeholder="driver@example.com"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition font-bold text-sm"
                   />
                 </div>
@@ -284,19 +235,7 @@ const DriversManager = ({ universityId }) => {
                     />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vehicle Number</label>
-                  <input
-                    value={formData.vehicle_number}
-                    onChange={(e) => setFormData({ ...formData, vehicle_number: e.target.value })}
-                    placeholder="PB-01-XX-0000"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition font-bold text-sm uppercase"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vehicle Type</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vehicle Type (Req)</label>
                   <select
                     value={formData.vehicle_type}
                     onChange={(e) => setFormData({ ...formData, vehicle_type: e.target.value })}
@@ -307,19 +246,13 @@ const DriversManager = ({ universityId }) => {
                     <option value="minibus">Minibus</option>
                   </select>
                 </div>
-                <div className="space-y-1 col-span-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Route (Inherited)</label>
-                    <div className="w-full bg-slate-100 border border-slate-200 rounded-xl p-3 font-bold text-sm text-slate-500 italic">
-                        {currentDriver?.profile?.assigned_route_name || "Automatically linked via vehicle assignment"}
-                    </div>
-                </div>
               </div>
 
               <button
                 type="submit"
                 className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 transition shadow-xl mt-6 flex items-center justify-center gap-2"
               >
-                <Save size={18} /> {currentDriver ? "Sync Profile Changes" : "Create Driver Account"}
+                <Save size={18} /> {currentDriver ? "Sync Profile Changes" : "Register Driver Account"}
               </button>
             </form>
           </div>

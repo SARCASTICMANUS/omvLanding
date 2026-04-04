@@ -7,6 +7,7 @@ import {
   TileLayer,
   Polyline,
   CircleMarker,
+  Marker,
   Popup,
   useMap,
 } from "react-leaflet";
@@ -23,6 +24,7 @@ import {
   Loader,
   Clock,
   RefreshCw,
+  Hand
 } from "lucide-react";
 import Header from "../Layout/Header";
 import "leaflet/dist/leaflet.css";
@@ -37,19 +39,95 @@ const MapResizer = () => {
   return null;
 };
 
-const MapUpdater = ({ bounds }) => {
+// Fit bounds or follow vehicle with tilt/auto-zoom
+const DynamicAutoZoom = ({ currentPos, isDriving, routePath }) => {
   const map = useMap();
+  const prevPos = useRef(null);
+
   useEffect(() => {
-    if (bounds && bounds.length > 0) {
-      map.fitBounds(L.latLngBounds(bounds), { 
-        padding: [50, 50],
+    if (!currentPos) return;
+
+    if (isDriving) {
+      // 1. Calculate heading for map rotation (so bus always faces "up")
+      let heading = 0;
+      if (prevPos.current) {
+        const [lat1, lon1] = prevPos.current;
+        const [lat2, lon2] = currentPos;
+        // Invert angle for map rotation
+        heading = (Math.atan2(lon1 - lon2, lat2 - lat1) * 180) / Math.PI;
+      }
+      prevPos.current = currentPos;
+
+      // 2. Adjust zoom to 17 (from 18) for a broader view of the road
+      map.setView(currentPos, 17, {
         animate: true,
-        duration: 1.5,
-        easeLinearity: 0.25
+        duration: 0.8,
       });
+
+      // 3. Update CSS variables for 3D tilt/rotation
+      const mapContainer = map.getContainer();
+      mapContainer.style.setProperty('--map-rotation', `${heading}deg`);
+      
+      if (!mapContainer.classList.contains("navigation-mode")) {
+        mapContainer.classList.add("navigation-mode");
+      }
+    } else if (routePath && routePath.length > 0) {
+      const bounds = L.latLngBounds(routePath);
+      map.fitBounds(bounds, { padding: [50, 50] });
+      const mapContainer = map.getContainer();
+      mapContainer.classList.remove("navigation-mode");
+      mapContainer.style.removeProperty('--map-rotation');
     }
-  }, [bounds, map]);
+  }, [currentPos, isDriving, routePath, map]);
+
   return null;
+};
+
+// 3D-like Rotating Vehicle Marker
+const VehicleMarker = ({ pos, isDriving }) => {
+  const prevPos = useRef(null);
+  const [rotation, setRotation] = useState(0);
+
+  useEffect(() => {
+    if (prevPos.current && pos) {
+      const [lat1, lon1] = prevPos.current;
+      const [lat2, lon2] = pos;
+      const angle = (Math.atan2(lon2 - lon1, lat2 - lat1) * 180) / Math.PI;
+      if (Math.abs(lat2-lat1) > 0.00001 || Math.abs(lon2-lon1) > 0.00001) {
+          setRotation(angle);
+      }
+    }
+    prevPos.current = pos;
+  }, [pos]);
+
+  if (!pos) return null;
+
+  const busIcon = L.divIcon({
+    className: "custom-bus-icon",
+    html: `
+      <div style="transform: rotate(${rotation}deg); transition: transform 0.3s ease-out;">
+        <div class="relative w-12 h-12 flex items-center justify-center">
+          <div class="absolute inset-0 bg-blue-500/20 rounded-full animate-ping scale-150"></div>
+          <div class="relative bg-blue-600 w-8 h-12 rounded-lg border-2 border-white shadow-2xl flex flex-col items-center justify-center overflow-hidden">
+            <div class="w-full h-2 bg-blue-400 mb-1 flex justify-around px-1">
+                <div class="w-1.5 h-1.5 bg-yellow-300 rounded-full"></div>
+                <div class="w-1.5 h-1.5 bg-yellow-300 rounded-full"></div>
+            </div>
+            <div class="w-6 h-4 bg-white/20 rounded-sm"></div>
+            <div class="mt-2 text-[8px] font-black text-white leading-none">VAYY</div>
+          </div>
+        </div>
+      </div>
+    `,
+    iconSize: [48, 48],
+    iconAnchor: [24, 24],
+  });
+
+  return (
+    <Marker position={pos} icon={busIcon}>
+      <Popup>Vehicle Live</Popup>
+    </Marker>
+  );
 };
 
 // Helper to decode OSRM polyline string to [lat, lon] array
@@ -75,10 +153,8 @@ const MapDriver = () => {
   const [tripData, setTripData] = useState(null);
   const [currentPos, setCurrentPos] = useState(null);
   const [isDriving, setIsDriving] = useState(false);
-  
-  // Next 3 Stops tracking
-  const [nextStops, setNextStops] = useState([]); // [{id, name, waiting_count, eta_seconds}]
-  
+  const [passengers, setPassengers] = useState({}); 
+  const [nextStops, setNextStops] = useState([]); 
   const [loading, setLoading] = useState(false);
 
   const ws = useRef(null);
@@ -99,8 +175,6 @@ const MapDriver = () => {
       const res = await api.post("/api/driver/start-trip/", {
         route_id: selectedRouteId,
       });
-      // The old mock code assumed res.data.route_geometry was [lat,lon]. 
-      // OSRM returns encoded geometry string.
       let path = [];
       if (typeof res.data.route_geometry === "string") {
          path = decodePolyline(res.data.route_geometry);
@@ -111,7 +185,7 @@ const MapDriver = () => {
       setTripData(res.data);
       if (path && path.length > 0) setCurrentPos(path[0]);
     } catch (err) {
-      alert("Error loading route. Driver has active trip already?");
+      alert("Error loading route.");
     } finally {
       setLoading(false);
     }
@@ -131,24 +205,38 @@ const MapDriver = () => {
     setIsDriving(true);
 
     const token = localStorage.getItem("token");
-    const wsUrl = `ws://${window.location.host.split(':')[0]}:8000/ws/trip/${tripData.trip_id}/driver/?token=${token}`;
+    const wsUrl = `ws://${window.location.host.split(':')[0]}:8000/ws/public/${tripData.city_id || 'public'}/driver/${tripData.trip_id}/?token=${token}`;
     ws.current = new WebSocket(wsUrl);
 
     ws.current.onopen = () => {
-      console.log("WS Connected");
       pollNextStops(tripData.trip_id);
       pollIntervalRef.current = setInterval(() => pollNextStops(tripData.trip_id), 10000);
     };
 
     ws.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.type === "student_update") {
-        // A student just moved or activated. Refresh counts for realism.
+      if (data.type === "student_update" || data.type === "passenger_update") {
         pollNextStops(tripData.trip_id);
+        if (data.user_id && data.lat && data.lon) {
+           setPassengers(prev => ({
+              ...prev,
+              [data.user_id]: {
+                 lat: data.lat,
+                 lon: data.lon,
+                 hand_raised: !!data.hand_raised,
+                 last_seen: Date.now()
+              }
+           }));
+        }
+      } else if (data.type === "passenger_stopped") {
+         setPassengers(prev => {
+            const next = { ...prev };
+            delete next[data.user_id];
+            return next;
+         });
       }
     };
 
-    // Simulation Loop (Simulating GPS updates)
     let index = 0;
     simulationRef.current = setInterval(() => {
       if (index >= routePath.length) {
@@ -162,7 +250,7 @@ const MapDriver = () => {
       if (ws.current && ws.current.readyState === WebSocket.OPEN) {
         ws.current.send(JSON.stringify({ lat: pos[0], lon: pos[1] }));
       }
-      index += 5; // Simulating movement speed
+      index += 5; 
     }, 1000);
   };
 
@@ -187,6 +275,24 @@ const MapDriver = () => {
   };
 
   useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setPassengers(prev => {
+        const next = { ...prev };
+        let changed = false;
+        Object.entries(next).forEach(([id, p]) => {
+          if (now - p.last_seen > 300000) { 
+            delete next[id];
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (simulationRef.current) clearInterval(simulationRef.current);
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
@@ -196,10 +302,30 @@ const MapDriver = () => {
 
   return (
     <div className="flex flex-col h-screen w-full bg-slate-50 font-sans">
+      <style>{`
+        .navigation-mode {
+          perspective: 1000px;
+          background: #1e293b;
+        }
+        .navigation-mode .leaflet-map-pane {
+          transform: rotateX(55deg) rotateZ(var(--map-rotation, 0deg)) translateY(20%);
+          transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        /* Counter-rotate markers to keep them upright */
+        .navigation-mode .custom-bus-icon, 
+        .navigation-mode .leaflet-marker-icon,
+        .navigation-mode .leaflet-popup {
+          transform: rotateZ(calc(-1 * var(--map-rotation, 0deg))) rotateX(-55deg) translateY(-20px) !important;
+          transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .leaflet-div-icon {
+          background: transparent !important;
+          border: none !important;
+        }
+      `}</style>
       <Header />
 
       <div className="flex-1 w-full relative z-0">
-        {/* --- Floating Control Panel --- */}
         <div className="absolute top-6 left-6 w-96 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl z-[1000] border border-white/20 overflow-hidden flex flex-col max-h-[calc(100vh-120px)] transition-all duration-300">
           <div className="bg-slate-900 p-5 text-white flex items-center justify-between shadow-md">
             <div>
@@ -215,7 +341,6 @@ const MapDriver = () => {
           </div>
 
           <div className="p-6 flex flex-col gap-5 overflow-y-auto">
-            {/* Step 1: Select Route */}
             {!isDriving && !routePath && (
               <div className="space-y-4">
                 <div className="relative group">
@@ -241,7 +366,6 @@ const MapDriver = () => {
               </div>
             )}
 
-            {/* Step 2: Confirm Start */}
             {routePath && !isDriving && (
               <div className="space-y-4">
                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
@@ -268,7 +392,6 @@ const MapDriver = () => {
               </div>
             )}
 
-            {/* Step 3: Active Trip (Next Stops) */}
             {isDriving && (
               <div className="space-y-4 animate-fade-in">
                 <div className="flex justify-between items-end pb-2 border-b border-slate-200">
@@ -306,9 +429,8 @@ const MapDriver = () => {
           </div>
         </div>
 
-        {/* --- Map View --- */}
         <MapContainer
-          center={[40.7128, -74.006]}
+          center={[30.7333, 76.7794]}
           zoom={13}
           style={{ height: "100%", width: "100%" }}
           zoomControl={false}
@@ -316,30 +438,47 @@ const MapDriver = () => {
         >
           <MapResizer />
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            attribution='&copy; CARTO'
             url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            className="map-grayscale"
           />
 
           {routePath && (
-             <Polyline positions={routePath} color="#2563eb" weight={6} opacity={0.6} lineCap="round" />
+             <Polyline positions={routePath} color="#2563eb" weight={8} opacity={0.3} lineCap="round" />
           )}
 
           {currentPos && (
-            <CircleMarker
-              center={currentPos}
-              radius={10}
-              pathOptions={{
-                color: "white", fillColor: "#ef4444", fillOpacity: 1, weight: 3,
-              }}
-            >
-              <Popup>
-                <div className="font-bold text-center">Bus {tripData?.bus_number}</div>
-              </Popup>
-            </CircleMarker>
+            <VehicleMarker pos={currentPos} isDriving={isDriving} />
           )}
 
-          <MapUpdater bounds={routePath} />
+          {Object.entries(passengers).map(([id, p]) => (
+            <React.Fragment key={id}>
+              <CircleMarker
+                center={[p.lat, p.lon]}
+                radius={p.hand_raised ? 8 : 5}
+                pathOptions={{
+                  color: "white",
+                  fillColor: p.hand_raised ? "#f59e0b" : "#10b981",
+                  fillOpacity: 1,
+                  weight: 2,
+                }}
+              />
+              {p.hand_raised && (
+                <Marker
+                  position={[p.lat, p.lon]}
+                  icon={L.divIcon({
+                    html: `<div class="animate-bounce text-2xl" style="margin-top: -20px; margin-left: -10px;">✋</div>`,
+                    className: 'hand-marker'
+                  })}
+                />
+              )}
+            </React.Fragment>
+          ))}
+
+          <DynamicAutoZoom 
+            currentPos={currentPos} 
+            isDriving={isDriving} 
+            routePath={routePath} 
+          />
         </MapContainer>
       </div>
     </div>

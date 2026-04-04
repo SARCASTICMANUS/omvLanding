@@ -12,21 +12,25 @@ const useDebounce = (value, delay) => {
   return debouncedValue;
 };
 
-const LocationSearch = ({ placeholder, onSelect }) => {
-  const [query, setQuery] = useState("");
+const LocationSearch = ({ placeholder, onSelect, initialValue = "" }) => {
+  const [query, setQuery] = useState(initialValue);
   const [results, setResults] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const debouncedQuery = useDebounce(query, 500);
 
+  // Sync with initialValue if it changes externally (e.g., from dragging a marker)
   useEffect(() => {
-    // Only search if user typed 3+ chars
-    if (debouncedQuery.length > 2) {
-      const token = localStorage.getItem("token");
+    if (initialValue && initialValue !== query) {
+      setQuery(initialValue.split(",")[0]);
+    }
+  }, [initialValue]);
+
+  useEffect(() => {
+    // Only search if user typed 3+ chars and it's not the initial value sync
+    if (debouncedQuery.length > 2 && debouncedQuery !== initialValue.split(",")[0]) {
       // Using the global search API
       axios
-        .get(`http://localhost:8000/api/global-search/?q=${debouncedQuery}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        .get(`http://localhost:8000/api/global-search/?q=${debouncedQuery}`)
         .then((res) => {
           setResults(res.data);
           setIsOpen(true);

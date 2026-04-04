@@ -33,13 +33,31 @@ const AutoZoom = ({ selectedRoute, points, stops }) => {
       const bounds = L.latLngBounds(selectedRoute.path_coords);
       map.fitBounds(bounds, { padding: [50, 50] });
     } else if (points.start && points.end) {
-      const allPoints = [
-        points.start,
-        points.end,
-        ...stops.map((s) => [s.lat, s.lon]),
-      ];
-      const bounds = L.latLngBounds(allPoints);
-      map.fitBounds(bounds, { padding: [100, 100] });
+      const allPoints = [];
+      
+      const format = (p) => {
+        if (!p) return null;
+        const lat = p.lat;
+        const lng = p.lng || p.lon;
+        if (lat !== undefined && lng !== undefined) return [lat, lng];
+        return null;
+      };
+
+      const start = format(points.start);
+      const end = format(points.end);
+      
+      if (start) allPoints.push(start);
+      if (end) allPoints.push(end);
+      
+      stops.forEach(s => {
+        const p = format(s);
+        if (p) allPoints.push(p);
+      });
+
+      if (allPoints.length > 0) {
+        const bounds = L.latLngBounds(allPoints);
+        map.fitBounds(bounds, { padding: [100, 100] });
+      }
     }
   }, [selectedRoute, points, stops, map]);
   return null;
@@ -64,9 +82,9 @@ const MapClicker = ({ onMapClick }) => {
 };
 
 // --- Main Component ---
-const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
-  const [universities, setUniversities] = useState([]);
-  const [selectedUniv, setSelectedUniv] = useState(preSelectedUniv || "");
+const AdminRouteManager = ({ onBack, preSelectedCity }) => {
+  const [cities, setCities] = useState([]);
+  const [selectedCity, setSelectedCity] = useState(preSelectedCity || "");
   const [routes, setRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
 
@@ -82,29 +100,31 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   useEffect(() => {
-    fetchUniversities();
+    fetchCities();
   }, []);
 
   useEffect(() => {
-    if (selectedUniv) fetchRoutes();
-  }, [selectedUniv]);
+    if (selectedCity) fetchRoutes();
+  }, [selectedCity]);
 
-  const fetchUniversities = async () => {
+  const fetchCities = async () => {
     try {
-      const res = await api.get("/api/universities/");
-      setUniversities(res.data);
-      if (!selectedUniv && res.data.length > 0) setSelectedUniv(res.data[0].id);
+      const res = await api.get("/api/cities/");
+      const data = Array.isArray(res.data) ? res.data : res.data.results || [];
+      setCities(data);
+      if (!selectedCity && data.length > 0) setSelectedCity(data[0].id);
     } catch (e) {
-      console.error("Failed to load universities", e);
+      console.error("Failed to load cities", e);
     }
   };
 
   const fetchRoutes = async () => {
     try {
       const res = await api.get(
-        `/api/admin/routes/?university=${selectedUniv}`,
+        `/api/admin/routes/?city=${selectedCity}`,
       );
-      setRoutes(res.data);
+      const data = Array.isArray(res.data) ? res.data : res.data.results || [];
+      setRoutes(data);
     } catch (e) {
       console.error("Failed to load routes", e);
     }
@@ -113,31 +133,57 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
   const handleMapClick = (latlng) => {
     setSelectedRoute(null);
     if (isAddingStop) {
-      setStops([
-        ...stops,
-        { ...latlng, lon: latlng.lng, name: `Stop ${stops.length + 1}` },
-      ]);
+      const newStop = { lat: latlng.lat, lng: latlng.lng, name: `Stop ${stops.length + 1}` };
+      setStops([...stops, newStop]);
       setIsAddingStop(false);
+      // Automatically reverse geocode the stop
+      reverseGeocode(latlng, (name) => {
+        setStops(prev => {
+          const updated = [...prev];
+          const idx = updated.findIndex(s => s.lat === latlng.lat && s.lng === latlng.lng);
+          if (idx !== -1) updated[idx].name = name;
+          return updated;
+        });
+      });
     } else if (!newPoints.start) {
-      setNewPoints({ ...newPoints, start: latlng });
-      setNames({ ...names, start: "Start Point" });
+      setNewPoints({ ...newPoints, start: { lat: latlng.lat, lng: latlng.lng } });
+      reverseGeocode(latlng, (name) => setNames(prev => ({ ...prev, start: name })));
     } else if (!newPoints.end) {
-      setNewPoints({ ...newPoints, end: latlng });
-      setNames({ ...names, end: "End Point" });
+      setNewPoints({ ...newPoints, end: { lat: latlng.lat, lng: latlng.lng } });
+      reverseGeocode(latlng, (name) => setNames(prev => ({ ...prev, end: name })));
+    }
+  };
+
+  const reverseGeocode = async (latlng, callback) => {
+    try {
+      const res = await api.get(`/api/reverse-search/?lat=${latlng.lat}&lon=${latlng.lng || latlng.lon}`);
+      if (res.data && res.data.display_name) {
+        callback(res.data.display_name);
+      }
+    } catch (e) {
+      console.error("Reverse geocode failed", e);
     }
   };
 
   const handleDrag = (type, latlng, index = null) => {
+    const coords = { lat: latlng.lat, lng: latlng.lng };
     if (type === "stop") {
       const newStops = [...stops];
       newStops[index] = {
         ...newStops[index],
-        lat: latlng.lat,
-        lon: latlng.lng,
+        ...coords
       };
       setStops(newStops);
+      reverseGeocode(latlng, (name) => {
+        setStops(prev => {
+          const updated = [...prev];
+          updated[index].name = name;
+          return updated;
+        });
+      });
     } else {
-      setNewPoints({ ...newPoints, [type]: latlng });
+      setNewPoints({ ...newPoints, [type]: coords });
+      reverseGeocode(latlng, (name) => setNames(prev => ({ ...prev, [type]: name })));
     }
   };
 
@@ -153,9 +199,14 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
   const fetchPreviews = async () => {
     try {
       const res = await api.post("/api/admin/routes/preview/", {
-        start: { lat: newPoints.start.lat, lon: newPoints.start.lng },
-        end: { lat: newPoints.end.lat, lon: newPoints.end.lng },
-        stops: stops.map((s, i) => ({ ...s, order: i })),
+        start: { lat: newPoints.start.lat, lon: newPoints.start.lng || newPoints.start.lon },
+        end: { lat: newPoints.end.lat, lon: newPoints.end.lng || newPoints.end.lon },
+        stops: stops.map((s, i) => ({ 
+          lat: s.lat, 
+          lon: s.lng || s.lon, 
+          name: s.name, 
+          order: i 
+        })),
       });
       setPreviews(res.data);
       setSelectedIndex(0); // Default to first (usually shortest/best)
@@ -173,20 +224,25 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
   };
 
   const saveRoute = async () => {
-    if (!newPoints.start || !newPoints.end || !selectedUniv) return;
+    if (!newPoints.start || !newPoints.end || !selectedCity) return;
     setLoading(true);
 
     const activePreview = previews[selectedIndex];
 
     try {
       await api.post("/api/admin/routes/", {
-        university: selectedUniv,
+        city: selectedCity,
         name: names.route || "New Route",
         start_name: names.start,
         end_name: names.end,
-        start: { lat: newPoints.start.lat, lon: newPoints.start.lng },
-        end: { lat: newPoints.end.lat, lon: newPoints.end.lng },
-        stops: stops.map((s, i) => ({ ...s, order: i })),
+        start: { lat: newPoints.start.lat, lon: newPoints.start.lng || newPoints.start.lon },
+        end: { lat: newPoints.end.lat, lon: newPoints.end.lng || newPoints.end.lon },
+        stops: stops.map((s, i) => ({ 
+          lat: s.lat, 
+          lon: s.lng || s.lon, 
+          name: s.name, 
+          order: i 
+        })),
         // Pass the selected alternative's path
         path: activePreview?.path,
         total_distance: activePreview?.distance,
@@ -216,7 +272,7 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
         <div className="p-6 bg-slate-900 text-white flex flex-col gap-4 shadow-lg">
           <div className="flex justify-between items-center">
             <h2 className="font-bold text-xl flex items-center gap-3 tracking-tight">
-              <School className="text-indigo-400" size={24} /> University
+              <School className="text-indigo-400" size={24} /> City
               Transit
             </h2>
             <button
@@ -229,15 +285,15 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
 
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-              Selected College
+              Selected City
             </label>
             <select
-              value={selectedUniv}
-              onChange={(e) => setSelectedUniv(e.target.value)}
+              value={selectedCity}
+              onChange={(e) => setSelectedCity(e.target.value)}
               className="w-full bg-slate-800 border-none text-white text-sm rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition"
             >
-              <option value="">Select University...</option>
-              {universities.map((u) => (
+              <option value="">Select City...</option>
+              {cities.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name}
                 </option>
@@ -274,13 +330,13 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
                     <span className="text-[10px] font-bold text-slate-400 uppercase">
                       Origin
                     </span>
-                    <input
-                      value={names.start}
-                      onChange={(e) =>
-                        setNames({ ...names, start: e.target.value })
-                      }
-                      placeholder="Start Point A"
-                      className="w-full text-sm font-bold bg-transparent outline-none p-0 focus:text-indigo-600 transition"
+                    <LocationSearch
+                      placeholder="Search Start Point"
+                      onSelect={(item) => {
+                        setNewPoints({ ...newPoints, start: { lat: item.lat, lng: item.lon } });
+                        setNames({ ...names, start: item.display_name });
+                      }}
+                      initialValue={names.start}
                     />
                   </div>
                   <div className="h-px bg-slate-200"></div>
@@ -288,13 +344,13 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
                     <span className="text-[10px] font-bold text-slate-400 uppercase">
                       Destination
                     </span>
-                    <input
-                      value={names.end}
-                      onChange={(e) =>
-                        setNames({ ...names, end: e.target.value })
-                      }
-                      placeholder="End Point B"
-                      className="w-full text-sm font-bold bg-transparent outline-none p-0 focus:text-indigo-600 transition"
+                    <LocationSearch
+                      placeholder="Search End Point"
+                      onSelect={(item) => {
+                        setNewPoints({ ...newPoints, end: { lat: item.lat, lng: item.lon } });
+                        setNames({ ...names, end: item.display_name });
+                      }}
+                      initialValue={names.end}
                     />
                   </div>
                 </div>
@@ -333,14 +389,19 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
                       {i + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <input
-                        value={stop.name}
-                        onChange={(e) => {
+                      <LocationSearch
+                        placeholder="Search Stop Name"
+                        onSelect={(item) => {
                           const newStops = [...stops];
-                          newStops[i].name = e.target.value;
+                          newStops[i] = {
+                            ...newStops[i],
+                            name: item.display_name,
+                            lat: item.lat,
+                            lon: item.lon,
+                          };
                           setStops(newStops);
                         }}
-                        className="w-full text-sm font-semibold outline-none bg-transparent focus:text-indigo-600"
+                        initialValue={stop.name}
                       />
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -430,7 +491,7 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
             <>
               {newPoints.start && (
                 <Marker
-                  position={newPoints.start}
+                  position={[newPoints.start.lat, newPoints.start.lng || newPoints.start.lon]}
                   icon={
                     new L.DivIcon({
                       className: "bg-transparent",
@@ -445,13 +506,14 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
               )}
               {newPoints.end && (
                 <Marker
-                  position={newPoints.end}
+                  position={[newPoints.end.lat, newPoints.end.lng || newPoints.end.lon]}
                   icon={
                     new L.DivIcon({
                       className: "bg-transparent",
                       html: `<div class="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>`,
                     })
                   }
+                  draggable={true}
                   eventHandlers={{
                     dragend: (e) => handleDrag("end", e.target.getLatLng()),
                   }}
@@ -480,7 +542,10 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
 
               {!previews.length && newPoints.start && newPoints.end && (
                 <Polyline
-                  positions={[newPoints.start, newPoints.end]}
+                  positions={[
+                    [newPoints.start.lat, newPoints.start.lng || newPoints.start.lon],
+                    [newPoints.end.lat, newPoints.end.lng || newPoints.end.lon]
+                  ]}
                   pathOptions={{
                     color: "gray",
                     dashArray: "10, 10",
@@ -493,7 +558,7 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
               {stops.map((s, i) => (
                 <Marker
                   key={i}
-                  position={[s.lat, s.lon]}
+                  position={[s.lat, s.lng || s.lon]}
                   icon={StopIcon(i)}
                   draggable={true}
                   eventHandlers={{
@@ -521,7 +586,7 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
                 pathOptions={{ color: "#4f46e5", weight: 6, opacity: 0.8 }}
               />
               {selectedRoute.stops.map((s, i) => (
-                <Marker key={i} position={[s.lat, s.lon]} icon={StopIcon(i)}>
+                <Marker key={i} position={[s.lat, s.lng || s.lon]} icon={StopIcon(i)}>
                   <Tooltip direction="top" offset={[0, -10]}>
                     {s.name}
                   </Tooltip>
