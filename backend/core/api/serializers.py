@@ -1,23 +1,20 @@
-# VAYY | core/api/serializers.py | Status: 🔧 Fixed
-# Reason: Added StudentProfileSerializer, DriverProfileSerializer, boarding_eligible field,
-#         role-based embedded profiles in UserSerializer.
+# VAYY | core/api/serializers.py | Status: ✅ Public Transport Refactor
 
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from django.utils import timezone
 from core.models import (
-    University, Route, Stop, Vehicle, StudentAssignment,
-    ActiveTrip, StudentProfile, DriverProfile, BulkUploadLog
+    City, Route, Stop, Vehicle,
+    ActiveTrip, PublicPassengerProfile, PublicDriverProfile
 )
 from django.contrib.gis.geos import Point, LineString
 
 User = get_user_model()
 
 
-class UniversitySerializer(serializers.ModelSerializer):
+class CitySerializer(serializers.ModelSerializer):
     class Meta:
-        model = University
-        fields = "__all__"
+        model = City
+        fields = ("id", "name", "state", "country", "created_at")
 
 
 class StopSerializer(serializers.ModelSerializer):
@@ -33,17 +30,20 @@ class RouteSerializer(serializers.ModelSerializer):
     stops = StopSerializer(many=True, read_only=True)
     path_coords = serializers.SerializerMethodField()
     stops_count = serializers.SerializerMethodField()
+    city_name = serializers.CharField(source="city.name", read_only=True, default="")
 
     class Meta:
         model = Route
         fields = (
             "id",
-            "university",
+            "city",
+            "city_name",
             "name",
             "bus_number",
             "start_name",
             "end_name",
             "total_distance_meters",
+            "is_public",
             "path_coords",
             "stops",
             "stops_count",
@@ -56,66 +56,36 @@ class RouteSerializer(serializers.ModelSerializer):
         return obj.stops.count()
 
 
-class StudentProfileSerializer(serializers.ModelSerializer):
-    boarding_eligible = serializers.SerializerMethodField()
-    assigned_vehicle_number = serializers.SerializerMethodField()
-    assigned_route_name = serializers.SerializerMethodField()
-    pickup_lat = serializers.SerializerMethodField()
-    pickup_lon = serializers.SerializerMethodField()
-
+class PassengerProfileSerializer(serializers.ModelSerializer):
     class Meta:
-        model = StudentProfile
+        model = PublicPassengerProfile
         fields = (
             "id",
             "user",
-            "student_name",
-            "student_id",
-            "bus_pass_id",
-            "bus_pass_validity",
+            "display_name",
             "phone_number",
-            "home_address",
-            "assigned_vehicle_number",
-            "assigned_route_name",
-            "boarding_eligible",
-            "pickup_lat",
-            "pickup_lon",
+            "profile_photo",
+            "last_active_at",
         )
 
-    def get_boarding_eligible(self, obj):
-        if not obj.bus_pass_validity:
-            return False
-        return obj.bus_pass_validity >= timezone.now().date()
 
-    def get_assigned_vehicle_number(self, obj):
-        assignment = obj.user.vehicle_assignments.first()
-        return assignment.vehicle.vehicle_number if assignment else None
-
-    def get_assigned_route_name(self, obj):
-        assignment = obj.user.vehicle_assignments.first()
-        if assignment and assignment.vehicle.route:
-            return assignment.vehicle.route.name
-        return ""
-
-    def get_pickup_lat(self, obj):
-        return obj.pickup_stop.y if obj.pickup_stop else None
-
-    def get_pickup_lon(self, obj):
-        return obj.pickup_stop.x if obj.pickup_stop else None
-
-
-class DriverProfileSerializer(serializers.ModelSerializer):
+class PublicDriverProfileSerializer(serializers.ModelSerializer):
     assigned_vehicle_number = serializers.SerializerMethodField()
     assigned_route_name = serializers.SerializerMethodField()
 
     class Meta:
-        model = DriverProfile
+        model = PublicDriverProfile
         fields = (
             "id",
             "user",
-            "driver_name",
+            "display_name",
+            "phone_number",
             "license_number",
             "vehicle_number",
             "vehicle_type",
+            "is_verified",
+            "rating",
+            "total_trips",
             "assigned_vehicle_number",
             "assigned_route_name",
         )
@@ -132,15 +102,9 @@ class DriverProfileSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    university_name = serializers.CharField(source="university.name", read_only=True, default="")
+    city_name = serializers.CharField(source="city.name", read_only=True, default="")
     profile = serializers.SerializerMethodField()
-    boarding_eligible = serializers.SerializerMethodField()
-    
-    # Virtual fields for StudentProfile sync
-    student_id = serializers.CharField(source="student_profile.student_id", required=False, allow_null=True)
-    bus_pass_id = serializers.CharField(source="student_profile.bus_pass_id", required=False, allow_null=True)
-    bus_pass_validity = serializers.DateField(source="student_profile.bus_pass_validity", required=False, allow_null=True)
-    phone_number = serializers.CharField(source="student_profile.phone_number", required=False, allow_blank=True)
+    phone_number = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -150,58 +114,37 @@ class UserSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "role",
-            "university",
-            "university_name",
+            "city",
+            "city_name",
             "profile",
-            "boarding_eligible",
-            "student_id",
-            "bus_pass_id",
-            "bus_pass_validity",
             "phone_number",
         )
-    
-    def update(self, instance, validated_data):
-        # Extract student profile nested data if present
-        profile_data = validated_data.pop("student_profile", None)
-        
-        # Update User
-        instance = super().update(instance, validated_data)
-        
-        # Update or Create StudentProfile if user is a student
-        if instance.role == "student" and profile_data:
-            fullName = f"{instance.first_name} {instance.last_name}".strip() or instance.email
-            StudentProfile.objects.update_or_create(
-                user=instance,
-                defaults={
-                    "student_name": fullName,
-                    **profile_data
-                }
-            )
-        return instance
 
     def get_profile(self, obj):
-        if obj.role == "student" and hasattr(obj, "student_profile"):
-            return StudentProfileSerializer(obj.student_profile).data
+        if obj.role == "passenger" and hasattr(obj, "passenger_profile"):
+            return PassengerProfileSerializer(obj.passenger_profile).data
         if obj.role == "driver" and hasattr(obj, "driver_profile"):
-            return DriverProfileSerializer(obj.driver_profile).data
+            return PublicDriverProfileSerializer(obj.driver_profile).data
         return None
 
-    def get_boarding_eligible(self, obj):
-        if obj.role != "student":
-            return None
-        if hasattr(obj, "student_profile") and obj.student_profile.bus_pass_validity:
-            return obj.student_profile.bus_pass_validity >= timezone.now().date()
-        return False
+    def get_phone_number(self, obj):
+        if obj.role == "passenger" and hasattr(obj, "passenger_profile"):
+            return obj.passenger_profile.phone_number
+        if obj.role == "driver" and hasattr(obj, "driver_profile"):
+            return obj.driver_profile.phone_number
+        return ""
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        return instance
 
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
-    # Remove default validators so we can check it manually in validate_email
     email = serializers.EmailField(validators=[])
-    student_id = serializers.CharField(required=False, allow_null=True)
-    bus_pass_id = serializers.CharField(required=False, allow_null=True)
-    bus_pass_validity = serializers.DateField(required=False, allow_null=True)
-    phone_number = serializers.CharField(required=False, allow_blank=True)
+    phone_number = serializers.CharField(required=False, allow_blank=True, default="")
+    license_number = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    vehicle_type = serializers.CharField(required=False, allow_blank=True, default="bus")
 
     class Meta:
         model = User
@@ -209,30 +152,31 @@ class RegisterSerializer(serializers.ModelSerializer):
             "email",
             "password",
             "role",
-            "university",
+            "city",
             "first_name",
             "last_name",
-            "student_id",
-            "bus_pass_id",
-            "bus_pass_validity",
             "phone_number",
+            "license_number",
+            "vehicle_type",
         )
 
     def validate_email(self, value):
         user = User.objects.filter(email=value).first()
-        # Django considers "" to be a "usable" password artificially. We only block
-        # if the password is truly hashed and set.
         if user and user.password != "" and user.has_usable_password():
             raise serializers.ValidationError("User with this email already exists.")
         return value
 
     def create(self, validated_data):
         email = validated_data["email"]
+        phone = validated_data.pop("phone_number", "")
+        license_number = validated_data.pop("license_number", None)
+        v_type = validated_data.pop("vehicle_type", "bus")
+
         user = User.objects.filter(email=email).first()
         if user:
             user.set_password(validated_data["password"])
-            user.role = validated_data.get("role", "student")
-            user.university = validated_data.get("university")
+            user.role = validated_data.get("role", "passenger")
+            user.city = validated_data.get("city")
             user.first_name = validated_data.get("first_name", "")
             user.last_name = validated_data.get("last_name", "")
             user.is_verified = True
@@ -242,28 +186,33 @@ class RegisterSerializer(serializers.ModelSerializer):
                 username=email,
                 email=email,
                 password=validated_data["password"],
-                role=validated_data.get("role", "student"),
-                university=validated_data.get("university"),
+                role=validated_data.get("role", "passenger"),
+                city=validated_data.get("city"),
                 first_name=validated_data.get("first_name", ""),
                 last_name=validated_data.get("last_name", ""),
                 is_verified=True,
             )
 
-        # Create Profile
-        if user.role == "student":
-            fullName = f"{user.first_name} {user.last_name}".strip() or user.email
-            StudentProfile.objects.update_or_create(
+        display_name = f"{user.first_name} {user.last_name}".strip() or user.email
+
+        if user.role == "passenger":
+            PublicPassengerProfile.objects.update_or_create(
                 user=user,
                 defaults={
-                    "student_name": fullName,
-                    "student_id": validated_data.get("student_id"),
-                    "bus_pass_id": validated_data.get("bus_pass_id"),
-                    "bus_pass_validity": validated_data.get("bus_pass_validity"),
-                    "phone_number": validated_data.get("phone_number", ""),
+                    "display_name": display_name,
+                    "phone_number": phone,
                 }
             )
         elif user.role == "driver":
-            DriverProfile.objects.get_or_create(user=user)
+            PublicDriverProfile.objects.update_or_create(
+                user=user,
+                defaults={
+                    "display_name": display_name,
+                    "phone_number": phone,
+                    "license_number": license_number or None,
+                    "vehicle_type": v_type,
+                }
+            )
 
         return user
 
@@ -271,12 +220,14 @@ class RegisterSerializer(serializers.ModelSerializer):
 class VehicleSerializer(serializers.ModelSerializer):
     driver_name = serializers.CharField(source="driver.get_full_name", read_only=True)
     route_name = serializers.CharField(source="route.name", read_only=True)
+    city_name = serializers.CharField(source="city.name", read_only=True, default="")
 
     class Meta:
         model = Vehicle
         fields = (
             "id",
-            "university",
+            "city",
+            "city_name",
             "route",
             "route_name",
             "driver",
@@ -284,18 +235,6 @@ class VehicleSerializer(serializers.ModelSerializer):
             "vehicle_number",
             "vehicle_type",
         )
-
-
-class StudentAssignmentSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source="student.get_full_name", read_only=True)
-    student_id = serializers.CharField(source="student.student_profile.student_id", read_only=True)
-    vehicle_number = serializers.CharField(
-        source="vehicle.vehicle_number", read_only=True
-    )
-
-    class Meta:
-        model = StudentAssignment
-        fields = ("id", "student", "student_name", "student_id", "vehicle", "vehicle_number")
 
 
 class ActiveTripSerializer(serializers.ModelSerializer):
@@ -310,9 +249,3 @@ class ActiveTripSerializer(serializers.ModelSerializer):
 class OTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
     otp = serializers.CharField(max_length=6, required=False)
-
-
-class BulkUploadLogSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = BulkUploadLog
-        fields = "__all__"

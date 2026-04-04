@@ -198,8 +198,8 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "100/day",
-        "user": "1000/hour",
+        "anon": "2000/day",
+        "user": "5000/hour",
     },
 }
 
@@ -270,14 +270,8 @@ if SYSTEM == "Windows":
 elif SYSTEM == "Darwin":
 
     # Homebrew installation path (Apple Silicon)
-    gdal_path = "/opt/homebrew/opt/gdal/lib/libgdal.dylib"
-    geos_path = "/opt/homebrew/opt/geos/lib/libgeos_c.dylib"
-
-    if os.path.exists(gdal_path):
-        GDAL_LIBRARY_PATH = gdal_path
-
-    if os.path.exists(geos_path):
-        GEOS_LIBRARY_PATH = geos_path
+    GDAL_LIBRARY_PATH = "/opt/homebrew/opt/gdal/lib/libgdal.dylib"
+    GEOS_LIBRARY_PATH = "/opt/homebrew/opt/geos/lib/libgeos_c.dylib"
 
 
 # ==============================

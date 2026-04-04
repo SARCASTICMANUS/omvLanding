@@ -1,6 +1,5 @@
-# VAYY | core/models.py | Status: 🔧 Fixed
-# Reason: Added StudentProfile, DriverProfile, BulkUploadLog; fixed ActiveTrip schema;
-#         added otp_verified/otp_created_at to User; added bus_number to Route.
+# VAYY | core/models.py | Status: ✅ Public Transport Refactor
+# Converted from University/Student model to Public City/Passenger/Driver model.
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -10,43 +9,52 @@ from django.utils import timezone
 import uuid
 
 
+# ─── City (replaces University) ───────────────────────────────────────────────
 
-class University(models.Model):
+class City(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
+    state = models.CharField(max_length=255, default="", blank=True)
+    country = models.CharField(max_length=255, default="India", blank=True)
     location = gis_models.PointField(geography=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return self.name
+    class Meta:
+        verbose_name_plural = "Cities"
+        ordering = ["name"]
 
+    def __str__(self):
+        return f"{self.name}, {self.state}"
+
+
+# ─── User ─────────────────────────────────────────────────────────────────────
 
 class User(AbstractUser):
     ROLE_CHOICES = (
-        ("student", "Student"),
+        ("passenger", "Passenger"),
         ("driver", "Driver"),
-        ("university_admin", "University Admin"),
+        ("city_admin", "City Admin"),
         ("admin", "Admin"),
     )
 
     email = models.EmailField(unique=True)
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="student")
-    university = models.ForeignKey(
-        University, on_delete=models.SET_NULL, null=True, blank=True
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="passenger")
+    city = models.ForeignKey(
+        City, on_delete=models.SET_NULL, null=True, blank=True, related_name="users"
     )
 
     # OTP Verification
     otp = models.CharField(max_length=6, null=True, blank=True)
     otp_verified = models.BooleanField(default=False)
     otp_created_at = models.DateTimeField(null=True, blank=True)
-    is_verified = models.BooleanField(default=False)  # kept for backward compat
+    is_verified = models.BooleanField(default=False)
 
-    # Legacy driver fields (kept to avoid breaking existing code; real data in DriverProfile)
+    # Legacy driver fields (kept for compatibility)
     vehicle_type = models.CharField(max_length=20, null=True, blank=True)
     vehicle_number = models.CharField(max_length=20, null=True, blank=True)
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = []  # Remove username from required fields
+    REQUIRED_FIELDS = []
 
     def __str__(self):
         return self.email
@@ -55,10 +63,12 @@ class User(AbstractUser):
 User_model = get_user_model()
 
 
+# ─── Route ────────────────────────────────────────────────────────────────────
+
 class Route(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    university = models.ForeignKey(
-        University, on_delete=models.CASCADE, related_name="routes"
+    city = models.ForeignKey(
+        City, on_delete=models.CASCADE, related_name="routes", null=True, blank=True
     )
     name = models.CharField(max_length=255)
     bus_number = models.CharField(max_length=50, default="", blank=True)
@@ -66,12 +76,16 @@ class Route(models.Model):
     start_name = models.CharField(max_length=255, default="", blank=True)
     end_name = models.CharField(max_length=255, default="", blank=True)
     total_distance_meters = models.FloatField(default=0)
+    is_public = models.BooleanField(default=True)  # Public routes are visible to all
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.name} ({self.university.name})"
+        city_name = self.city.name if self.city else "No City"
+        return f"{self.name} ({city_name})"
 
+
+# ─── Stop ─────────────────────────────────────────────────────────────────────
 
 class Stop(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -90,43 +104,45 @@ class Stop(models.Model):
         return f"{self.name} - {self.route.name}"
 
 
+# ─── Vehicle ──────────────────────────────────────────────────────────────────
+
 class Vehicle(models.Model):
+    VEHICLE_TYPE_CHOICES = [
+        ("bus", "Bus"),
+        ("van", "Van"),
+        ("minibus", "Minibus"),
+        ("car", "Car"),
+        ("auto", "Auto-Rickshaw"),
+        ("tempo", "Tempo Traveller"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    university = models.ForeignKey(
-        University, on_delete=models.CASCADE, related_name="vehicles"
+    city = models.ForeignKey(
+        City, on_delete=models.SET_NULL, null=True, blank=True, related_name="vehicles"
     )
     route = models.ForeignKey(
-        Route, on_delete=models.SET_NULL, null=True, related_name="vehicles"
+        Route, on_delete=models.SET_NULL, null=True, blank=True, related_name="vehicles"
     )
     driver = models.OneToOneField(
         User_model,
         on_delete=models.SET_NULL,
         null=True,
+        blank=True,
         related_name="assigned_vehicle",
     )
     vehicle_number = models.CharField(max_length=50)
     vehicle_type = models.CharField(
         max_length=20,
-        choices=[("bus", "Bus"), ("van", "Van"), ("minibus", "Minibus"), ("car", "Car")],
+        choices=VEHICLE_TYPE_CHOICES,
         default="bus",
     )
 
     def __str__(self):
-        return f"{self.vehicle_number} ({self.university.name})"
+        city_name = self.city.name if self.city else "No City"
+        return f"{self.vehicle_number} ({city_name})"
 
 
-class StudentAssignment(models.Model):
-    student = models.ForeignKey(
-        User_model, on_delete=models.CASCADE, related_name="vehicle_assignments"
-    )
-    vehicle = models.ForeignKey(
-        Vehicle, on_delete=models.CASCADE, related_name="assigned_students"
-    )
-    assigned_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = (("student", "vehicle"),)
-
+# ─── Active Trip ──────────────────────────────────────────────────────────────
 
 class ActiveTrip(models.Model):
     STATUS_CHOICES = (
@@ -150,42 +166,37 @@ class ActiveTrip(models.Model):
     last_updated = models.DateTimeField(auto_now=True, db_index=True)
     started_at = models.DateTimeField(default=timezone.now, editable=False)
 
-
-    # Keep legacy field for backward compat with old consumers code
+    # Legacy field for backward compat
     is_active = models.BooleanField(default=True)
 
     class Meta:
         indexes = [
             models.Index(fields=["status", "last_updated"]),
-            # Explicit spatial index for current_location if needed by certain PostGIS versions
         ]
 
     def __str__(self):
         return f"Trip {self.id} - {self.route.name} [{self.status}]"
 
     def save(self, *args, **kwargs):
-        # Keep is_active in sync with status for any legacy code
         self.is_active = (self.status == "active")
         super().save(*args, **kwargs)
 
 
-# ─── NEW MODELS ───────────────────────────────────────────────────────────────
+# ─── Public Passenger Profile (replaces StudentProfile) ───────────────────────
 
-class StudentProfile(models.Model):
+class PublicPassengerProfile(models.Model):
     user = models.OneToOneField(
-        User_model, on_delete=models.CASCADE, related_name="student_profile"
+        User_model, on_delete=models.CASCADE, related_name="passenger_profile"
     )
-    student_name = models.CharField(max_length=255, default="", blank=True)
-    student_id = models.CharField(max_length=100, unique=True, null=True, blank=True, default=None)
-    profile_photo = models.CharField(max_length=500, default="", blank=True)  # S3 URL
-    bus_pass_id = models.CharField(max_length=100, unique=True, null=True, blank=True, default=None)
-    bus_pass_validity = models.DateField(null=True, blank=True)
+    display_name = models.CharField(max_length=255, default="", blank=True)
     phone_number = models.CharField(max_length=20, default="", blank=True)
-    home_address = models.CharField(max_length=500, default="", blank=True)
+    profile_photo = models.CharField(max_length=500, default="", blank=True)  # S3 URL
     home_location = gis_models.PointField(srid=4326, null=True, blank=True)
-    pickup_stop = gis_models.PointField(srid=4326, null=True, blank=True)
     current_location = gis_models.PointField(srid=4326, null=True, blank=True)
     last_active_at = models.DateTimeField(null=True, blank=True)
+
+    # Saved/favourite routes
+    saved_routes = models.ManyToManyField(Route, blank=True, related_name="saved_by")
 
     class Meta:
         indexes = [
@@ -193,47 +204,34 @@ class StudentProfile(models.Model):
         ]
 
     def __str__(self):
-        return f"StudentProfile: {self.user.email}"
-
-    @property
-    def boarding_eligible(self):
-        from django.utils import timezone
-        if not self.bus_pass_validity:
-            return False
-        return self.bus_pass_validity >= timezone.now().date()
+        return f"PassengerProfile: {self.user.email}"
 
 
-class DriverProfile(models.Model):
+# ─── Public Driver Profile (replaces DriverProfile) ───────────────────────────
+
+class PublicDriverProfile(models.Model):
     VEHICLE_TYPE_CHOICES = (
         ("bus", "Bus"),
         ("van", "Van"),
         ("minibus", "Minibus"),
+        ("car", "Car"),
+        ("auto", "Auto-Rickshaw"),
+        ("tempo", "Tempo Traveller"),
     )
 
     user = models.OneToOneField(
         User_model, on_delete=models.CASCADE, related_name="driver_profile"
     )
-    driver_name = models.CharField(max_length=255, default="", blank=True)
+    display_name = models.CharField(max_length=255, default="", blank=True)
+    phone_number = models.CharField(max_length=20, default="", blank=True)
     license_number = models.CharField(max_length=100, unique=True, null=True, blank=True, default=None)
     vehicle_number = models.CharField(max_length=50, default="", blank=True)
     vehicle_type = models.CharField(
         max_length=20, choices=VEHICLE_TYPE_CHOICES, default="bus"
     )
+    is_verified = models.BooleanField(default=False)  # Admin can approve drivers
+    rating = models.FloatField(default=5.0)
+    total_trips = models.PositiveIntegerField(default=0)
 
     def __str__(self):
         return f"DriverProfile: {self.user.email}"
-
-
-class BulkUploadLog(models.Model):
-    uploaded_by = models.ForeignKey(
-        User_model, on_delete=models.CASCADE, related_name="bulk_uploads"
-    )
-    file_name = models.CharField(max_length=255, default="", blank=True)
-    total_rows = models.IntegerField(default=0)
-    success_count = models.IntegerField(default=0)
-    error_count = models.IntegerField(default=0)
-    errors = models.JSONField(default=list)  # [{"row": 3, "reason": "..."}]
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"Upload by {self.uploaded_by.email} at {self.created_at} ({self.success_count}/{self.total_rows})"
