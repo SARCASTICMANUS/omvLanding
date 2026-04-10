@@ -2,16 +2,8 @@
 // Reason: Added Next 3 Stops panel, passenger waiting counts, and ETA polling.
 
 import React, { useState, useRef, useEffect } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Polyline,
-  CircleMarker,
-  Marker,
-  Popup,
-  useMap,
-} from "react-leaflet";
-import L from "leaflet";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import api from "../../utils/api";
 import {
   Play,
@@ -24,111 +16,8 @@ import {
   Loader,
   Clock,
   RefreshCw,
-  Hand
 } from "lucide-react";
 import Header from "../Layout/Header";
-import "leaflet/dist/leaflet.css";
-
-const MapResizer = () => {
-  const map = useMap({ attributionControl: false });
-  useEffect(() => {
-    setTimeout(() => {
-      map.invalidateSize();
-    }, 100);
-  }, [map]);
-  return null;
-};
-
-// Fit bounds or follow vehicle with tilt/auto-zoom
-const DynamicAutoZoom = ({ currentPos, isDriving, routePath }) => {
-  const map = useMap();
-  const prevPos = useRef(null);
-
-  useEffect(() => {
-    if (!currentPos) return;
-
-    if (isDriving) {
-      // 1. Calculate heading for map rotation (so bus always faces "up")
-      let heading = 0;
-      if (prevPos.current) {
-        const [lat1, lon1] = prevPos.current;
-        const [lat2, lon2] = currentPos;
-        // Invert angle for map rotation
-        heading = (Math.atan2(lon1 - lon2, lat2 - lat1) * 180) / Math.PI;
-      }
-      prevPos.current = currentPos;
-
-      // 2. Adjust zoom to 17 (from 18) for a broader view of the road
-      map.setView(currentPos, 17, {
-        animate: true,
-        duration: 0.8,
-      });
-
-      // 3. Update CSS variables for 3D tilt/rotation
-      const mapContainer = map.getContainer();
-      mapContainer.style.setProperty('--map-rotation', `${heading}deg`);
-      
-      if (!mapContainer.classList.contains("navigation-mode")) {
-        mapContainer.classList.add("navigation-mode");
-      }
-    } else if (routePath && routePath.length > 0) {
-      const bounds = L.latLngBounds(routePath);
-      map.fitBounds(bounds, { padding: [50, 50] });
-      const mapContainer = map.getContainer();
-      mapContainer.classList.remove("navigation-mode");
-      mapContainer.style.removeProperty('--map-rotation');
-    }
-  }, [currentPos, isDriving, routePath, map]);
-
-  return null;
-};
-
-// 3D-like Rotating Vehicle Marker
-const VehicleMarker = ({ pos, isDriving }) => {
-  const prevPos = useRef(null);
-  const [rotation, setRotation] = useState(0);
-
-  useEffect(() => {
-    if (prevPos.current && pos) {
-      const [lat1, lon1] = prevPos.current;
-      const [lat2, lon2] = pos;
-      const angle = (Math.atan2(lon2 - lon1, lat2 - lat1) * 180) / Math.PI;
-      if (Math.abs(lat2-lat1) > 0.00001 || Math.abs(lon2-lon1) > 0.00001) {
-          setRotation(angle);
-      }
-    }
-    prevPos.current = pos;
-  }, [pos]);
-
-  if (!pos) return null;
-
-  const busIcon = L.divIcon({
-    className: "custom-bus-icon",
-    html: `
-      <div style="transform: rotate(${rotation}deg); transition: transform 0.3s ease-out;">
-        <div class="relative w-12 h-12 flex items-center justify-center">
-          <div class="absolute inset-0 bg-blue-500/20 rounded-full animate-ping scale-150"></div>
-          <div class="relative bg-blue-600 w-8 h-12 rounded-lg border-2 border-white shadow-2xl flex flex-col items-center justify-center overflow-hidden">
-            <div class="w-full h-2 bg-blue-400 mb-1 flex justify-around px-1">
-                <div class="w-1.5 h-1.5 bg-yellow-300 rounded-full"></div>
-                <div class="w-1.5 h-1.5 bg-yellow-300 rounded-full"></div>
-            </div>
-            <div class="w-6 h-4 bg-white/20 rounded-sm"></div>
-            <div class="mt-2 text-[8px] font-black text-white leading-none">VAYY</div>
-          </div>
-        </div>
-      </div>
-    `,
-    iconSize: [48, 48],
-    iconAnchor: [24, 24],
-  });
-
-  return (
-    <Marker position={pos} icon={busIcon}>
-      <Popup>Vehicle Live</Popup>
-    </Marker>
-  );
-};
 
 // Helper to decode OSRM polyline string to [lat, lon] array
 function decodePolyline(str, precision = 5) {
@@ -147,6 +36,8 @@ function decodePolyline(str, precision = 5) {
 }
 
 const MapDriver = () => {
+  const mapContainer = useRef(null);
+  const map = useRef(null);
   const [availableRoutes, setAvailableRoutes] = useState([]);
   const [selectedRouteId, setSelectedRouteId] = useState("");
   const [routePath, setRoutePath] = useState(null);
@@ -160,6 +51,188 @@ const MapDriver = () => {
   const ws = useRef(null);
   const simulationRef = useRef(null);
   const pollIntervalRef = useRef(null);
+  const vehicleMarker = useRef(null);
+  const passengerMarkers = useRef({});
+  const prevPos = useRef(null);
+
+  // Initialize Map
+  useEffect(() => {
+    if (map.current) return;
+    map.current = new maplibregl.Map({
+      container: mapContainer.current,
+      style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+      center: [76.7794, 30.7333], // Chandigarh [lon, lat]
+      zoom: 13,
+      pitch: 0,
+      bearing: 0,
+    });
+
+    map.current.addControl(new maplibregl.NavigationControl(), "top-right");
+
+    map.current.on("load", () => {
+      map.current.addSource("route", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: [],
+          },
+        },
+      });
+
+      map.current.addLayer({
+        id: "route",
+        type: "line",
+        source: "route",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#2563eb",
+          "line-width": 8,
+          "line-opacity": 0.3,
+        },
+      });
+    });
+
+    return () => {
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
+    };
+  }, []);
+
+  // Sync Route Path
+  useEffect(() => {
+    if (!map.current || !map.current.isStyleLoaded()) return;
+    const source = map.current.getSource("route");
+    if (source) {
+      source.setData({
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "LineString",
+          coordinates: routePath ? routePath.map(p => [p[1], p[0]]) : [],
+        },
+      });
+
+      if (routePath && routePath.length > 0 && !isDriving) {
+        const bounds = routePath.reduce(
+          (acc, coord) => acc.extend([coord[1], coord[0]]),
+          new maplibregl.LngLatBounds([routePath[0][1], routePath[0][0]], [routePath[0][1], routePath[0][0]])
+        );
+        map.current.fitBounds(bounds, { padding: 50 });
+      }
+    }
+  }, [routePath, isDriving]);
+
+  // Sync Vehicle Marker and Camera
+  useEffect(() => {
+    if (!map.current || !currentPos) return;
+
+    if (!vehicleMarker.current) {
+      const el = document.createElement("div");
+      el.className = "custom-bus-icon";
+      el.innerHTML = `
+        <div class="relative w-12 h-12 flex items-center justify-center">
+          <div class="absolute inset-0 bg-blue-500/20 rounded-full animate-ping scale-150"></div>
+          <div class="relative bg-blue-600 w-8 h-12 rounded-lg border-2 border-white shadow-2xl flex flex-col items-center justify-center overflow-hidden">
+            <div class="w-full h-2 bg-blue-400 mb-1 flex justify-around px-1">
+                <div class="w-1.5 h-1.5 bg-yellow-300 rounded-full"></div>
+                <div class="w-1.5 h-1.5 bg-yellow-300 rounded-full"></div>
+            </div>
+            <div class="w-6 h-4 bg-white/20 rounded-sm"></div>
+            <div class="mt-2 text-[8px] font-black text-white leading-none">VAYY</div>
+          </div>
+        </div>
+      `;
+      vehicleMarker.current = new maplibregl.Marker({ element: el })
+        .setLngLat([currentPos[1], currentPos[0]])
+        .addTo(map.current);
+    } else {
+      vehicleMarker.current.setLngLat([currentPos[1], currentPos[0]]);
+    }
+
+    if (isDriving) {
+      let bearing = map.current.getBearing();
+      if (prevPos.current) {
+        const [lat1, lon1] = prevPos.current;
+        const [lat2, lon2] = currentPos;
+        // MapLibre bearing is degrees clockwise from North
+        bearing = (Math.atan2(lon2 - lon1, lat2 - lat1) * 180) / Math.PI;
+      }
+      prevPos.current = currentPos;
+
+      map.current.easeTo({
+        center: [currentPos[1], currentPos[0]],
+        zoom: 17,
+        pitch: 60,
+        bearing: bearing,
+        duration: 1000,
+      });
+
+      // Update marker rotation
+      const el = vehicleMarker.current.getElement();
+      const inner = el.querySelector(".relative.bg-blue-600").parentElement;
+      if (inner) inner.style.transform = `rotate(${bearing}deg)`;
+    } else {
+      map.current.setPitch(0);
+      map.current.setBearing(0);
+    }
+  }, [currentPos, isDriving]);
+
+  // Sync Passenger Markers
+  useEffect(() => {
+    if (!map.current) return;
+
+    const currentPassengerIds = new Set();
+    Object.entries(passengers).forEach(([id, p]) => {
+      currentPassengerIds.add(id);
+      if (!passengerMarkers.current[id]) {
+        const el = document.createElement("div");
+        el.className = "passenger-marker";
+        el.style.width = p.hand_raised ? "16px" : "10px";
+        el.style.height = p.hand_raised ? "16px" : "10px";
+        el.style.borderRadius = "50%";
+        el.style.backgroundColor = p.hand_raised ? "#f59e0b" : "#10b981";
+        el.style.border = "2px solid white";
+        el.style.boxShadow = "0 0 5px rgba(0,0,0,0.3)";
+
+        if (p.hand_raised) {
+          const hand = document.createElement("div");
+          hand.innerHTML = "✋";
+          hand.style.position = "absolute";
+          hand.style.top = "-25px";
+          hand.style.left = "-5px";
+          hand.style.fontSize = "20px";
+          hand.className = "animate-bounce";
+          el.appendChild(hand);
+        }
+
+        passengerMarkers.current[id] = new maplibregl.Marker({ element: el })
+          .setLngLat([p.lon, p.lat])
+          .addTo(map.current);
+      } else {
+        passengerMarkers.current[id].setLngLat([p.lon, p.lat]);
+        // Update style if hand raise status changed
+        const el = passengerMarkers.current[id].getElement();
+        el.style.backgroundColor = p.hand_raised ? "#f59e0b" : "#10b981";
+        el.style.width = p.hand_raised ? "16px" : "10px";
+        el.style.height = p.hand_raised ? "16px" : "10px";
+      }
+    });
+
+    Object.keys(passengerMarkers.current).forEach(id => {
+      if (!currentPassengerIds.has(id)) {
+        passengerMarkers.current[id].remove();
+        delete passengerMarkers.current[id];
+      }
+    });
+  }, [passengers]);
 
   useEffect(() => {
     api
@@ -272,6 +345,10 @@ const MapDriver = () => {
     setTripData(null);
     setNextStops([]);
     setSelectedRouteId("");
+    if (vehicleMarker.current) {
+      vehicleMarker.current.remove();
+      vehicleMarker.current = null;
+    }
   };
 
   useEffect(() => {
@@ -302,27 +379,6 @@ const MapDriver = () => {
 
   return (
     <div className="flex flex-col h-screen w-full bg-slate-50 font-sans">
-      <style>{`
-        .navigation-mode {
-          perspective: 1000px;
-          background: #1e293b;
-        }
-        .navigation-mode .leaflet-map-pane {
-          transform: rotateX(55deg) rotateZ(var(--map-rotation, 0deg)) translateY(20%);
-          transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        /* Counter-rotate markers to keep them upright */
-        .navigation-mode .custom-bus-icon, 
-        .navigation-mode .leaflet-marker-icon,
-        .navigation-mode .leaflet-popup {
-          transform: rotateZ(calc(-1 * var(--map-rotation, 0deg))) rotateX(-55deg) translateY(-20px) !important;
-          transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .leaflet-div-icon {
-          background: transparent !important;
-          border: none !important;
-        }
-      `}</style>
       <Header />
 
       <div className="flex-1 w-full relative z-0">
@@ -429,60 +485,15 @@ const MapDriver = () => {
           </div>
         </div>
 
-        <MapContainer
-          center={[30.7333, 76.7794]}
-          zoom={13}
-          style={{ height: "100%", width: "100%" }}
-          zoomControl={false}
-          attributionControl={false}
-        >
-          <MapResizer />
-          <TileLayer
-            attribution='&copy; CARTO'
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-          />
-
-          {routePath && (
-             <Polyline positions={routePath} color="#2563eb" weight={8} opacity={0.3} lineCap="round" />
-          )}
-
-          {currentPos && (
-            <VehicleMarker pos={currentPos} isDriving={isDriving} />
-          )}
-
-          {Object.entries(passengers).map(([id, p]) => (
-            <React.Fragment key={id}>
-              <CircleMarker
-                center={[p.lat, p.lon]}
-                radius={p.hand_raised ? 8 : 5}
-                pathOptions={{
-                  color: "white",
-                  fillColor: p.hand_raised ? "#f59e0b" : "#10b981",
-                  fillOpacity: 1,
-                  weight: 2,
-                }}
-              />
-              {p.hand_raised && (
-                <Marker
-                  position={[p.lat, p.lon]}
-                  icon={L.divIcon({
-                    html: `<div class="animate-bounce text-2xl" style="margin-top: -20px; margin-left: -10px;">✋</div>`,
-                    className: 'hand-marker'
-                  })}
-                />
-              )}
-            </React.Fragment>
-          ))}
-
-          <DynamicAutoZoom 
-            currentPos={currentPos} 
-            isDriving={isDriving} 
-            routePath={routePath} 
-          />
-        </MapContainer>
+        <div ref={mapContainer} className="h-full w-full" />
       </div>
     </div>
   );
 };
+
+
+
+
+
 
 export default MapDriver;

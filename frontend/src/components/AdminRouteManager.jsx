@@ -1,13 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Polyline,
-  Marker,
-  useMapEvents,
-  useMap,
-  Tooltip,
-} from "react-leaflet";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import api from "../utils/api";
 import {
   Trash2,
@@ -22,67 +15,10 @@ import {
   Bus,
 } from "lucide-react";
 import LocationSearch from "./Shared/LocationSearch";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 
-// --- Helpers ---
-const AutoZoom = ({ selectedRoute, points, stops }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (selectedRoute && selectedRoute.path_coords) {
-      const bounds = L.latLngBounds(selectedRoute.path_coords);
-      map.fitBounds(bounds, { padding: [50, 50] });
-    } else if (points.start && points.end) {
-      const allPoints = [];
-      
-      const format = (p) => {
-        if (!p) return null;
-        const lat = p.lat;
-        const lng = p.lng || p.lon;
-        if (lat !== undefined && lng !== undefined) return [lat, lng];
-        return null;
-      };
-
-      const start = format(points.start);
-      const end = format(points.end);
-      
-      if (start) allPoints.push(start);
-      if (end) allPoints.push(end);
-      
-      stops.forEach(s => {
-        const p = format(s);
-        if (p) allPoints.push(p);
-      });
-
-      if (allPoints.length > 0) {
-        const bounds = L.latLngBounds(allPoints);
-        map.fitBounds(bounds, { padding: [100, 100] });
-      }
-    }
-  }, [selectedRoute, points, stops, map]);
-  return null;
-};
-
-const StopIcon = (order) =>
-  new L.DivIcon({
-    className: "bg-transparent",
-    html: `<div class="flex items-center justify-center bg-indigo-600 text-white w-6 h-6 rounded-full border-2 border-white shadow-md text-[10px] font-bold">${order + 1}</div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-  });
-
-// --- 3. Helper: Map Click Handler ---
-const MapClicker = ({ onMapClick }) => {
-  useMapEvents({
-    click(e) {
-      onMapClick(e.latlng);
-    },
-  });
-  return null;
-};
-
-// --- Main Component ---
 const AdminRouteManager = ({ onBack, preSelectedCity }) => {
+  const mapContainer = useRef(null);
+  const map = useRef(null);
   const [cities, setCities] = useState([]);
   const [selectedCity, setSelectedCity] = useState(preSelectedCity || "");
   const [routes, setRoutes] = useState([]);
@@ -98,6 +34,229 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
   // New: Alternative Routing State
   const [previews, setPreviews] = useState([]); // [{path, distance, duration}]
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const markers = useRef({}); // { type_id: markerInstance }
+
+  // Initialize Map
+  useEffect(() => {
+    if (map.current) return;
+    map.current = new maplibregl.Map({
+      container: mapContainer.current,
+      style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+      center: [78.9629, 20.5937],
+      zoom: 5,
+    });
+
+    map.current.addControl(new maplibregl.NavigationControl(), "top-right");
+
+    map.current.on("load", () => {
+      map.current.addSource("route-previews", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+
+      map.current.addLayer({
+        id: "route-previews-layer",
+        type: "line",
+        source: "route-previews",
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": ["case", ["boolean", ["get", "selected"], false], "#4f46e5", "#94a3b8"],
+          "line-width": ["case", ["boolean", ["get", "selected"], false], 7, 4],
+          "line-opacity": ["case", ["boolean", ["get", "selected"], false], 0.9, 0.4],
+        },
+      });
+
+      map.current.on("click", "route-previews-layer", (e) => {
+        if (e.features.length > 0) {
+          setSelectedIndex(e.features[0].properties.index);
+        }
+      });
+    });
+
+    map.current.on("click", (e) => {
+      // Logic handled in a separate effect to have access to state
+    });
+
+    return () => {
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
+    };
+  }, []);
+
+  // Handle Map Clicks
+  useEffect(() => {
+    if (!map.current) return;
+
+    const handleClick = (e) => {
+      // Check if clicked on a feature
+      const features = map.current.queryRenderedFeatures(e.point, { layers: ["route-previews-layer"] });
+      if (features.length > 0) return;
+
+      const latlng = e.lngLat;
+      handleMapClick({ lat: latlng.lat, lng: latlng.lng });
+    };
+
+    map.current.off("click", handleClick);
+    map.current.on("click", handleClick);
+    
+    return () => map.current?.off("click", handleClick);
+  }, [isAddingStop, newPoints, stops]);
+
+  // Sync Markers and Previews
+  useEffect(() => {
+    if (!map.current) return;
+
+    // Update Start Marker
+    if (newPoints.start && !selectedRoute) {
+      if (!markers.current["start"]) {
+        const el = document.createElement("div");
+        el.className = "w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-lg cursor-move";
+        markers.current["start"] = new maplibregl.Marker({ element: el, draggable: true })
+          .setLngLat([newPoints.start.lng || newPoints.start.lon, newPoints.start.lat])
+          .addTo(map.current)
+          .on("dragend", () => {
+            const lngLat = markers.current["start"].getLngLat();
+            handleDrag("start", { lat: lngLat.lat, lng: lngLat.lng });
+          });
+      } else {
+        markers.current["start"].setLngLat([newPoints.start.lng || newPoints.start.lon, newPoints.start.lat]);
+      }
+    } else if (markers.current["start"]) {
+      markers.current["start"].remove();
+      delete markers.current["start"];
+    }
+
+    // Update End Marker
+    if (newPoints.end && !selectedRoute) {
+      if (!markers.current["end"]) {
+        const el = document.createElement("div");
+        el.className = "w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg cursor-move";
+        markers.current["end"] = new maplibregl.Marker({ element: el, draggable: true })
+          .setLngLat([newPoints.end.lng || newPoints.end.lon, newPoints.end.lat])
+          .addTo(map.current)
+          .on("dragend", () => {
+            const lngLat = markers.current["end"].getLngLat();
+            handleDrag("end", { lat: lngLat.lat, lng: lngLat.lng });
+          });
+      } else {
+        markers.current["end"].setLngLat([newPoints.end.lng || newPoints.end.lon, newPoints.end.lat]);
+      }
+    } else if (markers.current["end"]) {
+      markers.current["end"].remove();
+      delete markers.current["end"];
+    }
+
+    // Update Stop Markers
+    const currentStopIds = new Set();
+    if (!selectedRoute) {
+      stops.forEach((s, i) => {
+        const id = `stop-${i}`;
+        currentStopIds.add(id);
+        if (!markers.current[id]) {
+          const el = document.createElement("div");
+          el.className = "flex items-center justify-center bg-indigo-600 text-white w-6 h-6 rounded-full border-2 border-white shadow-md text-[10px] font-bold cursor-move";
+          el.innerHTML = i + 1;
+          markers.current[id] = new maplibregl.Marker({ element: el, draggable: true })
+            .setLngLat([s.lng || s.lon, s.lat])
+            .setPopup(new maplibregl.Popup({ offset: 15 }).setText(s.name))
+            .addTo(map.current)
+            .on("dragend", () => {
+              const lngLat = markers.current[id].getLngLat();
+              handleDrag("stop", { lat: lngLat.lat, lng: lngLat.lng }, i);
+            });
+        } else {
+          markers.current[id].setLngLat([s.lng || s.lon, s.lat]);
+          markers.current[id].getElement().innerHTML = i + 1;
+        }
+      });
+    }
+
+    // Update Selected Route Markers
+    if (selectedRoute) {
+      selectedRoute.stops.forEach((s, i) => {
+        const id = `route-stop-${i}`;
+        currentStopIds.add(id);
+        if (!markers.current[id]) {
+          const el = document.createElement("div");
+          el.className = "flex items-center justify-center bg-indigo-600 text-white w-6 h-6 rounded-full border-2 border-white shadow-md text-[10px] font-bold";
+          el.innerHTML = i + 1;
+          markers.current[id] = new maplibregl.Marker({ element: el })
+            .setLngLat([s.lng || s.lon, s.lat])
+            .setPopup(new maplibregl.Popup({ offset: 15 }).setText(s.name))
+            .addTo(map.current);
+        } else {
+          markers.current[id].setLngLat([s.lng || s.lon, s.lat]);
+        }
+      });
+    }
+
+    Object.keys(markers.current).forEach(id => {
+      if ((id.startsWith("stop-") || id.startsWith("route-stop-")) && !currentStopIds.has(id)) {
+        markers.current[id].remove();
+        delete markers.current[id];
+      }
+    });
+
+    // Update GeoJSON Previews
+    if (map.current.isStyleLoaded()) {
+      const source = map.current.getSource("route-previews");
+      if (source) {
+        let features = [];
+        if (selectedRoute) {
+          features.push({
+            type: "Feature",
+            properties: { selected: true, index: 0 },
+            geometry: {
+              type: "LineString",
+              coordinates: selectedRoute.path_coords.map(p => [p[1], p[0]]),
+            },
+          });
+        } else if (previews.length > 0) {
+          features = previews.map((p, idx) => ({
+            type: "Feature",
+            properties: { selected: idx === selectedIndex, index: idx },
+            geometry: {
+              type: "LineString",
+              coordinates: p.path.map(coord => [coord[1], coord[0]]),
+            },
+          }));
+        } else if (newPoints.start && newPoints.end) {
+           features.push({
+            type: "Feature",
+            properties: { selected: false, index: 0, dash: true },
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [newPoints.start.lng || newPoints.start.lon, newPoints.start.lat],
+                [newPoints.end.lng || newPoints.end.lon, newPoints.end.lat]
+              ],
+            },
+          });
+        }
+        source.setData({ type: "FeatureCollection", features });
+      }
+    }
+
+    // Auto Zoom
+    if (selectedRoute || (newPoints.start && newPoints.end)) {
+      const points = [];
+      if (selectedRoute) {
+        selectedRoute.path_coords.forEach(p => points.push([p[1], p[0]]));
+      } else {
+        if (newPoints.start) points.push([newPoints.start.lng || newPoints.start.lon, newPoints.start.lat]);
+        if (newPoints.end) points.push([newPoints.end.lng || newPoints.end.lon, newPoints.end.lat]);
+        stops.forEach(s => points.push([s.lng || s.lon, s.lat]));
+      }
+      
+      if (points.length > 0) {
+        const bounds = points.reduce((acc, coord) => acc.extend(coord), new maplibregl.LngLatBounds(points[0], points[0]));
+        map.current.fitBounds(bounds, { padding: 80, duration: 1500 });
+      }
+    }
+  }, [newPoints, stops, previews, selectedIndex, selectedRoute]);
 
   useEffect(() => {
     fetchCities();
@@ -471,130 +630,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
 
       {/* --- Map Area --- */}
       <div className="flex-1 relative">
-        <MapContainer
-          center={[20.5937, 78.9629]}
-          zoom={5}
-          style={{ height: "100%", width: "100%" }}
-          attributionControl={false}
-        >
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
-          <AutoZoom
-            selectedRoute={selectedRoute}
-            points={newPoints}
-            stops={stops}
-          />
-          <MapClicker onMapClick={handleMapClick} />
-
-          {/* New Route Preview */}
-          {!selectedRoute && (
-            <>
-              {newPoints.start && (
-                <Marker
-                  position={[newPoints.start.lat, newPoints.start.lng || newPoints.start.lon]}
-                  icon={
-                    new L.DivIcon({
-                      className: "bg-transparent",
-                      html: `<div class="w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-lg"></div>`,
-                    })
-                  }
-                  draggable={true}
-                  eventHandlers={{
-                    dragend: (e) => handleDrag("start", e.target.getLatLng()),
-                  }}
-                />
-              )}
-              {newPoints.end && (
-                <Marker
-                  position={[newPoints.end.lat, newPoints.end.lng || newPoints.end.lon]}
-                  icon={
-                    new L.DivIcon({
-                      className: "bg-transparent",
-                      html: `<div class="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>`,
-                    })
-                  }
-                  draggable={true}
-                  eventHandlers={{
-                    dragend: (e) => handleDrag("end", e.target.getLatLng()),
-                  }}
-                />
-              )}
-
-              {/* Alternative Preview Options */}
-              {previews.map((p, idx) => (
-                <Polyline
-                  key={`preview-${idx}`}
-                  positions={p.path}
-                  eventHandlers={{
-                    click: () => setSelectedIndex(idx),
-                  }}
-                  pathOptions={{
-                    color: selectedIndex === idx ? "#4f46e5" : "#94a3b8",
-                    weight: selectedIndex === idx ? 7 : 4,
-                    opacity: selectedIndex === idx ? 0.9 : 0.4,
-                  }}
-                >
-                  <Tooltip sticky>
-                    Route Option {idx + 1} ({(p.distance / 1000).toFixed(1)} km)
-                  </Tooltip>
-                </Polyline>
-              ))}
-
-              {!previews.length && newPoints.start && newPoints.end && (
-                <Polyline
-                  positions={[
-                    [newPoints.start.lat, newPoints.start.lng || newPoints.start.lon],
-                    [newPoints.end.lat, newPoints.end.lng || newPoints.end.lon]
-                  ]}
-                  pathOptions={{
-                    color: "gray",
-                    dashArray: "10, 10",
-                    weight: 2,
-                    opacity: 0.5,
-                  }}
-                />
-              )}
-
-              {stops.map((s, i) => (
-                <Marker
-                  key={i}
-                  position={[s.lat, s.lng || s.lon]}
-                  icon={StopIcon(i)}
-                  draggable={true}
-                  eventHandlers={{
-                    dragend: (e) => handleDrag("stop", e.target.getLatLng(), i),
-                  }}
-                >
-                  <Tooltip
-                    permanent
-                    direction="top"
-                    offset={[0, -10]}
-                    className="bg-white border-none shadow-lg text-[10px] font-bold rounded-full px-3 py-1 text-slate-700"
-                  >
-                    {s.name}
-                  </Tooltip>
-                </Marker>
-              ))}
-            </>
-          )}
-
-          {/* Saved Route View */}
-          {selectedRoute && (
-            <>
-              <Polyline
-                positions={selectedRoute.path_coords}
-                pathOptions={{ color: "#4f46e5", weight: 6, opacity: 0.8 }}
-              />
-              {selectedRoute.stops.map((s, i) => (
-                <Marker key={i} position={[s.lat, s.lng || s.lon]} icon={StopIcon(i)}>
-                  <Tooltip direction="top" offset={[0, -10]}>
-                    {s.name}
-                  </Tooltip>
-                </Marker>
-              ))}
-            </>
-          )}
-        </MapContainer>
+        <div ref={mapContainer} className="h-full w-full" />
 
         {/* Floating Help */}
         <div className="absolute top-6 right-6 flex flex-col items-end gap-3 z-[1000]">
@@ -622,5 +658,10 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
     </div>
   );
 };
+
+
+
+
+
 
 export default AdminRouteManager;

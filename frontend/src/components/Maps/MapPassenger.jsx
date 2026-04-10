@@ -2,83 +2,16 @@
 // Passenger can see ALL active public buses — no assignment needed.
 
 import React, { useState, useRef, useEffect } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  CircleMarker,
-  Popup,
-  useMap,
-  Polyline,
-} from "react-leaflet";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import api from "../../utils/api";
 import { Navigation, Clock, Bus, RefreshCw, MapPin, Hand, Search, ArrowRight } from "lucide-react";
-import L from "leaflet";
 import Header from "../Layout/Header";
 import LocationSearch from "../LocationSearch";
-import "leaflet/dist/leaflet.css";
-
-// Fix map bounds dynamically
-const MapResizer = () => {
-  const map = useMap({ attributionControl: false });
-  useEffect(() => {
-    setTimeout(() => {
-      map.invalidateSize();
-    }, 100);
-  }, [map]);
-  return null;
-};
-
-// Fit bounds to show route and buses
-const AutoZoom = ({ routeLine, buses, myPos, pickup, destination }) => {
-  const map = useMap({ attributionControl: false });
-  useEffect(() => {
-    const points = [];
-    if (myPos) points.push([myPos.lat, myPos.lon]);
-    if (pickup) points.push([pickup.lat, pickup.lon]);
-    if (destination) points.push([destination.lat, destination.lon]);
-    
-    if (routeLine && routeLine.length > 0) {
-      points.push(...routeLine);
-    }
-    
-    Object.values(buses).forEach(b => {
-      if (b.pos) points.push(b.pos);
-    });
-
-    if (points.length > 0) {
-      try {
-        const bounds = L.latLngBounds(points);
-        map.fitBounds(bounds, { 
-            padding: [80, 80],
-            animate: true,
-            duration: 1.5,
-            easeLinearity: 0.25
-        });
-      } catch (e) {
-        // Handle edge case where points are identical
-      }
-    }
-  }, [routeLine, buses, myPos, map, pickup, destination]);
-  return null;
-};
-
-// Helper to decode OSRM polyline string to [lat, lon] array
-function decodePolyline(str, precision = 5) {
-  let index = 0, lat = 0, lng = 0, coordinates = [], shift = 0, result = 0, byte = null, latitude_change, longitude_change, factor = Math.pow(10, precision);
-  while (index < str.length) {
-    byte = null; shift = 0; result = 0;
-    do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
-    latitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
-    shift = result = 0;
-    do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
-    longitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
-    lat += latitude_change; lng += longitude_change;
-    coordinates.push([lat / factor, lng / factor]);
-  }
-  return coordinates;
-}
 
 const MapPassenger = () => {
+  const mapContainer = useRef(null);
+  const map = useRef(null);
   const [dashboard, setDashboard] = useState(null);
   const [buses, setBuses] = useState({}); // { trip_id: { pos: [lat, lon], bus_number: "...", eta: [..] } }
   const [loading, setLoading] = useState(true);
@@ -101,6 +34,153 @@ const MapPassenger = () => {
   const reconnectTimeout = useRef(null);
   const reconnectAttempts = useRef(0);
   const maxReconnectDelay = 30000;
+
+  const markers = useRef({}); // { type_id: markerInstance }
+
+  // Initialize Map
+  useEffect(() => {
+    if (loading || map.current || !mapContainer.current) return;
+    
+    map.current = new maplibregl.Map({
+      container: mapContainer.current,
+      style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+      center: [78.9629, 20.5937], // India center [lon, lat]
+      zoom: 4,
+    });
+
+    map.current.addControl(new maplibregl.NavigationControl(), "top-right");
+
+    return () => {
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
+    };
+  }, [loading]);
+
+  // Sync Markers and Bounds
+  useEffect(() => {
+    if (!map.current) return;
+
+    const points = [];
+    if (myPos) points.push([myPos.lon, myPos.lat]);
+    if (pickup) points.push([pickup.lon, pickup.lat]);
+    if (destination) points.push([destination.lon, destination.lat]);
+
+    // Update MyPos Marker
+    if (myPos) {
+      if (!markers.current["me"]) {
+        const el = document.createElement("div");
+        el.className = "my-pos-marker";
+        el.style.width = "14px";
+        el.style.height = "14px";
+        el.style.borderRadius = "50%";
+        el.style.backgroundColor = "#4f46e5";
+        el.style.border = "3px solid white";
+        el.style.boxShadow = "0 0 10px rgba(0,0,0,0.2)";
+        
+        markers.current["me"] = new maplibregl.Marker({ element: el })
+          .setLngLat([myPos.lon, myPos.lat])
+          .setPopup(new maplibregl.Popup().setText("You are here"))
+          .addTo(map.current);
+      } else {
+        markers.current["me"].setLngLat([myPos.lon, myPos.lat]);
+      }
+    } else if (markers.current["me"]) {
+      markers.current["me"].remove();
+      delete markers.current["me"];
+    }
+
+    // Update Pickup Marker
+    if (pickup) {
+      if (!markers.current["pickup"]) {
+        const el = document.createElement("div");
+        el.style.width = "16px";
+        el.style.height = "16px";
+        el.style.borderRadius = "50%";
+        el.style.backgroundColor = "#10b981";
+        el.style.border = "3px solid white";
+        
+        markers.current["pickup"] = new maplibregl.Marker({ element: el })
+          .setLngLat([pickup.lon, pickup.lat])
+          .setPopup(new maplibregl.Popup().setText(`Pickup: ${pickup.display_name}`))
+          .addTo(map.current);
+      } else {
+        markers.current["pickup"].setLngLat([pickup.lon, pickup.lat]);
+      }
+    } else if (markers.current["pickup"]) {
+      markers.current["pickup"].remove();
+      delete markers.current["pickup"];
+    }
+
+    // Update Destination Marker
+    if (destination) {
+      if (!markers.current["destination"]) {
+        const el = document.createElement("div");
+        el.style.width = "16px";
+        el.style.height = "16px";
+        el.style.borderRadius = "50%";
+        el.style.backgroundColor = "#ef4444";
+        el.style.border = "3px solid white";
+        
+        markers.current["destination"] = new maplibregl.Marker({ element: el })
+          .setLngLat([destination.lon, destination.lat])
+          .setPopup(new maplibregl.Popup().setText(`Destination: ${destination.display_name}`))
+          .addTo(map.current);
+      } else {
+        markers.current["destination"].setLngLat([destination.lon, destination.lat]);
+      }
+    } else if (markers.current["destination"]) {
+      markers.current["destination"].remove();
+      delete markers.current["destination"];
+    }
+
+    // Update Bus Markers
+    const currentBusIds = new Set();
+    Object.entries(buses).forEach(([tripId, bus]) => {
+      if (bus.pos && (!selectedTripId || selectedTripId === tripId)) {
+        currentBusIds.add(tripId);
+        points.push([bus.pos[1], bus.pos[0]]); // lon, lat
+
+        if (!markers.current[`bus-${tripId}`]) {
+          const el = document.createElement("div");
+          el.className = "bus-marker";
+          el.style.width = "20px";
+          el.style.height = "20px";
+          el.style.borderRadius = "50%";
+          el.style.backgroundColor = "#ef4444";
+          el.style.border = "3px solid white";
+          el.style.cursor = "pointer";
+          
+          markers.current[`bus-${tripId}`] = new maplibregl.Marker({ element: el })
+            .setLngLat([bus.pos[1], bus.pos[0]])
+            .setPopup(new maplibregl.Popup().setHTML(`
+              <div class="text-center font-bold text-slate-800">
+                ${bus.bus_number ? `Bus ${bus.bus_number}` : "Public Bus"}
+              </div>
+              ${bus.route_name ? `<div class="text-xs text-slate-500 text-center">${bus.route_name}</div>` : ""}
+            `))
+            .addTo(map.current);
+        } else {
+          markers.current[`bus-${tripId}`].setLngLat([bus.pos[1], bus.pos[0]]);
+        }
+      }
+    });
+
+    // Remove old bus markers
+    Object.keys(markers.current).forEach(key => {
+      if (key.startsWith("bus-") && !currentBusIds.has(key.replace("bus-", ""))) {
+        markers.current[key].remove();
+        delete markers.current[key];
+      }
+    });
+
+    // Fit Bounds if points exist
+    if (points.length > 0) {
+      const bounds = points.reduce((acc, coord) => acc.extend(coord), new maplibregl.LngLatBounds(points[0], points[0]));
+      map.current.fitBounds(bounds, { padding: 80, duration: 1500 });
+    }
+  }, [myPos, pickup, destination, buses, selectedTripId]);
 
   useEffect(() => {
     fetchDashboard();
@@ -237,13 +317,6 @@ const MapPassenger = () => {
     }
   };
 
-  // Removed automatic search to allow manual trigger via button
-  // useEffect(() => {
-  //   if (pickup && destination) {
-  //     handleSearchTrips();
-  //   }
-  // }, [pickup, destination]);
-
   const toggleLocationSharing = () => {
     if (isLocationActive) {
         if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
@@ -283,7 +356,8 @@ const MapPassenger = () => {
       if (bus.stops) {
          let min = Infinity;
          bus.stops.forEach(s => {
-            const d = L.latLng(myPos.lat, myPos.lon).distanceTo(L.latLng(s.lat, s.lon));
+            // Simple Haversine approx for distance (or use turf)
+            const d = Math.sqrt(Math.pow(myPos.lat - s.lat, 2) + Math.pow(myPos.lon - s.lon, 2)) * 111320; 
             if (d < min) min = d;
          });
          newDistances[tripId] = min < 1000 ? `${Math.round(min)}m` : `${(min/1000).toFixed(1)}km`;
@@ -327,7 +401,7 @@ const MapPassenger = () => {
             setLocationError(msg);
         },
         { 
-            enableHighAccuracy: false, // Set to false to increase reliability in diverse environments
+            enableHighAccuracy: false, 
             maximumAge: 10000,
             timeout: 10000
         }
@@ -346,10 +420,6 @@ const MapPassenger = () => {
         <RefreshCw className="animate-spin text-blue-500" />
       </div>
     );
-
-  // Only show buses on the map IF a specific trip is selected
-  const allBuses = Object.entries(buses)
-    .filter(([tripId, b]) => b.pos && selectedTripId === tripId);
 
   const selectedBus = selectedTripId ? buses[selectedTripId] : null;
 
@@ -582,116 +652,15 @@ const MapPassenger = () => {
         </div>
 
         {/* Map */}
-        <MapContainer
-          center={[20.5937, 78.9629]} // Default: center of India
-          zoom={12}
-          style={{ height: "100%", width: "100%" }}
-          zoomControl={false}
-          attributionControl={false}
-        >
-          <MapResizer />
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            className="map-grayscale"
-          />
-
-          <AutoZoom 
-            routeLine={[]} 
-            buses={allBuses.reduce((acc, [id, b]) => ({...acc, [id]: b}), {})} 
-            myPos={myPos} 
-            pickup={pickup} 
-            destination={destination} 
-          />
-
-          {/* Pickup and Destination Pins */}
-          {pickup && (
-            <CircleMarker
-              center={[pickup.lat, pickup.lon]}
-              radius={8}
-              pathOptions={{
-                color: "white",
-                fillColor: "#10b981",
-                fillOpacity: 1,
-                weight: 3,
-              }}
-            >
-              <Popup>Pickup: {pickup.display_name}</Popup>
-            </CircleMarker>
-          )}
-
-          {destination && (
-            <CircleMarker
-              center={[destination.lat, destination.lon]}
-              radius={8}
-              pathOptions={{
-                color: "white",
-                fillColor: "#ef4444",
-                fillOpacity: 1,
-                weight: 3,
-              }}
-            >
-              <Popup>Destination: {destination.display_name}</Popup>
-            </CircleMarker>
-          )}
-
-          {/* My position */}
-          {myPos && (
-            <CircleMarker
-              center={[myPos.lat, myPos.lon]}
-              radius={7}
-              pathOptions={{
-                color: "white",
-                fillColor: "#4f46e5",
-                fillOpacity: 1,
-                weight: 3,
-              }}
-            >
-              <Popup>You are here</Popup>
-            </CircleMarker>
-          )}
-
-          {/* Active buses (filtered if one is selected) */}
-          {allBuses.map(([tripId, bus]) => (
-            <React.Fragment key={tripId}>
-              {/* Pulsing aura */}
-              <CircleMarker
-                center={bus.pos}
-                radius={18}
-                pathOptions={{
-                  color: "transparent",
-                  fillColor: "#ef4444",
-                  fillOpacity: 0.15,
-                  weight: 0,
-                }}
-              />
-              <CircleMarker
-                center={bus.pos}
-                radius={10}
-                pathOptions={{
-                  color: "white",
-                  fillColor: "#ef4444",
-                  fillOpacity: 1,
-                  weight: 3,
-                }}
-              >
-                <Popup>
-                  <div className="text-center font-bold text-slate-800">
-                    {bus.bus_number ? `Bus ${bus.bus_number}` : "Public Bus"}
-                  </div>
-                  {bus.route_name && (
-                    <div className="text-xs text-slate-500 text-center">
-                      {bus.route_name}
-                    </div>
-                  )}
-                </Popup>
-              </CircleMarker>
-            </React.Fragment>
-          ))}
-        </MapContainer>
+        <div ref={mapContainer} className="h-full w-full" />
       </div>
     </div>
   );
 };
+
+
+
+
+
 
 export default MapPassenger;
