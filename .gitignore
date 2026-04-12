@@ -31,6 +31,12 @@ backend/osrm-data/*.pbf
 backend/osrm-data/*.osrm*
 backend/osrm-data/*.lua
 
+# Django migrations
+backend/**/migrations/*.py
+!backend/**/migrations/__init__.py
+backend/**/migrations/*.pyc
+
+
 # --- Frontend (React) ---
 frontend/node_modules/
 frontend/build/
