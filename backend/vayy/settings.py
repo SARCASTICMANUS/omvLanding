@@ -117,15 +117,13 @@ db_url = os.environ.get("DATABASE_URL")
 
 if db_url:
     DATABASES = {
-        "default": dj_database_url.parse(db_url, conn_max_age=600)
+       "default": dj_database_url.config(
+        default=db_url if db_url else "postgis://postgres:1234@host.docker.internal:5432/vayy_db",
+        conn_max_age=600,
+        ssl_require=False # Local DB usually doesn't have SSL
+    )
     }
-else:
-    DATABASES = {
-        "default": dj_database_url.parse(
-            "postgres://postgres:1234@localhost:5432/vayy_db?sslmode=disable",
-            conn_max_age=600
-        )
-    }
+
 
 CORS_ALLOWED_ORIGINS = os.environ.get(
     "CORS_ALLOWED_ORIGINS",
