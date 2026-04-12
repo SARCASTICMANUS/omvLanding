@@ -1,0 +1,13 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DEBUG=${DEBUG}
+      - DATABASE_URL=${DATABASE_URL}
+      - OSRM_URL=${OSRM_URL}
+    # Local override: use runserver so the code auto-reloads when you save a file
+    # command: python manage.py runserver 0.0.0.0:8000

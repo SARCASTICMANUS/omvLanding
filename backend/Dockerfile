@@ -1,31 +1,8 @@
 # FROM python:3.10-slim
 
-# # Install geospatial libraries (GDAL/GEOS) required for GeoDjango
-# RUN apt-get update && apt-get install -y \
-#     binutils \
-#     libproj-dev \
-#     gdal-bin \
-#     libgdal-dev \
-#     python3-gdal \
-#     && rm -rf /var/lib/apt/lists/*
-
-# WORKDIR /app
-
-# COPY requirements.txt .
-# RUN pip install --no-cache-dir -r requirements.txt
-
-# COPY . .
-
-# # We wait for the DB to be ready in the entrypoint or compose
-# # CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "vayy.asgi:application"]
-# CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
-
-# FROM python:3.10-slim
-
-# # Prevent Python from buffering stdout and stderr
 # ENV PYTHONUNBUFFERED=1
 
-# # Install geospatial libraries (GDAL/GEOS) required for GeoDjango
+# # Install GDAL/Geos
 # RUN apt-get update && apt-get install -y \
 #     binutils \
 #     libproj-dev \
@@ -41,14 +18,22 @@
 
 # COPY . .
 
-# # We default to daphne for best WebSocket support, but can be overridden
-# CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "vayy.asgi:application"]
+# # Copy entrypoint and make it executable
+# COPY entrypoint.sh /entrypoint.sh
+# RUN chmod +x /entrypoint.sh
 
-FROM python:3.10-slim
+# # Set the entrypoint
+# ENTRYPOINT ["/entrypoint.sh"]
 
+FROM python:3.11-slim
+
+# Prevent Python from buffering stdout/stderr and writing .pyc files
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
-# Install GDAL/Geos
+WORKDIR /app
+
+# Install standard PostgreSQL client libraries (required for psycopg2)
 RUN apt-get update && apt-get install -y \
     binutils \
     libproj-dev \
@@ -57,16 +42,16 @@ RUN apt-get update && apt-get install -y \
     python3-gdal \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
+# Install Python requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy backend source code (Context is the backend folder)
 COPY . .
 
-# Copy entrypoint and make it executable
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-# Set the entrypoint
-ENTRYPOINT ["/entrypoint.sh"]
+# 1. Run Migrations
+# 2. Collect Static files (for Admin panel/WhiteNoise)
+# 3. Start Daphne ASGI server
+CMD sh -c "python manage.py migrate --noinput && \
+           python manage.py collectstatic --noinput && \
+           daphne -b 0.0.0.0 -p 8000 vayy.asgi:application"

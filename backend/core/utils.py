@@ -8,9 +8,7 @@ from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
-OSRM_HOST = (
-    "http://osrm:5000" if os.environ.get("IN_DOCKER") else "http://localhost:5000"
-)
+OSRM_HOST = os.environ.get("OSRM_URL", "http://router.project-osrm.org")
 
 
 def _get_osrm_client():
