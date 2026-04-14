@@ -114,13 +114,15 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
       if (!markers.current["start"]) {
         const el = document.createElement("div");
         el.className = "w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-lg cursor-move";
-        markers.current["start"] = new maplibregl.Marker({ element: el, draggable: true })
+        const marker = new maplibregl.Marker({ element: el, draggable: true })
           .setLngLat([newPoints.start.lng || newPoints.start.lon, newPoints.start.lat])
-          .addTo(map.current)
-          .on("dragend", () => {
-            const lngLat = markers.current["start"].getLngLat();
-            handleDrag("start", { lat: lngLat.lat, lng: lngLat.lng });
-          });
+          .addTo(map.current);
+        
+        marker.on("dragend", () => {
+          const lngLat = marker.getLngLat();
+          handleDrag("start", { lat: lngLat.lat, lng: lngLat.lng });
+        });
+        markers.current["start"] = marker;
       } else {
         markers.current["start"].setLngLat([newPoints.start.lng || newPoints.start.lon, newPoints.start.lat]);
       }
@@ -134,13 +136,15 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
       if (!markers.current["end"]) {
         const el = document.createElement("div");
         el.className = "w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg cursor-move";
-        markers.current["end"] = new maplibregl.Marker({ element: el, draggable: true })
+        const marker = new maplibregl.Marker({ element: el, draggable: true })
           .setLngLat([newPoints.end.lng || newPoints.end.lon, newPoints.end.lat])
-          .addTo(map.current)
-          .on("dragend", () => {
-            const lngLat = markers.current["end"].getLngLat();
-            handleDrag("end", { lat: lngLat.lat, lng: lngLat.lng });
-          });
+          .addTo(map.current);
+        
+        marker.on("dragend", () => {
+          const lngLat = marker.getLngLat();
+          handleDrag("end", { lat: lngLat.lat, lng: lngLat.lng });
+        });
+        markers.current["end"] = marker;
       } else {
         markers.current["end"].setLngLat([newPoints.end.lng || newPoints.end.lon, newPoints.end.lat]);
       }
@@ -159,14 +163,16 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
           const el = document.createElement("div");
           el.className = "flex items-center justify-center bg-indigo-600 text-white w-6 h-6 rounded-full border-2 border-white shadow-md text-[10px] font-bold cursor-move";
           el.innerHTML = i + 1;
-          markers.current[id] = new maplibregl.Marker({ element: el, draggable: true })
+          const marker = new maplibregl.Marker({ element: el, draggable: true })
             .setLngLat([s.lng || s.lon, s.lat])
             .setPopup(new maplibregl.Popup({ offset: 15 }).setText(s.name))
-            .addTo(map.current)
-            .on("dragend", () => {
-              const lngLat = markers.current[id].getLngLat();
-              handleDrag("stop", { lat: lngLat.lat, lng: lngLat.lng }, i);
-            });
+            .addTo(map.current);
+          
+          marker.on("dragend", () => {
+            const lngLat = marker.getLngLat();
+            handleDrag("stop", { lat: lngLat.lat, lng: lngLat.lng }, i);
+          });
+          markers.current[id] = marker;
         } else {
           markers.current[id].setLngLat([s.lng || s.lon, s.lat]);
           markers.current[id].getElement().innerHTML = i + 1;
