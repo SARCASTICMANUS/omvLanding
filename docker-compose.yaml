@@ -26,23 +26,8 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-
-  osrm:
-    image: osrm/osrm-backend
-    container_name: osrm
-    platform: linux/amd64 # CRITICAL: OSRM binaries are often amd64-only
-    restart: always
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./backend/osrm-data:/data:delegated # ':delegated' is vital for OSRM speed on Mac
-    command: >
-      /bin/bash -c " if [ ! -f /data/map.osrm ]; then 
-        echo 'Map data not found. Processing...' &&
-        osrm-extract -p /opt/car.lua /data/map.osm.pbf &&
-        osrm-partition /data/map.osrm &&
-        osrm-customize /data/map.osrm;
-      fi; echo 'Starting OSRM...' && osrm-routed --algorithm mld /data/map.osrm"
+    networks:
+      - vayy_network
 
   backend:
     build: ./backend
@@ -56,13 +41,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-      osrm:
-        condition: service_started
     environment:
       - IN_DOCKER=true
       - DATABASE_URL=postgis://postgres:password@db:5432/vayy_db
       - REDIS_URL=redis://redis:6379/0
-      - OSRM_URL=http://osrm:5000
+      - OSRM_URL=http://router.project-osrm.org
 
   celery_worker:
     build: ./backend
@@ -122,3 +105,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  vayy_network:       # Yahan network ka asli naam define karo
+    external: true
