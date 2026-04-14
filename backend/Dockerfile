@@ -52,6 +52,10 @@ COPY . .
 # 1. Run Migrations
 # 2. Collect Static files (for Admin panel/WhiteNoise)
 # 3. Start Daphne ASGI server
-CMD sh -c "python manage.py migrate --noinput && \
+# CMD sh -c "python manage.py migrate --noinput && \
+#            python manage.py collectstatic --noinput && \
+#            daphne -b 0.0.0.0 -p 8000 vayy.asgi:application" 
+CMD sh -c "python manage.py makemigrations && \
+           python manage.py migrate --noinput && \
            python manage.py collectstatic --noinput && \
            daphne -b 0.0.0.0 -p 8000 vayy.asgi:application"
