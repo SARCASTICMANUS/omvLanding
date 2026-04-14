@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import api from "../utils/api";
+import api from "../lib/api";
 import { Plus, Edit2, Trash2, MapPin, School, Save, X } from "lucide-react";
 
 const CityManager = () => {

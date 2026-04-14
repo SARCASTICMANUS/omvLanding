@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Bus, Plus, Trash2, Edit, X, Save, Loader2 } from "lucide-react";
-import api from "../utils/api";
+import api from "../lib/api";
 
 const VehiclesManager = ({ cityId }) => {
   const [vehicles, setVehicles] = useState([]);

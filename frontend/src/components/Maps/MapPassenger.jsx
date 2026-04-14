@@ -4,7 +4,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import api from "../../utils/api";
+import api from "../../lib/api";
 import { Navigation, Clock, Bus, RefreshCw, MapPin, Hand, Search, ArrowRight } from "lucide-react";
 import Header from "../Layout/Header";
 import LocationSearch from "../LocationSearch";

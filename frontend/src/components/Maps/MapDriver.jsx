@@ -4,7 +4,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import api from "../../utils/api";
+import api from "../../lib/api";
 import {
   Play,
   Navigation,
