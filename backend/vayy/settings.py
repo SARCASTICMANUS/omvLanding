@@ -90,7 +90,7 @@ WSGI_APPLICATION = "vayy.wsgi.application"
 ASGI_APPLICATION = "vayy.asgi.application"  # Critical for Channels
 
 
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
 CHANNEL_LAYERS = {
     "default": {

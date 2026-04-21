@@ -5,7 +5,6 @@ import {
   ChevronLeft,
   MapPin,
   Clock,
-  Bus,
   Hand,
   RefreshCw,
 } from "lucide-react";
@@ -30,6 +29,9 @@ export default function PassengerLiveTracking({
   pickup,
   destination,
   onBack,
+  onUpdatePickup,
+  onUpdateDestination,
+  onRefreshRoutes,
 }) {
   const mapContainer = useRef(null);
   const map = useRef(null);
@@ -50,25 +52,102 @@ export default function PassengerLiveTracking({
     stops: [],
   });
 
-  const [wsStatus, setWsStatus] = useState("connecting");
-  const [loading, setLoading] = useState(true);
+  const [wsStatus, setWsStatus] = useState("disconnected");
+  const [loading, setLoading] = useState(false);
   const [myPos, setMyPos] = useState(null);
   const [isLocationActive, setIsLocationActive] = useState(false);
   const [locationError, setLocationError] = useState("");
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [distanceToNearestStop, setDistanceToNearestStop] = useState("");
+  const [isRouteDirty, setIsRouteDirty] = useState(false);
 
   const tripId = selectedTrip?.trip_id || null;
   const maxReconnectDelay = 30000;
+  const routeSourceId = "pickup-destination-route";
+  const routeLayerId = "pickup-destination-route-layer";
 
   useEffect(() => {
-    if (!tripId) return;
+    setBusData({
+      trip_id: selectedTrip?.trip_id || null,
+      bus_number: selectedTrip?.bus_number || null,
+      vehicle_number: selectedTrip?.vehicle_number || null,
+      route_name: selectedTrip?.route_name || null,
+      next_stop: selectedTrip?.next_stop || null,
+      next_stop_eta: [],
+      pos: null,
+      stops: [],
+    });
+  }, [selectedTrip]);
+
+  useEffect(() => {
+    if (map.current || !mapContainer.current) return;
+
+    map.current = new maplibregl.Map({
+      container: mapContainer.current,
+      style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+      center: [78.9629, 20.5937],
+      zoom: 4,
+    });
+
+    map.current.addControl(new maplibregl.NavigationControl(), "top-right");
+
+    map.current.on("load", () => {
+      if (!map.current) return;
+
+      if (!map.current.getSource(routeSourceId)) {
+        map.current.addSource(routeSourceId, {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: [],
+            },
+            properties: {},
+          },
+        });
+      }
+
+      if (!map.current.getLayer(routeLayerId)) {
+        map.current.addLayer({
+          id: routeLayerId,
+          type: "line",
+          source: routeSourceId,
+          layout: {
+            "line-join": "round",
+            "line-cap": "round",
+          },
+          paint: {
+            "line-color": "#111111",
+            "line-width": 4,
+            "line-opacity": 0.7,
+            "line-dasharray": [2, 2],
+          },
+        });
+      }
+    });
+
+    return () => {
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!tripId) {
+      setLoading(false);
+      setWsStatus("disconnected");
+      return;
+    }
 
     let active = true;
 
     const fetchTripSnapshot = async () => {
       try {
         setLoading(true);
+
         const res = await api.get("/api/passenger/dashboard/");
         const trip = (res.data?.active_trips || []).find(
           (item) => item.trip_id === tripId,
@@ -99,27 +178,11 @@ export default function PassengerLiveTracking({
   }, [tripId]);
 
   useEffect(() => {
-    if (loading || map.current || !mapContainer.current) return;
-
-    map.current = new maplibregl.Map({
-      container: mapContainer.current,
-      style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
-      center: [78.9629, 20.5937],
-      zoom: 4,
-    });
-
-    map.current.addControl(new maplibregl.NavigationControl(), "top-right");
-
-    return () => {
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
-      }
-    };
-  }, [loading]);
-
-  useEffect(() => {
-    if (!tripId) return;
+    if (!tripId) {
+      cleanupWebSocket();
+      setWsStatus("disconnected");
+      return;
+    }
 
     const connectWebSocket = () => {
       cleanupWebSocket();
@@ -128,8 +191,8 @@ export default function PassengerLiveTracking({
       const token = localStorage.getItem("token");
       const wsBase = getWsBaseUrl();
       const groupId = "public";
-
       const socketUrl = `${wsBase}/ws/public/${groupId}/passenger/${tripId}/?token=${token || ""}`;
+
       ws.current = new WebSocket(socketUrl);
 
       ws.current.onopen = () => {
@@ -181,6 +244,8 @@ export default function PassengerLiveTracking({
   }, [tripId]);
 
   const scheduleReconnect = () => {
+    if (!tripId) return;
+
     if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
 
     const delay = Math.min(
@@ -241,6 +306,7 @@ export default function PassengerLiveTracking({
 
   const cleanupWebSocket = () => {
     if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+
     if (ws.current) {
       ws.current.onclose = null;
       ws.current.close();
@@ -270,6 +336,7 @@ export default function PassengerLiveTracking({
     el.style.justifyContent = "center";
     el.style.boxShadow = "0 8px 22px rgba(34,197,94,0.35)";
     el.style.border = "4px solid white";
+    el.style.transition = "transform 400ms ease";
 
     const inner = document.createElement("div");
     inner.style.width = "0";
@@ -284,6 +351,39 @@ export default function PassengerLiveTracking({
   };
 
   useEffect(() => {
+    if (!map.current || !map.current.isStyleLoaded()) return;
+
+    const hasPickup = Boolean(pickup?.lon && pickup?.lat);
+    const hasDestination = Boolean(destination?.lon && destination?.lat);
+
+    const source = map.current.getSource(routeSourceId);
+    if (!source) return;
+
+    if (hasPickup && hasDestination) {
+      source.setData({
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [pickup.lon, pickup.lat],
+            [destination.lon, destination.lat],
+          ],
+        },
+        properties: {},
+      });
+    } else {
+      source.setData({
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: [],
+        },
+        properties: {},
+      });
+    }
+  }, [pickup, destination]);
+
+  useEffect(() => {
     if (!map.current) return;
 
     const points = [];
@@ -294,6 +394,7 @@ export default function PassengerLiveTracking({
       if (!markers.current.pickup) {
         markers.current.pickup = new maplibregl.Marker({
           element: createCircleMarker("#22c55e", 14),
+          draggable: true,
         })
           .setLngLat([pickup.lon, pickup.lat])
           .setPopup(
@@ -302,9 +403,26 @@ export default function PassengerLiveTracking({
             ),
           )
           .addTo(map.current);
+
+        markers.current.pickup.on("dragend", () => {
+          const lngLat = markers.current.pickup.getLngLat();
+
+          onUpdatePickup?.({
+            ...pickup,
+            lon: lngLat.lng,
+            lat: lngLat.lat,
+            name: pickup?.name || "Pickup",
+            display_name: pickup?.display_name || pickup?.name || "Pickup",
+          });
+
+          setIsRouteDirty(true);
+        });
       } else {
         markers.current.pickup.setLngLat([pickup.lon, pickup.lat]);
       }
+    } else if (markers.current.pickup) {
+      markers.current.pickup.remove();
+      delete markers.current.pickup;
     }
 
     if (destination?.lon && destination?.lat) {
@@ -313,6 +431,7 @@ export default function PassengerLiveTracking({
       if (!markers.current.destination) {
         markers.current.destination = new maplibregl.Marker({
           element: createCircleMarker("#ef4444", 14),
+          draggable: true,
         })
           .setLngLat([destination.lon, destination.lat])
           .setPopup(
@@ -321,9 +440,29 @@ export default function PassengerLiveTracking({
             ),
           )
           .addTo(map.current);
+
+        markers.current.destination.on("dragend", () => {
+          const lngLat = markers.current.destination.getLngLat();
+
+          onUpdateDestination?.({
+            ...destination,
+            lon: lngLat.lng,
+            lat: lngLat.lat,
+            name: destination?.name || "Destination",
+            display_name:
+              destination?.display_name ||
+              destination?.name ||
+              "Destination",
+          });
+
+          setIsRouteDirty(true);
+        });
       } else {
         markers.current.destination.setLngLat([destination.lon, destination.lat]);
       }
+    } else if (markers.current.destination) {
+      markers.current.destination.remove();
+      delete markers.current.destination;
     }
 
     if (myPos?.lon && myPos?.lat) {
@@ -367,6 +506,9 @@ export default function PassengerLiveTracking({
       } else {
         markers.current.bus.setLngLat([lon, lat]);
       }
+    } else if (markers.current.bus) {
+      markers.current.bus.remove();
+      delete markers.current.bus;
     }
 
     if (points.length > 0) {
@@ -380,7 +522,7 @@ export default function PassengerLiveTracking({
         duration: 1200,
       });
     }
-  }, [pickup, destination, myPos, busData]);
+  }, [pickup, destination, myPos, busData, onUpdatePickup, onUpdateDestination]);
 
   useEffect(() => {
     if (!myPos || !busData?.stops?.length) {
@@ -496,6 +638,16 @@ export default function PassengerLiveTracking({
     }
   };
 
+  const handleRefreshRoutes = async () => {
+    if (typeof onRefreshRoutes === "function") {
+      await onRefreshRoutes();
+    } else {
+      window.dispatchEvent(new Event("reFetchRoutes"));
+    }
+
+    setIsRouteDirty(false);
+  };
+
   useEffect(() => {
     return () => {
       cleanupWebSocket();
@@ -509,13 +661,24 @@ export default function PassengerLiveTracking({
     };
   }, []);
 
-  if (!selectedTrip) {
+  if (!pickup && !destination && !selectedTrip) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#171717] px-4 text-center text-white">
-        No trip selected.
+        No location selected.
       </div>
     );
   }
+
+  const routeTitle = busData.bus_number
+    ? `Bus ${busData.bus_number}`
+    : busData.vehicle_number
+      ? `Vehicle ${busData.vehicle_number}`
+      : selectedTrip
+        ? "Selected Route"
+        : "Route Preview";
+
+  const routeSubtitle =
+    busData.route_name || selectedTrip?.route_name || "Public Route";
 
   return (
     <div className="min-h-screen bg-[#171717] px-2 py-2 sm:px-6 sm:py-8">
@@ -545,20 +708,18 @@ export default function PassengerLiveTracking({
                       Route
                     </p>
                     <h2 className="text-[18px] font-bold text-black">
-                      {busData.bus_number
-                        ? `Bus ${busData.bus_number}`
-                        : busData.vehicle_number
-                          ? `Vehicle ${busData.vehicle_number}`
-                          : "Public Bus"}
+                      {routeTitle}
                     </h2>
                     <p className="text-[12px] font-medium text-black/70">
-                      {busData.route_name || "Public Route"}
+                      {routeSubtitle}
                     </p>
                   </div>
 
                   <div className="rounded-[10px] bg-white px-3 py-2 text-center shadow-sm">
                     <p className="text-[16px] font-black text-black">
-                      {formatMinutesFromEta(busData.next_stop_eta)}
+                      {selectedTrip
+                        ? formatMinutesFromEta(busData.next_stop_eta)
+                        : "--"}
                     </p>
                     <p className="text-[9px] font-bold uppercase tracking-wider text-black/50">
                       min
@@ -571,11 +732,15 @@ export default function PassengerLiveTracking({
                     <Clock size={15} className="shrink-0 text-black/70" />
                     <span>
                       Next Stop:{" "}
-                      <strong>{busData.next_stop || "Calculating..."}</strong>
+                      <strong>
+                        {selectedTrip
+                          ? busData.next_stop || "Calculating..."
+                          : "Drag pickup/drop to refine route"}
+                      </strong>
                     </span>
                   </div>
 
-                  {distanceToNearestStop && (
+                  {distanceToNearestStop && selectedTrip && (
                     <div className="flex items-center gap-3 text-[13px] text-black">
                       <MapPin size={15} className="shrink-0 text-black/70" />
                       <span>
@@ -584,6 +749,36 @@ export default function PassengerLiveTracking({
                     </div>
                   )}
                 </div>
+              </div>
+
+              <div className="rounded-[14px] bg-[#a6a6a6] p-4 text-[12px] text-black">
+                <p className="mb-2 font-bold">Edit Stops</p>
+                <div className="space-y-2">
+                  <p>
+                    <strong>Pickup:</strong>{" "}
+                    {pickup?.display_name || pickup?.name || "Not selected"}
+                  </p>
+                  <p>
+                    <strong>Destination:</strong>{" "}
+                    {destination?.display_name ||
+                      destination?.name ||
+                      "Not selected"}
+                  </p>
+                  <p className="pt-2 text-[11px] text-black/65">
+                    Drag the green and red markers on the map to adjust pickup and
+                    drop points.
+                  </p>
+                </div>
+
+                {isRouteDirty && (
+                  <button
+                    type="button"
+                    onClick={handleRefreshRoutes}
+                    className="mt-4 w-full rounded-[12px] bg-black px-4 py-3 text-[13px] font-bold text-white"
+                  >
+                    Refresh Routes
+                  </button>
+                )}
               </div>
 
               <div className="rounded-[14px] bg-[#a6a6a6] p-4">
@@ -600,9 +795,11 @@ export default function PassengerLiveTracking({
                     }`}
                   />
                   <span className="text-[13px] font-semibold text-black">
-                    {wsStatus === "connected"
-                      ? "Live connection active"
-                      : "Connecting..."}
+                    {selectedTrip
+                      ? wsStatus === "connected"
+                        ? "Live connection active"
+                        : "Connecting..."
+                      : "Map preview active"}
                   </span>
                 </div>
               </div>
@@ -641,32 +838,19 @@ export default function PassengerLiveTracking({
                 <button
                   type="button"
                   onClick={toggleHandRaise}
-                  disabled={!isLocationActive}
+                  disabled={!isLocationActive || !selectedTrip}
                   className={`flex w-full items-center justify-center gap-2 rounded-[12px] px-4 py-3 text-[13px] font-bold transition ${
                     isHandRaised
                       ? "bg-[#f59e0b] text-white"
                       : "bg-white text-black"
                   } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
-                  <Hand size={16} className={isHandRaised ? "animate-bounce" : ""} />
+                  <Hand
+                    size={16}
+                    className={isHandRaised ? "animate-bounce" : ""}
+                  />
                   {isHandRaised ? "Lower Hand" : "Raise Hand To Stop"}
                 </button>
-              </div>
-
-              <div className="rounded-[14px] bg-[#a6a6a6] p-4 text-[12px] text-black">
-                <p className="mb-2 font-bold">Trip Summary</p>
-                <div className="space-y-2">
-                  <p>
-                    <strong>Pickup:</strong>{" "}
-                    {pickup?.display_name || pickup?.name || "Not selected"}
-                  </p>
-                  <p>
-                    <strong>Destination:</strong>{" "}
-                    {destination?.display_name ||
-                      destination?.name ||
-                      "Not selected"}
-                  </p>
-                </div>
               </div>
             </div>
           </div>

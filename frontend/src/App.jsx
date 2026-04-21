@@ -18,6 +18,34 @@ import MapDriver from "./components/Maps/MapDriver";
 import PassengerLivePage from "./pages/PassengerLivePage";
 
 /* ===============================
+   Helpers
+================================ */
+const normalizeRole = (role) =>
+  String(role || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+const getRedirectPathByRole = (role) => {
+  const normalizedRole = normalizeRole(role);
+
+  if (normalizedRole === "driver") {
+    return "/driver/live";
+  }
+
+  if (
+    normalizedRole === "admin" ||
+    normalizedRole === "city_admin" ||
+    normalizedRole === "university_admin" ||
+    normalizedRole === "super_admin"
+  ) {
+    return "/admin";
+  }
+
+  return "/passenger/live";
+};
+
+/* ===============================
    Loader
 ================================ */
 const FullScreenLoader = () => (
@@ -46,6 +74,7 @@ const UnknownRoleScreen = ({ role }) => (
       <button
         onClick={() => {
           localStorage.clear();
+          sessionStorage.clear();
           window.location.replace("/login");
         }}
         className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white"
@@ -59,43 +88,65 @@ const UnknownRoleScreen = ({ role }) => (
 /* ===============================
    Auth Guards
 ================================ */
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated } = useSelector((state) => state.auth);
+const ProtectedRoute = ({ children, allowedRoles = [] }) => {
+  const { isAuthenticated, user } = useSelector((state) => state.auth || {});
+  const role = normalizeRole(user?.role);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
+    return <Navigate to={getRedirectPathByRole(role)} replace />;
   }
 
   return children;
 };
 
 const ProtectedAdmin = ({ children }) => {
-  const { isAuthenticated, user } = useSelector((state) => state.auth);
+  const { isAuthenticated, user } = useSelector((state) => state.auth || {});
+  const role = normalizeRole(user?.role);
 
-  if (!isAuthenticated || !user?.role) {
+  if (!isAuthenticated || !role) {
     return <Navigate to="/login" replace />;
   }
 
   const isAdmin =
-    user.role === "admin" ||
-    user.role === "city_admin" ||
-    user.role === "university_admin";
+    role === "admin" ||
+    role === "city_admin" ||
+    role === "university_admin" ||
+    role === "super_admin";
 
   if (!isAdmin) {
-    return <UnknownRoleScreen role={user.role} />;
+    return <UnknownRoleScreen role={user?.role} />;
   }
 
   return children;
 };
 
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated } = useSelector((state) => state.auth);
+  const { isAuthenticated, user } = useSelector((state) => state.auth || {});
+  const role = normalizeRole(user?.role);
 
   if (isAuthenticated) {
-    return <Navigate to="/passenger/live" replace />;
+    return <Navigate to={getRedirectPathByRole(role)} replace />;
   }
 
   return children;
+};
+
+/* ===============================
+   Root Redirect
+================================ */
+const RootRedirect = () => {
+  const { isAuthenticated, user } = useSelector((state) => state.auth || {});
+  const role = normalizeRole(user?.role);
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Navigate to={getRedirectPathByRole(role)} replace />;
 };
 
 /* ===============================
@@ -103,9 +154,9 @@ const PublicRoute = ({ children }) => {
 ================================ */
 const AppLayout = ({ children }) => {
   return (
-    <div >
+    <div className="min-h-screen bg-slate-50">
       <Header />
-      <main >{children}</main>
+      <main>{children}</main>
     </div>
   );
 };
@@ -129,11 +180,13 @@ function App() {
       if (decoded?.exp && decoded.exp < now) {
         if (!refreshToken) {
           localStorage.clear();
+          sessionStorage.clear();
           dispatch(logout());
         }
       }
-    } catch {
+    } catch (error) {
       localStorage.clear();
+      sessionStorage.clear();
       dispatch(logout());
     }
   }, [dispatch]);
@@ -161,7 +214,7 @@ function App() {
             }
           />
 
-          {/* PROTECTED WITH HEADER */}
+          {/* ADMIN */}
           <Route
             path="/admin"
             element={
@@ -173,10 +226,11 @@ function App() {
             }
           />
 
+          {/* DRIVER */}
           <Route
             path="/driver/live"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={["driver"]}>
                 <AppLayout>
                   <MapDriver />
                 </AppLayout>
@@ -184,10 +238,11 @@ function App() {
             }
           />
 
+          {/* PASSENGER */}
           <Route
             path="/passenger/live"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={["passenger"]}>
                 <AppLayout>
                   <PassengerLivePage />
                 </AppLayout>
@@ -196,10 +251,7 @@ function App() {
           />
 
           {/* DEFAULT LANDING */}
-          <Route
-            path="/"
-            element={<Navigate to="/passenger/live" replace />}
-          />
+          <Route path="/" element={<RootRedirect />} />
 
           {/* FALLBACK */}
           <Route path="*" element={<Navigate to="/" replace />} />
