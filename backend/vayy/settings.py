@@ -10,12 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
-
 from pathlib import Path
 import os
 from datetime import timedelta
 import dj_database_url
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DEBUG","False") == "True"
+DEBUG = os.environ.get("DEBUG", "False") == "True"
 
 raw_hosts = os.environ.get("ALLOWED_HOSTS", "")
 
@@ -58,7 +58,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",  # FIXED: Must be right here
-    "corsheaders.middleware.CorsMiddleware",        # Moved below WhiteNoise
+    "corsheaders.middleware.CorsMiddleware",  # Moved below WhiteNoise
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -90,7 +90,7 @@ WSGI_APPLICATION = "vayy.wsgi.application"
 ASGI_APPLICATION = "vayy.asgi.application"  # Critical for Channels
 
 
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379")
 
 CHANNEL_LAYERS = {
     "default": {
@@ -117,17 +117,20 @@ db_url = os.environ.get("DATABASE_URL")
 
 if db_url:
     DATABASES = {
-       "default": dj_database_url.config(
-        default=db_url if db_url else "postgis://postgres:1234@host.docker.internal:5432/vayy_db",
-        conn_max_age=600,
-        ssl_require=False # Local DB usually doesn't have SSL
-    )
+        "default": dj_database_url.config(
+            default=(
+                db_url
+                if db_url
+                else "postgis://postgres:1234@host.docker.internal:5432/vayy_db"
+            ),
+            conn_max_age=600,
+            ssl_require=False,  # Local DB usually doesn't have SSL
+        )
     }
 
 
 CORS_ALLOWED_ORIGINS = os.environ.get(
-    "CORS_ALLOWED_ORIGINS",
-    "http://localhost:3000"
+    "CORS_ALLOWED_ORIGINS", "http://localhost:3000"
 ).split(",")
 CORS_ALLOW_CREDENTIALS = True
 
@@ -197,41 +200,46 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Point to custom user model
 AUTH_USER_MODEL = "core.User"
 
+CELERY_BEAT_SCHEDULE = {
+    "sync-locations-every-2-min": {
+        "task": "core.tasks.sync_locations_to_db",
+        "schedule": 120.0,
+    },
+    "cleanup-inactive-trips-every-60s": {
+        "task": "core.tasks.cleanup_inactive_trips",
+        "schedule": 60.0,
+    },
+    "resolve-hybrid-location-every-30s": {
+        "task": "core.tasks.resolve_hybrid_location",
+        "schedule": 30.0,
+    },
+}
+
 # Email Config (Console for dev)
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-# import os
-# import platform
+import os
+import platform
 
-# # Detect OS
-# SYSTEM = platform.system()
+# Detect OS
+SYSTEM = platform.system()
 
-# if SYSTEM == "Darwin":  # macOS
-#     GDAL_LIBRARY_PATH = os.environ.get(
-#         "GDAL_LIBRARY_PATH",
-#         "/opt/homebrew/opt/gdal/lib/libgdal.dylib"
-#     )
-#     GEOS_LIBRARY_PATH = os.environ.get(
-#         "GEOS_LIBRARY_PATH",
-#         "/opt/homebrew/opt/geos/lib/libgeos_c.dylib"
-#     )
+if SYSTEM == "Darwin":  # macOS
+    GDAL_LIBRARY_PATH = os.environ.get(
+        "GDAL_LIBRARY_PATH", "/opt/homebrew/opt/gdal/lib/libgdal.dylib"
+    )
+    GEOS_LIBRARY_PATH = os.environ.get(
+        "GEOS_LIBRARY_PATH", "/opt/homebrew/opt/geos/lib/libgeos_c.dylib"
+    )
 
-# elif SYSTEM == "Windows":
-#     GDAL_LIBRARY_PATH = os.environ.get(
-#         "GDAL_LIBRARY_PATH",
-#         r"C:\OSGeo4W\bin\gdal306.dll"
-#     )
-#     GEOS_LIBRARY_PATH = os.environ.get(
-#         "GEOS_LIBRARY_PATH",
-#         r"C:\OSGeo4W\bin\geos_c.dll"
-#     )
+elif SYSTEM == "Windows":
+    GDAL_LIBRARY_PATH = os.environ.get(
+        "GDAL_LIBRARY_PATH", r"C:\OSGeo4W\bin\gdal306.dll"
+    )
+    GEOS_LIBRARY_PATH = os.environ.get(
+        "GEOS_LIBRARY_PATH", r"C:\OSGeo4W\bin\geos_c.dll"
+    )
 
-# elif SYSTEM == "Linux":  # Docker / Ubuntu
-#     GDAL_LIBRARY_PATH = os.environ.get(
-#         "GDAL_LIBRARY_PATH",
-#         "/usr/lib/libgdal.so"
-#     )
-#     GEOS_LIBRARY_PATH = os.environ.get(
-#         "GEOS_LIBRARY_PATH",
-#         "/usr/lib/libgeos_c.so"
-#     )
+elif SYSTEM == "Linux":  # Docker / Ubuntu
+    GDAL_LIBRARY_PATH = os.environ.get("GDAL_LIBRARY_PATH", "/usr/lib/libgdal.so")
+    GEOS_LIBRARY_PATH = os.environ.get("GEOS_LIBRARY_PATH", "/usr/lib/libgeos_c.so")

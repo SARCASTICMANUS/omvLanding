@@ -13,6 +13,7 @@ from core.api.views import (
     PassengerProfileViewSet,
     PublicDriverProfileViewSet,
     UserViewSet,
+    BoardingRequestViewSet,
     GlobalSearchView,
     ReverseSearchView,
     AdminRouteView,
@@ -24,6 +25,7 @@ from core.api.views import (
     PassengerNearbyStopsView,
     PassengerDashboardView,
     PassengerFilteredTripsView,
+    TelemetryIngestView,
     AuthView,
     MeView,
 )
@@ -34,6 +36,7 @@ router.register(r"vehicles", VehicleViewSet)
 router.register(r"driver-profiles", PublicDriverProfileViewSet)
 router.register(r"passenger-profiles", PassengerProfileViewSet)
 router.register(r"users", UserViewSet)
+router.register(r"boarding-requests", BoardingRequestViewSet)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -71,6 +74,9 @@ urlpatterns = [
     path("api/passenger/nearby-stops/", PassengerNearbyStopsView.as_view()),
     path("api/passenger/dashboard/", PassengerDashboardView.as_view()),
     path("api/passenger/filtered-trips/", PassengerFilteredTripsView.as_view()),
+
+    # ── Telemetry ─────────────────────────────────────────────────────────────
+    path("api/telemetry/ingest/", TelemetryIngestView.as_view()),
 
     # Legacy aliases (keep existing frontend working during transition)
     path("api/student/dashboard/", PassengerDashboardView.as_view()),

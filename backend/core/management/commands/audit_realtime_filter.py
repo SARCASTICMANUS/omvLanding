@@ -1,6 +1,6 @@
 import time
 import json
-import redis
+from core.services.redis_service import get_redis_client
 from django.core.management.base import BaseCommand
 from django.contrib.gis.geos import Point, LineString
 from django.utils import timezone
@@ -84,8 +84,7 @@ class Command(BaseCommand):
         )
 
         # Connect to Redis to simulate realtime location
-        REDIS_HOST = "redis" if os.environ.get("IN_DOCKER") else "localhost"
-        r = redis.Redis(host=REDIS_HOST, port=6379, db=0)
+        r = get_redis_client()
         
         def update_loc(trip_id, lon, lat):
             r.set(f"driver_pos:{trip_id}", f"{lon},{lat}")

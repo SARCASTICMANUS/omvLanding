@@ -5,6 +5,8 @@ import React, { useState, useRef, useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import api from "../../utils/api";
+import { useSelector } from "react-redux";
+import DriverManifest from "../DriverManifest";
 import {
   Play,
   Navigation,
@@ -36,6 +38,7 @@ function decodePolyline(str, precision = 5) {
 }
 
 const MapDriver = () => {
+  const { user } = useSelector((state) => state.auth);
   const mapContainer = useRef(null);
   const map = useRef(null);
   const [availableRoutes, setAvailableRoutes] = useState([]);
@@ -47,6 +50,7 @@ const MapDriver = () => {
   const [passengers, setPassengers] = useState({}); 
   const [nextStops, setNextStops] = useState([]); 
   const [loading, setLoading] = useState(false);
+  const [showManifest, setShowManifest] = useState(true);
 
   const ws = useRef(null);
   const simulationRef = useRef(null);
@@ -70,6 +74,8 @@ const MapDriver = () => {
     map.current.addControl(new maplibregl.NavigationControl(), "top-right");
 
     map.current.on("load", () => {
+      console.log("Map style loaded successfully");
+      map.current.resize(); // Ensure map sizes to container
       map.current.addSource("route", {
         type: "geojson",
         data: {
@@ -98,6 +104,10 @@ const MapDriver = () => {
       });
     });
 
+    map.current.on("error", (e) => {
+      console.error("MapLibre GL Error:", e);
+    });
+
     return () => {
       if (map.current) {
         map.current.remove();
@@ -108,7 +118,7 @@ const MapDriver = () => {
 
   // Sync Route Path
   useEffect(() => {
-    if (!map.current || !map.current.isStyleLoaded()) return;
+    if (!map.current) return;
     const source = map.current.getSource("route");
     if (source) {
       source.setData({
@@ -381,7 +391,19 @@ const MapDriver = () => {
     <div className="flex flex-col h-screen w-full bg-slate-50 font-sans">
       <Header />
 
-      <div className="flex-1 w-full relative z-0">
+      <div className="flex-1 w-full relative z-0 h-screen">
+        {/* Map Area - Absolute Layer to fill screen behind panels */}
+        <div className="absolute inset-0 z-0">
+            <style>
+                {`
+                    .maplibregl-map { position: absolute; top: 0; bottom: 0; width: 100%; }
+                    .maplibregl-canvas { position: absolute; top: 0; bottom: 0; width: 100%; height: 100%; }
+                `}
+            </style>
+            <div ref={mapContainer} className="w-full h-full" />
+        </div>
+
+        {/* Driver Console Overlay - Z-indexed above map */}
         <div className="absolute top-6 left-6 w-96 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl z-[1000] border border-white/20 overflow-hidden flex flex-col max-h-[calc(100vh-120px)] transition-all duration-300">
           <div className="bg-slate-900 p-5 text-white flex items-center justify-between shadow-md">
             <div>
@@ -390,8 +412,16 @@ const MapDriver = () => {
               </h2>
             </div>
             {isDriving && (
-              <div className="bg-red-500/20 px-2 py-1 rounded text-[10px] font-bold text-red-100 uppercase border border-red-500/50 animate-pulse">
-                Live
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setShowManifest(!showManifest)}
+                  className={`px-3 py-1 rounded text-[10px] font-bold uppercase border transition-all ${showManifest ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
+                >
+                  {showManifest ? "Hide Manifest" : "Show Manifest"}
+                </button>
+                <div className="bg-red-500/20 px-2 py-1 rounded text-[10px] font-bold text-red-100 uppercase border border-red-500/50 animate-pulse">
+                  Live
+                </div>
               </div>
             )}
           </div>
@@ -461,8 +491,8 @@ const MapDriver = () => {
                   <div className="text-sm text-slate-500 text-center py-4">Locating next stops...</div>
                 ) : (
                   <div className="space-y-3">
-                     {nextStops.map((stop, idx) => (
-                        <div key={stop.id} className={`p-4 rounded-xl border ${idx === 0 ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-100'}`}>
+                     {nextStops.map((stop, index) => (
+                        <div key={`${stop.id}_${index}`} className={`p-4 rounded-xl border ${index === 0 ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-100'}`}>
                            <div className="flex justify-between items-start mb-2">
                               <span className="font-bold text-slate-800">{stop.name}</span>
                               <div className="flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-xs font-bold">
@@ -485,7 +515,15 @@ const MapDriver = () => {
           </div>
         </div>
 
-        <div ref={mapContainer} className="h-full w-full" />
+        {/* Right Side Manifest (Sliding Panel) */}
+        {isDriving && showManifest && (
+            <div className="absolute right-0 top-0 w-96 h-full z-[1001] animate-in slide-in-from-right duration-300">
+                <DriverManifest 
+                    vehicleId={user?.profile?.assigned_vehicle_id} 
+                    tripId={tripData?.trip_id} 
+                />
+            </div>
+        )}
       </div>
     </div>
   );

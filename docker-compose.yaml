@@ -45,7 +45,7 @@ services:
       - IN_DOCKER=true
       - DATABASE_URL=postgis://postgres:password@db:5432/vayy_db
       - REDIS_URL=redis://redis:6379/0
-      - OSRM_URL=http://router.project-osrm.org
+      - OSRM_URL=http://osrm:5000
 
   celery_worker:
     build: ./backend
@@ -106,6 +106,8 @@ volumes:
   postgres_data:
   redis_data:
 
+
 networks:
-  vayy_network:       # Yahan network ka asli naam define karo
+  vayy_network:
+    # Yahan network ka asli naam define karo
     external: true

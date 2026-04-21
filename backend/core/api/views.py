@@ -2,6 +2,7 @@
 # Converted from University/Student to City/Passenger/Driver model.
 
 import os
+import json
 import secrets
 from datetime import timedelta
 import logging
@@ -17,8 +18,14 @@ from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
 
 from core.models import (
-    City, Route, Stop, Vehicle,
-    ActiveTrip, PublicPassengerProfile, PublicDriverProfile
+    City,
+    Route,
+    Stop,
+    Vehicle,
+    ActiveTrip,
+    PublicPassengerProfile,
+    PublicDriverProfile,
+    BoardingRequest,
 )
 from core.utils import create_route_geometry
 from core.api.serializers import (
@@ -31,6 +38,7 @@ from core.api.serializers import (
     ActiveTripSerializer,
     PublicDriverProfileSerializer,
     PassengerProfileSerializer,
+    BoardingRequestSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,8 +48,10 @@ OTP_EXPIRY_MINUTES = 10
 
 # ─── Helper: make / decode verification token ─────────────────────────────────
 
+
 def _make_verification_token(user):
     import hmac, hashlib, time, base64
+
     payload = f"{user.id}:{int(time.time())}"
     secret = os.environ.get("SECRET_KEY", "vayy-dev-secret")
     sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
@@ -51,6 +61,7 @@ def _make_verification_token(user):
 
 def _decode_verification_token(token, max_age_seconds=600):
     import hmac, hashlib, time, base64
+
     try:
         raw = base64.urlsafe_b64decode(token.encode()).decode()
         parts = raw.rsplit(":", 2)
@@ -62,7 +73,9 @@ def _decode_verification_token(token, max_age_seconds=600):
             return None, False, "Token expired"
         payload = f"{user_id}:{ts_str}"
         secret = os.environ.get("SECRET_KEY", "vayy-dev-secret")
-        expected_sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        expected_sig = hmac.new(
+            secret.encode(), payload.encode(), hashlib.sha256
+        ).hexdigest()
         if not hmac.compare_digest(sig, expected_sig):
             return None, False, "Invalid token signature"
         return int(user_id), True, None
@@ -71,6 +84,7 @@ def _decode_verification_token(token, max_age_seconds=600):
 
 
 # ─── ViewSets ─────────────────────────────────────────────────────────────────
+
 
 class CityViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
@@ -119,6 +133,7 @@ class PassengerProfileViewSet(viewsets.ModelViewSet):
 
 class UserViewSet(viewsets.ModelViewSet):
     from django.contrib.auth import get_user_model
+
     User = get_user_model()
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -134,10 +149,69 @@ class UserViewSet(viewsets.ModelViewSet):
         return qs
 
 
+class BoardingRequestViewSet(viewsets.ModelViewSet):
+    """
+    Allow passengers to 'book' a spot at a stop for a specific trip.
+    Drivers can see these in their digital manifest via WebSocket or API.
+    """
+
+    permission_classes = [IsAuthenticated]
+    queryset = BoardingRequest.objects.all()
+    serializer_class = BoardingRequestSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == "driver":
+            # Drivers see requests for their active trips
+            return BoardingRequest.objects.filter(
+                trip__driver=user, status__in=["pending", "approaching", "boarded"]
+            )
+        # Passengers see their own requests
+        return BoardingRequest.objects.filter(passenger=user)
+
+    def perform_create(self, serializer):
+        boarding_request = serializer.save(passenger=self.request.user)
+        # Trigger manifest update task
+        from core.tasks import update_driver_manifest
+
+        update_driver_manifest.delay(str(boarding_request.trip_id))
+
+    from rest_framework.decorators import action
+
+    @action(detail=True, methods=["post"])
+    def update_status(self, request, pk=None):
+        boarding_request = self.get_object()
+        new_status = request.data.get("status")
+        if new_status in dict(BoardingRequest.STATUS_CHOICES):
+            boarding_request.status = new_status
+            boarding_request.save()
+
+            # Broadcast manifest update
+            from core.tasks import update_driver_manifest
+
+            update_driver_manifest.delay(str(boarding_request.trip_id))
+
+            return Response({"status": "updated"})
+        return Response({"error": "invalid status"}, status=400)
+
+    def destroy(self, request, *args, **kwargs):
+        boarding_request = self.get_object()
+        trip_id = str(boarding_request.trip_id)
+        response = super().destroy(request, *args, **kwargs)
+
+        # Update manifest after deletion
+        from core.tasks import update_driver_manifest
+
+        update_driver_manifest.delay(trip_id)
+        return response
+
+
 # ─── Global Location Search ───────────────────────────────────────────────────
+
 
 class GlobalSearchView(APIView):
     permission_classes = [AllowAny]
+
     def get(self, request):
         query = request.query_params.get("q")
         if not query:
@@ -148,11 +222,13 @@ class GlobalSearchView(APIView):
             results = []
             if locations:
                 for loc in locations:
-                    results.append({
-                        "display_name": loc.address,
-                        "lat": loc.latitude,
-                        "lon": loc.longitude,
-                    })
+                    results.append(
+                        {
+                            "display_name": loc.address,
+                            "lat": loc.latitude,
+                            "lon": loc.longitude,
+                        }
+                    )
             return Response(results)
         except (GeocoderTimedOut, GeocoderUnavailable):
             return Response({"error": "Search service busy"}, status=503)
@@ -162,6 +238,7 @@ class GlobalSearchView(APIView):
 
 class ReverseSearchView(APIView):
     permission_classes = [AllowAny]
+
     def get(self, request):
         lat = request.query_params.get("lat")
         lon = request.query_params.get("lon")
@@ -171,11 +248,13 @@ class ReverseSearchView(APIView):
             geolocator = Nominatim(user_agent="vayy-app")
             location = geolocator.reverse(f"{lat}, {lon}")
             if location:
-                return Response({
-                    "display_name": location.address,
-                    "lat": location.latitude,
-                    "lon": location.longitude,
-                })
+                return Response(
+                    {
+                        "display_name": location.address,
+                        "lat": location.latitude,
+                        "lon": location.longitude,
+                    }
+                )
             return Response({"error": "No location found"}, status=404)
         except (GeocoderTimedOut, GeocoderUnavailable):
             return Response({"error": "Search service busy"}, status=503)
@@ -184,6 +263,7 @@ class ReverseSearchView(APIView):
 
 
 # ─── Route Management ─────────────────────────────────────────────────────────
+
 
 class AdminRouteView(APIView):
     def get(self, request):
@@ -212,10 +292,15 @@ class AdminRouteView(APIView):
             waypoints.append((end["lon"], end["lat"]))
 
             route_data = create_route_geometry(waypoints)
-            if not route_data:
-                return Response({"error": "Could not calculate route"}, status=400)
+            if route_data is None:
+                return Response(
+                    {
+                        "error": "Routing service unreachable or could not calculate route"
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
             path = route_data["geometry"]
-            total_distance = route_data["distance"]
+            total_distance = route_data["total_distance"]
 
         route = Route.objects.create(
             city_id=city_id or None,
@@ -268,20 +353,33 @@ class AdminRoutePreviewView(APIView):
         waypoints.append((end["lon"], end["lat"]))
 
         route_options = create_route_geometry(waypoints, alternatives=True)
+        if route_options is None:
+            # Check if this was a connection error vs no routes found
+            # (Note: create_route_geometry returns None for both currently)
+            return Response(
+                {"error": "Routing service unreachable or no routes found"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         if not route_options:
-            return Response({"error": "No routes found"}, status=404)
+            return Response(
+                {"error": "No routes found between these points"}, status=404
+            )
 
         output = []
         for r in route_options:
-            output.append({
-                "path": [[y, x] for x, y in r["geometry"].coords],
-                "distance": r["total_distance"],
-                "duration": r["duration"],
-            })
+            output.append(
+                {
+                    "path": [[y, x] for x, y in r["geometry"].coords],
+                    "distance": r["total_distance"],
+                    "duration": r["duration"],
+                }
+            )
         return Response(output)
 
 
 # ─── Driver Views ─────────────────────────────────────────────────────────────
+
 
 class DriverStartTripView(APIView):
     def get(self, request):
@@ -293,17 +391,19 @@ class DriverStartTripView(APIView):
         if city_id:
             routes = routes.filter(city_id=city_id)
 
-        return Response([
-            {
-                "id": r.id,
-                "name": f"{r.name} ({r.start_name} → {r.end_name})",
-                "total_distance": r.total_distance_meters,
-                "stops_count": r.stops.count(),
-                "bus_number": r.bus_number,
-                "city": str(r.city_id) if r.city_id else None,
-            }
-            for r in routes
-        ])
+        return Response(
+            [
+                {
+                    "id": r.id,
+                    "name": f"{r.name} ({r.start_name} → {r.end_name})",
+                    "total_distance": r.total_distance_meters,
+                    "stops_count": r.stops.count(),
+                    "bus_number": r.bus_number,
+                    "city": str(r.city_id) if r.city_id else None,
+                }
+                for r in routes
+            ]
+        )
 
     def post(self, request):
         route_id = request.data.get("route_id")
@@ -344,15 +444,17 @@ class DriverStartTripView(APIView):
         return self._format_trip_response(trip, resumed=False)
 
     def _format_trip_response(self, trip, *, resumed=False):
-        return Response({
-            "trip_id": str(trip.id),
-            "route_geometry": [[y, x] for x, y in trip.route.path.coords],
-            "total_distance": trip.route.total_distance_meters,
-            "stops": StopSerializer(trip.route.stops.all(), many=True).data,
-            "bus_number": trip.route.bus_number,
-            "route_name": trip.route.name,
-            "resumed": resumed,
-        })
+        return Response(
+            {
+                "trip_id": str(trip.id),
+                "route_geometry": [[y, x] for x, y in trip.route.path.coords],
+                "total_distance": trip.route.total_distance_meters,
+                "stops": StopSerializer(trip.route.stops.all(), many=True).data,
+                "bus_number": trip.route.bus_number,
+                "route_name": trip.route.name,
+                "resumed": resumed,
+            }
+        )
 
 
 class TripEndView(APIView):
@@ -368,6 +470,7 @@ class TripEndView(APIView):
 
 class TripNextStopsView(APIView):
     """Return waiting passenger counts for next 3 stops on the trip."""
+
     def get(self, request, trip_id):
         try:
             trip = ActiveTrip.objects.get(id=trip_id)
@@ -377,27 +480,33 @@ class TripNextStopsView(APIView):
         stops = list(trip.route.stops.order_by("order")[:3])
         result = []
         for stop in stops:
-            result.append({
-                "stop_id": str(stop.id),
-                "name": stop.name,
-                "lat": stop.location.y,
-                "lon": stop.location.x,
-                "order": stop.order,
-            })
+            result.append(
+                {
+                    "stop_id": str(stop.id),
+                    "name": stop.name,
+                    "lat": stop.location.y,
+                    "lon": stop.location.x,
+                    "order": stop.order,
+                }
+            )
         return Response(result)
 
 
 # ─── Passenger Views ──────────────────────────────────────────────────────────
 
+
 class PassengerMatchView(APIView):
     """Find active trips on routes near the passenger's location."""
+
     def post(self, request):
         lat = request.data.get("lat")
         lon = request.data.get("lon")
         radius_deg = float(request.data.get("radius", 0.1))  # ~11km
         p_point = Point(float(lon), float(lat), srid=4326)
 
-        routes = Route.objects.filter(path__dwithin=(p_point, radius_deg), is_public=True)
+        routes = Route.objects.filter(
+            path__dwithin=(p_point, radius_deg), is_public=True
+        )
         cutoff = timezone.now() - timedelta(seconds=90)
         active_trips = ActiveTrip.objects.filter(
             route__in=routes, status="active", last_updated__gte=cutoff
@@ -405,19 +514,24 @@ class PassengerMatchView(APIView):
 
         matches = []
         for trip in active_trips:
-            matches.append({
-                "trip_id": str(trip.id),
-                "vehicle_number": (trip.vehicle.vehicle_number if trip.vehicle else "N/A"),
-                "route_name": trip.route.name,
-                "bus_number": trip.route.bus_number,
-                "driver_name": trip.driver.get_full_name() if trip.driver else "",
-                "route_id": str(trip.route_id),
-            })
+            matches.append(
+                {
+                    "trip_id": str(trip.id),
+                    "vehicle_number": (
+                        trip.vehicle.vehicle_number if trip.vehicle else "N/A"
+                    ),
+                    "route_name": trip.route.name,
+                    "bus_number": trip.route.bus_number,
+                    "driver_name": trip.driver.get_full_name() if trip.driver else "",
+                    "route_id": str(trip.route_id),
+                }
+            )
         return Response(matches)
 
 
 class PassengerNearbyStopsView(APIView):
     """Return stops near a given location — no city filter, open to all."""
+
     def get(self, request):
         lat = request.query_params.get("lat")
         lon = request.query_params.get("lon")
@@ -441,6 +555,7 @@ class PassengerDashboardView(APIView):
     Open dashboard: returns active trips near the passenger.
     No assignment needed — any passenger can see any active bus.
     """
+
     def get(self, request):
         lat = request.query_params.get("lat")
         lon = request.query_params.get("lon")
@@ -454,41 +569,45 @@ class PassengerDashboardView(APIView):
         if lat and lon:
             p_point = Point(float(lon), float(lat), srid=4326)
             radius = float(request.query_params.get("radius", 0.2))
-            active_trips = active_trips.filter(
-                route__path__dwithin=(p_point, radius)
-            )
+            active_trips = active_trips.filter(route__path__dwithin=(p_point, radius))
 
         trip_data = []
         for trip in active_trips:
             # Include basic stop info for distance calculation on frontend
             stops = trip.route.stops.order_by("order")[:3]
-            trip_data.append({
-                "trip_id": str(trip.id),
-                "bus_number": trip.route.bus_number,
-                "route_name": trip.route.name,
-                "route_geometry": [[y, x] for x, y in trip.route.path.coords],
-                "driver_name": trip.driver.get_full_name() if trip.driver else "",
-                "vehicle_number": (trip.vehicle.vehicle_number if trip.vehicle else "N/A"),
-                "stops": [
-                    {"name": s.name, "lat": s.location.y, "lon": s.location.x}
-                    for s in stops
-                ]
-            })
+            trip_data.append(
+                {
+                    "trip_id": str(trip.id),
+                    "bus_number": trip.route.bus_number,
+                    "route_name": trip.route.name,
+                    "route_geometry": [[y, x] for x, y in trip.route.path.coords],
+                    "driver_name": trip.driver.get_full_name() if trip.driver else "",
+                    "vehicle_number": (
+                        trip.vehicle.vehicle_number if trip.vehicle else "N/A"
+                    ),
+                    "stops": [
+                        {"name": s.name, "lat": s.location.y, "lon": s.location.x}
+                        for s in stops
+                    ],
+                }
+            )
 
-        return Response({
-            "active_trips": trip_data,
-            "total_active": len(trip_data),
-        })
+        return Response(
+            {
+                "active_trips": trip_data,
+                "total_active": len(trip_data),
+            }
+        )
 
 
 from core.utils import create_route_geometry, get_table_eta_async, _run
-import redis
 from django.db.models import F
 from django.contrib.gis.db.models.functions import LineLocatePoint
+from core.services.redis_service import get_redis_client
 
 # Redis setup (sync for view)
-REDIS_HOST = "redis" if os.environ.get("IN_DOCKER") else "localhost"
-r_client = redis.Redis(host=REDIS_HOST, port=6379, db=0)
+r_client = get_redis_client()
+
 
 class PassengerFilteredTripsView(APIView):
     """
@@ -497,32 +616,40 @@ class PassengerFilteredTripsView(APIView):
     where pickup comes BEFORE destination on the route,
     and the vehicle hasn't passed the pickup point yet.
     """
+
     def post(self, request):
-        pickup = request.data.get("pickup") # {lat, lon}
-        destination = request.data.get("destination") # {lat, lon}
-        print(f"PassengerFilteredTrips: Received request with pickup={pickup} and destination={destination}")
-        
+        pickup = request.data.get("pickup")  # {lat, lon}
+        destination = request.data.get("destination")  # {lat, lon}
+        print(
+            f"PassengerFilteredTrips: Received request with pickup={pickup} and destination={destination}"
+        )
+
         if not pickup or not destination:
-            return Response({"error": "Pickup and destination are required"}, status=400)
+            return Response(
+                {"error": "Pickup and destination are required"}, status=400
+            )
 
         p_point = Point(float(pickup["lon"]), float(pickup["lat"]), srid=4326)
         d_point = Point(float(destination["lon"]), float(destination["lat"]), srid=4326)
-        
+
         # 1. Find routes that pass near both points AND have correct directionality
         # Radius in meters for geography queries
         radius_m = float(request.data.get("radius_m", 3000))
-        
+
         # We annotate each route with the fraction of the line where pickup and destination are closest
         # Use filter with geography=True for accurate meter distance
-        routes = Route.objects.filter(
-            path__dwithin=(p_point, radius_m)
-        ).filter(
-            path__dwithin=(d_point, radius_m)
-        ).annotate(
-            p_frac=LineLocatePoint("path", p_point),
-            d_frac=LineLocatePoint("path", d_point)
-        ).filter(p_frac__lt=F("d_frac"))
-        print(f"PassengerFilteredTrips: Found {routes.count()} candidate routes near pickup and destination with correct directionality")
+        routes = (
+            Route.objects.filter(path__dwithin=(p_point, radius_m))
+            .filter(path__dwithin=(d_point, radius_m))
+            .annotate(
+                p_frac=LineLocatePoint("path", p_point),
+                d_frac=LineLocatePoint("path", d_point),
+            )
+            .filter(p_frac__lt=F("d_frac"))
+        )
+        print(
+            f"PassengerFilteredTrips: Found {routes.count()} candidate routes near pickup and destination with correct directionality"
+        )
 
         if not routes.exists():
             return Response([])
@@ -531,11 +658,11 @@ class PassengerFilteredTripsView(APIView):
         # Increased cutoff to 5 minutes (300s) to be less aggressive with staleness
         cutoff = timezone.now() - timedelta(seconds=300)
         active_trips = ActiveTrip.objects.filter(
-            route__in=routes,
-            status="active",
-            last_updated__gte=cutoff
+            route__in=routes, status="active", last_updated__gte=cutoff
         ).select_related("route", "vehicle", "driver")
-        print(f"PassengerFilteredTrips: Found {active_trips.count()} active trips for {routes.count()} candidate routes near pickup ({pickup['lat']}, {pickup['lon']}) and destination ({destination['lat']}, {destination['lon']}) within radius {radius_m}")
+        print(
+            f"PassengerFilteredTrips: Found {active_trips.count()} active trips for {routes.count()} candidate routes near pickup ({pickup['lat']}, {pickup['lon']}) and destination ({destination['lat']}, {destination['lon']}) within radius {radius_m}"
+        )
 
         results = []
         # Cache route fracs for quick lookup
@@ -545,7 +672,9 @@ class PassengerFilteredTripsView(APIView):
             # Get current location from Redis (realtime) or DB
             curr_loc_raw = r_client.get(f"driver_pos:{trip.id}")
             if curr_loc_raw:
-                lon, lat = map(float, curr_loc_raw.decode().split(","))
+                if isinstance(curr_loc_raw, bytes):
+                    curr_loc_raw = curr_loc_raw.decode()
+                lon, lat = map(float, curr_loc_raw.split(","))
                 curr_pos = (lon, lat)
             elif trip.current_location:
                 curr_pos = (trip.current_location.x, trip.current_location.y)
@@ -558,12 +687,15 @@ class PassengerFilteredTripsView(APIView):
             # But we can approximate by checking if the bus is near the pickup or before it.
             # For high accuracy, we'll do one more check:
             c_point = Point(curr_pos[0], curr_pos[1], srid=4326)
-            
+
             # We'll use a simple QuerySet to get the fraction for the current point
-            curr_frac_data = Route.objects.filter(id=trip.route_id).annotate(
-                c_frac=LineLocatePoint("path", c_point)
-            ).values("c_frac").first()
-            
+            curr_frac_data = (
+                Route.objects.filter(id=trip.route_id)
+                .annotate(c_frac=LineLocatePoint("path", c_point))
+                .values("c_frac")
+                .first()
+            )
+
             curr_frac = curr_frac_data["c_frac"] if curr_frac_data else 0
             pickup_frac = route_data_map.get(trip.route_id, 0)
 
@@ -575,11 +707,11 @@ class PassengerFilteredTripsView(APIView):
             stops = list(trip.route.stops.order_by("order"))
             next_stop = None
             eta_seconds = 0
-            
+
             if stops:
                 sources = [curr_pos]
                 destinations = [(s.location.x, s.location.y) for s in stops]
-                
+
                 table = _run(get_table_eta_async(sources, destinations))
                 if table and table.get("durations"):
                     durations = table["durations"][0]
@@ -590,21 +722,87 @@ class PassengerFilteredTripsView(APIView):
                     idx = durations.index(min_dur)
                     next_stop = stops[idx]
                     eta_seconds = min_dur
-            
-            results.append({
-                "trip_id": str(trip.id),
-                "bus_number": trip.route.bus_number,
-                "vehicle_number": trip.vehicle.vehicle_number if trip.vehicle else "N/A",
-                "route_name": trip.route.name,
-                "next_stop": next_stop.name if next_stop else "N/A",
-                "eta_seconds": eta_seconds,
-                "current_lat": curr_pos[1],
-                "current_lon": curr_pos[0],
-            })
+
+            results.append(
+                {
+                    "trip_id": str(trip.id),
+                    "bus_number": trip.route.bus_number,
+                    "vehicle_number": (
+                        trip.vehicle.vehicle_number if trip.vehicle else "N/A"
+                    ),
+                    "route_name": trip.route.name,
+                    "next_stop": next_stop.name if next_stop else "N/A",
+                    "eta_seconds": eta_seconds,
+                    "current_lat": curr_pos[1],
+                    "current_lon": curr_pos[0],
+                }
+            )
 
         return Response(results)
 
+
+# ─── Ingestion Views ──────────────────────────────────────────────────────────
+
+
+class TelemetryIngestView(APIView):
+    """
+    High-performance ingestion endpoint for GPS and Hybrid location data.
+    Ensures < 50ms response time by offloading processing.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data
+        t_type = data.get("type")
+        trip_id = data.get("trip_id")
+        user = request.user
+
+        if not t_type:
+            return Response({"error": "type is required"}, status=400)
+
+        # 1. Handle Hybrid Signal Data (Cell/Wi-Fi)
+        if t_type == "hybrid":
+            # Package for Redis Stream (Consumer will save to HybridLog)
+            stream_payload = {
+                "user_id": str(user.id),
+                "trip_id": str(trip_id) if trip_id else "",
+                "cell_towers": json.dumps(data.get("cell_towers", [])),
+                "wifi_aps": json.dumps(data.get("wifi_aps", [])),
+                "device_id": data.get("device_id", ""),
+                "timestamp": str(timezone.now().timestamp()),
+            }
+            try:
+                r_client.xadd("raw_signal_stream", stream_payload)
+            except Exception as e:
+                logger.error(f"Redis Stream Error: {e}")
+                # Fallback to direct DB save if Redis is down (slower but safe)
+                # For now, we prioritize 200 OK
+
+            return Response({"status": "queued"}, status=200)
+
+        # 2. Handle Standard GPS Data
+        elif t_type == "gps":
+            lat = data.get("lat")
+            lon = data.get("lon")
+
+            if not lat or not lon or not trip_id:
+                return Response(
+                    {"error": "lat, lon, and trip_id are required for GPS"}, status=400
+                )
+
+            # Use shared logic for Redis update and WebSocket broadcast
+            from core.utils import process_gps_update
+
+            process_gps_update(trip_id=trip_id, lat=lat, lon=lon, source="gps")
+
+            return Response({"status": "received"}, status=200)
+
+        return Response({"error": "invalid telemetry type"}, status=400)
+
+
 # ─── Auth Views ───────────────────────────────────────────────────────────────
+
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
@@ -619,6 +817,7 @@ class AuthView(APIView):
 
     def post(self, request, action):
         from django.contrib.auth import get_user_model
+
         User = get_user_model()
 
         # ── Register ──────────────────────────────────────────────────────────
@@ -627,11 +826,13 @@ class AuthView(APIView):
             if serializer.is_valid():
                 user = serializer.save()
                 refresh = RefreshToken.for_user(user)
-                return Response({
-                    "refresh": str(refresh),
-                    "access": str(refresh.access_token),
-                    "user": {"email": user.email, "role": user.role},
-                })
+                return Response(
+                    {
+                        "refresh": str(refresh),
+                        "access": str(refresh.access_token),
+                        "user": {"email": user.email, "role": user.role},
+                    }
+                )
             return Response(serializer.errors, status=400)
 
         # ── Login ─────────────────────────────────────────────────────────────
@@ -642,14 +843,17 @@ class AuthView(APIView):
             if user:
                 refresh = RefreshToken.for_user(user)
                 user_role = "admin" if user.is_superuser else user.role
-                return Response({
-                    "refresh": str(refresh),
-                    "access": str(refresh.access_token),
-                    "role": user_role,
-                    "city": str(user.city_id) if user.city_id else None,
-                    "name": f"{user.first_name} {user.last_name}".strip() or user.email,
-                    "email": user.email,
-                })
+                return Response(
+                    {
+                        "refresh": str(refresh),
+                        "access": str(refresh.access_token),
+                        "role": user_role,
+                        "city": str(user.city_id) if user.city_id else None,
+                        "name": f"{user.first_name} {user.last_name}".strip()
+                        or user.email,
+                        "email": user.email,
+                    }
+                )
             return Response({"error": "Invalid credentials"}, status=401)
 
         # ── Send OTP ──────────────────────────────────────────────────────────
@@ -673,7 +877,7 @@ class AuthView(APIView):
             user.otp_verified = False
             user.otp_created_at = timezone.now()
             user.save(update_fields=["otp", "otp_verified", "otp_created_at"])
-            
+
             logger.info(f"[OTP] Generated dummy code 123456 for {email}")
             return Response({"message": f"OTP sent to {email}"}, status=200)
 
@@ -695,7 +899,10 @@ class AuthView(APIView):
             if user.otp_created_at:
                 age = timezone.now() - user.otp_created_at
                 if age > timedelta(minutes=OTP_EXPIRY_MINUTES):
-                    return Response({"error": "OTP has expired. Please request a new one."}, status=400)
+                    return Response(
+                        {"error": "OTP has expired. Please request a new one."},
+                        status=400,
+                    )
 
             user.otp_verified = True
             user.is_verified = True
@@ -712,7 +919,10 @@ class AuthView(APIView):
             token = request.data.get("verification_token")
             password = request.data.get("password")
             if not token or not password:
-                return Response({"error": "verification_token and password are required"}, status=400)
+                return Response(
+                    {"error": "verification_token and password are required"},
+                    status=400,
+                )
 
             user_id, ok, err = _decode_verification_token(token)
             if not ok:
@@ -724,13 +934,18 @@ class AuthView(APIView):
                 return Response({"error": "User not found"}, status=404)
 
             if not user.otp_verified:
-                return Response({"error": "OTP not verified for this account"}, status=403)
+                return Response(
+                    {"error": "OTP not verified for this account"}, status=403
+                )
 
             user.set_password(password)
             user.otp = None
             user.otp_created_at = None
             user.save(update_fields=["password", "otp", "otp_created_at"])
-            return Response({"message": "Password set successfully. You can now log in."}, status=200)
+            return Response(
+                {"message": "Password set successfully. You can now log in."},
+                status=200,
+            )
 
         # ── Forgot Password ───────────────────────────────────────────────────
         elif action == "forgot-password":
@@ -746,7 +961,9 @@ class AuthView(APIView):
                 logger.info(f"[OTP] Generated dummy reset OTP for {email}: 123456")
             except User.DoesNotExist:
                 pass  # Don't reveal if user exists
-            return Response({"message": "If that email exists, a reset code was sent."}, status=200)
+            return Response(
+                {"message": "If that email exists, a reset code was sent."}, status=200
+            )
 
         # ── Reset Password ────────────────────────────────────────────────────
         elif action == "reset-password":
@@ -754,7 +971,9 @@ class AuthView(APIView):
             otp = request.data.get("otp")
             new_password = request.data.get("new_password")
             if not all([email, otp, new_password]):
-                return Response({"error": "email, otp, and new_password are required"}, status=400)
+                return Response(
+                    {"error": "email, otp, and new_password are required"}, status=400
+                )
 
             try:
                 user = User.objects.get(email=email)
@@ -773,7 +992,9 @@ class AuthView(APIView):
             user.otp = None
             user.otp_verified = False
             user.otp_created_at = None
-            user.save(update_fields=["password", "otp", "otp_verified", "otp_created_at"])
+            user.save(
+                update_fields=["password", "otp", "otp_verified", "otp_created_at"]
+            )
             return Response({"message": "Password reset successful."}, status=200)
 
         return Response({"error": "Unknown action"}, status=404)

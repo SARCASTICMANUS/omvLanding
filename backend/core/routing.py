@@ -16,4 +16,9 @@ websocket_urlpatterns = [
         r"ws/trip/(?P<trip_id>[\w-]+)/(?P<role>\w+)/$",
         consumers.VayyConsumer.as_asgi(),
     ),
+    # Driver Manifest: ws://host/ws/driver/manifest/<vehicle_id>/
+    re_path(
+        r"ws/driver/manifest/(?P<vehicle_id>[\w-]+)/$",
+        consumers.DriverConsumer.as_asgi(),
+    ),
 ]
