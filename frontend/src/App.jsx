@@ -1,145 +1,269 @@
-import React, { useEffect } from "react";
+import React, { Suspense, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { logout } from "./features/auth/authSlice";
-import { jwtDecode } from "jwt-decode";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
 } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
+
+import Header from "./components/Layout/Header";
+import { logout } from "./features/auth/authSlice";
+
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import MapDriver from "./components/Maps/MapDriver";
-import MapPassenger from "./components/Maps/MapPassenger";
 import AdminPanel from "./pages/AdminPanel";
+import MapDriver from "./components/Maps/MapDriver";
+import PassengerLivePage from "./pages/PassengerLivePage";
 
-// Component to handle role-based redirection
-const DashboardRouter = () => {
-  const { user, isAuthenticated } = useSelector((state) => state.auth);
+/* ===============================
+   Helpers
+================================ */
+const normalizeRole = (role) =>
+  String(role || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
 
-  if (!isAuthenticated || !user || !user.role) {
+const getRedirectPathByRole = (role) => {
+  const normalizedRole = normalizeRole(role);
+
+  if (normalizedRole === "driver") {
+    return "/driver/live";
+  }
+
+  if (
+    normalizedRole === "admin" ||
+    normalizedRole === "city_admin" ||
+    normalizedRole === "university_admin" ||
+    normalizedRole === "super_admin"
+  ) {
+    return "/admin";
+  }
+
+  if (
+    normalizedRole === "passenger" ||
+    normalizedRole === "student"
+  ) {
+    return "/passenger/live";
+  }
+
+  return "/passenger/live";
+};
+
+/* ===============================
+   Loader
+================================ */
+const FullScreenLoader = () => (
+  <div className="flex min-h-screen items-center justify-center bg-[#171717] px-4">
+    <div className="rounded-2xl bg-white px-6 py-4 shadow-xl">
+      <p className="text-sm font-semibold text-slate-700">Loading...</p>
+    </div>
+  </div>
+);
+
+/* ===============================
+   Unknown Role
+================================ */
+const UnknownRoleScreen = ({ role }) => (
+  <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
+    <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl">
+      <h1 className="mb-2 text-2xl font-bold text-slate-900">Unknown Role</h1>
+      <p className="mb-6 text-sm text-slate-600">
+        Invalid account role detected.
+      </p>
+
+      <div className="mb-6 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+        Role: <span className="font-semibold">{role || "N/A"}</span>
+      </div>
+
+      <button
+        onClick={() => {
+          localStorage.clear();
+          sessionStorage.clear();
+          window.location.replace("/login");
+        }}
+        className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white"
+      >
+        Back to Login
+      </button>
+    </div>
+  </div>
+);
+
+/* ===============================
+   Auth Guards
+================================ */
+const ProtectedRoute = ({ children, allowedRoles = [] }) => {
+  const { isAuthenticated, user } = useSelector((state) => state.auth || {});
+  const role = normalizeRole(user?.role);
+
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  switch (user.role) {
-    case "admin":
-    case "city_admin":
-      return <Navigate to="/admin" replace />;
-    case "driver":
-      return <MapDriver />;
-    case "passenger":
-    case "student": // legacy compat
-      return <MapPassenger />;
-    default:
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="bg-white p-8 rounded-xl shadow-lg text-center">
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">
-              Unknown Role
-            </h1>
-            <p className="text-gray-600 mb-4">Role: {user.role}</p>
-            <button
-              onClick={() => (window.location.href = "/login")}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg"
-            >
-              Go Back to Login
-            </button>
-          </div>
-        </div>
-      );
+  if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
+    return <Navigate to={getRedirectPathByRole(role)} replace />;
   }
+
+  return children;
 };
 
-// Protected Admin Route
 const ProtectedAdmin = ({ children }) => {
-  const { user, isAuthenticated } = useSelector((state) => state.auth);
+  const { isAuthenticated, user } = useSelector((state) => state.auth || {});
+  const role = normalizeRole(user?.role);
 
-  if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
+  if (!isAuthenticated || !role) {
+    return <Navigate to="/login" replace />;
+  }
 
   const isAdmin =
-    user?.role === "admin" ||
-    user?.role === "city_admin" ||
-    user?.role === "university_admin"; // legacy compat
-  if (!isAdmin) return <Navigate to="/" replace />;
+    role === "admin" ||
+    role === "city_admin" ||
+    role === "university_admin" ||
+    role === "super_admin";
 
-  return children;
-};
-
-// Public Route (Redirects if already logged in)
-const PublicRoute = ({ children }) => {
-  const { user, isAuthenticated } = useSelector((state) => state.auth);
-  // Only redirect if FULLY authenticated with a role
-  if (isAuthenticated && user && user.role) {
-    return <Navigate to="/" replace />;
+  if (!isAdmin) {
+    return <UnknownRoleScreen role={user?.role} />;
   }
+
   return children;
 };
 
+const PublicRoute = ({ children }) => {
+  const { isAuthenticated, user } = useSelector((state) => state.auth || {});
+  const role = normalizeRole(user?.role);
 
+  if (isAuthenticated) {
+    return <Navigate to={getRedirectPathByRole(role)} replace />;
+  }
+
+  return children;
+};
+
+/* ===============================
+   Root Redirect
+================================ */
+const RootRedirect = () => {
+  const { isAuthenticated, user } = useSelector((state) => state.auth || {});
+  const role = normalizeRole(user?.role);
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Navigate to={getRedirectPathByRole(role)} replace />;
+};
+
+/* ===============================
+   App Layout (Header everywhere)
+================================ */
+const AppLayout = ({ children }) => {
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <Header />
+      <main>{children}</main>
+    </div>
+  );
+};
+
+/* ===============================
+   APP
+================================ */
 function App() {
   const dispatch = useDispatch();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (token) {
-      try {
-        const decoded = jwtDecode(token);
-        const currentTime = Date.now() / 1000;
+    const refreshToken = localStorage.getItem("refreshToken");
 
-        // If token explicitly expired (without relying solely on interceptor)
-        if (decoded.exp < currentTime) {
-          // The api.js interceptor will try to use the refresh token on the next request.
-          // Or we can pre-emptively try refreshing here, but for simplicity, 
-          // letting the interceptor catch the 401 is usually sufficient. 
-          // However, if we know it's expired and we don't have a refresh token:
-          if (!localStorage.getItem("refreshToken")) {
-            dispatch(logout());
-          }
+    if (!token) return;
+
+    try {
+      const decoded = jwtDecode(token);
+      const now = Date.now() / 1000;
+
+      if (decoded?.exp && decoded.exp < now) {
+        if (!refreshToken) {
+          localStorage.clear();
+          sessionStorage.clear();
+          dispatch(logout());
         }
-      } catch (e) {
-        // Invalid token format
-        dispatch(logout());
       }
+    } catch (error) {
+      localStorage.clear();
+      sessionStorage.clear();
+      dispatch(logout());
     }
   }, [dispatch]);
 
   return (
     <Router>
-      <Routes>
-        <Route
-          path="/login"
-          element={
-            <PublicRoute>
-              <LoginPage />
-            </PublicRoute>
-          }
-        />
-        <Route
-          path="/register"
-          element={
-            <PublicRoute>
-              <RegisterPage />
-            </PublicRoute>
-          }
-        />
+      <Suspense fallback={<FullScreenLoader />}>
+        <Routes>
+          {/* PUBLIC */}
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <LoginPage />
+              </PublicRoute>
+            }
+          />
 
-        {/* Main Dashboard (Protected) */}
-        <Route path="/" element={<DashboardRouter />} />
+          <Route
+            path="/register"
+            element={
+              <PublicRoute>
+                <RegisterPage />
+              </PublicRoute>
+            }
+          />
 
-        {/* Admin Panel (Protected) */}
-        <Route
-          path="/admin"
-          element={
-            <ProtectedAdmin>
-              <AdminPanel />
-            </ProtectedAdmin>
-          }
-        />
+          {/* ADMIN */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedAdmin>
+                <AppLayout>
+                  <AdminPanel />
+                </AppLayout>
+              </ProtectedAdmin>
+            }
+          />
 
-        {/* Catch all */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* DRIVER */}
+          <Route
+            path="/driver/live"
+            element={
+              <ProtectedRoute allowedRoles={["driver"]}>
+                <AppLayout>
+                  <MapDriver />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* PASSENGER */}
+          <Route
+            path="/passenger/live"
+            element={
+              <ProtectedRoute allowedRoles={["passenger", "student"]}>
+                <AppLayout>
+                  <PassengerLivePage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* DEFAULT LANDING */}
+          <Route path="/" element={<RootRedirect />} />
+
+          {/* FALLBACK */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </Router>
   );
 }

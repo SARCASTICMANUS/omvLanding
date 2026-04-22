@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Users, MapPin, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+<<<<<<< HEAD
+=======
+import api, { getWsUrl } from "../lib/api";
+>>>>>>> temp-save
 
 /**
  * DriverManifest Component
@@ -17,9 +21,13 @@ const DriverManifest = ({ vehicleId, tripId }) => {
     if (!vehicleId) return;
 
     const token = localStorage.getItem("token");
+<<<<<<< HEAD
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
     const host = window.location.host.split(":")[0];
     const wsUrl = `${protocol}://${host}:8000/ws/driver/manifest/${vehicleId}/?token=${token}`;
+=======
+    const wsUrl = getWsUrl(`/ws/driver/manifest/${vehicleId}/?token=${token}`);
+>>>>>>> temp-save
 
     ws.current = new WebSocket(wsUrl);
 

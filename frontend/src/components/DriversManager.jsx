@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { User as UserIcon, Plus, Trash2, Edit, ShieldCheck, X, Save, Loader2, Mail, Phone, Info } from "lucide-react";
-import api from "../utils/api";
+import api from "../lib/api";
 
 const DriversManager = ({ cityId }) => {
   const [drivers, setDrivers] = useState([]);

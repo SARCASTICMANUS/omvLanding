@@ -4,7 +4,11 @@
 import React, { useState, useRef, useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+<<<<<<< HEAD
 import api from "../../utils/api";
+=======
+import api, { getWsUrl } from "../../lib/api";
+>>>>>>> temp-save
 import { useSelector } from "react-redux";
 import DriverManifest from "../DriverManifest";
 import {
@@ -47,8 +51,8 @@ const MapDriver = () => {
   const [tripData, setTripData] = useState(null);
   const [currentPos, setCurrentPos] = useState(null);
   const [isDriving, setIsDriving] = useState(false);
-  const [passengers, setPassengers] = useState({}); 
-  const [nextStops, setNextStops] = useState([]); 
+  const [passengers, setPassengers] = useState({});
+  const [nextStops, setNextStops] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showManifest, setShowManifest] = useState(true);
 
@@ -260,9 +264,9 @@ const MapDriver = () => {
       });
       let path = [];
       if (typeof res.data.route_geometry === "string") {
-         path = decodePolyline(res.data.route_geometry);
+        path = decodePolyline(res.data.route_geometry);
       } else {
-         path = res.data.route_geometry;
+        path = res.data.route_geometry;
       }
       setRoutePath(path);
       setTripData(res.data);
@@ -288,7 +292,7 @@ const MapDriver = () => {
     setIsDriving(true);
 
     const token = localStorage.getItem("token");
-    const wsUrl = `ws://${window.location.host.split(':')[0]}:8000/ws/public/${tripData.city_id || 'public'}/driver/${tripData.trip_id}/?token=${token}`;
+    const wsUrl = getWsUrl(`/ws/public/${tripData.city_id || "public"}/driver/${tripData.trip_id}/?token=${token}`);
     ws.current = new WebSocket(wsUrl);
 
     ws.current.onopen = () => {
@@ -301,22 +305,22 @@ const MapDriver = () => {
       if (data.type === "student_update" || data.type === "passenger_update") {
         pollNextStops(tripData.trip_id);
         if (data.user_id && data.lat && data.lon) {
-           setPassengers(prev => ({
-              ...prev,
-              [data.user_id]: {
-                 lat: data.lat,
-                 lon: data.lon,
-                 hand_raised: !!data.hand_raised,
-                 last_seen: Date.now()
-              }
-           }));
+          setPassengers(prev => ({
+            ...prev,
+            [data.user_id]: {
+              lat: data.lat,
+              lon: data.lon,
+              hand_raised: !!data.hand_raised,
+              last_seen: Date.now()
+            }
+          }));
         }
       } else if (data.type === "passenger_stopped") {
-         setPassengers(prev => {
-            const next = { ...prev };
-            delete next[data.user_id];
-            return next;
-         });
+        setPassengers(prev => {
+          const next = { ...prev };
+          delete next[data.user_id];
+          return next;
+        });
       }
     };
 
@@ -333,7 +337,7 @@ const MapDriver = () => {
       if (ws.current && ws.current.readyState === WebSocket.OPEN) {
         ws.current.send(JSON.stringify({ lat: pos[0], lon: pos[1] }));
       }
-      index += 5; 
+      index += 5;
     }, 1000);
   };
 
@@ -341,13 +345,13 @@ const MapDriver = () => {
     if (simulationRef.current) clearInterval(simulationRef.current);
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     if (ws.current) ws.current.close();
-    
+
     if (tripData?.trip_id) {
-       try {
-           await api.post(`/api/trips/end/${tripData.trip_id}/`);
-       } catch (e) {
-           console.error(e);
-       }
+      try {
+        await api.post(`/api/trips/end/${tripData.trip_id}/`);
+      } catch (e) {
+        console.error(e);
+      }
     }
 
     setIsDriving(false);
@@ -368,7 +372,7 @@ const MapDriver = () => {
         const next = { ...prev };
         let changed = false;
         Object.entries(next).forEach(([id, p]) => {
-          if (now - p.last_seen > 300000) { 
+          if (now - p.last_seen > 300000) {
             delete next[id];
             changed = true;
           }
@@ -394,6 +398,7 @@ const MapDriver = () => {
       <div className="flex-1 w-full relative z-0 h-screen">
         {/* Map Area - Absolute Layer to fill screen behind panels */}
         <div className="absolute inset-0 z-0">
+<<<<<<< HEAD
             <style>
                 {`
                     .maplibregl-map { position: absolute; top: 0; bottom: 0; width: 100%; }
@@ -401,6 +406,15 @@ const MapDriver = () => {
                 `}
             </style>
             <div ref={mapContainer} className="w-full h-full" />
+=======
+          <style>
+            {`
+                    .maplibregl-map { position: absolute; top: 0; bottom: 0; width: 100%; }
+                    .maplibregl-canvas { position: absolute; top: 0; bottom: 0; width: 100%; height: 100%; }
+                `}
+          </style>
+          <div ref={mapContainer} className="w-full h-full" />
+>>>>>>> temp-save
         </div>
 
         {/* Driver Console Overlay - Z-indexed above map */}
@@ -413,7 +427,11 @@ const MapDriver = () => {
             </div>
             {isDriving && (
               <div className="flex items-center gap-2">
+<<<<<<< HEAD
                 <button 
+=======
+                <button
+>>>>>>> temp-save
                   onClick={() => setShowManifest(!showManifest)}
                   className={`px-3 py-1 rounded text-[10px] font-bold uppercase border transition-all ${showManifest ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
                 >
@@ -481,16 +499,17 @@ const MapDriver = () => {
             {isDriving && (
               <div className="space-y-4 animate-fade-in">
                 <div className="flex justify-between items-end pb-2 border-b border-slate-200">
-                   <h3 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
-                      <StopCircle size={14} className="text-slate-400"/> Next Stops
-                   </h3>
-                   <span className="text-[10px] text-slate-400 flex items-center gap-1"><RefreshCw size={10} className="animate-spin"/> Live Polling</span>
+                  <h3 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
+                    <StopCircle size={14} className="text-slate-400" /> Next Stops
+                  </h3>
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1"><RefreshCw size={10} className="animate-spin" /> Live Polling</span>
                 </div>
 
                 {nextStops.length === 0 ? (
                   <div className="text-sm text-slate-500 text-center py-4">Locating next stops...</div>
                 ) : (
                   <div className="space-y-3">
+<<<<<<< HEAD
                      {nextStops.map((stop, index) => (
                         <div key={`${stop.id}_${index}`} className={`p-4 rounded-xl border ${index === 0 ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-100'}`}>
                            <div className="flex justify-between items-start mb-2">
@@ -499,8 +518,18 @@ const MapDriver = () => {
                                  <Users size={12}/> {stop.waiting_count}
                               </div>
                            </div>
+=======
+                    {nextStops.map((stop, index) => (
+                      <div key={`${stop.id}_${index}`} className={`p-4 rounded-xl border ${index === 0 ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-100'}`}>
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="font-bold text-slate-800">{stop.name}</span>
+                          <div className="flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-xs font-bold">
+                            <Users size={12} /> {stop.waiting_count}
+                          </div>
+>>>>>>> temp-save
                         </div>
-                     ))}
+                      </div>
+                    ))}
                   </div>
                 )}
 
@@ -517,12 +546,21 @@ const MapDriver = () => {
 
         {/* Right Side Manifest (Sliding Panel) */}
         {isDriving && showManifest && (
+<<<<<<< HEAD
             <div className="absolute right-0 top-0 w-96 h-full z-[1001] animate-in slide-in-from-right duration-300">
                 <DriverManifest 
                     vehicleId={user?.profile?.assigned_vehicle_id} 
                     tripId={tripData?.trip_id} 
                 />
             </div>
+=======
+          <div className="absolute right-0 top-0 w-96 h-full z-[1001] animate-in slide-in-from-right duration-300">
+            <DriverManifest
+              vehicleId={user?.profile?.assigned_vehicle_id}
+              tripId={tripData?.trip_id}
+            />
+          </div>
+>>>>>>> temp-save
         )}
       </div>
     </div>

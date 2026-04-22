@@ -10,6 +10,7 @@ import uuid
 
 from django.contrib.auth.models import BaseUserManager
 
+
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
@@ -35,6 +36,7 @@ class UserManager(BaseUserManager):
 
 # ─── City (replaces University) ───────────────────────────────────────────────
 
+
 class City(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
@@ -52,6 +54,7 @@ class City(models.Model):
 
 
 # ─── User ─────────────────────────────────────────────────────────────────────
+
 
 class User(AbstractUser):
     ROLE_CHOICES = (
@@ -91,6 +94,7 @@ User_model = get_user_model()
 
 # ─── Route ────────────────────────────────────────────────────────────────────
 
+
 class Route(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     city = models.ForeignKey(
@@ -113,6 +117,7 @@ class Route(models.Model):
 
 # ─── Stop ─────────────────────────────────────────────────────────────────────
 
+
 class Stop(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     route = models.ForeignKey(Route, on_delete=models.CASCADE, related_name="stops")
@@ -132,8 +137,10 @@ class Stop(models.Model):
 
 # ─── Schedule Management ──────────────────────────────────────────────────────
 
+
 class TripSchedule(models.Model):
     """Represents a specific daily instance/time-slot of a route (e.g. 8:30 AM Slot)."""
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     route = models.ForeignKey(Route, on_delete=models.CASCADE, related_name="schedules")
     scheduled_start_time = models.TimeField()
@@ -146,8 +153,11 @@ class TripSchedule(models.Model):
 
 class StopTime(models.Model):
     """Static schedule for when a bus SHOULD be at a specific stop for a TripSchedule."""
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    trip_schedule = models.ForeignKey(TripSchedule, on_delete=models.CASCADE, related_name="stop_times")
+    trip_schedule = models.ForeignKey(
+        TripSchedule, on_delete=models.CASCADE, related_name="stop_times"
+    )
     stop = models.ForeignKey(Stop, on_delete=models.CASCADE)
     arrival_time = models.TimeField()
     stop_sequence = models.PositiveIntegerField()
@@ -161,6 +171,7 @@ class StopTime(models.Model):
 
 
 # ─── Vehicle ──────────────────────────────────────────────────────────────────
+
 
 class Vehicle(models.Model):
     VEHICLE_TYPE_CHOICES = [
@@ -200,8 +211,13 @@ class Vehicle(models.Model):
 
 class VehicleState(models.Model):
     """Real-time transient state of a vehicle, including schedule adherence."""
-    vehicle = models.OneToOneField(Vehicle, on_delete=models.CASCADE, related_name="state")
-    active_trip = models.ForeignKey("ActiveTrip", on_delete=models.SET_NULL, null=True, blank=True)
+
+    vehicle = models.OneToOneField(
+        Vehicle, on_delete=models.CASCADE, related_name="state"
+    )
+    active_trip = models.ForeignKey(
+        "ActiveTrip", on_delete=models.SET_NULL, null=True, blank=True
+    )
     delay_minutes = models.IntegerField(default=0)
     last_updated = models.DateTimeField(auto_now=True)
 
@@ -211,6 +227,7 @@ class VehicleState(models.Model):
 
 # ─── Active Trip ──────────────────────────────────────────────────────────────
 
+
 class ActiveTrip(models.Model):
     STATUS_CHOICES = (
         ("active", "Active"),
@@ -218,10 +235,16 @@ class ActiveTrip(models.Model):
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, null=True, blank=True)
+    vehicle = models.ForeignKey(
+        Vehicle, on_delete=models.CASCADE, null=True, blank=True
+    )
     route = models.ForeignKey(Route, on_delete=models.CASCADE)
     trip_schedule = models.ForeignKey(
-        TripSchedule, on_delete=models.SET_NULL, null=True, blank=True, related_name="active_trips"
+        TripSchedule,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="active_trips",
     )
     driver = models.ForeignKey(
         User_model,
@@ -248,11 +271,12 @@ class ActiveTrip(models.Model):
         return f"Trip {self.id} - {self.route.name} [{self.status}]"
 
     def save(self, *args, **kwargs):
-        self.is_active = (self.status == "active")
+        self.is_active = self.status == "active"
         super().save(*args, **kwargs)
 
 
 # ─── Public Passenger Profile (replaces StudentProfile) ───────────────────────
+
 
 class PublicPassengerProfile(models.Model):
     user = models.OneToOneField(
@@ -279,6 +303,7 @@ class PublicPassengerProfile(models.Model):
 
 # ─── Boarding Requests ────────────────────────────────────────────────────────
 
+
 class BoardingRequest(models.Model):
     STATUS_CHOICES = (
         ("pending", "Pending"),
@@ -289,23 +314,36 @@ class BoardingRequest(models.Model):
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    passenger = models.ForeignKey(User_model, on_delete=models.CASCADE, related_name="boarding_requests")
-    trip = models.ForeignKey(ActiveTrip, on_delete=models.CASCADE, related_name="boarding_requests")
-    pickup_stop = models.ForeignKey(Stop, on_delete=models.CASCADE, related_name="boarding_requests")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True)
-    
+    passenger = models.ForeignKey(
+        User_model, on_delete=models.CASCADE, related_name="boarding_requests"
+    )
+    trip = models.ForeignKey(
+        ActiveTrip, on_delete=models.CASCADE, related_name="boarding_requests"
+    )
+    pickup_stop = models.ForeignKey(
+        Stop, on_delete=models.CASCADE, related_name="boarding_requests"
+    )
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
-        unique_together = ("passenger", "trip", "status") # Prevent double booking for same trip unless cancelled
+        unique_together = (
+            "passenger",
+            "trip",
+            "status",
+        )  # Prevent double booking for same trip unless cancelled
 
     def __str__(self):
         return f"Request {self.id}: {self.passenger.email} @ {self.pickup_stop.name} [{self.status}]"
 
 
 # ─── Public Driver Profile (replaces DriverProfile) ───────────────────────────
+
 
 class PublicDriverProfile(models.Model):
     VEHICLE_TYPE_CHOICES = (
@@ -322,7 +360,9 @@ class PublicDriverProfile(models.Model):
     )
     display_name = models.CharField(max_length=255, default="", blank=True)
     phone_number = models.CharField(max_length=20, default="", blank=True)
-    license_number = models.CharField(max_length=100, unique=True, null=True, blank=True, default=None)
+    license_number = models.CharField(
+        max_length=100, unique=True, null=True, blank=True, default=None
+    )
     vehicle_number = models.CharField(max_length=50, default="", blank=True)
     vehicle_type = models.CharField(
         max_length=20, choices=VEHICLE_TYPE_CHOICES, default="bus"
@@ -337,16 +377,23 @@ class PublicDriverProfile(models.Model):
 
 # ─── Hybrid Location Logs ─────────────────────────────────────────────────────
 
+
 class HybridLog(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User_model, on_delete=models.CASCADE, related_name="hybrid_logs")
-    vehicle = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, null=True, blank=True)
-    trip = models.ForeignKey(ActiveTrip, on_delete=models.SET_NULL, null=True, blank=True)
-    
+    user = models.ForeignKey(
+        User_model, on_delete=models.CASCADE, related_name="hybrid_logs"
+    )
+    vehicle = models.ForeignKey(
+        Vehicle, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    trip = models.ForeignKey(
+        ActiveTrip, on_delete=models.SET_NULL, null=True, blank=True
+    )
+
     # Raw signal data
     cell_towers = models.JSONField(default=list, blank=True)  # List of dicts
-    wifi_aps = models.JSONField(default=list, blank=True)     # List of dicts
-    
+    wifi_aps = models.JSONField(default=list, blank=True)  # List of dicts
+
     # Metadata
     device_id = models.CharField(max_length=255, db_index=True, null=True, blank=True)
     timestamp = models.DateTimeField(default=timezone.now, db_index=True)

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import api from "../utils/api";
+import api from "../lib/api";
 import {
   Trash2,
   Save,
@@ -14,7 +14,7 @@ import {
   School,
   Bus,
 } from "lucide-react";
-import LocationSearch from "./Shared/LocationSearch";
+import LocationSearch from "./LocationSearch";
 
 const AdminRouteManager = ({ onBack, preSelectedCity }) => {
   const mapContainer = useRef(null);

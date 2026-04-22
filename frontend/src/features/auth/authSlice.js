@@ -1,7 +1,7 @@
 // VAYY | src/features/auth/authSlice.js | Status: 🔧 Fixed
 // Reason: Store refreshToken; add JWT exp decode helper array + restoreAuth logic.
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import api from "../../utils/api";
+import api from "../../lib/api";
 
 const getPersistedUser = () => {
   try {
@@ -23,7 +23,7 @@ export const loginUser = createAsyncThunk(
         role: data.role,
         name: data.name,
         email: data.email,
-        university: data.university,
+        city: data.city,
       };
 
       localStorage.setItem("token", data.access);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import api from "../utils/api";
+import api from "../lib/api";
 import { Plus, X, Search, Building, Trash2 } from "lucide-react";
 
 const AdminUsersManager = () => {

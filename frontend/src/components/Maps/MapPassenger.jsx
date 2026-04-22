@@ -4,7 +4,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import api from "../../utils/api";
+import api, { getWsUrl } from "../../lib/api";
 import { Navigation, Clock, Bus, RefreshCw, MapPin, Hand, Search, ArrowRight } from "lucide-react";
 import Header from "../Layout/Header";
 import LocationSearch from "../LocationSearch";
@@ -261,8 +261,8 @@ const MapPassenger = () => {
 
     // Add tripId to the WebSocket URL if selected
     const wsUrl = tripId 
-      ? `ws://${window.location.host.split(":")[0]}:8000/ws/public/${groupId}/passenger/${tripId}/?token=${token}`
-      : `ws://${window.location.host.split(":")[0]}:8000/ws/public/${groupId}/passenger/?token=${token}`;
+      ? getWsUrl(`/ws/public/${groupId}/passenger/${tripId}/?token=${token}`)
+      : getWsUrl(`/ws/public/${groupId}/passenger/?token=${token}`);
 
     ws.current = new WebSocket(wsUrl);
 

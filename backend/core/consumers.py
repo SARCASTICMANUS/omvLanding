@@ -8,6 +8,7 @@ from core.services.redis_service import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
+
 class VayyConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         kwargs = self.scope["url_route"]["kwargs"]
@@ -80,11 +81,12 @@ class VayyConsumer(AsyncWebsocketConsumer):
                 # 1. Use centralized logic for Redis update, delay calculation, and broadcasting
                 # Note: process_gps_update handles group_send to trip and city groups
                 from core.utils import process_gps_update
+
                 await database_sync_to_async(process_gps_update)(
                     trip_id=self.trip_id, lat=lat, lon=lon, source="websocket"
                 )
 
-                # 2. (Optional) Still compute next stop ETAs for trip-specific back-broadcast 
+                # 2. (Optional) Still compute next stop ETAs for trip-specific back-broadcast
                 # if the consumer needs to send more detailed info specifically back to the driver
                 # but process_gps_update already covers the main passenger/admin needs.
 
@@ -264,20 +266,20 @@ class VayyConsumer(AsyncWebsocketConsumer):
         """
         # Full object contains: trip_id, lat, lon, bus_number, route_id, next_stop_eta, source, delay_minutes
         # Delta contains: id, lat, lon, h (heading), dc (delay_change)
-        
+
         delta_payload = {
-            "type": "v_delta", # Shorter type name
+            "type": "v_delta",  # Shorter type name
             "id": event.get("trip_id"),
             "lat": round(event.get("lat", 0), 6),
             "lon": round(event.get("lon", 0), 6),
-            "h": event.get("heading", 0), # heading
-            "d": event.get("delay_minutes", 0), # current delay
+            "h": event.get("heading", 0),  # heading
+            "d": event.get("delay_minutes", 0),  # current delay
         }
-        
+
         # Only send bus_number/route_id if it's the first time or every N frames
         # For simplicity in this MVP, we always send ID, lat, lon, h, d.
         # This still removes large strings like 'next_stop_eta' and 'bus_number' from every frame.
-        
+
         await self.send(text_data=json.dumps(delta_payload))
 
     async def vehicle_update(self, event):
@@ -289,7 +291,9 @@ class VayyConsumer(AsyncWebsocketConsumer):
             "lon": round(event.get("lon", 0), 6),
             "h": event.get("heading", 0),
             "d": event.get("delay_minutes", 0),
-            "eta": event.get("next_stop_eta", [])[:1], # Only send the very next stop ETA
+            "eta": event.get("next_stop_eta", [])[
+                :1
+            ],  # Only send the very next stop ETA
         }
         await self.send(text_data=json.dumps(delta_payload))
 
@@ -308,9 +312,10 @@ class VayyConsumer(AsyncWebsocketConsumer):
 
 class DriverConsumer(AsyncWebsocketConsumer):
     """
-    Dedicated consumer for Drivers to receive high-priority 
+    Dedicated consumer for Drivers to receive high-priority
     manifest updates and alerts.
     """
+
     async def connect(self):
         self.vehicle_id = self.scope["url_route"]["kwargs"].get("vehicle_id")
         self.user = self.scope["user"]
@@ -322,33 +327,38 @@ class DriverConsumer(AsyncWebsocketConsumer):
 
         self.manifest_group = f"manifest_{self.vehicle_id}"
         await self.channel_layer.group_add(self.manifest_group, self.channel_name)
-        
+
         # Also join trip-specific group if they have an active trip
         self.trip_id = await self._get_active_trip_id(self.user.id)
         if self.trip_id:
-            await self.channel_layer.group_add(f"trip_{self.trip_id}", self.channel_name)
+            await self.channel_layer.group_add(
+                f"trip_{self.trip_id}", self.channel_name
+            )
 
         await self.accept()
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.manifest_group, self.channel_name)
         if hasattr(self, "trip_id") and self.trip_id:
-            await self.channel_layer.group_discard(f"trip_{self.trip_id}", self.channel_name)
+            await self.channel_layer.group_discard(
+                f"trip_{self.trip_id}", self.channel_name
+            )
 
     @database_sync_to_async
     def _get_active_trip_id(self, user_id):
         from core.models import ActiveTrip
+
         trip = ActiveTrip.objects.filter(driver_id=user_id, status="active").first()
         return str(trip.id) if trip else None
 
     async def manifest_update(self, event):
         """
-        Receives manifest changes, filters for the next 3 stops based 
+        Receives manifest changes, filters for the next 3 stops based
         on current location, and pushes to the driver.
         """
         import json
         from core.services.manifest import ManifestManager
-        
+
         trip_id = event.get("trip_id")
         if not trip_id:
             return
@@ -368,7 +378,9 @@ class DriverConsumer(AsyncWebsocketConsumer):
             last_order = int(last_order_raw) if last_order_raw else 0
         else:
             # Fallback to sync if async redis not available (unlikely in this env)
-            last_order_raw = await database_sync_to_async(mm.redis.get)(f"driver_last_stop:{trip_id}")
+            last_order_raw = await database_sync_to_async(mm.redis.get)(
+                f"driver_last_stop:{trip_id}"
+            )
             last_order = int(last_order_raw) if last_order_raw else 0
 
         all_stops = manifest.get("stops", [])
@@ -379,7 +391,7 @@ class DriverConsumer(AsyncWebsocketConsumer):
             **event,
             "next_3_stops": next_3_stops,
             "total_pending": manifest.get("total_pending", 0),
-            "last_updated": manifest.get("last_updated")
+            "last_updated": manifest.get("last_updated"),
         }
 
         await self.send(text_data=json.dumps(enriched_payload))
