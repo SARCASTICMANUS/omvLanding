@@ -4,7 +4,8 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from core.models import (
     City, Route, Stop, Vehicle,
-    ActiveTrip, PublicPassengerProfile, PublicDriverProfile
+    ActiveTrip, PublicPassengerProfile, PublicDriverProfile,
+    BoardingRequest
 )
 from django.contrib.gis.geos import Point, LineString
 
@@ -71,6 +72,7 @@ class PassengerProfileSerializer(serializers.ModelSerializer):
 
 class PublicDriverProfileSerializer(serializers.ModelSerializer):
     assigned_vehicle_number = serializers.SerializerMethodField()
+    assigned_vehicle_id = serializers.SerializerMethodField()
     assigned_route_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -87,12 +89,17 @@ class PublicDriverProfileSerializer(serializers.ModelSerializer):
             "rating",
             "total_trips",
             "assigned_vehicle_number",
+            "assigned_vehicle_id",
             "assigned_route_name",
         )
 
     def get_assigned_vehicle_number(self, obj):
         vehicle = getattr(obj.user, "assigned_vehicle", None)
         return vehicle.vehicle_number if vehicle else ""
+
+    def get_assigned_vehicle_id(self, obj):
+        vehicle = getattr(obj.user, "assigned_vehicle", None)
+        return str(vehicle.id) if vehicle else ""
 
     def get_assigned_route_name(self, obj):
         vehicle = getattr(obj.user, "assigned_vehicle", None)
@@ -240,10 +247,47 @@ class VehicleSerializer(serializers.ModelSerializer):
 class ActiveTripSerializer(serializers.ModelSerializer):
     route_name = serializers.CharField(source="route.name", read_only=True)
     bus_number = serializers.CharField(source="route.bus_number", read_only=True)
+    delay_minutes = serializers.SerializerMethodField()
 
     class Meta:
         model = ActiveTrip
-        fields = ("id", "driver", "route", "route_name", "bus_number", "status", "started_at", "last_updated")
+        fields = (
+            "id",
+            "driver",
+            "route",
+            "route_name",
+            "bus_number",
+            "status",
+            "started_at",
+            "last_updated",
+            "delay_minutes",
+        )
+
+    def get_delay_minutes(self, obj):
+        if obj.vehicle and hasattr(obj.vehicle, "state"):
+            return obj.vehicle.state.delay_minutes
+        return 0
+
+
+class BoardingRequestSerializer(serializers.ModelSerializer):
+    passenger_name = serializers.CharField(source="passenger.get_full_name", read_only=True)
+    stop_name = serializers.CharField(source="pickup_stop.name", read_only=True)
+    trip_bus_number = serializers.CharField(source="trip.route.bus_number", read_only=True)
+
+    class Meta:
+        model = BoardingRequest
+        fields = (
+            "id",
+            "passenger",
+            "passenger_name",
+            "trip",
+            "trip_bus_number",
+            "pickup_stop",
+            "stop_name",
+            "status",
+            "created_at",
+        )
+        read_only_fields = ("passenger", "status")
 
 
 class OTPSerializer(serializers.Serializer):

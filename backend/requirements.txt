@@ -21,6 +21,7 @@ django-environ>=0.11.2
 # Geospatial Utilities
 geopy>=2.4.1       # For Global Search (Nominatim)
 polyline>=2.0.1    # To decode OSRM route strings
+numpy>=1.26.0
 
 djangorestframework-simplejwt>=5.3.0
 

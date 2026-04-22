@@ -8,6 +8,7 @@ import api from "../../lib/api";
 import { Navigation, Clock, Bus, RefreshCw, MapPin, Hand, Search, ArrowRight } from "lucide-react";
 import Header from "../Layout/Header";
 import LocationSearch from "../LocationSearch";
+import ProximityAlertModal from "../Shared/ProximityAlertModal";
 
 const MapPassenger = () => {
   const mapContainer = useRef(null);
@@ -21,6 +22,7 @@ const MapPassenger = () => {
   const [locationError, setLocationError] = useState(null);
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [stopDistances, setStopDistances] = useState({}); // { route_id: distance_string }
+  const [activeAlert, setActiveAlert] = useState(null);
   
   // New state for filtered trips
   const [pickup, setPickup] = useState(null);
@@ -143,6 +145,7 @@ const MapPassenger = () => {
         points.push([bus.pos[1], bus.pos[0]]); // lon, lat
 
         if (!markers.current[`bus-${tripId}`]) {
+          // Initialize marker
           const el = document.createElement("div");
           el.className = "bus-marker";
           el.style.width = "20px";
@@ -150,27 +153,51 @@ const MapPassenger = () => {
           el.style.borderRadius = "50%";
           el.style.backgroundColor = "#ef4444";
           el.style.border = "3px solid white";
-          el.style.cursor = "pointer";
           
-          markers.current[`bus-${tripId}`] = new maplibregl.Marker({ element: el })
-            .setLngLat([bus.pos[1], bus.pos[0]])
-            .setPopup(new maplibregl.Popup().setHTML(`
-              <div class="text-center font-bold text-slate-800">
-                ${bus.bus_number ? `Bus ${bus.bus_number}` : "Public Bus"}
-              </div>
-              ${bus.route_name ? `<div class="text-xs text-slate-500 text-center">${bus.route_name}</div>` : ""}
-            `))
-            .addTo(map.current);
+          markers.current[`bus-${tripId}`] = {
+            marker: new maplibregl.Marker({ element: el })
+              .setLngLat([bus.pos[1], bus.pos[0]])
+              .addTo(map.current),
+            targetPos: [bus.pos[1], bus.pos[0]],
+            startPos: [bus.pos[1], bus.pos[0]],
+            startTime: null
+          };
         } else {
-          markers.current[`bus-${tripId}`].setLngLat([bus.pos[1], bus.pos[0]]);
+          // Animate to new position
+          const m = markers.current[`bus-${tripId}`];
+          m.startPos = m.marker.getLngLat().toArray();
+          m.targetPos = [bus.pos[1], bus.pos[0]];
+          m.startTime = performance.now();
         }
       }
     });
 
+    // Animation Loop
+    const animate = (time) => {
+      let active = false;
+      Object.entries(markers.current).forEach(([key, m]) => {
+        if (key.startsWith("bus-") && m.startTime) {
+          const elapsed = time - m.startTime;
+          const duration = 3000; // 3 seconds
+          const progress = Math.min(elapsed / duration, 1);
+          
+          const lat = m.startPos[1] + (m.targetPos[1] - m.startPos[1]) * progress;
+          const lon = m.startPos[0] + (m.targetPos[0] - m.startPos[0]) * progress;
+          
+          m.marker.setLngLat([lon, lat]);
+          
+          if (progress < 1) active = true;
+          else m.startTime = null;
+        }
+      });
+      if (active) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+
     // Remove old bus markers
     Object.keys(markers.current).forEach(key => {
       if (key.startsWith("bus-") && !currentBusIds.has(key.replace("bus-", ""))) {
-        markers.current[key].remove();
+        markers.current[key].marker.remove();
         delete markers.current[key];
       }
     });
@@ -269,6 +296,8 @@ const MapPassenger = () => {
           delete next[data.trip_id];
           return next;
         });
+      } else if (data.type === "proximity_alert") {
+         setActiveAlert(data);
       }
     };
 
@@ -426,6 +455,7 @@ const MapPassenger = () => {
   return (
     <div className="flex flex-col h-screen w-full bg-slate-50 font-sans">
       <Header />
+      <ProximityAlertModal alert={activeAlert} onClose={() => setActiveAlert(null)} />
 
       <div className="flex-1 w-full relative z-0">
         {/* Floating Status Panel */}
