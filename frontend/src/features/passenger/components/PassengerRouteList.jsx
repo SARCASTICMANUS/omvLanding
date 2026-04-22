@@ -486,6 +486,7 @@ export default function PassengerRouteList({
   onUpdatePickup,
   onUpdateDestination,
   onReSearchRoutes,
+  onShowAllBuses,
 }) {
   const [showAllBuses, setShowAllBuses] = useState(false);
 
@@ -495,6 +496,13 @@ export default function PassengerRouteList({
   }, [trips, showAllBuses]);
 
   const handleTrackNow = (trip) => onChooseRoute?.(trip);
+
+  const toggleShowAllBuses = () => {
+    if (!showAllBuses && onShowAllBuses) {
+      onShowAllBuses();
+    }
+    setShowAllBuses((prev) => !prev);
+  };
 
   const pickupText =
     pickup?.display_name || pickup?.name || "Choose pickup point";
@@ -591,7 +599,7 @@ export default function PassengerRouteList({
                   <div className="mt-4 space-y-3 lg:mt-6">
                     <button
                       type="button"
-                      onClick={() => setShowAllBuses((prev) => !prev)}
+                      onClick={toggleShowAllBuses}
                       className="flex h-[50px] w-full items-center justify-center rounded-[12px] bg-[#00f08a] text-[13px] font-extrabold text-black shadow-[0_10px_24px_rgba(0,240,138,0.24)] transition hover:brightness-105 active:scale-[0.99]"
                     >
                       {showAllBuses

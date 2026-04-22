@@ -3,7 +3,7 @@ import PassengerTripPlanner from "./PassengerTripPlanner";
 import PassengerRouteList from "./PassengerRouteList";
 import PassengerStopsTimeline from "./PassengerStopsTimeline";
 import PassengerLiveTracking from "./PassengerLiveTracking";
-import { passengerTrips as passengerData } from "../../../mock/passengerData";
+import api from "../../../lib/api";
 
 const STEPS = {
   PLANNER: "planner",
@@ -27,41 +27,34 @@ export default function PassengerFlow({ onBackToDashboard }) {
     typeof point.lon === "number" &&
     Number.isFinite(point.lon);
 
-  const normalizeText = (value) =>
-    String(value || "")
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, " ");
-
-  // ✅ USE passengerData HERE
+  // ✅ USE API HERE
   const fetchFilteredTrips = async (from, to) => {
     if (!hasValidCoords(from) || !hasValidCoords(to)) {
       console.error("Invalid pickup/drop coordinates", { from, to });
       return [];
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    try {
+      const response = await api.post("/api/passenger/filtered-trips/", {
+        pickup: { lat: from.lat, lon: from.lon },
+        destination: { lat: to.lat, lon: to.lon },
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Failed to fetch filtered trips", error);
+      return [];
+    }
+  };
 
-    const fromName = normalizeText(from?.name || from?.display_name);
-    const toName = normalizeText(to?.name || to?.display_name);
-
-    const filtered = passengerData.filter((trip) => {
-      const tripPickup = normalizeText(trip.pickup_name);
-      const tripDestination = normalizeText(trip.destination_name);
-
-      const pickupMatch = fromName
-        ? tripPickup.includes(fromName) || fromName.includes(tripPickup)
-        : true;
-
-      const destinationMatch = toName
-        ? tripDestination.includes(toName) ||
-          toName.includes(tripDestination)
-        : true;
-
-      return pickupMatch && destinationMatch; // ✅ FIXED
-    });
-
-    return filtered;
+  const fetchAllTrips = async () => {
+    try {
+      const response = await api.get("/api/passenger/dashboard/");
+      // Dashboard view returns { active_trips: [...] }
+      return response.data.active_trips || [];
+    } catch (error) {
+      console.error("Failed to fetch all trips", error);
+      return [];
+    }
   };
 
   const handlePlannerNext = async ({ from, to }) => {
@@ -79,6 +72,18 @@ export default function PassengerFlow({ onBackToDashboard }) {
       console.error("Failed to load trips", error);
       setFilteredTrips([]);
       setCurrentStep(STEPS.ROUTE_LIST);
+    } finally {
+      setLoadingRoutes(false);
+    }
+  };
+
+  const handleShowAllBuses = async () => {
+    try {
+      setLoadingRoutes(true);
+      const allTrips = await fetchAllTrips();
+      setFilteredTrips(allTrips);
+    } catch (error) {
+      console.error("Failed to load all buses", error);
     } finally {
       setLoadingRoutes(false);
     }
@@ -144,6 +149,7 @@ export default function PassengerFlow({ onBackToDashboard }) {
         onUpdatePickup={handleUpdatePickup}
         onUpdateDestination={handleUpdateDestination}
         onReSearchRoutes={handleReSearchRoutes}
+        onShowAllBuses={handleShowAllBuses}
       />
     );
   }

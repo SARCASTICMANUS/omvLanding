@@ -14,7 +14,7 @@ import {
   School,
   Bus,
 } from "lucide-react";
-import LocationSearch from "./Shared/LocationSearch";
+import LocationSearch from "./LocationSearch";
 
 const AdminRouteManager = ({ onBack, preSelectedCity }) => {
   const mapContainer = useRef(null);

@@ -58,4 +58,11 @@ api.interceptors.response.use(
   },
 );
 
+export const getWsUrl = (path) => {
+  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const wsProtocol = baseUrl.startsWith("https") ? "wss" : "ws";
+  const wsHost = baseUrl.replace(/^https?:\/\//, "");
+  return `${wsProtocol}://${wsHost}${path}`;
+};
+
 export default api;

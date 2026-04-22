@@ -23,7 +23,7 @@ export const loginUser = createAsyncThunk(
         role: data.role,
         name: data.name,
         email: data.email,
-        university: data.university,
+        city: data.city,
       };
 
       localStorage.setItem("token", data.access);

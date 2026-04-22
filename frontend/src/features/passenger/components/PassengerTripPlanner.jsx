@@ -6,7 +6,7 @@ import {
   ArrowRight,
   Compass,
 } from "lucide-react";
-import LocationSearch from "../../../components/Shared/LocationSearch";
+import LocationSearch from "../../../components/LocationSearch";
 import img from "../../../assets/img1.png";
 
 /**

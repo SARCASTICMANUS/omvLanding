@@ -42,6 +42,13 @@ const getRedirectPathByRole = (role) => {
     return "/admin";
   }
 
+  if (
+    normalizedRole === "passenger" ||
+    normalizedRole === "student"
+  ) {
+    return "/passenger/live";
+  }
+
   return "/passenger/live";
 };
 
@@ -242,7 +249,7 @@ function App() {
           <Route
             path="/passenger/live"
             element={
-              <ProtectedRoute allowedRoles={["passenger"]}>
+              <ProtectedRoute allowedRoles={["passenger", "student"]}>
                 <AppLayout>
                   <PassengerLivePage />
                 </AppLayout>

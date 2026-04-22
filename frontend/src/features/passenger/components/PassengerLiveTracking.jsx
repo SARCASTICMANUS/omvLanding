@@ -8,16 +8,7 @@ import {
   Hand,
   RefreshCw,
 } from "lucide-react";
-import api from "../../../lib/api";
-
-function getWsBaseUrl() {
-  const envUrl = import.meta.env.VITE_WS_URL;
-  if (envUrl) return envUrl.replace(/\/$/, "");
-
-  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  const host = window.location.hostname;
-  return `${protocol}://${host}:8000`;
-}
+import api, { getWsUrl } from "../../../lib/api";
 
 function formatMinutesFromEta(nextStopEta) {
   if (!nextStopEta?.[0]?.duration_seconds) return "--";
@@ -189,9 +180,8 @@ export default function PassengerLiveTracking({
       setWsStatus("connecting");
 
       const token = localStorage.getItem("token");
-      const wsBase = getWsBaseUrl();
       const groupId = "public";
-      const socketUrl = `${wsBase}/ws/public/${groupId}/passenger/${tripId}/?token=${token || ""}`;
+      const socketUrl = getWsUrl(`/ws/public/${groupId}/passenger/${tripId}/?token=${token || ""}`);
 
       ws.current = new WebSocket(socketUrl);
 
@@ -257,9 +247,8 @@ export default function PassengerLiveTracking({
       reconnectAttempts.current += 1;
 
       const token = localStorage.getItem("token");
-      const wsBase = getWsBaseUrl();
       const groupId = "public";
-      const socketUrl = `${wsBase}/ws/public/${groupId}/passenger/${tripId}/?token=${token || ""}`;
+      const socketUrl = getWsUrl(`/ws/public/${groupId}/passenger/${tripId}/?token=${token || ""}`);
 
       cleanupWebSocket();
       setWsStatus("connecting");

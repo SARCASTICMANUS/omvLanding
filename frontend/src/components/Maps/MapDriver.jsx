@@ -4,7 +4,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import api from "../../utils/api";
+import api, { getWsUrl } from "../../lib/api";
 import { useSelector } from "react-redux";
 import DriverManifest from "../DriverManifest";
 import {
@@ -288,7 +288,7 @@ const MapDriver = () => {
     setIsDriving(true);
 
     const token = localStorage.getItem("token");
-    const wsUrl = `ws://${window.location.host.split(':')[0]}:8000/ws/public/${tripData.city_id || 'public'}/driver/${tripData.trip_id}/?token=${token}`;
+    const wsUrl = getWsUrl(`/ws/public/${tripData.city_id || "public"}/driver/${tripData.trip_id}/?token=${token}`);
     ws.current = new WebSocket(wsUrl);
 
     ws.current.onopen = () => {
