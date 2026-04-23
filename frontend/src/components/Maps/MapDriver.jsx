@@ -4,11 +4,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-<<<<<<< HEAD
-import api from "../../utils/api";
-=======
 import api, { getWsUrl } from "../../lib/api";
->>>>>>> temp-save
 import { useSelector } from "react-redux";
 import DriverManifest from "../DriverManifest";
 import {
@@ -398,15 +394,6 @@ const MapDriver = () => {
       <div className="flex-1 w-full relative z-0 h-screen">
         {/* Map Area - Absolute Layer to fill screen behind panels */}
         <div className="absolute inset-0 z-0">
-<<<<<<< HEAD
-            <style>
-                {`
-                    .maplibregl-map { position: absolute; top: 0; bottom: 0; width: 100%; }
-                    .maplibregl-canvas { position: absolute; top: 0; bottom: 0; width: 100%; height: 100%; }
-                `}
-            </style>
-            <div ref={mapContainer} className="w-full h-full" />
-=======
           <style>
             {`
                     .maplibregl-map { position: absolute; top: 0; bottom: 0; width: 100%; }
@@ -414,11 +401,10 @@ const MapDriver = () => {
                 `}
           </style>
           <div ref={mapContainer} className="w-full h-full" />
->>>>>>> temp-save
-        </div>
+        </div >
 
         {/* Driver Console Overlay - Z-indexed above map */}
-        <div className="absolute top-6 left-6 w-96 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl z-[1000] border border-white/20 overflow-hidden flex flex-col max-h-[calc(100vh-120px)] transition-all duration-300">
+        < div className="absolute top-6 left-6 w-96 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl z-[1000] border border-white/20 overflow-hidden flex flex-col max-h-[calc(100vh-120px)] transition-all duration-300" >
           <div className="bg-slate-900 p-5 text-white flex items-center justify-between shadow-md">
             <div>
               <h2 className="font-bold text-lg flex items-center gap-2">
@@ -427,11 +413,7 @@ const MapDriver = () => {
             </div>
             {isDriving && (
               <div className="flex items-center gap-2">
-<<<<<<< HEAD
-                <button 
-=======
                 <button
->>>>>>> temp-save
                   onClick={() => setShowManifest(!showManifest)}
                   className={`px-3 py-1 rounded text-[10px] font-bold uppercase border transition-all ${showManifest ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
                 >
@@ -440,9 +422,9 @@ const MapDriver = () => {
                 <div className="bg-red-500/20 px-2 py-1 rounded text-[10px] font-bold text-red-100 uppercase border border-red-500/50 animate-pulse">
                   Live
                 </div>
-              </div>
+              </div >
             )}
-          </div>
+          </div >
 
           <div className="p-6 flex flex-col gap-5 overflow-y-auto">
             {!isDriving && !routePath && (
@@ -509,16 +491,6 @@ const MapDriver = () => {
                   <div className="text-sm text-slate-500 text-center py-4">Locating next stops...</div>
                 ) : (
                   <div className="space-y-3">
-<<<<<<< HEAD
-                     {nextStops.map((stop, index) => (
-                        <div key={`${stop.id}_${index}`} className={`p-4 rounded-xl border ${index === 0 ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-100'}`}>
-                           <div className="flex justify-between items-start mb-2">
-                              <span className="font-bold text-slate-800">{stop.name}</span>
-                              <div className="flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-xs font-bold">
-                                 <Users size={12}/> {stop.waiting_count}
-                              </div>
-                           </div>
-=======
                     {nextStops.map((stop, index) => (
                       <div key={`${stop.id}_${index}`} className={`p-4 rounded-xl border ${index === 0 ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-100'}`}>
                         <div className="flex justify-between items-start mb-2">
@@ -526,7 +498,6 @@ const MapDriver = () => {
                           <div className="flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-xs font-bold">
                             <Users size={12} /> {stop.waiting_count}
                           </div>
->>>>>>> temp-save
                         </div>
                       </div>
                     ))}
@@ -539,31 +510,24 @@ const MapDriver = () => {
                 >
                   <StopCircle size={20} /> End Trip
                 </button>
-              </div>
+              </div >
             )}
-          </div>
-        </div>
+          </div >
+        </div >
 
         {/* Right Side Manifest (Sliding Panel) */}
-        {isDriving && showManifest && (
-<<<<<<< HEAD
+        {
+          isDriving && showManifest && (
             <div className="absolute right-0 top-0 w-96 h-full z-[1001] animate-in slide-in-from-right duration-300">
-                <DriverManifest 
-                    vehicleId={user?.profile?.assigned_vehicle_id} 
-                    tripId={tripData?.trip_id} 
-                />
+              <DriverManifest
+                vehicleId={user?.profile?.assigned_vehicle_id}
+                tripId={tripData?.trip_id}
+              />
             </div>
-=======
-          <div className="absolute right-0 top-0 w-96 h-full z-[1001] animate-in slide-in-from-right duration-300">
-            <DriverManifest
-              vehicleId={user?.profile?.assigned_vehicle_id}
-              tripId={tripData?.trip_id}
-            />
-          </div>
->>>>>>> temp-save
-        )}
-      </div>
-    </div>
+          )
+        }
+      </div >
+    </div >
   );
 };
 
