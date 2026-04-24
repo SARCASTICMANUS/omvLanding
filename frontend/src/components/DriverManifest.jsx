@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Users, MapPin, CheckCircle2, Clock, AlertCircle } from "lucide-react";
-<<<<<<< HEAD
-=======
 import api, { getWsUrl } from "../lib/api";
->>>>>>> temp-save
 
 /**
  * DriverManifest Component
@@ -21,13 +18,7 @@ const DriverManifest = ({ vehicleId, tripId }) => {
     if (!vehicleId) return;
 
     const token = localStorage.getItem("token");
-<<<<<<< HEAD
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const host = window.location.host.split(":")[0];
-    const wsUrl = `${protocol}://${host}:8000/ws/driver/manifest/${vehicleId}/?token=${token}`;
-=======
     const wsUrl = getWsUrl(`/ws/driver/manifest/${vehicleId}/?token=${token}`);
->>>>>>> temp-save
 
     ws.current = new WebSocket(wsUrl);
 
@@ -43,19 +34,19 @@ const DriverManifest = ({ vehicleId, tripId }) => {
       if (data.type === "manifest_update") {
         // The backend broadcasts 'redis_manifest' which contains the structure
         const manifest = data.redis_manifest || {};
-        
+
         // Handle stops from the manifest object (stops_json is a string)
         let stops = [];
         if (manifest.stops) {
           stops = manifest.stops;
         } else if (manifest.stops_json) {
-           try {
-             stops = JSON.parse(manifest.stops_json);
-           } catch(e) {
-             console.error("Failed to parse stops_json", e);
-           }
+          try {
+            stops = JSON.parse(manifest.stops_json);
+          } catch (e) {
+            console.error("Failed to parse stops_json", e);
+          }
         }
-        
+
         setNext3Stops(stops);
         setTotalPending(data.total_pending || 0);
         setManifest(manifest);
@@ -78,7 +69,7 @@ const DriverManifest = ({ vehicleId, tripId }) => {
       <div className="p-6 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
         <div>
           <h2 className="text-xl font-black tracking-tight flex items-center gap-2 uppercase">
-            <Users className="text-emerald-500" size={24} /> 
+            <Users className="text-emerald-500" size={24} />
             Digital Manifest
           </h2>
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
@@ -86,15 +77,15 @@ const DriverManifest = ({ vehicleId, tripId }) => {
           </p>
         </div>
         <div className="flex flex-col items-end">
-            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-black uppercase border ${isConnected ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' : 'bg-red-500/10 border-red-500/50 text-red-400'}`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
-                {isConnected ? 'Live' : 'Offline'}
+          <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-black uppercase border ${isConnected ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' : 'bg-red-500/10 border-red-500/50 text-red-400'}`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
+            {isConnected ? 'Live' : 'Offline'}
+          </div>
+          {totalPending > 0 && (
+            <div className="mt-2 text-xs font-bold text-slate-400 flex items-center gap-1">
+              <AlertCircle size={12} className="text-amber-500" /> {totalPending} waiting
             </div>
-            {totalPending > 0 && (
-                <div className="mt-2 text-xs font-bold text-slate-400 flex items-center gap-1">
-                    <AlertCircle size={12} className="text-amber-500" /> {totalPending} waiting
-                </div>
-            )}
+          )}
         </div>
       </div>
 
@@ -124,32 +115,32 @@ const DriverManifest = ({ vehicleId, tripId }) => {
                           {stop.stop_name}
                         </h3>
                         <div className="flex items-center gap-2 mt-2">
-                           <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded">STOP #{stop.order}</span>
-                           {stop.visited && <span className="text-[10px] font-bold text-slate-500 flex items-center gap-0.5 uppercase tracking-tighter"><CheckCircle2 size={10}/> Visited</span>}
+                          <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded">STOP #{stop.order}</span>
+                          {stop.visited && <span className="text-[10px] font-bold text-slate-500 flex items-center gap-0.5 uppercase tracking-tighter"><CheckCircle2 size={10} /> Visited</span>}
                         </div>
                       </div>
 
                       {stop.passenger_count > 0 && !stop.visited && (
                         <div className="flex flex-col items-end">
-                            <div className="bg-emerald-500 text-slate-950 w-10 h-10 rounded-xl flex flex-col items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                <span className="text-xl font-black leading-none">{stop.passenger_count}</span>
-                                <span className="text-[8px] font-bold uppercase leading-none mt-0.5">Wait</span>
-                            </div>
+                          <div className="bg-emerald-500 text-slate-950 w-10 h-10 rounded-xl flex flex-col items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                            <span className="text-xl font-black leading-none">{stop.passenger_count}</span>
+                            <span className="text-[8px] font-bold uppercase leading-none mt-0.5">Wait</span>
+                          </div>
                         </div>
                       )}
                     </div>
-                    
+
                     {stop.passenger_count > 0 && !stop.visited && (
-                        <div className="mt-4 pt-4 border-t border-emerald-500/20 flex gap-2">
-                             <div className="flex -space-x-2">
-                                {Array.from({ length: Math.min(stop.passenger_count, 3) }).map((_, i) => (
-                                    <div key={i} className="w-6 h-6 rounded-full bg-emerald-600 border-2 border-slate-950 flex items-center justify-center text-[10px] font-bold">
-                                        P
-                                    </div>
-                                ))}
-                             </div>
-                             <span className="text-[10px] font-bold text-emerald-500/60 uppercase self-center ml-1">Passengers at Stop</span>
+                      <div className="mt-4 pt-4 border-t border-emerald-500/20 flex gap-2">
+                        <div className="flex -space-x-2">
+                          {Array.from({ length: Math.min(stop.passenger_count, 3) }).map((_, i) => (
+                            <div key={i} className="w-6 h-6 rounded-full bg-emerald-600 border-2 border-slate-950 flex items-center justify-center text-[10px] font-bold">
+                              P
+                            </div>
+                          ))}
                         </div>
+                        <span className="text-[10px] font-bold text-emerald-500/60 uppercase self-center ml-1">Passengers at Stop</span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -161,15 +152,15 @@ const DriverManifest = ({ vehicleId, tripId }) => {
 
       {/* Footer Info */}
       <div className="p-4 bg-slate-900/50 border-t border-slate-800">
-          <div className="flex items-center gap-3 text-slate-500">
-              <MapPin size={16} />
-              <div className="flex-1">
-                  <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-600 w-1/3"></div>
-                  </div>
-              </div>
-              <span className="text-[10px] font-black uppercase">Trip Progress</span>
+        <div className="flex items-center gap-3 text-slate-500">
+          <MapPin size={16} />
+          <div className="flex-1">
+            <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-600 w-1/3"></div>
+            </div>
           </div>
+          <span className="text-[10px] font-black uppercase">Trip Progress</span>
+        </div>
       </div>
     </div>
   );

@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { AlertCircle, X, Loader, Footprints } from "lucide-react";
-<<<<<<< HEAD
-import api from "../../utils/api";
-=======
 import api from "../../lib/api";
->>>>>>> temp-save
 
 const ProximityAlertModal = ({ alert, onClose }) => {
   const [walkingEta, setWalkingEta] = useState(null);
@@ -34,11 +30,7 @@ const ProximityAlertModal = ({ alert, onClose }) => {
         <h3 className="font-black text-lg text-slate-900">{alert.message}</h3>
         {walkingEta && (
           <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
-<<<<<<< HEAD
-            <Walking size={20} className="text-blue-500" />
-=======
             <Footprints size={20} className="text-blue-500" />
->>>>>>> temp-save
             <div>
               <p className="text-[10px] font-bold text-slate-500 uppercase">Walking Time</p>
               <p className="text-sm font-bold">{walkingEta} mins to stop</p>
