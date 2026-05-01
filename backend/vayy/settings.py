@@ -201,10 +201,13 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Point to custom user model
 AUTH_USER_MODEL = "core.User"
 
+# CELERY_BROKER_URL = os.environ.get(
+#     "CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//"
+# )
 CELERY_BEAT_SCHEDULE = {
-    "sync-locations-every-2-min": {
+    "sync-locations-every-60s": {
         "task": "core.tasks.sync_locations_to_db",
-        "schedule": 120.0,
+        "schedule": 60.0,
     },
     "cleanup-inactive-trips-every-60s": {
         "task": "core.tasks.cleanup_inactive_trips",
@@ -219,28 +222,33 @@ CELERY_BEAT_SCHEDULE = {
 # Email Config (Console for dev)
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
+# import os
+# import platform
+
+# # Detect OS
+# SYSTEM = platform.system()
+
+# if SYSTEM == "Darwin":  # macOS
+#     GDAL_LIBRARY_PATH = os.environ.get(
+#         "GDAL_LIBRARY_PATH", "/opt/homebrew/opt/gdal/lib/libgdal.dylib"
+#     )
+#     GEOS_LIBRARY_PATH = os.environ.get(
+#         "GEOS_LIBRARY_PATH", "/opt/homebrew/opt/geos/lib/libgeos_c.dylib"
+#     )
+
+# elif SYSTEM == "Windows":
+#     GDAL_LIBRARY_PATH = os.environ.get(
+#         "GDAL_LIBRARY_PATH", r"C:\OSGeo4W\bin\gdal306.dll"
+#     )
+#     GEOS_LIBRARY_PATH = os.environ.get(
+#         "GEOS_LIBRARY_PATH", r"C:\OSGeo4W\bin\geos_c.dll"
+#     )
+
+# elif SYSTEM == "Linux":  # Docker / Ubuntu
+#     GDAL_LIBRARY_PATH = os.environ.get("GDAL_LIBRARY_PATH", "/usr/lib/libgdal.so")
+#     GEOS_LIBRARY_PATH = os.environ.get("GEOS_LIBRARY_PATH", "/usr/lib/libgeos_c.so")
 import os
-import platform
+from ctypes.util import find_library
 
-# Detect OS
-SYSTEM = platform.system()
-
-if SYSTEM == "Darwin":  # macOS
-    GDAL_LIBRARY_PATH = os.environ.get(
-        "GDAL_LIBRARY_PATH", "/opt/homebrew/opt/gdal/lib/libgdal.dylib"
-    )
-    GEOS_LIBRARY_PATH = os.environ.get(
-        "GEOS_LIBRARY_PATH", "/opt/homebrew/opt/geos/lib/libgeos_c.dylib"
-    )
-
-elif SYSTEM == "Windows":
-    GDAL_LIBRARY_PATH = os.environ.get(
-        "GDAL_LIBRARY_PATH", r"C:\OSGeo4W\bin\gdal306.dll"
-    )
-    GEOS_LIBRARY_PATH = os.environ.get(
-        "GEOS_LIBRARY_PATH", r"C:\OSGeo4W\bin\geos_c.dll"
-    )
-
-elif SYSTEM == "Linux":  # Docker / Ubuntu
-    GDAL_LIBRARY_PATH = os.environ.get("GDAL_LIBRARY_PATH", "/usr/lib/libgdal.so")
-    GEOS_LIBRARY_PATH = os.environ.get("GEOS_LIBRARY_PATH", "/usr/lib/libgeos_c.so")
+GDAL_LIBRARY_PATH = os.environ.get("GDAL_LIBRARY_PATH") or find_library("gdal")
+GEOS_LIBRARY_PATH = os.environ.get("GEOS_LIBRARY_PATH") or find_library("geos_c")
