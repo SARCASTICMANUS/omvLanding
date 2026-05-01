@@ -124,6 +124,7 @@ if db_url:
                 if db_url
                 else "postgis://postgres:1234@host.docker.internal:5432/vayy_db"
             ),
+            engine="django.contrib.gis.db.backends.postgis",
             conn_max_age=600,
             ssl_require=False,  # Local DB usually doesn't have SSL
         )
