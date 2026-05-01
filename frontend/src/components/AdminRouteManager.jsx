@@ -1,14 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Polyline,
-  Marker,
-  useMapEvents,
-  useMap,
-  Tooltip,
-} from "react-leaflet";
-import api from "../utils/api";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import api from "../lib/api";
 import {
   Trash2,
   Save,
@@ -21,52 +14,13 @@ import {
   School,
   Bus,
 } from "lucide-react";
-import LocationSearch from "./Shared/LocationSearch";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import LocationSearch from "./LocationSearch";
 
-// --- Helpers ---
-const AutoZoom = ({ selectedRoute, points, stops }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (selectedRoute && selectedRoute.path_coords) {
-      const bounds = L.latLngBounds(selectedRoute.path_coords);
-      map.fitBounds(bounds, { padding: [50, 50] });
-    } else if (points.start && points.end) {
-      const allPoints = [
-        points.start,
-        points.end,
-        ...stops.map((s) => [s.lat, s.lon]),
-      ];
-      const bounds = L.latLngBounds(allPoints);
-      map.fitBounds(bounds, { padding: [100, 100] });
-    }
-  }, [selectedRoute, points, stops, map]);
-  return null;
-};
-
-const StopIcon = (order) =>
-  new L.DivIcon({
-    className: "bg-transparent",
-    html: `<div class="flex items-center justify-center bg-indigo-600 text-white w-6 h-6 rounded-full border-2 border-white shadow-md text-[10px] font-bold">${order + 1}</div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-  });
-
-// --- 3. Helper: Map Click Handler ---
-const MapClicker = ({ onMapClick }) => {
-  useMapEvents({
-    click(e) {
-      onMapClick(e.latlng);
-    },
-  });
-  return null;
-};
-
-// --- Main Component ---
-const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
-  const [universities, setUniversities] = useState([]);
-  const [selectedUniv, setSelectedUniv] = useState(preSelectedUniv || "");
+const AdminRouteManager = ({ onBack, preSelectedCity }) => {
+  const mapContainer = useRef(null);
+  const map = useRef(null);
+  const [cities, setCities] = useState([]);
+  const [selectedCity, setSelectedCity] = useState(preSelectedCity || "");
   const [routes, setRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
 
@@ -81,30 +35,261 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
   const [previews, setPreviews] = useState([]); // [{path, distance, duration}]
   const [selectedIndex, setSelectedIndex] = useState(0);
 
+  const markers = useRef({}); // { type_id: markerInstance }
+
+  // Initialize Map
   useEffect(() => {
-    fetchUniversities();
+    if (map.current) return;
+    map.current = new maplibregl.Map({
+      container: mapContainer.current,
+      style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+      center: [78.9629, 20.5937],
+      zoom: 5,
+    });
+
+    map.current.addControl(new maplibregl.NavigationControl(), "top-right");
+
+    map.current.on("load", () => {
+      map.current.addSource("route-previews", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+
+      map.current.addLayer({
+        id: "route-previews-layer",
+        type: "line",
+        source: "route-previews",
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": ["case", ["boolean", ["get", "selected"], false], "#4f46e5", "#94a3b8"],
+          "line-width": ["case", ["boolean", ["get", "selected"], false], 7, 4],
+          "line-opacity": ["case", ["boolean", ["get", "selected"], false], 0.9, 0.4],
+        },
+      });
+
+      map.current.on("click", "route-previews-layer", (e) => {
+        if (e.features.length > 0) {
+          setSelectedIndex(e.features[0].properties.index);
+        }
+      });
+    });
+
+    map.current.on("click", (e) => {
+      // Logic handled in a separate effect to have access to state
+    });
+
+    return () => {
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
+    };
+  }, []);
+
+  // Handle Map Clicks
+  useEffect(() => {
+    if (!map.current) return;
+
+    const handleClick = (e) => {
+      // Check if clicked on a feature
+      const features = map.current.queryRenderedFeatures(e.point, { layers: ["route-previews-layer"] });
+      if (features.length > 0) return;
+
+      const latlng = e.lngLat;
+      handleMapClick({ lat: latlng.lat, lng: latlng.lng });
+    };
+
+    map.current.off("click", handleClick);
+    map.current.on("click", handleClick);
+    
+    return () => map.current?.off("click", handleClick);
+  }, [isAddingStop, newPoints, stops]);
+
+  // Sync Markers and Previews
+  useEffect(() => {
+    if (!map.current) return;
+
+    // Update Start Marker
+    if (newPoints.start && !selectedRoute) {
+      if (!markers.current["start"]) {
+        const el = document.createElement("div");
+        el.className = "w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-lg cursor-move";
+        const marker = new maplibregl.Marker({ element: el, draggable: true })
+          .setLngLat([newPoints.start.lng || newPoints.start.lon, newPoints.start.lat])
+          .addTo(map.current);
+        
+        marker.on("dragend", () => {
+          const lngLat = marker.getLngLat();
+          handleDrag("start", { lat: lngLat.lat, lng: lngLat.lng });
+        });
+        markers.current["start"] = marker;
+      } else {
+        markers.current["start"].setLngLat([newPoints.start.lng || newPoints.start.lon, newPoints.start.lat]);
+      }
+    } else if (markers.current["start"]) {
+      markers.current["start"].remove();
+      delete markers.current["start"];
+    }
+
+    // Update End Marker
+    if (newPoints.end && !selectedRoute) {
+      if (!markers.current["end"]) {
+        const el = document.createElement("div");
+        el.className = "w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg cursor-move";
+        const marker = new maplibregl.Marker({ element: el, draggable: true })
+          .setLngLat([newPoints.end.lng || newPoints.end.lon, newPoints.end.lat])
+          .addTo(map.current);
+        
+        marker.on("dragend", () => {
+          const lngLat = marker.getLngLat();
+          handleDrag("end", { lat: lngLat.lat, lng: lngLat.lng });
+        });
+        markers.current["end"] = marker;
+      } else {
+        markers.current["end"].setLngLat([newPoints.end.lng || newPoints.end.lon, newPoints.end.lat]);
+      }
+    } else if (markers.current["end"]) {
+      markers.current["end"].remove();
+      delete markers.current["end"];
+    }
+
+    // Update Stop Markers
+    const currentStopIds = new Set();
+    if (!selectedRoute) {
+      stops.forEach((s, i) => {
+        const id = `stop-${i}`;
+        currentStopIds.add(id);
+        if (!markers.current[id]) {
+          const el = document.createElement("div");
+          el.className = "flex items-center justify-center bg-indigo-600 text-white w-6 h-6 rounded-full border-2 border-white shadow-md text-[10px] font-bold cursor-move";
+          el.innerHTML = i + 1;
+          const marker = new maplibregl.Marker({ element: el, draggable: true })
+            .setLngLat([s.lng || s.lon, s.lat])
+            .setPopup(new maplibregl.Popup({ offset: 15 }).setText(s.name))
+            .addTo(map.current);
+          
+          marker.on("dragend", () => {
+            const lngLat = marker.getLngLat();
+            handleDrag("stop", { lat: lngLat.lat, lng: lngLat.lng }, i);
+          });
+          markers.current[id] = marker;
+        } else {
+          markers.current[id].setLngLat([s.lng || s.lon, s.lat]);
+          markers.current[id].getElement().innerHTML = i + 1;
+        }
+      });
+    }
+
+    // Update Selected Route Markers
+    if (selectedRoute) {
+      selectedRoute.stops.forEach((s, i) => {
+        const id = `route-stop-${i}`;
+        currentStopIds.add(id);
+        if (!markers.current[id]) {
+          const el = document.createElement("div");
+          el.className = "flex items-center justify-center bg-indigo-600 text-white w-6 h-6 rounded-full border-2 border-white shadow-md text-[10px] font-bold";
+          el.innerHTML = i + 1;
+          markers.current[id] = new maplibregl.Marker({ element: el })
+            .setLngLat([s.lng || s.lon, s.lat])
+            .setPopup(new maplibregl.Popup({ offset: 15 }).setText(s.name))
+            .addTo(map.current);
+        } else {
+          markers.current[id].setLngLat([s.lng || s.lon, s.lat]);
+        }
+      });
+    }
+
+    Object.keys(markers.current).forEach(id => {
+      if ((id.startsWith("stop-") || id.startsWith("route-stop-")) && !currentStopIds.has(id)) {
+        markers.current[id].remove();
+        delete markers.current[id];
+      }
+    });
+
+    // Update GeoJSON Previews
+    if (map.current.isStyleLoaded()) {
+      const source = map.current.getSource("route-previews");
+      if (source) {
+        let features = [];
+        if (selectedRoute) {
+          features.push({
+            type: "Feature",
+            properties: { selected: true, index: 0 },
+            geometry: {
+              type: "LineString",
+              coordinates: selectedRoute.path_coords.map(p => [p[1], p[0]]),
+            },
+          });
+        } else if (previews.length > 0) {
+          features = previews.map((p, idx) => ({
+            type: "Feature",
+            properties: { selected: idx === selectedIndex, index: idx },
+            geometry: {
+              type: "LineString",
+              coordinates: p.path.map(coord => [coord[1], coord[0]]),
+            },
+          }));
+        } else if (newPoints.start && newPoints.end) {
+           features.push({
+            type: "Feature",
+            properties: { selected: false, index: 0, dash: true },
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [newPoints.start.lng || newPoints.start.lon, newPoints.start.lat],
+                [newPoints.end.lng || newPoints.end.lon, newPoints.end.lat]
+              ],
+            },
+          });
+        }
+        source.setData({ type: "FeatureCollection", features });
+      }
+    }
+
+    // Auto Zoom
+    if (selectedRoute || (newPoints.start && newPoints.end)) {
+      const points = [];
+      if (selectedRoute) {
+        selectedRoute.path_coords.forEach(p => points.push([p[1], p[0]]));
+      } else {
+        if (newPoints.start) points.push([newPoints.start.lng || newPoints.start.lon, newPoints.start.lat]);
+        if (newPoints.end) points.push([newPoints.end.lng || newPoints.end.lon, newPoints.end.lat]);
+        stops.forEach(s => points.push([s.lng || s.lon, s.lat]));
+      }
+      
+      if (points.length > 0) {
+        const bounds = points.reduce((acc, coord) => acc.extend(coord), new maplibregl.LngLatBounds(points[0], points[0]));
+        map.current.fitBounds(bounds, { padding: 80, duration: 1500 });
+      }
+    }
+  }, [newPoints, stops, previews, selectedIndex, selectedRoute]);
+
+  useEffect(() => {
+    fetchCities();
   }, []);
 
   useEffect(() => {
-    if (selectedUniv) fetchRoutes();
-  }, [selectedUniv]);
+    if (selectedCity) fetchRoutes();
+  }, [selectedCity]);
 
-  const fetchUniversities = async () => {
+  const fetchCities = async () => {
     try {
-      const res = await api.get("/api/universities/");
-      setUniversities(res.data);
-      if (!selectedUniv && res.data.length > 0) setSelectedUniv(res.data[0].id);
+      const res = await api.get("/api/cities/");
+      const data = Array.isArray(res.data) ? res.data : res.data.results || [];
+      setCities(data);
+      if (!selectedCity && data.length > 0) setSelectedCity(data[0].id);
     } catch (e) {
-      console.error("Failed to load universities", e);
+      console.error("Failed to load cities", e);
     }
   };
 
   const fetchRoutes = async () => {
     try {
       const res = await api.get(
-        `/api/admin/routes/?university=${selectedUniv}`,
+        `/api/admin/routes/?city=${selectedCity}`,
       );
-      setRoutes(res.data);
+      const data = Array.isArray(res.data) ? res.data : res.data.results || [];
+      setRoutes(data);
     } catch (e) {
       console.error("Failed to load routes", e);
     }
@@ -113,31 +298,57 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
   const handleMapClick = (latlng) => {
     setSelectedRoute(null);
     if (isAddingStop) {
-      setStops([
-        ...stops,
-        { ...latlng, lon: latlng.lng, name: `Stop ${stops.length + 1}` },
-      ]);
+      const newStop = { lat: latlng.lat, lng: latlng.lng, name: `Stop ${stops.length + 1}` };
+      setStops([...stops, newStop]);
       setIsAddingStop(false);
+      // Automatically reverse geocode the stop
+      reverseGeocode(latlng, (name) => {
+        setStops(prev => {
+          const updated = [...prev];
+          const idx = updated.findIndex(s => s.lat === latlng.lat && s.lng === latlng.lng);
+          if (idx !== -1) updated[idx].name = name;
+          return updated;
+        });
+      });
     } else if (!newPoints.start) {
-      setNewPoints({ ...newPoints, start: latlng });
-      setNames({ ...names, start: "Start Point" });
+      setNewPoints({ ...newPoints, start: { lat: latlng.lat, lng: latlng.lng } });
+      reverseGeocode(latlng, (name) => setNames(prev => ({ ...prev, start: name })));
     } else if (!newPoints.end) {
-      setNewPoints({ ...newPoints, end: latlng });
-      setNames({ ...names, end: "End Point" });
+      setNewPoints({ ...newPoints, end: { lat: latlng.lat, lng: latlng.lng } });
+      reverseGeocode(latlng, (name) => setNames(prev => ({ ...prev, end: name })));
+    }
+  };
+
+  const reverseGeocode = async (latlng, callback) => {
+    try {
+      const res = await api.get(`/api/reverse-search/?lat=${latlng.lat}&lon=${latlng.lng || latlng.lon}`);
+      if (res.data && res.data.display_name) {
+        callback(res.data.display_name);
+      }
+    } catch (e) {
+      console.error("Reverse geocode failed", e);
     }
   };
 
   const handleDrag = (type, latlng, index = null) => {
+    const coords = { lat: latlng.lat, lng: latlng.lng };
     if (type === "stop") {
       const newStops = [...stops];
       newStops[index] = {
         ...newStops[index],
-        lat: latlng.lat,
-        lon: latlng.lng,
+        ...coords
       };
       setStops(newStops);
+      reverseGeocode(latlng, (name) => {
+        setStops(prev => {
+          const updated = [...prev];
+          updated[index].name = name;
+          return updated;
+        });
+      });
     } else {
-      setNewPoints({ ...newPoints, [type]: latlng });
+      setNewPoints({ ...newPoints, [type]: coords });
+      reverseGeocode(latlng, (name) => setNames(prev => ({ ...prev, [type]: name })));
     }
   };
 
@@ -153,9 +364,14 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
   const fetchPreviews = async () => {
     try {
       const res = await api.post("/api/admin/routes/preview/", {
-        start: { lat: newPoints.start.lat, lon: newPoints.start.lng },
-        end: { lat: newPoints.end.lat, lon: newPoints.end.lng },
-        stops: stops.map((s, i) => ({ ...s, order: i })),
+        start: { lat: newPoints.start.lat, lon: newPoints.start.lng || newPoints.start.lon },
+        end: { lat: newPoints.end.lat, lon: newPoints.end.lng || newPoints.end.lon },
+        stops: stops.map((s, i) => ({ 
+          lat: s.lat, 
+          lon: s.lng || s.lon, 
+          name: s.name, 
+          order: i 
+        })),
       });
       setPreviews(res.data);
       setSelectedIndex(0); // Default to first (usually shortest/best)
@@ -173,20 +389,25 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
   };
 
   const saveRoute = async () => {
-    if (!newPoints.start || !newPoints.end || !selectedUniv) return;
+    if (!newPoints.start || !newPoints.end || !selectedCity) return;
     setLoading(true);
 
     const activePreview = previews[selectedIndex];
 
     try {
       await api.post("/api/admin/routes/", {
-        university: selectedUniv,
+        city: selectedCity,
         name: names.route || "New Route",
         start_name: names.start,
         end_name: names.end,
-        start: { lat: newPoints.start.lat, lon: newPoints.start.lng },
-        end: { lat: newPoints.end.lat, lon: newPoints.end.lng },
-        stops: stops.map((s, i) => ({ ...s, order: i })),
+        start: { lat: newPoints.start.lat, lon: newPoints.start.lng || newPoints.start.lon },
+        end: { lat: newPoints.end.lat, lon: newPoints.end.lng || newPoints.end.lon },
+        stops: stops.map((s, i) => ({ 
+          lat: s.lat, 
+          lon: s.lng || s.lon, 
+          name: s.name, 
+          order: i 
+        })),
         // Pass the selected alternative's path
         path: activePreview?.path,
         total_distance: activePreview?.distance,
@@ -216,7 +437,7 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
         <div className="p-6 bg-slate-900 text-white flex flex-col gap-4 shadow-lg">
           <div className="flex justify-between items-center">
             <h2 className="font-bold text-xl flex items-center gap-3 tracking-tight">
-              <School className="text-indigo-400" size={24} /> University
+              <School className="text-indigo-400" size={24} /> City
               Transit
             </h2>
             <button
@@ -229,15 +450,15 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
 
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-              Selected College
+              Selected City
             </label>
             <select
-              value={selectedUniv}
-              onChange={(e) => setSelectedUniv(e.target.value)}
+              value={selectedCity}
+              onChange={(e) => setSelectedCity(e.target.value)}
               className="w-full bg-slate-800 border-none text-white text-sm rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition"
             >
-              <option value="">Select University...</option>
-              {universities.map((u) => (
+              <option value="">Select City...</option>
+              {cities.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name}
                 </option>
@@ -274,13 +495,13 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
                     <span className="text-[10px] font-bold text-slate-400 uppercase">
                       Origin
                     </span>
-                    <input
-                      value={names.start}
-                      onChange={(e) =>
-                        setNames({ ...names, start: e.target.value })
-                      }
-                      placeholder="Start Point A"
-                      className="w-full text-sm font-bold bg-transparent outline-none p-0 focus:text-indigo-600 transition"
+                    <LocationSearch
+                      placeholder="Search Start Point"
+                      onSelect={(item) => {
+                        setNewPoints({ ...newPoints, start: { lat: item.lat, lng: item.lon } });
+                        setNames({ ...names, start: item.display_name });
+                      }}
+                      initialValue={names.start}
                     />
                   </div>
                   <div className="h-px bg-slate-200"></div>
@@ -288,13 +509,13 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
                     <span className="text-[10px] font-bold text-slate-400 uppercase">
                       Destination
                     </span>
-                    <input
-                      value={names.end}
-                      onChange={(e) =>
-                        setNames({ ...names, end: e.target.value })
-                      }
-                      placeholder="End Point B"
-                      className="w-full text-sm font-bold bg-transparent outline-none p-0 focus:text-indigo-600 transition"
+                    <LocationSearch
+                      placeholder="Search End Point"
+                      onSelect={(item) => {
+                        setNewPoints({ ...newPoints, end: { lat: item.lat, lng: item.lon } });
+                        setNames({ ...names, end: item.display_name });
+                      }}
+                      initialValue={names.end}
                     />
                   </div>
                 </div>
@@ -333,14 +554,19 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
                       {i + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <input
-                        value={stop.name}
-                        onChange={(e) => {
+                      <LocationSearch
+                        placeholder="Search Stop Name"
+                        onSelect={(item) => {
                           const newStops = [...stops];
-                          newStops[i].name = e.target.value;
+                          newStops[i] = {
+                            ...newStops[i],
+                            name: item.display_name,
+                            lat: item.lat,
+                            lon: item.lon,
+                          };
                           setStops(newStops);
                         }}
-                        className="w-full text-sm font-semibold outline-none bg-transparent focus:text-indigo-600"
+                        initialValue={stop.name}
                       />
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -410,126 +636,7 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
 
       {/* --- Map Area --- */}
       <div className="flex-1 relative">
-        <MapContainer
-          center={[20.5937, 78.9629]}
-          zoom={5}
-          style={{ height: "100%", width: "100%" }}
-          attributionControl={false}
-        >
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
-          <AutoZoom
-            selectedRoute={selectedRoute}
-            points={newPoints}
-            stops={stops}
-          />
-          <MapClicker onMapClick={handleMapClick} />
-
-          {/* New Route Preview */}
-          {!selectedRoute && (
-            <>
-              {newPoints.start && (
-                <Marker
-                  position={newPoints.start}
-                  icon={
-                    new L.DivIcon({
-                      className: "bg-transparent",
-                      html: `<div class="w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-lg"></div>`,
-                    })
-                  }
-                  draggable={true}
-                  eventHandlers={{
-                    dragend: (e) => handleDrag("start", e.target.getLatLng()),
-                  }}
-                />
-              )}
-              {newPoints.end && (
-                <Marker
-                  position={newPoints.end}
-                  icon={
-                    new L.DivIcon({
-                      className: "bg-transparent",
-                      html: `<div class="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>`,
-                    })
-                  }
-                  eventHandlers={{
-                    dragend: (e) => handleDrag("end", e.target.getLatLng()),
-                  }}
-                />
-              )}
-
-              {/* Alternative Preview Options */}
-              {previews.map((p, idx) => (
-                <Polyline
-                  key={`preview-${idx}`}
-                  positions={p.path}
-                  eventHandlers={{
-                    click: () => setSelectedIndex(idx),
-                  }}
-                  pathOptions={{
-                    color: selectedIndex === idx ? "#4f46e5" : "#94a3b8",
-                    weight: selectedIndex === idx ? 7 : 4,
-                    opacity: selectedIndex === idx ? 0.9 : 0.4,
-                  }}
-                >
-                  <Tooltip sticky>
-                    Route Option {idx + 1} ({(p.distance / 1000).toFixed(1)} km)
-                  </Tooltip>
-                </Polyline>
-              ))}
-
-              {!previews.length && newPoints.start && newPoints.end && (
-                <Polyline
-                  positions={[newPoints.start, newPoints.end]}
-                  pathOptions={{
-                    color: "gray",
-                    dashArray: "10, 10",
-                    weight: 2,
-                    opacity: 0.5,
-                  }}
-                />
-              )}
-
-              {stops.map((s, i) => (
-                <Marker
-                  key={i}
-                  position={[s.lat, s.lon]}
-                  icon={StopIcon(i)}
-                  draggable={true}
-                  eventHandlers={{
-                    dragend: (e) => handleDrag("stop", e.target.getLatLng(), i),
-                  }}
-                >
-                  <Tooltip
-                    permanent
-                    direction="top"
-                    offset={[0, -10]}
-                    className="bg-white border-none shadow-lg text-[10px] font-bold rounded-full px-3 py-1 text-slate-700"
-                  >
-                    {s.name}
-                  </Tooltip>
-                </Marker>
-              ))}
-            </>
-          )}
-
-          {/* Saved Route View */}
-          {selectedRoute && (
-            <>
-              <Polyline
-                positions={selectedRoute.path_coords}
-                pathOptions={{ color: "#4f46e5", weight: 6, opacity: 0.8 }}
-              />
-              {selectedRoute.stops.map((s, i) => (
-                <Marker key={i} position={[s.lat, s.lon]} icon={StopIcon(i)}>
-                  <Tooltip direction="top" offset={[0, -10]}>
-                    {s.name}
-                  </Tooltip>
-                </Marker>
-              ))}
-            </>
-          )}
-        </MapContainer>
+        <div ref={mapContainer} className="h-full w-full" />
 
         {/* Floating Help */}
         <div className="absolute top-6 right-6 flex flex-col items-end gap-3 z-[1000]">
@@ -557,5 +664,10 @@ const AdminRouteManager = ({ onBack, preSelectedUniv }) => {
     </div>
   );
 };
+
+
+
+
+
 
 export default AdminRouteManager;

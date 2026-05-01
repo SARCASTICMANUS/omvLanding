@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useDispatch } from "react-redux";
 import { logout } from "../features/auth/authSlice";
 import AdminRouteManager from "../components/AdminRouteManager";
-import UniversityManager from "../components/UniversityManager";
+import CityManager from "../components/CityManager";
 import AdminUsersManager from "../components/AdminUsersManager";
 import PassengersManager from "../components/PassengersManager";
 import VehiclesManager from "../components/VehiclesManager";
@@ -11,7 +11,7 @@ import { useSelector } from "react-redux";
 import {
   LayoutDashboard,
   Route as RouteIcon,
-  School,
+  MapPin,
   BarChart3,
   Users,
   LogOut,
@@ -24,19 +24,19 @@ const AdminPanel = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const isSuperAdmin = user?.role === "admin";
-  const universityId = user?.university;
+  const cityId = user?.city;
 
-  const [activeTab, setActiveTab] = useState(isSuperAdmin ? "universities" : "passengers");
+  const [activeTab, setActiveTab] = useState(isSuperAdmin ? "cities" : "passengers");
 
   const navItems = [
-    // University Admin Specific
+    // City Admin Specific
     { id: "passengers", label: "Passengers", icon: <UserSquare size={18} />, hidden: isSuperAdmin },
     { id: "routes", label: "Routes", icon: <RouteIcon size={18} /> },
     { id: "vehicles", label: "Vehicles", icon: <Bus size={18} />, hidden: isSuperAdmin },
     { id: "drivers", label: "Drivers", icon: <UserCheck size={18} />, hidden: isSuperAdmin },
     
     // Super Admin Specific
-    { id: "universities", label: "Universities", icon: <School size={18} />, hidden: !isSuperAdmin },
+    { id: "cities", label: "Cities", icon: <MapPin size={18} />, hidden: !isSuperAdmin },
     { id: "users", label: "Users", icon: <Users size={18} />, hidden: !isSuperAdmin },
     
     { id: "stats", label: "Stats", icon: <BarChart3 size={18} /> },
@@ -83,13 +83,13 @@ const AdminPanel = () => {
 
       {/* --- Main Content --- */}
       <div className="flex-1 relative overflow-hidden">
-        {activeTab === "passengers" && <PassengersManager universityId={universityId} />}
-        {activeTab === "vehicles" && <VehiclesManager universityId={universityId} />}
-        {activeTab === "drivers" && <DriversManager universityId={universityId} />}
+        {activeTab === "passengers" && <PassengersManager cityId={cityId} />}
+        {activeTab === "vehicles" && <VehiclesManager cityId={cityId} />}
+        {activeTab === "drivers" && <DriversManager cityId={cityId} />}
         {activeTab === "routes" && (
-          <AdminRouteManager preSelectedUniv={universityId} onBack={() => setActiveTab("routes")} />
+          <AdminRouteManager preSelectedCity={cityId} onBack={() => setActiveTab("routes")} />
         )}
-        {activeTab === "universities" && <UniversityManager />}
+        {activeTab === "cities" && <CityManager />}
         {activeTab === "users" && <AdminUsersManager />}
         {activeTab === "stats" && (
           <div className="flex items-center justify-center h-full text-slate-400 font-bold bg-slate-50">

@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Bus, Plus, Trash2, Edit, X, Save, Loader2, Users } from "lucide-react";
-import api from "../utils/api";
-import VehicleAssignmentModal from "./VehicleAssignmentModal";
+import { Bus, Plus, Trash2, Edit, X, Save, Loader2 } from "lucide-react";
+import api from "../lib/api";
 
-const VehiclesManager = ({ universityId }) => {
+const VehiclesManager = ({ cityId }) => {
   const [vehicles, setVehicles] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [drivers, setDrivers] = useState([]);
@@ -17,24 +16,21 @@ const VehiclesManager = ({ universityId }) => {
     driver: "",
   });
 
-  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
-  const [selectedVehicleForAssignment, setSelectedVehicleForAssignment] = useState(null);
-
   useEffect(() => {
     fetchData();
-  }, [universityId]);
+  }, [cityId]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const [vRes, rRes, dRes] = await Promise.all([
-        api.get(`/api/vehicles/?university=${universityId}`),
-        api.get(`/api/admin/routes/?university=${universityId}`),
-        api.get(`/api/users/?university=${universityId}&role=driver`),
+        api.get(`/api/vehicles/?city=${cityId}`),
+        api.get(`/api/admin/routes/?city=${cityId}`),
+        api.get(`/api/users/?city=${cityId}&role=driver`),
       ]);
-      setVehicles(vRes.data);
-      setRoutes(rRes.data);
-      setDrivers(dRes.data);
+      setVehicles(Array.isArray(vRes.data) ? vRes.data : vRes.data.results || []);
+      setRoutes(Array.isArray(rRes.data) ? rRes.data : rRes.data.results || []);
+      setDrivers(Array.isArray(dRes.data) ? dRes.data : dRes.data.results || []);
     } catch (error) {
       console.error("Error fetching vehicle data:", error);
     } finally {
@@ -65,7 +61,7 @@ const VehiclesManager = ({ universityId }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const payload = { ...formData, university: universityId };
+    const payload = { ...formData, city: cityId };
     try {
       if (currentVehicle) {
         await api.put(`/api/vehicles/${currentVehicle.id}/`, payload);
@@ -97,7 +93,7 @@ const VehiclesManager = ({ universityId }) => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-black text-slate-800">Vehicle Management</h1>
-            <p className="text-slate-500 mt-2">Manage university buses, vans, and staff vehicles.</p>
+            <p className="text-slate-500 mt-2">Manage city public transport vehicles.</p>
           </div>
           <button 
             onClick={() => handleOpenModal()}
@@ -149,16 +145,6 @@ const VehiclesManager = ({ universityId }) => {
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button 
-                          onClick={() => {
-                            setSelectedVehicleForAssignment(v);
-                            setIsAssignmentModalOpen(true);
-                          }}
-                          className="p-2 hover:bg-indigo-50 rounded-lg text-indigo-400 transition"
-                          title="Manage Student Assignments"
-                        >
-                          <Users size={16} />
-                        </button>
-                        <button 
                           onClick={() => handleOpenModal(v)}
                           className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 transition"
                         >
@@ -205,7 +191,7 @@ const VehiclesManager = ({ universityId }) => {
                   value={formData.vehicle_number}
                   onChange={(e) => setFormData({ ...formData, vehicle_number: e.target.value })}
                   placeholder="e.g. PB-01-AX-1234"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition font-bold"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition font-bold text-slate-800 uppercase"
                 />
               </div>
 
@@ -215,7 +201,7 @@ const VehiclesManager = ({ universityId }) => {
                   <select
                     value={formData.vehicle_type}
                     onChange={(e) => setFormData({ ...formData, vehicle_type: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition font-bold"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition font-bold text-slate-800"
                   >
                     <option value="bus">Bus</option>
                     <option value="van">Van</option>
@@ -230,11 +216,11 @@ const VehiclesManager = ({ universityId }) => {
                 <select
                   value={formData.route}
                   onChange={(e) => setFormData({ ...formData, route: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition font-bold"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition font-bold text-slate-800"
                 >
                   <option value="">No Route Selected</option>
                   {routes.map((r) => (
-                    <option key={r.id} value={r.id}>{r.name} ({r.bus_number})</option>
+                    <option key={r.id} value={r.id}>{r.name} {r.bus_number ? `(${r.bus_number})` : ''}</option>
                   ))}
                 </select>
               </div>
@@ -244,7 +230,7 @@ const VehiclesManager = ({ universityId }) => {
                 <select
                   value={formData.driver}
                   onChange={(e) => setFormData({ ...formData, driver: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition font-bold"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition font-bold text-slate-800"
                 >
                   <option value="">No Driver Selected</option>
                   {drivers.map((d) => (
@@ -262,14 +248,6 @@ const VehiclesManager = ({ universityId }) => {
             </form>
           </div>
         </div>
-      )}
-
-      {isAssignmentModalOpen && (
-        <VehicleAssignmentModal 
-          vehicle={selectedVehicleForAssignment}
-          universityId={universityId}
-          onClose={() => setIsAssignmentModalOpen(false)}
-        />
       )}
     </div>
   );

@@ -1,125 +1,116 @@
-# 🚖 Vayy - Institutional Bus Tracking Platform
+# 🚖 Vayy - Public Transit & Real-Time Tracking Platform
 
-**Vayy** is a production-grade, real-time geospatial platform designed for university and institutional bus tracking. Built to handle concurrency and provide a great passenger experience, Vayy connects student passengers with fixed-route buses.
+**Vayy** is a production-grade, real-time geospatial platform designed for urban public transport and institutional bus tracking. Built to handle high concurrency, Vayy connects passengers with fixed-route buses, vans, and shuttles through a resilient, low-latency architecture.
 
-It features a **10-meter geospatial buffer matching system**, real-time WebSocket tracking, bus capacity tracking (via "next stops" prediction), an automated One-Time-Password (OTP) onboarding flow, and a dedicated Admin Route Creator.
-
-## 🏗 System Architecture
-
-The project is built to handle high concurrency by offloading geospatial calculations to OSRM, real-time state to Redis, and heavy tasks to Celery.
-
-| Service       | Technology              | Purpose                                           |
-| :------------ | :---------------------- | :------------------------------------------------ |
-| **Frontend**  | React + Vite + Tailwind | User Interface (Leaflet Maps, Redux Persist).     |
-| **Backend**   | Django + GeoDjango      | API, Auth, Database Management.                   |
-| **WebSockets**| Daphne (ASGI)           | WebSocket handling for live map rendering.        |
-| **Database**  | PostgreSQL + PostGIS    | Persistent storage for Routes & Spatial Indexing. |
-| **Cache/PubSub**| Redis                   | Ephemeral storage for live GPS & Celery queues.   |
-| **Workers**   | Celery                  | Asynchronous tasks (Emails, OTPs, Bulk Uploads).  |
-| **Routing**   | OSRM (C++ Engine)       | High-speed routing engine for ETA & Distances.    |
-| **Proxy**     | Nginx                   | Load balancer and request routing.                |
+The platform has recently transitioned to a flexible **City/Passenger/Driver** model, supporting multi-city deployments and diverse vehicle types (Bus, Van, Auto-Rickshaw, etc.).
 
 ---
 
-## 🚀 Features
+## 🏗 System Architecture
 
-### **Admin Capabilities**
-- Map-based drag-and-drop Route Creator.
-- Stop sequencing and organization.
-- Background asynchronous CSV/Excel student roster uploads.
-- Secure University/Campus management.
+The project is built to handle high concurrency by offloading geospatial calculations to **OSRM**, real-time state to **Redis**, and heavy tasks to **Celery**.
 
-### **Driver Capabilities**
-- Intuitive "Start Trip" interface locking to assigned vehicles.
-- "Next 3 Stops" tracking panel showing the count of waiting students at upcoming stops.
-- Live GPS broadcasting over optimized WebSockets.
+| Service         | Technology              | Purpose                                           |
+| :-------------- | :---------------------- | :------------------------------------------------ |
+| **Frontend**    | React 19 + Vite + Tailwind | Modern SPA with MapLibre GL & Redux Toolkit.      |
+| **Backend**     | Django 4.2 + GeoDjango  | REST API, Auth, Database Management.              |
+| **WebSockets**  | Daphne (ASGI)           | Bi-directional live GPS & ETA broadcasting.       |
+| **Database**    | PostgreSQL + PostGIS    | Persistent storage for Routes & Spatial Indexing. |
+| **Cache/PubSub**| Redis 7                 | Real-time GPS storage (GEO) & Celery queues.      |
+| **Workers**     | Celery                  | Async tasks (Location Sync, Stale Cleanup).       |
+| **Routing**     | OSRM (C++ Engine)       | High-speed routing engine for ETA & Distances.    |
+| **Proxy**       | Nginx                   | Unified entry point and request routing.          |
 
-### **Passenger (Student) Capabilities**
-- Polished dashboard with assigned route map polyline.
-- Expiration warnings for invalid bus passes to prevent boarding issues.
-- Live tracking of *all* active buses on their assigned route simultaneously.
-- Real-time ETA calculations to their specific designated pickup stop.
-- Auto-reconnecting resilient WebSockets.
+---
+
+## 🚀 Key Features
+
+### **🗺️ Real-Time Geospatial & Tracking**
+- **Live Tracking:** Sub-second GPS updates via WebSockets for both drivers and passengers.
+- **Directional Filtering:** Smart "Filtered Trips" logic ensuring passengers only see buses moving *towards* them.
+- **Hybrid Ingestion:** Supports GPS and Cell Tower/Wi-Fi signals for robust tracking.
+- **Smoothing:** Kalman Filter implementation for fluid, noise-reduced vehicle positioning.
+- **Schedule Adherence:** Automatic delay calculation (Actual vs. Scheduled) shown in real-time.
+- **Geofencing & Alerts:** Automated proximity notifications when a bus approaches a pickup stop.
+
+### **🎫 Boarding & Manifest Management**
+- **Digital Manifest:** Real-time boarding control interface for drivers via dedicated WebSocket manifests.
+- **Booking System:** Passenger-driven stop booking (Pending -> Approaching -> Boarded -> Completed).
+- **Automated Stop Detection:** Geofencing logic to auto-detect arrivals at stops based on dwell time.
+
+### **🛠️ Admin Panel**
+- **Route Creator:** Map interface to design complex routes with ordered stops.
+- **Multi-City Management:** Support for multiple cities, each with isolated routes, users, and vehicles.
+- **Granular Roles:** `Admin`, `City Admin`, `Driver`, and `Passenger`.
+
+### **📱 Driver & Passenger Experience**
+- **One-Tap Trip:** Drivers can easily start/resume trips with route-specific stop lists.
+- **OTP Onboarding:** Secure 6-digit OTP flow for registration and password resets.
+- **High-Performance Map:** Smooth, low-bandwidth Delta Updates for live vehicle motion.
+- **Walking ETAs:** OSRM-powered walking ETAs for passengers to reach stops on time.
+
+---
+
+## 📁 Project Structure
+
+```text
+vayy/
+├── backend/                # Django/GeoDjango Project
+│   ├── core/               # Main application logic (Models, Views, Consumers)
+│   │   ├── api/            # DRF Serializers & ViewSets
+│   │   ├── services/       # Business Logic (ManifestManager)
+│   │   ├── tasks.py        # Celery background tasks (Geofencing, Manifests)
+│   │   ├── consumers.py    # WebSocket logic (Daphne/Channels)
+│   │   └── utils.py        # Kalman Filter, OSRM & Geospatial helpers
+├── frontend/               # React Vite SPA
+│   ├── src/
+│   │   ├── components/     # UI & Map Components (DriverManifest, MapLibre)
+│   │   └── pages/          # Admin, Dashboard, Auth pages
+└── docker-compose.yaml     # Infrastructure & Service Orchestration
+```
 
 ---
 
 ## 🐳 Docker Deployment Setup (Recommended)
 
-The entire stack is containerized for simple bringing up.
+### 1. Map Data Preparation
+Place your `.osm.pbf` file (e.g., from [Geofabrik](https://download.geofabrik.de/)) in `backend/osrm-data/` and rename it to `map.osm.pbf`.
 
-### 1. File Structure Setup
-
-Create a folder named `osrm-data` in the project root and place your downloaded `.osm.pbf` map file there. **Rename it** to `map.osm.pbf`. 
-*Note: You can download map data from the [Geofabrik Download Server](https://download.geofabrik.de/).*
-
-```text
-vayy/
-├── backend/
-├── frontend/
-├── docker-compose.yml
-├── nginx.conf
-└── osrm-data/
-    └── map.osm.pbf  <-- CRITICAL: Must be named exactly this
+```bash
+mkdir -p backend/osrm-data
+# Move your downloaded file there:
+mv india-latest.osm.pbf backend/osrm-data/map.osm.pbf
 ```
 
-### 2. Run with Docker Compose
-
-This command sets up the Database, Redis, OSRM, Backend, Async Workers, and Frontend proxy automatically.
-
+### 2. Launch Services
 ```bash
 docker-compose up -d --build
 ```
 
-**What happens automatically?**
-
-1.  **OSRM Container**: Detects the `.pbf` file, extracts the graph, and starts the routing service.
-2.  **Database**: Starts PostgreSQL with PostGIS extensions on port 5435 to avoid local conflicts.
-3.  **Backend**: Waits for DB, runs Django API on `8000`.
-4.  **Daphne**: Starts ASGI server for WebSockets on `8001`.
-5.  **Celery + Beat**: Starts background task workers for email rendering and inactive trip cleanup.
-6.  **Frontend**: Starts the Vite SPA.
-7.  **Nginx**: Reverse proxies traffic based on URL (`/api/`, `/ws/`, `/`).
-
-### 3. Access the App
-
-- **Frontend App:** [http://localhost](http://localhost) (via Nginx)
-- **Direct Frontend (dev):** [http://localhost:3000](http://localhost:3000)
-- **Django Admin:** [http://localhost/admin/](http://localhost/admin/)
+**Unified Entry Point:** [http://localhost](http://localhost) (via Nginx)
 
 ---
 
-## 🛠 Manual / Local Development Setup
+## 🛠 Local Development
 
-If you want to run the code locally (outside Docker) for debugging:
+### Prerequisites
+- Python 3.10+ & Node.js 20+
+- **PostgreSQL 15+** with **PostGIS** extension
+- **Redis 7**
 
-### 1. Start Infrastructure Only
-```bash
-docker-compose up -d db redis osrm
-```
-
-### 2. Backend Setup
-*Requires Python 3.10+ and GDAL installed on your OS.*
+### Backend Setup
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # or .\venv\Scripts\activate on Windows
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-
-# Run Migrations
 python manage.py migrate
-
-# Terminal 1: Run Django Server
-python manage.py runserver
-
-# Terminal 2: Run Daphne WebSockets
-daphne -b 127.0.0.1 -p 8001 vayy.asgi:application
-
-# Terminal 3: Run Celery Worker
-celery -A vayy worker -l info
+# Start core services:
+python manage.py runserver  # API Development
+daphne -p 8001 vayy.asgi:application # WebSockets
+celery -A vayy worker -l info # Async Tasks
 ```
 
-### 3. Frontend Setup
-*Requires Node.js 20+*
+### Frontend Setup
 ```bash
 cd frontend
 npm install
@@ -128,35 +119,19 @@ npm run dev
 
 ---
 
-## 📜 Selected API Core Endpoints
+## 📈 Scalability & Production Readiness
 
-#### Authentication
-- `POST /api/auth/send-otp/`: Request an OTP for login or reset.
-- `POST /api/auth/verify-otp/`: Verify a 6-digit OTP code to receive a short-lived token.
-- `POST /api/auth/set-password/`: Set a new password using the verification token.
-- `POST /api/auth/login/`: Receive JWT Access and Refresh tokens.
+Vayy is architected for regional and institutional scales (up to 10k concurrent users). For PAN India deployment (1M+ users), the platform has a clear roadmap involving:
+- **Hot Geospatial Store:** Shifting real-time positions from PostgreSQL to **Tile38** or **Redis Cluster**.
+- **Microservices:** Decoupling coordinate ingestion using **Go** or **Node.js** for high-performance I/O.
+- **Protobuf:** Utilizing Protocol Buffers for WebSocket messages to reduce bandwidth by ~60%.
 
-#### Driver & Trip Sync
-- `POST /api/driver/start-trip/`: Initialize a new live trip, locked to the driver.
-- `GET /api/trips/next-stops/<trip_id>/`: Return student counts for the next 3 upcoming stops.
-- `POST /api/trips/end/<trip_id>/`: Mark a trip as completed.
-
-#### Administration
-- `POST /api/admin/students/bulk-upload/`: Async multipart form upload for Excel/CSV student rosters.
-- `POST /api/admin/routes/`: Create a new geographic route by passing a series of coordinate stops.
+*See [scalability_report.md](scalability_report.md) for the full technical audit.*
 
 ---
 
-## 🔧 Troubleshooting
+## 📜 Troubleshooting
 
-### "OSRM Missing Files"
-* **Cause**: The OSRM container hasn't finished processing the map data yet on first boot.
-* **Fix**: Check `docker-compose logs -f osrm`. Wait until processing ends.
-
-### "Celery Worker Disconnected"
-* **Cause**: Redis may have crashed or restarted abruptly.
-* **Fix**: Run `docker-compose restart celery_worker`.
-
-### "Token Expired Loop on Frontend"
-* **Cause**: Rare edge case where both access and refresh tokens expire simultaneously during a request transit.
-* **Fix**: The React Redux Persist store automatically handles this, but clearing localStorage is a fast hard-reset.
+- **PostGIS Compatibility**: The `docker-compose.yaml` uses `platform: linux/amd64` for the `db` container to ensure stability on Apple Silicon.
+- **OSRM Unreachable**: Ensure the `OSRM_URL` environment variable points to the correct endpoint (Default: `http://osrm:5000`).
+- **WebSocket Connection**: If connecting via Nginx, ensure the `/ws/` block is correctly configured for `Upgrade` headers.

@@ -4,7 +4,7 @@
 services:
   db:
     image: postgis/postgis:15-3.3
-    platform: linux/amd64  # Fixes PostGIS crashes/bugs on Apple Silicon
+    platform: linux/amd64 # Fixes PostGIS crashes/bugs on Apple Silicon
     environment:
       POSTGRES_DB: vayy_db
       POSTGRES_USER: postgres
@@ -14,7 +14,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data:delegated
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,26 +26,8 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-
-  osrm:
-    image: osrm/osrm-backend
-    container_name: osrm
-    platform: linux/amd64  # CRITICAL: OSRM binaries are often amd64-only
-    restart: always
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./backend/osrm-data:/data:delegated # ':delegated' is vital for OSRM speed on Mac
-    command: >
-      /bin/bash -c "
-      if [ ! -f /data/map.osrm ]; then 
-        echo 'Map data not found. Processing...' &&
-        osrm-extract -p /opt/car.lua /data/map.osm.pbf &&
-        osrm-partition /data/map.osrm &&
-        osrm-customize /data/map.osrm;
-      fi;
-      echo 'Starting OSRM...' &&
-      osrm-routed --algorithm mld /data/map.osrm"
+    networks:
+      - vayy_network
 
   backend:
     build: ./backend
@@ -59,28 +41,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-      osrm:
-        condition: service_started
     environment:
       - IN_DOCKER=true
       - DATABASE_URL=postgis://postgres:password@db:5432/vayy_db
       - REDIS_URL=redis://redis:6379/0
       - OSRM_URL=http://osrm:5000
-
-  daphne:
-    build: ./backend
-    command: daphne -b 0.0.0.0 -p 8001 vayy.asgi:application
-    volumes:
-      - ./backend:/app:delegated
-    ports:
-      - "8001:8001"
-    depends_on:
-      redis:
-        condition: service_started
-    environment:
-      - IN_DOCKER=true
-      - DATABASE_URL=postgis://postgres:password@db:5432/vayy_db
-      - REDIS_URL=redis://redis:6379/0
 
   celery_worker:
     build: ./backend
@@ -88,8 +53,10 @@ services:
     volumes:
       - ./backend:/app:delegated
     depends_on:
-       redis:
-         condition: service_started
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       - IN_DOCKER=true
       - DATABASE_URL=postgis://postgres:password@db:5432/vayy_db
@@ -101,25 +68,27 @@ services:
     volumes:
       - ./backend:/app:delegated
     depends_on:
-       redis:
-         condition: service_started
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       - IN_DOCKER=true
       - DATABASE_URL=postgis://postgres:password@db:5432/vayy_db
       - REDIS_URL=redis://redis:6379/0
 
   frontend:
-    build: 
-       context: ./frontend
-       dockerfile: Dockerfile
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     volumes:
       - ./frontend:/app:delegated
-      - /app/node_modules        
+      - /app/node_modules
     ports:
       - "3000:3000"
     environment:
       - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8001   
+      - VITE_WS_URL=ws://localhost:8000
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
 
@@ -132,8 +101,13 @@ services:
     depends_on:
       - backend
       - frontend
-      - daphne
 
 volumes:
   postgres_data:
   redis_data:
+
+
+networks:
+  vayy_network:
+    # Yahan network ka asli naam define karo
+    external: true

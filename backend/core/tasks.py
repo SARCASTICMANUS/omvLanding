@@ -1,226 +1,389 @@
-# VAYY | core/tasks.py | Status: 🆕 Created
-# Reason: Missing entirely — all 4 Celery tasks required by spec.
-
+# VAYY | core/tasks.py | Status: ✅ Public Transport Refactor
 import random
 import string
 from celery import shared_task
+from celery.utils.log import get_task_logger
 from django.utils import timezone
 from datetime import timedelta
+from core.services.redis_service import get_redis_client, get_async_redis_client
+
+logger = get_task_logger(__name__)
 
 
-# ─── OTP Task ────────────────────────────────────────────────────────────────
+# ─── Location Sync ────────────────────────────────────────────────────────────
+
+
+@shared_task(name="core.tasks.sync_locations_to_db")
+def sync_locations_to_db():
+    """
+    Periodically sync high-frequency location data from Redis GEO sets to PostGIS.
+    Batching writes every 2 minutes for system performance.
+    """
+    from django.contrib.gis.geos import Point
+
+    # Updated to new Public models
+    from core.models import ActiveTrip, PublicPassengerProfile
+
+    r = get_async_redis_client()  # get_redis_client()
+
+    # ── 1. Sync Active Trip positions (Drivers) ──────────────────────────────
+    cursor = 0
+    trip_synced = 0
+    while True:
+        cursor, members = r.zscan("active_trips_locations", cursor=cursor, count=100)
+        for trip_id_raw, _ in members:
+            if isinstance(trip_id_raw, bytes):
+                trip_id = trip_id_raw.decode()
+            else:
+                trip_id = trip_id_raw
+
+            if not r.exists(f"driver_pos:{trip_id}"):
+                r.zrem("active_trips_locations", trip_id)
+                continue
+
+            positions = r.geopos("active_trips_locations", trip_id)
+            if positions and positions[0]:
+                lon, lat = positions[0]
+                # 1. Update ActiveTrip
+                updated = ActiveTrip.objects.filter(id=trip_id).update(
+                    current_location=Point(float(lon), float(lat), srid=4326),
+                    last_updated=timezone.now(),
+                )
+
+                if updated:
+                    # 2. Calculate and Sync Schedule Delay
+                    trip = ActiveTrip.objects.select_related(
+                        "trip_schedule", "vehicle"
+                    ).get(id=trip_id)
+                    if trip.trip_schedule and trip.vehicle:
+                        from core.models import VehicleState, StopTime
+                        from django.contrib.gis.db.models.functions import Distance
+
+                        p_point = Point(float(lon), float(lat), srid=4326)
+                        nearest_stop_time = (
+                            StopTime.objects.filter(trip_schedule=trip.trip_schedule)
+                            .annotate(distance=Distance("stop__location", p_point))
+                            .order_by("distance")
+                            .first()
+                        )
+
+                        delay = 0
+                        if nearest_stop_time:
+                            now = timezone.now().time()
+                            sched = nearest_stop_time.arrival_time
+                            now_mins = now.hour * 60 + now.minute
+                            sched_mins = sched.hour * 60 + sched.minute
+                            delay = now_mins - sched_mins
+
+                        v_state, _ = VehicleState.objects.get_or_create(
+                            vehicle=trip.vehicle
+                        )
+                        v_state.active_trip = trip
+                        v_state.delay_minutes = delay
+                        v_state.save()
+
+                    # 3. Geofencing: Notify passengers when bus is near their pickup stop
+                    from core.models import BoardingRequest
+                    from channels.layers import get_channel_layer
+                    from asgiref.sync import async_to_sync
+                    import json
+
+                    # Find pending requests for this trip where pickup stop is within 500m
+                    p_point = Point(float(lon), float(lat), srid=4326)
+                    approaching_reqs = BoardingRequest.objects.filter(
+                        trip_id=trip_id,
+                        status="pending",
+                        pickup_stop__location__dwithin=(
+                            p_point,
+                            0.005,
+                        ),  # ~500m in degrees approx
+                    ).select_related("passenger", "pickup_stop")
+
+                    channel_layer = get_channel_layer()
+                    for req in approaching_reqs:
+                        req.status = "approaching"
+                        req.save()
+
+                        # Notify specific passenger
+                        if channel_layer:
+                            # We assume passengers join a user-specific group: user_{id}
+                            async_to_sync(channel_layer.group_send)(
+                                f"user_{req.passenger_id}",
+                                {
+                                    "type": "proximity_alert",
+                                    "trip_id": str(trip_id),
+                                    "stop_name": req.pickup_stop.name,
+                                    "message": f"Your bus (Route {req.trip.route.bus_number}) is 500m away, please stand at the stop!",
+                                },
+                            )
+                            # Also trigger manifest update for driver to see "approaching" status
+                            from core.tasks import update_driver_manifest
+
+                            update_driver_manifest.delay(str(trip_id))
+
+                    trip_synced += 1
+        if cursor == 0:
+            break
+
+    # ── 2. Sync Passenger positions ──────────────────────────────────────────
+    cursor = 0
+    passenger_synced = 0
+    while True:
+        # Consumer now uses 'passenger_locations'
+        cursor, members = r.zscan("passenger_locations", cursor=cursor, count=100)
+        for user_id_raw, _ in members:
+            if isinstance(user_id_raw, bytes):
+                user_id = user_id_raw.decode()
+            else:
+                user_id = user_id_raw
+
+            # Consumer sets passenger_last_active:{id}
+            if not r.exists(f"passenger_last_active:{user_id}"):
+                r.zrem("passenger_locations", user_id)
+                continue
+
+            positions = r.geopos("passenger_locations", user_id)
+            if positions and positions[0]:
+                lon, lat = positions[0]
+                updated = PublicPassengerProfile.objects.filter(user_id=user_id).update(
+                    current_location=Point(float(lon), float(lat), srid=4326),
+                    last_active_at=timezone.now(),
+                )
+                if updated:
+                    passenger_synced += 1
+
+        if cursor == 0:
+            break
+
+    logger.info(f"Sync complete: {trip_synced} trips, {passenger_synced} passengers")
+    return {"status": "synced", "trips": trip_synced, "passengers": passenger_synced}
+
+
+# ─── Hybrid Signal Processing ─────────────────────────────────────────────────
+
+
+@shared_task(name="core.tasks.resolve_hybrid_location")
+def resolve_hybrid_location():
+    """
+    Consumes from raw_signal_stream, resolves cell/wifi signals to lat/lon via MLS,
+    applies Kalman Filter smoothing, and updates the vehicle's real-time position.
+    """
+    import json
+    from core.models import HybridLog
+    from core.utils import (
+        resolve_hybrid_location_external,
+        process_gps_update,
+        KalmanFilter,
+    )
+
+    r = get_async_redis_client()  # get_redis_client()
+
+    # Read up to 100 items from the stream
+    messages = r.xread({"raw_signal_stream": "0-0"}, count=50)
+
+    resolved_count = 0
+    if messages:
+        for stream, msgs in messages:
+            for msg_id, payload in msgs:
+                try:
+
+                    def get_val(key):
+                        # Try both bytes and string keys for robustness
+                        v = payload.get(key)
+                        if v is None:
+                            v = payload.get(
+                                key.decode() if isinstance(key, bytes) else key
+                            )
+                        if isinstance(v, bytes):
+                            return v.decode()
+                        return v
+
+                    user_id = get_val("user_id")
+                    trip_id = get_val("trip_id") or ""
+                    cell_towers = json.loads(get_val("cell_towers") or "[]")
+                    wifi_aps = json.loads(get_val("wifi_aps") or "[]")
+                    device_id = get_val("device_id") or ""
+                    ts_raw = get_val("timestamp")
+                    ts_float = float(ts_raw) if ts_raw else timezone.now().timestamp()
+                    timestamp = timezone.datetime.fromtimestamp(
+                        ts_float, tz=timezone.utc
+                    )
+
+                    # 1. Log the raw signals
+                    HybridLog.objects.create(
+                        user_id=user_id,
+                        trip_id=trip_id if trip_id else None,
+                        cell_towers=cell_towers,
+                        wifi_aps=wifi_aps,
+                        device_id=device_id,
+                        timestamp=timestamp,
+                    )
+
+                    # 2. Resolve to Lat/Lon
+                    location_data = resolve_hybrid_location_external(
+                        cell_towers, wifi_aps
+                    )
+
+                    if location_data and trip_id:
+                        # 3. Apply Kalman Filter Smoothing
+                        kf = KalmanFilter()
+
+                        # Fetch last known state from Redis
+                        kf_state_key = f"kf_state:{trip_id}"
+                        last_state_raw = r.get(kf_state_key)
+
+                        if last_state_raw:
+                            ls = json.loads(last_state_raw)
+                            kf.set_state(
+                                ls["lat"], ls["lon"], ls["velocity"], ls["heading"]
+                            )
+
+                            # Calculate dt from last_timestamp
+                            last_ts = ls.get("timestamp", ts_float - 1.0)
+                            dt = max(0.1, ts_float - last_ts)
+                            kf.predict(current_dt=dt)
+                        else:
+                            # Initialize with first measurement
+                            kf.set_state(location_data["lat"], location_data["lon"])
+
+                        # Update with new measurement
+                        kf.update(location_data["lat"], location_data["lon"])
+                        smoothed = kf.get_state()
+                        smoothed["timestamp"] = (
+                            ts_float  # Store current timestamp in state
+                        )
+
+                        # Save new state to Redis
+                        r.set(kf_state_key, json.dumps(smoothed), ex=3600)
+
+                        # 4. Trigger GPS update logic with smoothed coordinate
+                        process_gps_update(
+                            trip_id=trip_id,
+                            lat=smoothed["lat"],
+                            lon=smoothed["lon"],
+                            source="hybrid_smoothed",
+                        )
+                        resolved_count += 1
+
+                    # 5. Remove from stream after processing
+                    r.xdel("raw_signal_stream", msg_id)
+
+                except Exception as e:
+                    logger.error(f"Error in resolve_hybrid_location for {msg_id}: {e}")
+
+    return {"resolved": resolved_count}
+
+
+@shared_task(name="core.tasks.update_driver_manifest")
+def update_driver_manifest(trip_id):
+    """
+    Recalculates the Redis manifest and broadcasts
+    the updated state to the driver via WebSockets.
+    """
+    from core.services.manifest import ManifestManager
+    from core.models import BoardingRequest
+    from core.api.serializers import BoardingRequestSerializer
+    from channels.layers import get_channel_layer
+    from asgiref.sync import async_to_sync
+
+    try:
+        # 1. Recalculate Redis Manifest (Stops with boarders)
+        mm = ManifestManager()
+        mm.recalculate_manifest(trip_id)
+        redis_manifest = mm.get_manifest(trip_id)
+
+        # 2. Fetch full list for legacy WebSocket clients or detailed view
+        requests = BoardingRequest.objects.filter(
+            trip_id=trip_id, status__in=["pending", "approaching", "boarded"]
+        ).select_related("passenger", "pickup_stop")
+
+        serializer = BoardingRequestSerializer(requests, many=True)
+        manifest_data = serializer.data
+
+        # 3. Broadcast updated manifest
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            payload = {
+                "type": "manifest_update",
+                "trip_id": str(trip_id),
+                "manifest": manifest_data,  # Legacy detailed list
+                "redis_manifest": redis_manifest,  # New aggregated list
+                "total_pending": requests.filter(status="pending").count(),
+                "total_boarded": requests.filter(status="boarded").count(),
+            }
+
+            # Broadcast to Trip Group (Legacy/Shared)
+            async_to_sync(channel_layer.group_send)(f"trip_{trip_id}", payload)
+
+            # Broadcast to dedicated Driver Manifest group
+            trip = ActiveTrip.objects.select_related("vehicle").get(id=trip_id)
+            if trip.vehicle:
+                async_to_sync(channel_layer.group_send)(
+                    f"manifest_{trip.vehicle_id}", payload
+                )
+        return {"status": "success", "trip_id": str(trip_id)}
+    except Exception as e:
+        logger.error(f"Error updating driver manifest for trip {trip_id}: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+# ─── OTP Task ─────────────────────────────────────────────────────────────────
+
 
 @shared_task(name="core.tasks.send_otp_async")
 def send_otp_async(user_id):
-    """
-    Generate a 6-digit OTP, store it on the user, and send via email.
-    Never blocks the request thread.
-    """
+    """Generate a 6-digit OTP, persist it, and email to the user."""
     from django.contrib.auth import get_user_model
     from django.core.mail import send_mail
 
     User = get_user_model()
+    logger.info(f"[OTP] Sending OTP to user {user_id}")
     try:
         user = User.objects.get(id=user_id)
+        logger.info(f"[OTP] User found: {user.email}")
     except User.DoesNotExist:
+        logger.error(f"[OTP] User {user_id} not found")
         return {"status": "error", "reason": f"User {user_id} not found"}
 
-    otp = "123456" #"".join(random.choices(string.digits, k=6))
+    otp = 123456  # "".join(random.choices(string.digits, k=6))
+    logger.info(f"[OTP] Generated code {otp} for {user.email}")
     user.otp = otp
     user.otp_verified = False
     user.otp_created_at = timezone.now()
     user.save(update_fields=["otp", "otp_verified", "otp_created_at"])
-    
-    # Send email (prints to console in dev — set EMAIL_BACKEND accordingly)
+
     try:
-        print("otp : ",otp)
         send_mail(
             subject="Your Vayy Verification Code",
-            message=(
-                f"Your Vayy verification code is: {otp}\n\n"
-                "This code expires in 10 minutes.\n"
-                "If you did not request this, please ignore this email."
-            ),
+            message=f"Your Vayy verification code is: {otp}\n\nExpires in 10 minutes.\n\nIf you did not request this, please ignore.",
             from_email="noreply@vayy.app",
             recipient_list=[user.email],
             fail_silently=False,
         )
+        logger.info(f"[OTP] Email sent to {user.email}")
     except Exception as e:
-        # Log but don't fail — user can use console backend in dev
-        print(f"[OTP] Email send failed for {user.email}: {e}")
+        logger.error(f"[OTP] Email delivery failed for {user.email}: {e}")
 
-    print(f"[OTP] Sent OTP {otp} to {user.email}")
-    return {"status": "sent", "email": user.email}
+    return {"status": "sent"}
 
 
 # ─── Cleanup Tasks ────────────────────────────────────────────────────────────
 
+
 @shared_task(name="core.tasks.cleanup_inactive_trips")
 def cleanup_inactive_trips():
-    """
-    Every 60s: set trips to inactive where last_updated < now - 90 seconds.
-    This handles driver browser-close / network drop scenarios.
-    """
+    """Every 60 s: mark trips inactive if last_updated < now − 90 s."""
     from core.models import ActiveTrip
 
     threshold = timezone.now() - timedelta(seconds=90)
     updated = ActiveTrip.objects.filter(
         status="active",
         last_updated__lt=threshold,
-    ).update(status="inactive", is_active=False)
-
-    print(f"[Cleanup] Deactivated {updated} stale trips (threshold: {threshold})")
+    ).update(status="inactive")
     return {"deactivated": updated}
 
 
 @shared_task(name="core.tasks.cleanup_stale_passengers")
 def cleanup_stale_passengers():
-    """
-    Every 5 minutes: placeholder for future PassengerWait model cleanup.
-    Currently a no-op but registered so the Beat schedule is valid.
-    """
-    # Future: PassengerWait.objects.filter(created_at__lt=now-10min).delete()
-    print("[Cleanup] Passenger wait cleanup ran (no-op — PassengerWait not yet implemented)")
+    """Maintenance task for passenger location health."""
     return {"status": "ok"}
-
-
-# ─── Bulk Upload Task ─────────────────────────────────────────────────────────
-
-@shared_task(name="core.tasks.process_bulk_upload")
-def process_bulk_upload(log_id, file_path):
-    """
-    Process a CSV/Excel student bulk upload asynchronously.
-    Updates BulkUploadLog with success/error counts.
-    Triggered for files > 100 rows.
-    """
-    import csv
-    import os
-    from core.models import BulkUploadLog, Route, Stop, StudentProfile
-    from django.contrib.auth import get_user_model
-
-    User = get_user_model()
-
-    try:
-        log = BulkUploadLog.objects.get(id=log_id)
-    except BulkUploadLog.DoesNotExist:
-        return {"status": "error", "reason": f"BulkUploadLog {log_id} not found"}
-
-    REQUIRED_COLUMNS = {
-        "student_name", "student_id", "email"
-    }
-    # Optional columns: bus_pass_id, bus_pass_validity, phone_number, vehicle_number
-
-    errors = []
-    success_count = 0
-
-    try:
-        # Handle both CSV and Excel
-        if file_path.endswith(".xlsx"):
-            import openpyxl
-            wb = openpyxl.load_workbook(file_path)
-            ws = wb.active
-            rows = list(ws.iter_rows(values_only=True))
-            headers = [str(h).strip().lower() for h in rows[0]]
-            data_rows = [dict(zip(headers, row)) for row in rows[1:]]
-        else:
-            with open(file_path, "r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                headers = [h.strip().lower() for h in reader.fieldnames or []]
-                data_rows = [
-                    {k.strip().lower(): v for k, v in row.items()}
-                    for row in reader
-                ]
-
-        # Validate headers
-        missing = REQUIRED_COLUMNS - set(headers)
-        if missing:
-            log.errors = [{"row": 0, "reason": f"Missing columns: {', '.join(missing)}"}]
-            log.error_count = 1
-            log.save()
-            return {"status": "error", "reason": "Missing required columns"}
-
-        log.total_rows = len(data_rows)
-        log.save(update_fields=["total_rows"])
-
-        from core.models import Vehicle, StudentAssignment
-
-        for idx, row in enumerate(data_rows, start=2):  # row 1 = headers
-            try:
-                email = str(row.get("email", "")).strip()
-                if not email:
-                    raise ValueError("Email is required")
-
-                # Create or get user
-                user, created = User.objects.get_or_create(
-                    email=email,
-                    defaults={
-                        "username": email,
-                        "role": "student",
-                        "is_verified": True,
-                        "university": log.uploaded_by.university # Inherit from uploader
-                    }
-                )
-                if created:
-                    user.set_unusable_password()
-                    user.save()
-
-                # Parse bus_pass_validity
-                validity = None
-                validity_val = str(row.get("bus_pass_validity", "")).strip()
-                if validity_val and validity_val.lower() != "none" and validity_val != "NaN":
-                    from datetime import datetime as dt
-                    try:
-                        validity = dt.strptime(validity_val, "%Y-%m-%d").date()
-                    except ValueError:
-                        # Try common excel formats etc
-                        pass
-
-                # Create or update StudentProfile
-                StudentProfile.objects.update_or_create(
-                    user=user,
-                    defaults={
-                        "student_name": str(row.get("student_name", "")).strip(),
-                        "student_id": str(row.get("student_id", "")).strip(),
-                        "bus_pass_id": str(row.get("bus_pass_id", "")).strip() or None,
-                        "bus_pass_validity": validity,
-                        "phone_number": str(row.get("phone_number", "")).strip(),
-                    }
-                )
-
-                # Handle Vehicle Assignment if provided
-                v_num = str(row.get("vehicle_number", "")).strip()
-                if v_num:
-                    vehicle = Vehicle.objects.filter(
-                        university=log.uploaded_by.university,
-                        vehicle_number__iexact=v_num
-                    ).first()
-                    if vehicle:
-                        StudentAssignment.objects.update_or_create(
-                            student=user,
-                            defaults={"vehicle": vehicle}
-                        )
-                    else:
-                        errors.append({"row": idx, "reason": f"Vehicle '{v_num}' not found in your university. User created but unassigned."})
-
-                success_count += 1
-
-            except Exception as e:
-                errors.append({"row": idx, "reason": str(e)})
-
-        log.success_count = success_count
-        log.error_count = len(errors)
-        log.errors = errors
-        log.save()
-
-    except Exception as e:
-        log.errors = [{"row": 0, "reason": f"File processing error: {e}"}]
-        log.error_count = 1
-        log.save()
-        return {"status": "error", "reason": str(e)}
-    finally:
-        # Clean up temp file
-        if os.path.exists(file_path):
-            os.remove(file_path)
-
-    print(f"[BulkUpload] Log {log_id}: {success_count} success, {len(errors)} errors")
-    return {"status": "done", "success": success_count, "errors": len(errors)}

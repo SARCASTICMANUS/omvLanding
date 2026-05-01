@@ -1,6 +1,4 @@
-# VAYY | vayy/urls.py | Status: 🔧 Fixed
-# Reason: Fixed broken as_token_view() hack; added me, set-password, forgot/reset-password,
-#         trips endpoints, bulk-upload, student dashboard, and routes endpoint.
+# VAYY | vayy/urls.py | Status: ✅ Public Transport Refactor
 
 from django.conf import settings
 from django.conf.urls.static import static
@@ -10,39 +8,41 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from core.api.views import (
-    UniversityViewSet,
+    CityViewSet,
     VehicleViewSet,
-    StudentAssignmentViewSet,
-    StudentProfileViewSet,
+    PassengerProfileViewSet,
+    PublicDriverProfileViewSet,
+    UserViewSet,
+    BoardingRequestViewSet,
     GlobalSearchView,
+    ReverseSearchView,
     AdminRouteView,
     AdminRoutePreviewView,
     DriverStartTripView,
     TripEndView,
     TripNextStopsView,
     PassengerMatchView,
-    NearbyStopsView,
+    PassengerNearbyStopsView,
+    PassengerDashboardView,
+    PassengerFilteredTripsView,
+    TelemetryIngestView,
     AuthView,
     MeView,
-    StudentDashboardView,
-    BulkUploadView,
-    DriverProfileViewSet,
-    UserViewSet,
 )
 
 router = DefaultRouter()
-router.register(r"universities", UniversityViewSet)
+router.register(r"cities", CityViewSet)
 router.register(r"vehicles", VehicleViewSet)
-router.register(r"assignments", StudentAssignmentViewSet)
-router.register(r"driver-profiles", DriverProfileViewSet)
-router.register(r"student-profiles", StudentProfileViewSet)
+router.register(r"driver-profiles", PublicDriverProfileViewSet)
+router.register(r"passenger-profiles", PassengerProfileViewSet)
 router.register(r"users", UserViewSet)
+router.register(r"boarding-requests", BoardingRequestViewSet)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include(router.urls)),
 
-    # ── Auth Endpoints ────────────────────────────────────────────────────────
+    # ── Auth ──────────────────────────────────────────────────────────────────
     path("api/auth/register/", AuthView.as_view(), {"action": "register"}),
     path("api/auth/login/", AuthView.as_view(), {"action": "login"}),
     path("api/auth/send-otp/", AuthView.as_view(), {"action": "send-otp"}),
@@ -55,14 +55,12 @@ urlpatterns = [
 
     # ── Global Search ─────────────────────────────────────────────────────────
     path("api/global-search/", GlobalSearchView.as_view()),
+    path("api/reverse-search/", ReverseSearchView.as_view()),
 
     # ── Admin: Routes ─────────────────────────────────────────────────────────
     path("api/admin/routes/", AdminRouteView.as_view()),
     path("api/admin/routes/preview/", AdminRoutePreviewView.as_view()),
-    path("api/routes/", AdminRouteView.as_view()),  # Alias for driver/student GET
-
-    # ── Admin: Students ───────────────────────────────────────────────────────
-    path("api/admin/students/bulk-upload/", BulkUploadView.as_view()),
+    path("api/routes/", AdminRouteView.as_view()),  # Alias for driver/passenger GET
 
     # ── Driver ────────────────────────────────────────────────────────────────
     path("api/driver/routes/", DriverStartTripView.as_view()),
@@ -71,10 +69,17 @@ urlpatterns = [
     path("api/trips/end/<str:trip_id>/", TripEndView.as_view()),
     path("api/trips/next-stops/<str:trip_id>/", TripNextStopsView.as_view()),
 
-    # ── Passenger / Student ───────────────────────────────────────────────────
+    # ── Passenger ─────────────────────────────────────────────────────────────
     path("api/passenger/match/", PassengerMatchView.as_view()),
-    path("api/passenger/nearby-stops/", NearbyStopsView.as_view()),
-    path("api/student/dashboard/", StudentDashboardView.as_view()),
+    path("api/passenger/nearby-stops/", PassengerNearbyStopsView.as_view()),
+    path("api/passenger/dashboard/", PassengerDashboardView.as_view()),
+    path("api/passenger/filtered-trips/", PassengerFilteredTripsView.as_view()),
+
+    # ── Telemetry ─────────────────────────────────────────────────────────────
+    path("api/telemetry/ingest/", TelemetryIngestView.as_view()),
+
+    # Legacy aliases (keep existing frontend working during transition)
+    path("api/student/dashboard/", PassengerDashboardView.as_view()),
 ]
 
 if settings.DEBUG:

@@ -1,381 +1,426 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
-import api from "../utils/api";
 import {
   Mail,
-  Lock,
   User,
   KeyRound,
   Car,
-  Bus,
   CheckCircle2,
   ChevronRight,
-  ChevronLeft,
-  School,
-  GraduationCap,
-  ShieldCheck,
 } from "lucide-react";
 
-const RegisterPage = () => {
+import PassengerRegisterForm from "../features/passenger/components/PassengerRegisterForm";
+import DriverRegisterForm from "../features/driver/components/DriverRegisterForm";
+import api from "../lib/api";
+
+const ROLES = [
+  {
+    id: "passenger",
+    icon: User,
+    label: "Passenger",
+    desc: "Track public buses near you",
+  },
+  {
+    id: "driver",
+    icon: Car,
+    label: "Driver",
+    desc: "Share your live location",
+  },
+];
+
+const InputField = ({ icon: Icon, className = "", ...props }) => (
+  <div className="group relative">
+    {Icon && (
+      <Icon
+        className="absolute left-4 top-4 text-slate-400 transition-colors group-focus-within:text-indigo-500"
+        size={18}
+      />
+    )}
+
+    <input
+      className={`w-full ${
+        Icon ? "pl-12" : "pl-4"
+      } rounded-2xl border border-slate-200 bg-slate-50 py-4 pr-4 text-sm font-medium text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 ${className}`}
+      {...props}
+    />
+  </div>
+);
+
+export default function RegisterPage() {
   const [step, setStep] = useState(1);
-  const [universities, setUniversities] = useState([]);
+  const [cities, setCities] = useState([]);
   const [formData, setFormData] = useState({
     email: "",
     otp: "",
     password: "",
-    role: "student",
-    university: "",
-    vehicle_type: "bus",
-    vehicle_number: "",
+    role: "passenger",
+    city: "",
+    phone_number: "",
     first_name: "",
     last_name: "",
+    license_number: "",
+    vehicle_type: "bus",
   });
+
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const { isAuthenticated } = useSelector((state) => state.auth);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isAuthenticated) navigate("/");
-    fetchUniversities();
+    if (isAuthenticated) {
+      navigate("/");
+      return;
+    }
+
+    fetchCities();
   }, [isAuthenticated, navigate]);
 
-  const fetchUniversities = async () => {
+  const fetchCities = async () => {
     try {
-      const res = await api.get("/api/universities/");
-      setUniversities(res.data);
-    } catch (e) {
-      console.error("Failed to load universities");
+      const res = await api.get("/api/cities/");
+      const data = Array.isArray(res.data) ? res.data : res.data.results || [];
+      setCities(data);
+    } catch (err) {
+      console.warn("Could not load cities");
     }
   };
 
+  const updateFormData = (key, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
   const handleSendOTP = async () => {
-    if (!formData.email) return alert("Email required");
+    setError("");
+
+    if (!formData.email) {
+      setError("Email is required");
+      return;
+    }
+
     setLoading(true);
+
     try {
-      await api.post("/api/auth/send-otp/", { email: formData.email });
+      await api.post("/api/auth/send-otp/", {
+        email: formData.email,
+      });
+
       setStep(2);
-    } catch (e) {
-      alert("Failed to send OTP");
+    } catch (err) {
+      setError("Failed to send OTP. Please check your email and try again.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleVerifyOTP = async () => {
-    if (!formData.otp) return alert("OTP required");
+    setError("");
+
+    if (!formData.otp) {
+      setError("Enter the OTP sent to your email");
+      return;
+    }
+
     setLoading(true);
+
     try {
       await api.post("/api/auth/verify-otp/", {
         email: formData.email,
         otp: formData.otp,
       });
+
       setStep(3);
-    } catch (e) {
-      alert("Invalid OTP");
+    } catch (err) {
+      setError("Invalid or expired OTP. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRegister = async () => {
-    if (!formData.university && formData.role !== "passenger") {
-      return alert("Please select your University");
-    }
+  const handlePassengerSubmit = async (payload) => {
+    setError("");
     setLoading(true);
+
     try {
-      await api.post("/api/auth/register/", formData);
+      await api.post("/api/auth/register/", {
+        email: formData.email,
+        password: payload.password,
+        role: "passenger",
+        city: payload.city || undefined,
+        phone_number: payload.phone_number || "",
+        first_name: payload.first_name || "",
+        last_name: payload.last_name || "",
+        gender: payload.gender,
+        dob: payload.dob,
+        primary_travel_purpose: payload.primary_travel_purpose,
+        travel_frequency: payload.travel_frequency,
+        usual_travel_time: payload.usual_travel_time,
+        same_route_daily: payload.same_route_daily,
+        state: payload.state,
+      });
+
       navigate("/login");
     } catch (err) {
-      alert("Registration Failed");
+      const msg =
+        err?.response?.data?.email?.[0] ||
+        err?.response?.data?.detail ||
+        "Registration failed. Please try again.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleDriverSubmit = async (payload) => {
+    setError("");
+    setLoading(true);
+
+    try {
+      const submitData = new FormData();
+
+      submitData.append("email", formData.email);
+      submitData.append("password", payload.password);
+      submitData.append("role", "driver");
+      submitData.append("first_name", payload.first_name || "");
+      submitData.append("last_name", payload.last_name || "");
+      submitData.append("phone_number", payload.phone_number || "");
+      submitData.append("gender", payload.gender);
+      submitData.append("dob", payload.dob);
+      submitData.append("license_number", payload.license_number || "");
+      submitData.append("vehicle_type", payload.vehicle_type || "");
+      submitData.append("vehicle_no", payload.vehicle_no || "");
+      submitData.append(
+        "driving_experience",
+        payload.driving_experience || "",
+      );
+
+      if (payload.dl_file) {
+        submitData.append("dl_file", payload.dl_file);
+      }
+
+      await api.post("/api/auth/register/", submitData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      navigate("/login");
+    } catch (err) {
+      const msg =
+        err?.response?.data?.email?.[0] ||
+        err?.response?.data?.detail ||
+        "Registration failed. Please try again.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (step === 3) {
+    return formData.role === "driver" ? (
+      <DriverRegisterForm
+        email={formData.email}
+        onBack={() => {
+          setStep(2);
+          setError("");
+        }}
+        onSubmit={handleDriverSubmit}
+        loading={loading}
+        error={error}
+      />
+    ) : (
+      <PassengerRegisterForm
+        email={formData.email}
+        cities={cities}
+        onBack={() => {
+          setStep(2);
+          setError("");
+        }}
+        onSubmit={handlePassengerSubmit}
+        loading={loading}
+        error={error}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans">
-      {/* Header Logo */}
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-4 font-sans">
       <div className="mb-8 flex flex-col items-center">
-        <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-3xl shadow-2xl mb-3 rotate-3">
+        <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500 text-3xl font-black text-white shadow-2xl shadow-indigo-500/40">
           V
         </div>
-        <h1 className="text-3xl font-black text-slate-800 tracking-tight">
-          Join the Network
+
+        <h1 className="text-3xl font-black tracking-tight text-white">
+          Join Vayy
         </h1>
-        <p className="text-slate-500 text-sm font-medium">
-          University Transit & Ride Sharing
+
+        <p className="mt-1 text-sm font-medium text-indigo-300">
+          Public Transport Tracking · Open to Everyone
         </p>
       </div>
 
-      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-xl overflow-hidden border border-slate-100 ring-1 ring-slate-200/50">
-        {/* Progress Bar */}
-        <div className="bg-slate-50/50 p-6 border-b flex justify-between px-12">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="flex flex-col items-center gap-2">
+      <div className="w-full max-w-xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+        <div className="flex justify-between border-b bg-slate-50 px-12 py-5">
+          {[
+            { n: 1, label: "Email" },
+            { n: 2, label: "Verify" },
+            { n: 3, label: "Profile" },
+          ].map(({ n, label }) => (
+            <div key={n} className="flex flex-col items-center gap-1.5">
               <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-black transition-all duration-500 ${
-                  step >= s
-                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-110"
+                className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-black transition-all duration-500 ${
+                  step >= n
+                    ? "scale-110 bg-indigo-600 text-white shadow-lg shadow-indigo-200"
                     : "bg-slate-200 text-slate-400"
                 }`}
               >
-                {step > s ? <CheckCircle2 size={20} /> : s}
+                {step > n ? <CheckCircle2 size={18} /> : n}
               </div>
+
               <span
-                className={`text-[10px] uppercase tracking-[0.2em] font-black ${step >= s ? "text-indigo-600" : "text-slate-400"}`}
+                className={`text-[10px] font-black uppercase tracking-widest ${
+                  step >= n ? "text-indigo-600" : "text-slate-400"
+                }`}
               >
-                {s === 1 ? "Start" : s === 2 ? "Verify" : "Details"}
+                {label}
               </span>
             </div>
           ))}
         </div>
 
-        <div className="p-10 min-h-[450px] flex flex-col justify-center">
-          {/* STEP 1: Email */}
+        <div className="flex min-h-[400px] flex-col justify-center p-10">
           {step === 1 && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="text-center space-y-2">
+            <div className="space-y-7">
+              <div className="text-center">
                 <h3 className="text-2xl font-black text-slate-800">
-                  Welcome aboard!
+                  Get started
                 </h3>
-                <p className="text-slate-500 text-sm font-medium">
-                  Enter your email to verify your identity.
+                <p className="mt-1 text-sm text-slate-500">
+                  Enter your email to receive a verification code
                 </p>
               </div>
-              <div className="space-y-2">
-                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                  University or Personal Email
-                </label>
-                <div className="relative group">
-                  <Mail
-                    className="absolute left-4 top-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors"
-                    size={20}
-                  />
-                  <input
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-medium text-slate-700"
-                    placeholder="name@university.edu"
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
-                  />
-                </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {ROLES.map((role) => (
+                  <button
+                    key={role.id}
+                    type="button"
+                    onClick={() => updateFormData("role", role.id)}
+                    className={`flex flex-col items-center gap-2 rounded-2xl border-2 p-4 text-left transition-all ${
+                      formData.role === role.id
+                        ? "scale-[1.02] border-indigo-600 bg-indigo-50 text-indigo-700 shadow-md"
+                        : "border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-300"
+                    }`}
+                  >
+                    <role.icon size={22} />
+                    <span className="text-sm font-black">{role.label}</span>
+                    <span className="text-center text-[11px] leading-tight opacity-70">
+                      {role.desc}
+                    </span>
+                  </button>
+                ))}
               </div>
+
+              <InputField
+                icon={Mail}
+                type="email"
+                placeholder="your@email.com"
+                value={formData.email}
+                onChange={(e) => updateFormData("email", e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSendOTP();
+                }}
+              />
+
+              {error && (
+                <p className="text-center text-xs font-semibold text-red-500">
+                  {error}
+                </p>
+              )}
+
               <button
+                type="button"
                 onClick={handleSendOTP}
                 disabled={loading}
-                className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 transition shadow-xl hover:shadow-indigo-500/30 flex justify-center items-center gap-3 disabled:bg-slate-200 disabled:shadow-none"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 py-4 text-sm font-black uppercase tracking-widest text-white shadow-xl transition-all hover:bg-indigo-700 hover:shadow-indigo-500/30 active:scale-[0.98] disabled:opacity-50"
               >
                 {loading ? (
-                  "Initiating..."
+                  "Sending..."
                 ) : (
                   <>
-                    Continue <ChevronRight size={20} />
+                    Continue <ChevronRight size={18} />
                   </>
                 )}
               </button>
             </div>
           )}
 
-          {/* STEP 2: OTP */}
           {step === 2 && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="text-center space-y-2">
+            <div className="space-y-7">
+              <div className="text-center">
                 <h3 className="text-2xl font-black text-slate-800">
-                  Check your mail
+                  Check your inbox
                 </h3>
-                <p className="text-slate-500 text-sm font-medium">
-                  We've sent a code to{" "}
-                  <span className="text-indigo-600 font-bold">
+                <p className="mt-1 text-sm text-slate-500">
+                  Code sent to{" "}
+                  <span className="font-bold text-indigo-600">
                     {formData.email}
                   </span>
                 </p>
               </div>
-              <div className="space-y-2">
-                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                  6-Digit Verification Code
-                </label>
-                <div className="relative">
-                  <KeyRound
-                    className="absolute left-4 top-4 text-slate-400"
-                    size={20}
-                  />
-                  <input
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all tracking-[0.5em] font-black text-2xl text-slate-800 text-center"
-                    placeholder="••••••"
-                    maxLength={6}
-                    value={formData.otp}
-                    onChange={(e) =>
-                      setFormData({ ...formData, otp: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
+
+              <InputField
+                icon={KeyRound}
+                placeholder="6-digit code"
+                maxLength={6}
+                value={formData.otp}
+                onChange={(e) => updateFormData("otp", e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleVerifyOTP();
+                }}
+                className="text-center text-2xl tracking-[0.5em]"
+              />
+
+              {error && (
+                <p className="text-center text-xs font-semibold text-red-500">
+                  {error}
+                </p>
+              )}
+
               <button
+                type="button"
                 onClick={handleVerifyOTP}
                 disabled={loading}
-                className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 transition shadow-xl hover:shadow-indigo-500/30"
+                className="w-full rounded-2xl bg-indigo-600 py-4 text-sm font-black uppercase tracking-widest text-white shadow-xl transition-all hover:bg-indigo-700 disabled:opacity-50"
               >
-                {loading ? "Authenticating..." : "Verify Identity"}
+                {loading ? "Verifying..." : "Verify Code"}
               </button>
-              <button
-                onClick={() => setStep(1)}
-                className="w-full text-slate-400 text-xs font-bold hover:text-indigo-600 hover:underline transition"
-              >
-                Wait, I entered the wrong email
-              </button>
-            </div>
-          )}
-
-          {/* STEP 3: Details */}
-          {step === 3 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {/* Name & Password */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                    Full Name
-                  </label>
-                  <input
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-sm"
-                    placeholder="John Doe"
-                    onChange={(e) =>
-                      setFormData({ ...formData, first_name: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                    Secure Password
-                  </label>
-                  <input
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-sm"
-                    type="password"
-                    placeholder="••••••••"
-                    onChange={(e) =>
-                      setFormData({ ...formData, password: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Role Selection */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                  Who are you?
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[
-                    { id: "student", icon: GraduationCap, label: "Student" },
-                    { id: "driver", icon: Car, label: "Driver" },
-                    {
-                      id: "university_admin",
-                      icon: ShieldCheck,
-                      label: "Admin",
-                    },
-                    { id: "passenger", icon: User, label: "Public" },
-                  ].map((role) => (
-                    <div
-                      key={role.id}
-                      onClick={() =>
-                        setFormData({ ...formData, role: role.id })
-                      }
-                      className={`cursor-pointer border-2 rounded-2xl p-3 flex flex-col items-center gap-2 transition-all ${formData.role === role.id ? "border-indigo-600 bg-indigo-50 text-indigo-700 scale-105 shadow-md" : "border-slate-100 hover:border-slate-300 text-slate-400 bg-slate-50/50"}`}
-                    >
-                      <role.icon size={20} />
-                      <span className="font-black text-[9px] uppercase tracking-tighter">
-                        {role.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* University Selection (Only for specific roles) */}
-              {formData.role !== "passenger" && (
-                <div className="space-y-2 animate-in fade-in duration-300">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                    Your College
-                  </label>
-                  <div className="relative">
-                    <School
-                      className="absolute left-4 top-4 text-slate-400"
-                      size={18}
-                    />
-                    <select
-                      value={formData.university}
-                      onChange={(e) =>
-                        setFormData({ ...formData, university: e.target.value })
-                      }
-                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-sm appearance-none"
-                    >
-                      <option value="">Select University...</option>
-                      {universities.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {/* Driver Specifics */}
-              {formData.role === "driver" && (
-                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3 animate-in zoom-in-95 duration-300 shadow-inner">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Bus size={14} className="text-indigo-600" />
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                      Bus Details
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <select
-                      className="p-3 border rounded-xl bg-white text-xs font-bold"
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          vehicle_type: e.target.value,
-                        })
-                      }
-                    >
-                      <option value="bus">Transit Bus</option>
-                      <option value="van">Shuttle Van</option>
-                      <option value="car">Staff Car</option>
-                    </select>
-                    <input
-                      className="p-3 border rounded-xl placeholder:text-slate-400 text-xs font-bold"
-                      placeholder="Bus Number (e.g. B-704)"
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          vehicle_number: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              )}
 
               <button
-                onClick={handleRegister}
-                disabled={loading}
-                className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-emerald-700 transition shadow-xl hover:shadow-emerald-500/30"
+                type="button"
+                onClick={() => {
+                  setStep(1);
+                  setError("");
+                }}
+                className="w-full text-xs font-bold text-slate-400 transition hover:text-indigo-600"
               >
-                {loading ? "Finalizing Profile..." : "Complete Setup"}
+                Wrong email? Go back
               </button>
             </div>
           )}
         </div>
 
         {step === 1 && (
-          <div className="bg-slate-50/50 p-6 text-center text-xs font-bold text-slate-500 border-t border-slate-100">
-            Already a member?{" "}
+          <div className="border-t bg-slate-50 p-5 text-center text-xs font-bold text-slate-500">
+            Already have an account?{" "}
             <Link
               to="/login"
-              className="text-indigo-600 font-black hover:underline ml-1"
+              className="ml-1 font-black text-indigo-600 hover:underline"
             >
               Sign In
             </Link>
@@ -384,6 +429,4 @@ const RegisterPage = () => {
       </div>
     </div>
   );
-};
-
-export default RegisterPage;
+}
