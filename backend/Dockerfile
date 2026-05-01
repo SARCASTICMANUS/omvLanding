@@ -76,6 +76,7 @@ COPY . .
 
 # 1. We remove makemigrations (do that locally!)
 # 2. We keep migrate, collectstatic, and the server start
-CMD sh -c "python manage.py migrate --noinput && \
+CMD sh -c "python manage.py makemigrations && \
+    python manage.py migrate --noinput && \
     python manage.py collectstatic --noinput && \
     daphne -b 0.0.0.0 -p 8000 vayy.asgi:application"
