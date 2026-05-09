@@ -248,8 +248,3 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 # elif SYSTEM == "Linux":  # Docker / Ubuntu
 #     GDAL_LIBRARY_PATH = os.environ.get("GDAL_LIBRARY_PATH", "/usr/lib/libgdal.so")
 #     GEOS_LIBRARY_PATH = os.environ.get("GEOS_LIBRARY_PATH", "/usr/lib/libgeos_c.so")
-import os
-from ctypes.util import find_library
-
-GDAL_LIBRARY_PATH = os.environ.get("GDAL_LIBRARY_PATH") or find_library("gdal")
-GEOS_LIBRARY_PATH = os.environ.get("GEOS_LIBRARY_PATH") or find_library("geos_c")

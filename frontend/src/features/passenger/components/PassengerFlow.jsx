@@ -27,6 +27,18 @@ export default function PassengerFlow({ onBackToDashboard }) {
     typeof point.lon === "number" &&
     Number.isFinite(point.lon);
 
+  const normalizeTrips = (data) => {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== "object") return [];
+
+    if (Array.isArray(data.active_trips)) return data.active_trips;
+    if (Array.isArray(data.trips)) return data.trips;
+    if (Array.isArray(data.results)) return data.results;
+    if (Array.isArray(data.routes)) return data.routes;
+
+    return [];
+  };
+
   // ✅ USE API HERE
   const fetchFilteredTrips = async (from, to) => {
     if (!hasValidCoords(from) || !hasValidCoords(to)) {
@@ -36,10 +48,18 @@ export default function PassengerFlow({ onBackToDashboard }) {
 
     try {
       const response = await api.post("/api/passenger/filtered-trips/", {
-        pickup: { lat: from.lat, lon: from.lon },
-        destination: { lat: to.lat, lon: to.lon },
+        pickup: { 
+          lat: from.lat, 
+          lon: from.lon,
+          name: from.name || from.display_name
+        },
+        destination: { 
+          lat: to.lat, 
+          lon: to.lon,
+          name: to.name || to.display_name
+        },
       });
-      return response.data;
+      return normalizeTrips(response.data);
     } catch (error) {
       console.error("Failed to fetch filtered trips", error);
       return [];
@@ -50,7 +70,7 @@ export default function PassengerFlow({ onBackToDashboard }) {
     try {
       const response = await api.get("/api/passenger/dashboard/");
       // Dashboard view returns { active_trips: [...] }
-      return response.data.active_trips || [];
+      return normalizeTrips(response.data);
     } catch (error) {
       console.error("Failed to fetch all trips", error);
       return [];

@@ -281,17 +281,24 @@ class AdminRouteView(APIView):
         stops_data = request.data.get("stops", [])
         custom_geometry = request.data.get("path")
 
+        if not custom_geometry and (not start or not end):
+            return Response({"error": "Start and end locations are required for new routes."}, status=400)
+
         if custom_geometry:
             path_coords = [(lon, lat) for lat, lon in custom_geometry]
             path = LineString(path_coords, srid=4326)
             total_distance = request.data.get("total_distance", 0)
         else:
-            waypoints = [(start["lon"], start["lat"])]
-            for s in stops_data:
-                waypoints.append((float(s["lon"]), float(s["lat"])))
-            waypoints.append((end["lon"], end["lat"]))
+            try:
+                waypoints = [(start["lon"], start["lat"])]
+                for s in stops_data:
+                    waypoints.append((float(s["lon"]), float(s["lat"])))
+                waypoints.append((end["lon"], end["lat"]))
 
-            route_data = create_route_geometry(waypoints)
+                route_data = create_route_geometry(waypoints)
+            except (KeyError, TypeError, ValueError) as e:
+                return Response({"error": f"Invalid location format: {e}"}, status=400)
+
             if route_data is None:
                 return Response(
                     {
@@ -347,10 +354,16 @@ class AdminRoutePreviewView(APIView):
         end = request.data.get("end")
         stops_data = request.data.get("stops", [])
 
-        waypoints = [(start["lon"], start["lat"])]
-        for s in sorted(stops_data, key=lambda x: x.get("order", 0)):
-            waypoints.append((float(s["lon"]), float(s["lat"])))
-        waypoints.append((end["lon"], end["lat"]))
+        if not start or not end:
+            return Response({"error": "Start and end locations are required."}, status=400)
+
+        try:
+            waypoints = [(start["lon"], start["lat"])]
+            for s in sorted(stops_data, key=lambda x: x.get("order", 0)):
+                waypoints.append((float(s["lon"]), float(s["lat"])))
+            waypoints.append((end["lon"], end["lat"]))
+        except (KeyError, TypeError, ValueError) as e:
+            return Response({"error": f"Invalid location data format: {e}"}, status=400)
 
         route_options = create_route_geometry(waypoints, alternatives=True)
         if route_options is None:
@@ -600,8 +613,10 @@ class PassengerDashboardView(APIView):
         )
 
 
-from core.utils import create_route_geometry, get_table_eta_async, _run
-from django.db.models import F
+from django.db import models
+from django.db.models import F, Q
+from django.db.models.functions import Cast
+from django.contrib.gis.db.models import GeometryField
 from django.contrib.gis.db.models.functions import LineLocatePoint
 from core.services.redis_service import get_redis_client
 
@@ -618,127 +633,176 @@ class PassengerFilteredTripsView(APIView):
     """
 
     def post(self, request):
-        pickup = request.data.get("pickup")  # {lat, lon}
-        destination = request.data.get("destination")  # {lat, lon}
-        print(
-            f"PassengerFilteredTrips: Received request with pickup={pickup} and destination={destination}"
-        )
+        pickup_data = request.data.get("pickup")  # {lat, lon, name}
+        dest_data = request.data.get("destination")  # {lat, lon, name}
+        print(f"PassengerFilteredTrips: request pickup={pickup_data}, dest={dest_data}")
 
-        if not pickup or not destination:
-            return Response(
-                {"error": "Pickup and destination are required"}, status=400
-            )
+        if not pickup_data or not dest_data:
+            return Response({"error": "Pickup and destination are required"}, status=400)
 
-        p_point = Point(float(pickup["lon"]), float(pickup["lat"]), srid=4326)
-        d_point = Point(float(destination["lon"]), float(destination["lat"]), srid=4326)
+        p_lat, p_lon = float(pickup_data["lat"]), float(pickup_data["lon"])
+        d_lat, d_lon = float(dest_data["lat"]), float(dest_data["lon"])
+        p_point = Point(p_lon, p_lat, srid=4326)
+        d_point = Point(d_lon, d_lat, srid=4326)
 
-        # 1. Find routes that pass near both points AND have correct directionality
-        # Radius in meters for geography queries
-        radius_m = float(request.data.get("radius_m", 3000))
+        # 1. Find candidate routes via multiple strategies
+        radius_m = float(request.data.get("radius_m", 5000)) # Increased default to 5km
+        routes = Route.objects.none()
 
-        # We annotate each route with the fraction of the line where pickup and destination are closest
-        # Use filter with geography=True for accurate meter distance
-        routes = (
-            Route.objects.filter(path__dwithin=(p_point, radius_m))
-            .filter(path__dwithin=(d_point, radius_m))
-            .annotate(
-                p_frac=LineLocatePoint("path", p_point),
-                d_frac=LineLocatePoint("path", d_point),
-            )
-            .filter(p_frac__lt=F("d_frac"))
-        )
-        print(
-            f"PassengerFilteredTrips: Found {routes.count()} candidate routes near pickup and destination with correct directionality"
-        )
+        # STRATEGY A: Path-based matching (DWithin)
+        routes_geo = Route.objects.filter(
+            Q(path__dwithin=(p_point, radius_m)) & Q(path__dwithin=(d_point, radius_m))
+        ).annotate(
+            p_frac=LineLocatePoint(Cast("path", GeometryField()), p_point),
+            d_frac=LineLocatePoint(Cast("path", GeometryField()), d_point),
+        ).filter(p_frac__lt=F("d_frac") + 0.1) # Increased buffer
+        
+        routes = routes_geo
+
+        # STRATEGY B: Name-based fallback (Resilient to geocoding differences)
+        if not routes.exists() and ("name" in pickup_data or "name" in dest_data):
+            p_name = pickup_data.get("name", "").lower()
+            d_name = dest_data.get("name", "").lower()
+            
+            # Match by start/end names or route name - using words for better match
+            p_terms = [t for t in p_name.replace(',', ' ').split() if len(t) > 2]
+            d_terms = [t for t in d_name.replace(',', ' ').split() if len(t) > 2]
+            
+            if p_terms and d_terms:
+                name_q = Q()
+                for t in p_terms: name_q |= Q(start_name__icontains=t) | Q(name__icontains=t)
+                dest_q = Q()
+                for t in d_terms: dest_q |= Q(end_name__icontains=t) | Q(name__icontains=t)
+                
+                name_routes = Route.objects.filter(name_q & dest_q).annotate(
+                    p_frac=LineLocatePoint(Cast("path", GeometryField()), p_point),
+                    d_frac=LineLocatePoint(Cast("path", GeometryField()), d_point),
+                )
+                routes = name_routes
+
+        # STRATEGY C: Wide Stop Proximity Fallback
+        if not routes.exists():
+            wide_radius = radius_m * 2 # 10km fallback
+            p_stop_routes = Stop.objects.filter(location__dwithin=(p_point, wide_radius)).values_list('route_id', flat=True)
+            d_stop_routes = Stop.objects.filter(location__dwithin=(d_point, wide_radius)).values_list('route_id', flat=True)
+            common_route_ids = set(p_stop_routes) & set(d_stop_routes)
+            if common_route_ids:
+                routes = Route.objects.filter(id__in=common_route_ids).annotate(
+                    p_frac=LineLocatePoint(Cast("path", GeometryField()), p_point),
+                    d_frac=LineLocatePoint(Cast("path", GeometryField()), d_point),
+                )
 
         if not routes.exists():
+            print("PassengerFilteredTrips: No routes found after all fallbacks")
             return Response([])
 
-        # 2. Find active trips for these routes
-        # Increased cutoff to 5 minutes (300s) to be less aggressive with staleness
-        cutoff = timezone.now() - timedelta(seconds=300)
+        def serialize_route_candidate(route):
+            stops = list(route.stops.order_by("order"))
+            return {
+                "trip_id": f"route-{route.id}",
+                "route_id": str(route.id),
+                "is_route_only": True,
+                "trip_available": False,
+                "bus_number": route.bus_number or "Route Match",
+                "vehicle_number": route.bus_number or "No active bus",
+                "route_name": route.name,
+                "pickup_name": route.start_name,
+                "destination_name": route.end_name,
+                "route_geometry": [[y, x] for x, y in route.path.coords] if route.path else [],
+                "path_coords": [[y, x] for x, y in route.path.coords] if route.path else [],
+                "distance_text": f"{round((route.total_distance_meters or 0) / 1000, 1)} km" if route.total_distance_meters else "",
+                "duration_text": "",
+                "stops_count": len(stops),
+                "stops": [{"id": str(s.id), "name": s.name, "lat": s.location.y, "lon": s.location.x, "order": s.order} for s in stops],
+                "next_stop": stops[0].name if stops else "N/A",
+                "eta_seconds": 0,
+                "current_lat": p_lat,
+                "current_lon": p_lon,
+            }
+
+        # 2. Find active trips
+        # Cutoff set to 15 minutes to be very lenient with inactive/slow updates
+        cutoff = timezone.now() - timedelta(seconds=900)
         active_trips = ActiveTrip.objects.filter(
             route__in=routes, status="active", last_updated__gte=cutoff
         ).select_related("route", "vehicle", "driver")
-        print(
-            f"PassengerFilteredTrips: Found {active_trips.count()} active trips for {routes.count()} candidate routes near pickup ({pickup['lat']}, {pickup['lon']}) and destination ({destination['lat']}, {destination['lon']}) within radius {radius_m}"
-        )
+
+        if not active_trips.exists():
+            print(f"PassengerFilteredTrips: Found {routes.count()} routes, but no active trips within 15m cutoff")
+            return Response([serialize_route_candidate(route) for route in routes])
 
         results = []
-        # Cache route fracs for quick lookup
-        route_data_map = {r.id: r.p_frac for r in routes}
+        route_frac_map = {r.id: getattr(r, 'p_frac', 0) for r in routes}
 
         for trip in active_trips:
-            # Get current location from Redis (realtime) or DB
+            # Check Redis for the absolutely most recent position
             curr_loc_raw = r_client.get(f"driver_pos:{trip.id}")
             if curr_loc_raw:
-                if isinstance(curr_loc_raw, bytes):
-                    curr_loc_raw = curr_loc_raw.decode()
-                lon, lat = map(float, curr_loc_raw.split(","))
+                lon, lat = map(float, curr_loc_raw.decode().split(","))
                 curr_pos = (lon, lat)
             elif trip.current_location:
                 curr_pos = (trip.current_location.x, trip.current_location.y)
             else:
                 curr_pos = (trip.route.path.coords[0][0], trip.route.path.coords[0][1])
 
-            # 3. DIRECTIONAL CHECK: Has the bus already passed the pickup?
-            # We calculate current position fraction on the route path
-            # Using a raw SQL query or another annotation for the specific point is best
-            # But we can approximate by checking if the bus is near the pickup or before it.
-            # For high accuracy, we'll do one more check:
+            # DIRECTIONAL CHECK: Has the bus passed the pickup?
             c_point = Point(curr_pos[0], curr_pos[1], srid=4326)
+            
+            # Annotate current fraction for this trip specifically
+            c_frac_data = Route.objects.filter(id=trip.route_id).annotate(
+                c_frac=LineLocatePoint(Cast("path", GeometryField()), c_point)
+            ).values("c_frac").first()
+            
+            curr_frac = c_frac_data["c_frac"] if c_frac_data else 0
+            pickup_frac = route_frac_map.get(trip.route_id, 0)
 
-            # We'll use a simple QuerySet to get the fraction for the current point
-            curr_frac_data = (
-                Route.objects.filter(id=trip.route_id)
-                .annotate(c_frac=LineLocatePoint("path", c_point))
-                .values("c_frac")
-                .first()
-            )
-
-            curr_frac = curr_frac_data["c_frac"] if curr_frac_data else 0
-            pickup_frac = route_data_map.get(trip.route_id, 0)
-
-            # If bus has already passed the pickup point (with a buffer for GPS jitter/large routes)
-            if curr_frac > (pickup_frac + 0.01):
+            # Bus is eligible if it hasn't passed the pickup by more than a 5% margin (lenient)
+            if curr_frac > (pickup_frac + 0.05):
                 continue
 
-            # 4. Find next stop and ETA
             stops = list(trip.route.stops.order_by("order"))
-            next_stop = None
+            next_stop_name = "N/A"
             eta_seconds = 0
 
             if stops:
+                # OSRM ETA calculation
                 sources = [curr_pos]
                 destinations = [(s.location.x, s.location.y) for s in stops]
-
                 table = _run(get_table_eta_async(sources, destinations))
                 if table and table.get("durations"):
                     durations = table["durations"][0]
-                    # We want the first stop where stop_frac > curr_frac
-                    # Or simply the one with the smallest duration that is ahead
-                    # For now, pick the nearest stop as "next stop"
-                    min_dur = min(durations)
-                    idx = durations.index(min_dur)
-                    next_stop = stops[idx]
-                    eta_seconds = min_dur
+                    # Find first stop ahead of bus
+                    for idx, s in enumerate(stops):
+                        if durations[idx] > 0:
+                            next_stop_name = s.name
+                            eta_seconds = durations[idx]
+                            break
 
-            results.append(
-                {
-                    "trip_id": str(trip.id),
-                    "bus_number": trip.route.bus_number,
-                    "vehicle_number": (
-                        trip.vehicle.vehicle_number if trip.vehicle else "N/A"
-                    ),
-                    "route_name": trip.route.name,
-                    "next_stop": next_stop.name if next_stop else "N/A",
-                    "eta_seconds": eta_seconds,
-                    "current_lat": curr_pos[1],
-                    "current_lon": curr_pos[0],
-                }
-            )
+            results.append({
+                "trip_id": str(trip.id),
+                "route_id": str(trip.route.id),
+                "bus_number": trip.route.bus_number,
+                "vehicle_number": trip.vehicle.vehicle_number if trip.vehicle else "N/A",
+                "route_name": trip.route.name,
+                "pickup_name": trip.route.start_name,
+                "destination_name": trip.route.end_name,
+                "route_geometry": [[y, x] for x, y in trip.route.path.coords] if trip.route.path else [],
+                "path_coords": [[y, x] for x, y in trip.route.path.coords] if trip.route.path else [],
+                "distance_text": f"{round((trip.route.total_distance_meters or 0) / 1000, 1)} km" if trip.route.total_distance_meters else "",
+                "stops_count": trip.route.stops.count(),
+                "stops": [{"id": str(s.id), "name": s.name, "lat": s.location.y, "lon": s.location.x, "order": s.order} for s in stops],
+                "next_stop": next_stop_name,
+                "eta_seconds": eta_seconds,
+                "current_lat": curr_pos[1],
+                "current_lon": curr_pos[0],
+            })
+
+        if not results:
+            print("PassengerFilteredTrips: Found active trips but none headed towards pickup point")
+            return Response([serialize_route_candidate(route) for route in routes])
 
         return Response(results)
+
 
 
 # ─── Ingestion Views ──────────────────────────────────────────────────────────

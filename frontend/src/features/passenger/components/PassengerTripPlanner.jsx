@@ -1,34 +1,169 @@
 import React, { useMemo, useState } from "react";
 import {
-  ChevronLeft,
+  ArrowUpDown,
+  Bus,
+  ChevronDown,
+  Crosshair,
+  Globe2,
   MapPin,
-  Navigation,
-  ArrowRight,
-  Compass,
+  Menu,
+  Search,
+  ShieldCheck,
+  Sun,
 } from "lucide-react";
 import LocationSearch from "../../../components/LocationSearch";
-import img from "../../../assets/img1.png";
 
-/**
- * Reusable label with Vayy branding typography
- */
-function InputLabel({ children, icon: Icon }) {
+const brandGreen = "#079f4f";
+
+function VayyLogo() {
   return (
-    <label className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.15em] text-neutral-400">
-      {Icon && <Icon size={14} className="text-black" strokeWidth={2.5} />}
-      {children}
-    </label>
+    <div className="flex items-center gap-3">
+      <div className="flex h-10 w-10 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#12c46a] to-[#008e43] text-[23px] font-black text-white shadow-[0_10px_22px_rgba(0,153,77,0.25)]">
+        V
+      </div>
+      <span className="text-[22px] font-black tracking-[0.02em] text-[#071419]">
+        VAYY
+      </span>
+    </div>
   );
 }
 
-/**
- * Modern Input wrapper with glassmorphism transition
- * Important: do NOT hide overflow here, otherwise autocomplete gets clipped.
- */
-function InputShell({ children }) {
+function CityIllustration() {
   return (
-    <div className="group relative z-20 flex w-full items-center rounded-xl border border-neutral-100 bg-neutral-50 transition-all duration-300 focus-within:border-black focus-within:bg-white focus-within:ring-1 focus-within:ring-black">
-      <div className="w-full rounded-xl">{children}</div>
+    <div className="pointer-events-none absolute right-0 top-[38px] hidden h-[230px] w-[620px] overflow-hidden lg:block">
+      <svg
+        viewBox="0 0 620 245"
+        className="h-full w-full"
+        role="img"
+        aria-label="city bus route illustration"
+      >
+        <defs>
+          <linearGradient id="busBody" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stopColor="#2eb979" />
+            <stop offset="100%" stopColor="#7ed6ab" />
+          </linearGradient>
+          <linearGradient id="roadFade" x1="0" x2="1">
+            <stop offset="0%" stopColor="#dbe8e2" stopOpacity="0" />
+            <stop offset="70%" stopColor="#c9ded5" stopOpacity="0.9" />
+          </linearGradient>
+        </defs>
+
+        <g opacity="0.46" fill="#dcebe4">
+          <rect x="218" y="71" width="19" height="116" />
+          <path d="M247 99h23v88h-23zM258 86l11 13h-22z" />
+          <rect x="287" y="62" width="24" height="125" />
+          <rect x="327" y="107" width="24" height="80" />
+          <rect x="365" y="83" width="31" height="104" />
+          <rect x="411" y="116" width="25" height="71" />
+          <rect x="458" y="52" width="53" height="135" rx="2" />
+          <rect x="532" y="76" width="36" height="111" rx="2" />
+          <rect x="585" y="45" width="35" height="142" rx="2" />
+        </g>
+
+        <g opacity="0.35" stroke="#cbded5" strokeWidth="2" fill="none">
+          <path d="M92 185v-25m0 0c-17-5-25-18-20-32 5-13 19-19 32-13 10-17 38-11 38 11 14 3 23 13 20 28-3 13-14 21-31 21" />
+          <path d="M559 184v-34m0 0c-21-6-30-22-24-38 7-17 27-22 43-13 12-20 43-10 43 14" />
+        </g>
+
+        <path
+          d="M168 196 C270 179, 352 189, 446 171 C505 160, 568 158, 620 166"
+          fill="none"
+          stroke="url(#roadFade)"
+          strokeWidth="12"
+          strokeLinecap="round"
+        />
+
+        <path
+          d="M410 25c6 26 38 25 39 49 1 23-31 20-31 42 0 17 17 22 36 19"
+          fill="none"
+          stroke="#8ab8a1"
+          strokeDasharray="6 8"
+          strokeLinecap="round"
+          strokeWidth="2.3"
+        />
+        <path
+          d="M408 12c-13 0-22 10-22 22 0 17 22 43 22 43s22-26 22-43c0-12-9-22-22-22z"
+          fill="#16a765"
+        />
+        <circle cx="408" cy="33" r="8" fill="white" />
+
+        <g transform="translate(363 139)">
+          <path
+            d="M0 17c0-17 7-25 24-25h78c17 0 27 9 29 26l5 52H7L0 17z"
+            fill="url(#busBody)"
+            stroke="#2d9364"
+            strokeWidth="1.5"
+          />
+          <path d="M12 3h82c14 0 23 7 25 19H9c1-9 2-15 3-19z" fill="#3b9974" opacity="0.75" />
+          <rect x="13" y="13" width="37" height="28" rx="3" fill="#265f57" opacity="0.85" />
+          <rect x="56" y="13" width="31" height="28" rx="3" fill="#265f57" opacity="0.85" />
+          <rect x="94" y="13" width="23" height="28" rx="3" fill="#265f57" opacity="0.85" />
+          <path d="M5 51h127l2 19H8L5 51z" fill="#9ad9b5" opacity="0.68" />
+          <circle cx="32" cy="72" r="12" fill="#293f3c" />
+          <circle cx="105" cy="72" r="12" fill="#293f3c" />
+          <circle cx="32" cy="72" r="5" fill="#d8eee4" />
+          <circle cx="105" cy="72" r="5" fill="#d8eee4" />
+          <rect x="3" y="27" width="5" height="17" rx="2" fill="#234943" />
+        </g>
+
+        <g transform="translate(534 92)">
+          <rect x="0" y="0" width="48" height="48" rx="8" fill="#7cc9a4" opacity="0.85" />
+          <Bus x="12" y="11" width="24" height="24" color="white" strokeWidth="2.5" />
+          <path d="M24 48v48" stroke="#93b9a8" strokeWidth="4" />
+        </g>
+
+        <g opacity="0.35" fill="#cbded5">
+          <path d="M501 44c7-5 16-4 21 2 5-5 13-5 19 0" fill="none" stroke="#cbded5" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="214" cy="151" r="16" />
+          <circle cx="244" cy="161" r="11" />
+          <circle cx="284" cy="154" r="14" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function PlannerField({ label, placeholder, onSelect, icon }) {
+  return (
+    <div className="relative z-20">
+      <label className="mb-3 flex items-center gap-3 text-[14px] font-extrabold text-[#0b171c]">
+        {React.createElement(icon, {
+          size: 20,
+          className: "text-[#0aa658]",
+          fill: brandGreen,
+          strokeWidth: 2.5,
+        })}
+        {label}
+      </label>
+
+      <div className="relative">
+        <LocationSearch
+          placeholder={placeholder}
+          onSelect={onSelect}
+          className="h-[52px] w-full rounded-[10px] border border-[#cfd8e5] bg-white pl-[54px] pr-[54px] text-[15px] font-medium text-[#14242c] shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] outline-none transition focus:border-[#8fa6ba] focus:ring-4 focus:ring-[#dcebe4]"
+        />
+        <Crosshair
+          size={21}
+          className="pointer-events-none absolute right-5 top-1/2 z-20 -translate-y-1/2 text-[#7b8da3]"
+          strokeWidth={2.2}
+        />
+      </div>
+    </div>
+  );
+}
+
+function FeatureItem({ icon, title, copy }) {
+  return (
+    <div className="flex min-w-0 items-center gap-5">
+      <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full bg-[#dff4ea] text-[#0aa658]">
+        {React.createElement(icon, { size: 32, strokeWidth: 2.4 })}
+      </div>
+      <div>
+        <h3 className="text-[16px] font-extrabold text-[#102027]">{title}</h3>
+        <p className="mt-2 max-w-[260px] text-[13px] font-medium leading-6 text-[#5f6f83]">
+          {copy}
+        </p>
+      </div>
     </div>
   );
 }
@@ -53,125 +188,125 @@ export default function PassengerTripPlanner({
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-white">
-      {/* Background Image Layer: Visible only on Desktop (LG) */}
-      <div className="absolute inset-0 z-0 hidden lg:block">
-        <img
-          src={img}
-          alt="Vayy Urban Mobility"
-          className="h-full w-full object-cover grayscale-[10%]"
-        />
-        <div className="absolute inset-0 bg-black/30" />
-      </div>
-
-      <div className="relative z-10 flex min-h-screen">
-        {/* LEFT PANEL: The functional Vayy UI */}
-        <div className="flex w-full flex-col bg-white px-8 pt-12 sm:px-12 lg:h-screen lg:w-[480px] lg:shadow-[30px_0_60px_-15px_rgba(0,0,0,0.15)]">
-          {/* Header */}
-          <div className="mb-14 flex items-center justify-between">
+    <div className="min-h-screen bg-[#f8fbfa] font-sans text-[#071419]">
+      <section className="relative flex min-h-screen w-full flex-col overflow-hidden bg-[#f8fbfa]">
+        <header className="relative z-30 flex h-[87px] items-center justify-between border-b border-[#dbe4ea] bg-white/78 px-[38px] backdrop-blur-xl">
+          <div className="flex items-center gap-[28px]">
             <button
               type="button"
               onClick={onBack}
-              className="group flex h-10 w-10 items-center justify-center rounded-full border border-neutral-100 transition-all hover:bg-black hover:text-white"
-              aria-label="Go back"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-[#0f6d53] transition hover:bg-[#edf6f1]"
+              aria-label="Open menu"
             >
-              <ChevronLeft size={20} strokeWidth={2.5} />
+              <Menu size={24} strokeWidth={2.2} />
             </button>
+            <VayyLogo />
+          </div>
 
-            <h1 className="text-2xl font-black tracking-tighter text-black">
-              VAYY
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              className="hidden h-11 w-11 items-center justify-center rounded-full border border-[#dde6ee] bg-white text-[#15242d] shadow-sm transition hover:border-[#c7d5df] sm:flex"
+              aria-label="Toggle theme"
+            >
+              <Sun size={21} strokeWidth={2.1} />
+            </button>
+            <button
+              type="button"
+              className="flex h-11 items-center gap-2 rounded-[11px] border border-[#d7e0e8] bg-white px-4 text-[14px] font-semibold text-[#263848] shadow-sm transition hover:border-[#c5d2dc]"
+              aria-label="Select language"
+            >
+              <Globe2 size={19} strokeWidth={2.2} />
+              <span className="hidden sm:inline">English</span>
+              <ChevronDown size={17} strokeWidth={2.2} />
+            </button>
+          </div>
+        </header>
+
+        <main className="relative z-10 flex-1 px-[58px] pb-[30px] pt-[62px]">
+          <CityIllustration />
+
+          <section className="relative z-10 max-w-[470px]">
+            <h1 className="text-[46px] font-black leading-[1.04] tracking-normal text-[#08161b]">
+              Choose Your{" "}
+              <span className="bg-gradient-to-r from-[#078f48] to-[#17b965] bg-clip-text text-transparent">
+                Route
+              </span>
             </h1>
+            <p className="mt-[18px] max-w-[390px] text-[16px] font-medium leading-[1.65] text-[#33475b]">
+              Enter your pickup and drop locations to find the best bus routes
+              and track in real-time.
+            </p>
+          </section>
 
-            <div className="w-10" />
-          </div>
+          <section className="relative z-20 mt-[40px] w-full rounded-[13px] border border-[#e6ebef] bg-white/96 p-[24px] shadow-[0_14px_34px_rgba(18,38,48,0.10)] backdrop-blur">
+            <PlannerField
+              label="Pickup Point"
+              placeholder="Search pickup location"
+              onSelect={setPickup}
+              icon={MapPin}
+            />
 
-          <div className="flex-1">
-            <h2 className="mb-8 text-xl font-bold tracking-tight text-neutral-900">
-              Where are you headed?
-            </h2>
-
-            <div className="space-y-8">
-              {/* Pickup Input Block */}
-              <div className="animate-in fade-in slide-in-from-left-4 relative z-30 duration-500">
-                <InputLabel icon={MapPin}>Pickup Point</InputLabel>
-                <InputShell>
-                  <LocationSearch
-                    placeholder="Search pickup location"
-                    onSelect={setPickup}
-                    className="w-full border-none bg-transparent px-5 py-4 text-[15px] placeholder:text-neutral-400 outline-none focus:ring-0"
-                  />
-                </InputShell>
-              </div>
-
-              {/* Destination Input Block */}
-              <div className="animate-in fade-in slide-in-from-left-4 relative z-20 duration-700">
-                <div className="absolute -top-8 left-4 h-8 w-[1px] bg-neutral-100" />
-
-                <InputLabel icon={Navigation}>Drop Location</InputLabel>
-                <InputShell>
-                  <LocationSearch
-                    placeholder="Enter your destination"
-                    onSelect={setDestination}
-                    className="w-full border-none bg-transparent px-5 py-4 text-[15px] placeholder:text-neutral-400 outline-none focus:ring-0"
-                  />
-                </InputShell>
-              </div>
+            <div className="relative my-[36px] flex items-center">
+              <div className="h-px flex-1 border-t border-dashed border-[#d5dde7]" />
+              <button
+                type="button"
+                className="mx-0 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#e1e8ee] bg-white text-[#1e303a] shadow-[0_4px_12px_rgba(15,23,42,0.06)]"
+                aria-label="Swap pickup and drop"
+              >
+                <ArrowUpDown size={18} strokeWidth={2.2} />
+              </button>
+              <div className="h-px flex-1 border-t border-dashed border-[#d5dde7]" />
             </div>
-          </div>
 
-          {/* Action CTA */}
-          <div className="pb-12 pt-8">
+            <PlannerField
+              label="Drop Location"
+              placeholder="Enter your destination"
+              onSelect={setDestination}
+              icon={MapPin}
+            />
+
             <button
               type="button"
               onClick={handleNext}
               disabled={!canProceed || loading}
-              className="group relative flex h-[64px] w-full items-center justify-center overflow-hidden rounded-2xl bg-black text-[16px] font-bold text-white transition-all hover:bg-neutral-900 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+              className="mt-[24px] flex h-[53px] w-full items-center justify-center gap-4 rounded-[9px] bg-gradient-to-r from-[#009849] to-[#00aa55] text-[17px] font-extrabold text-white shadow-[0_14px_28px_rgba(0,153,77,0.22)] transition hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:from-[#98cfb1] disabled:to-[#98cfb1] disabled:shadow-none"
             >
-              <span className="relative z-10">
-                {loading ? "Searching for routes..." : "Search Vayy Rides"}
-              </span>
-
-              {!loading && canProceed && (
-                <ArrowRight
-                  className="absolute right-6 transition-transform group-hover:translate-x-1"
-                  size={20}
-                  strokeWidth={2.5}
-                />
-              )}
+              <Search size={22} strokeWidth={2.4} />
+              {loading ? "Searching for routes..." : "Search Vayy Rides"}
             </button>
+          </section>
 
-            <p className="mt-6 text-center text-[12px] leading-relaxed text-neutral-400">
-              Real-time transit tracking powered by Vayy Geospatial. <br />
-              Please enable location for a better experience.
-            </p>
-          </div>
-        </div>
+          <section className="relative z-10 mt-[34px] grid w-full gap-6 rounded-[13px] bg-[#edf8f3] px-[22px] py-[24px] sm:px-[39px] lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-10">
+            <FeatureItem
+              icon={ShieldCheck}
+              title="Safe. Reliable. On Time."
+              copy="Real-time transit tracking powered by Vayy Geospatial."
+            />
+            <div className="hidden h-[64px] w-px border-l border-dashed border-[#bdcbd5] lg:block" />
+            <FeatureItem
+              icon={Bus}
+              title="Live Tracking"
+              copy="Track buses in real-time and get accurate arrival updates."
+            />
+          </section>
+        </main>
 
-        {/* RIGHT SECTION: Visual Branding Overlay (Desktop Only) */}
-        <div className="hidden flex-1 flex-col justify-end p-24 lg:flex">
-          <div className="animate-in fade-in slide-in-from-bottom-6 max-w-xl duration-1000">
-            <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/20 bg-white/10 shadow-xl backdrop-blur-xl">
-              <Compass className="text-white" size={32} />
-            </div>
-
-            <h2 className="text-7xl font-black leading-[1.05] text-white drop-shadow-2xl">
-              Redefining <br />
-              <span className="text-white/90">urban travel.</span>
-            </h2>
-
-            <p className="mt-8 max-w-md text-xl font-medium leading-relaxed text-white/80 drop-shadow-lg">
-              Experience a resilient, low-latency tracking platform built for the
-              modern city.
-            </p>
-
-            <div className="mt-10 flex gap-3">
-              <div className="h-1.5 w-12 rounded-full bg-white" />
-              <div className="h-1.5 w-1.5 rounded-full bg-white/40" />
-              <div className="h-1.5 w-1.5 rounded-full bg-white/40" />
-            </div>
-          </div>
-        </div>
-      </div>
+        <footer className="relative z-20 mt-auto flex flex-col gap-4 border-t border-[#dbe4ea] bg-white/52 px-[38px] py-[18px] text-[12px] font-medium text-[#637286] sm:flex-row sm:items-center sm:justify-between">
+          <span>&copy; 2025 Vayy. All rights reserved.</span>
+          <nav className="flex flex-wrap gap-7">
+            <a href="#" className="transition hover:text-[#079f4f]">
+              Terms of Service
+            </a>
+            <a href="#" className="transition hover:text-[#079f4f]">
+              Privacy Policy
+            </a>
+            <a href="#" className="transition hover:text-[#079f4f]">
+              Contact Us
+            </a>
+          </nav>
+        </footer>
+      </section>
     </div>
   );
 }

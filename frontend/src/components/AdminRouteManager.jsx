@@ -61,7 +61,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
         source: "route-previews",
         layout: { "line-join": "round", "line-cap": "round" },
         paint: {
-          "line-color": ["case", ["boolean", ["get", "selected"], false], "#4f46e5", "#94a3b8"],
+          "line-color": ["case", ["boolean", ["get", "selected"], false], "#00E676", "#94a3b8"],
           "line-width": ["case", ["boolean", ["get", "selected"], false], 7, 4],
           "line-opacity": ["case", ["boolean", ["get", "selected"], false], 0.9, 0.4],
         },
@@ -664,10 +664,5 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
     </div>
   );
 };
-
-
-
-
-
 
 export default AdminRouteManager;

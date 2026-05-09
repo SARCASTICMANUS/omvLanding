@@ -26,8 +26,6 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    networks:
-      - vayy_network
 
   backend:
     build: ./backend
@@ -52,6 +50,7 @@ services:
     command: celery -A vayy worker -l info
     volumes:
       - ./backend:/app:delegated
+    restart: always
     depends_on:
       db:
         condition: service_healthy
@@ -67,6 +66,7 @@ services:
     command: celery -A vayy beat -l info
     volumes:
       - ./backend:/app:delegated
+    restart: always
     depends_on:
       db:
         condition: service_healthy
@@ -105,9 +105,3 @@ services:
 volumes:
   postgres_data:
   redis_data:
-
-
-networks:
-  vayy_network:
-    # Yahan network ka asli naam define karo
-    external: true

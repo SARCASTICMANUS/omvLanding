@@ -77,7 +77,7 @@ const MapPassenger = () => {
         el.style.width = "14px";
         el.style.height = "14px";
         el.style.borderRadius = "50%";
-        el.style.backgroundColor = "#4f46e5";
+        el.style.backgroundColor = "#00E676";
         el.style.border = "3px solid white";
         el.style.boxShadow = "0 0 10px rgba(0,0,0,0.2)";
         
@@ -687,10 +687,5 @@ const MapPassenger = () => {
     </div>
   );
 };
-
-
-
-
-
 
 export default MapPassenger;

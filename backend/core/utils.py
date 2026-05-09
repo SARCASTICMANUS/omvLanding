@@ -218,6 +218,12 @@ def process_gps_update(trip_id, lat, lon, source="gps"):
         r.geoadd("active_trips_locations", (float(lon), float(lat), str(trip_id)))
         r.set(f"driver_pos:{trip_id}", f"{lon},{lat}", ex=30)
 
+        # Update ActiveTrip in DB for real-time status
+        ActiveTrip.objects.filter(id=trip_id).update(
+            current_location=Point(float(lon), float(lat), srid=4326),
+            last_updated=timezone.now()
+        )
+
         # 2. Fetch Metadata for Broadcast
         trip = ActiveTrip.objects.select_related(
             "route", "trip_schedule", "vehicle"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import api from "../lib/api";
 import { Search } from "lucide-react";
 
@@ -12,40 +12,81 @@ const useDebounce = (value, delay) => {
   return debouncedValue;
 };
 
-const LocationSearch = ({ placeholder, onSelect, initialValue = "" }) => {
+const defaultInputClassName =
+  "w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none shadow-sm text-sm";
+
+const LocationSearch = ({
+  placeholder,
+  onSelect,
+  initialValue = "",
+  className = "",
+}) => {
   const [query, setQuery] = useState(initialValue);
   const [results, setResults] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const debouncedQuery = useDebounce(query, 500);
+  const selectedQueryRef = useRef(initialValue ? initialValue.split(",")[0] : "");
 
   // Sync with initialValue if it changes externally (e.g., from dragging a marker)
   useEffect(() => {
-    if (initialValue && initialValue !== query) {
-      setQuery(initialValue.split(",")[0]);
+    if (initialValue) {
+      const nextQuery = initialValue.split(",")[0];
+      selectedQueryRef.current = nextQuery;
+      const timeout = setTimeout(() => {
+        setQuery(nextQuery);
+        setResults([]);
+        setIsOpen(false);
+      }, 0);
+
+      return () => clearTimeout(timeout);
     }
   }, [initialValue]);
 
   useEffect(() => {
+    if (debouncedQuery === selectedQueryRef.current) {
+      return;
+    }
+
     // Only search if user typed 3+ chars and it's not the initial value sync
     if (debouncedQuery.length > 2 && debouncedQuery !== (initialValue ? initialValue.split(",")[0] : "")) {
+      let ignore = false;
+
       // Using the global search API
       api
-        .get(`/api/global-search/?q=${debouncedQuery}`)
+        .get(`/api/global-search/?q=${encodeURIComponent(debouncedQuery)}`)
         .then((res) => {
-          setResults(res.data);
-          setIsOpen(true);
+          if (ignore || debouncedQuery === selectedQueryRef.current) return;
+          const nextResults = Array.isArray(res.data) ? res.data : [];
+          setResults(nextResults);
+          setIsOpen(nextResults.length > 0);
         })
         .catch((err) => console.error("Search failed", err));
-    } else {
+
+      return () => {
+        ignore = true;
+      };
+    }
+  }, [debouncedQuery, initialValue]);
+
+  const handleSelect = (item) => {
+    const nextQuery = item.display_name.split(",")[0];
+    selectedQueryRef.current = nextQuery;
+    setQuery(nextQuery); // Keep it short
+    setResults([]);
+    setIsOpen(false);
+    onSelect(item);
+  };
+
+  const handleChange = (e) => {
+    const nextQuery = e.target.value;
+    if (nextQuery !== selectedQueryRef.current) {
+      selectedQueryRef.current = "";
+    }
+    if (nextQuery.length < 3) {
       setResults([]);
       setIsOpen(false);
     }
-  }, [debouncedQuery]);
-
-  const handleSelect = (item) => {
-    setQuery(item.display_name.split(",")[0]); // Keep it short
-    setIsOpen(false);
-    onSelect(item);
+    setQuery(nextQuery);
   };
 
   return (
@@ -53,10 +94,10 @@ const LocationSearch = ({ placeholder, onSelect, initialValue = "" }) => {
       <div className="relative">
         <input
           type="text"
-          className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none shadow-sm text-sm"
+          className={className || defaultInputClassName}
           placeholder={placeholder}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={handleChange}
         />
         <Search className="absolute left-3 top-3.5 text-gray-400" size={18} />
       </div>

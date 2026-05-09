@@ -250,9 +250,7 @@ function App() {
             path="/passenger/live"
             element={
               <ProtectedRoute allowedRoles={["passenger", "student"]}>
-                <AppLayout>
-                  <PassengerLivePage />
-                </AppLayout>
+                <PassengerLivePage />
               </ProtectedRoute>
             }
           />
