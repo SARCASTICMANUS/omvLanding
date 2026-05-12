@@ -29,7 +29,6 @@ services:
 
   backend:
     build: ./backend
-    command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./backend:/app:delegated
     ports:
@@ -39,11 +38,21 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      osrm:
+        condition: service_started
     environment:
       - IN_DOCKER=true
       - DATABASE_URL=postgis://postgres:password@db:5432/vayy_db
       - REDIS_URL=redis://redis:6379/0
       - OSRM_URL=http://osrm:5000
+
+  osrm:
+    image: osrm/osrm-backend
+    command: osrm-routed --algorithm mld /data/map.osrm
+    volumes:
+      - ./backend/osrm-data:/data
+    ports:
+      - "5000:5000"
 
   celery_worker:
     build: ./backend

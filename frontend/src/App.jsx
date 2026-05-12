@@ -16,6 +16,14 @@ import RegisterPage from "./pages/RegisterPage";
 import AdminPanel from "./pages/AdminPanel";
 import MapDriver from "./components/Maps/MapDriver";
 import PassengerLivePage from "./pages/PassengerLivePage";
+import IntroPage from "./components/SplashScreen/SplashScreen1";
+import SplashScreen2 from "./components/SplashScreen/SplashScreen2";
+import SplashScreen3 from "./components/SplashScreen/SplashScreen3";
+import SplashScreen4 from "./components/SplashScreen/SplashScreen4";
+
+import AboutPage from "./pages/AboutPage";
+import ContactUsPage from "./pages/ContactUsPage";
+import RoutesPage from "./pages/RoutesPage";
 
 /* ===============================
    Helpers
@@ -256,7 +264,42 @@ function App() {
           />
 
           {/* DEFAULT LANDING */}
-          <Route path="/" element={<RootRedirect />} />
+          <Route
+            path="/"
+            element={
+              <PublicRoute>
+                <IntroPage />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/splash2"
+            element={
+              <PublicRoute>
+                <SplashScreen2 />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/splash3"
+            element={
+              <PublicRoute>
+                <SplashScreen3 />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/splash4"
+            element={
+              <PublicRoute>
+                <SplashScreen4 />
+              </PublicRoute>
+            }
+          />
+          
+          <Route path="/about" element={<AppLayout><AboutPage /></AppLayout>} />
+          <Route path="/contact" element={<AppLayout><ContactUsPage /></AppLayout>} />
+          <Route path="/routes" element={<AppLayout><RoutesPage /></AppLayout>} />
 
           {/* FALLBACK */}
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -15,6 +15,7 @@ import {
   Clock, 
   CheckCircle2, 
   ChevronRight,
+  ChevronLeft,
   TrendingUp,
   LogOut,
   StopCircle,
@@ -30,8 +31,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 // --- Assets/Icons ---
 import api, { getWsUrl } from "../../lib/api";
-import DriverManifest from "../../components/DriverManifest";
-import Header from "../../components/Layout/Header";
+import DriverManifest from "../DriverManifest";
+import Header from "../Layout/Header";
 
 // Helper to decode OSRM polyline string
 function decodePolyline(str, precision = 5) {
