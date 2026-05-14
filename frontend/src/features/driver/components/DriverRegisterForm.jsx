@@ -360,7 +360,7 @@ export default function DriverRegister({
       style={{
         minHeight: "100vh",
         background: "#f8fafc",
-        fontFamily: "'Inter', 'Segoe UI', sans-serif",
+        fontFamily: "inherit",
       }}
     >
 

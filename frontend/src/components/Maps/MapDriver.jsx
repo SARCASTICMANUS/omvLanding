@@ -52,16 +52,71 @@ function decodePolyline(str, precision = 5) {
 
 function getDistance(p1, p2) {
   const R = 6371e3;
-  const phi1 = p1[0] * Math.PI/180;
-  const phi2 = p2[0] * Math.PI/180;
-  const dPhi = (p2[0]-p1[0]) * Math.PI/180;
-  const dLambda = (p2[1]-p1[1]) * Math.PI/180;
+  const phi1 = p1[1] * Math.PI/180;
+  const phi2 = p2[1] * Math.PI/180;
+  const dPhi = (p2[1]-p1[1]) * Math.PI/180;
+  const dLambda = (p2[0]-p1[0]) * Math.PI/180;
   const a = Math.sin(dPhi/2) * Math.sin(dPhi/2) +
           Math.cos(phi1) * Math.cos(phi2) *
           Math.sin(dLambda/2) * Math.sin(dLambda/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   return R * c;
 }
+
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const isLikelyLonLat = ([first, second]) => Math.abs(first) > 35 || Math.abs(second) <= 35;
+
+const normalizeCoordinate = (coord, fallbackOrder = "lonLat") => {
+  if (!Array.isArray(coord) || coord.length < 2) return null;
+
+  const first = toNumber(coord[0]);
+  const second = toNumber(coord[1]);
+  if (first === null || second === null) return null;
+
+  if (fallbackOrder === "latLon") return [second, first];
+  if (fallbackOrder === "lonLat") return [first, second];
+
+  return isLikelyLonLat([first, second]) ? [first, second] : [second, first];
+};
+
+const normalizePath = (path, fallbackOrder = "auto") => {
+  if (!Array.isArray(path)) return [];
+  return path
+    .map((coord) => normalizeCoordinate(coord, fallbackOrder))
+    .filter(Boolean);
+};
+
+const getStopLngLat = (stop) => {
+  if (!stop) return null;
+
+  if (Array.isArray(stop.location?.coordinates)) {
+    return normalizeCoordinate(stop.location.coordinates, "lonLat");
+  }
+
+  const lat = toNumber(stop.lat);
+  const lon = toNumber(stop.lon ?? stop.lng);
+  if (lat === null || lon === null) return null;
+
+  return [lon, lat];
+};
+
+const getPreviewOptions = (data) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.results)) return data.results;
+  if (Array.isArray(data?.routes)) return data.routes;
+  if (data?.path || data?.route_geometry || data?.path_coords) return [data];
+  return [];
+};
+
+const getPreviewPath = (preview) =>
+  normalizePath(preview?.path || preview?.route_geometry || preview?.path_coords, "auto");
+
+const getRoutePath = (route) =>
+  normalizePath(route?.path_coords || route?.route_geometry || route?.path, "latLon");
 
 // --- Components ---
 
@@ -127,6 +182,32 @@ export default function MapDriver() {
   }, [routePath, currentIndex]);
 
   const totalTripDistance = tripData?.total_distance || 0;
+
+  const updateRenderedRoute = (path) => {
+    if (!map.current || !mapLoaded) return;
+
+    const source = map.current.getSource("route");
+    if (!source) return;
+
+    source.setData({
+      type: "FeatureCollection",
+      features: [{
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "LineString",
+          coordinates: path || [],
+        },
+      }],
+    });
+    map.current.triggerRepaint();
+
+    if (path && path.length > 0) {
+      const bounds = new maplibregl.LngLatBounds(path[0], path[0]);
+      path.forEach(coord => bounds.extend(coord));
+      map.current.fitBounds(bounds, { padding: 50 });
+    }
+  };
 
   // Initialize Map
   useEffect(() => {
@@ -250,6 +331,9 @@ export default function MapDriver() {
     // Render Stops if tripData has stops
     if (tripData?.stops) {
       tripData.stops.forEach((stop) => {
+        const stopLngLat = getStopLngLat(stop);
+        if (!stopLngLat) return;
+
         const el = document.createElement("div");
         el.className = "stop-marker";
         el.style.backgroundColor = "#ef4444";
@@ -259,7 +343,7 @@ export default function MapDriver() {
         el.style.border = "2px solid white";
         
         new maplibregl.Marker({ element: el })
-          .setLngLat([stop.location.coordinates[0], stop.location.coordinates[1]])
+          .setLngLat(stopLngLat)
           .setPopup(new maplibregl.Popup({ offset: 25 }).setText(stop.name || "Stop"))
           .addTo(map.current);
       });
@@ -289,23 +373,23 @@ export default function MapDriver() {
         </div>
       `;
       vehicleMarker.current = new maplibregl.Marker({ element: el })
-        .setLngLat([currentPos[1], currentPos[0]])
+        .setLngLat(currentPos)
         .addTo(map.current);
     } else {
-      vehicleMarker.current.setLngLat([currentPos[1], currentPos[0]]);
+      vehicleMarker.current.setLngLat(currentPos);
     }
 
     if (isDriving) {
       let bearing = map.current.getBearing();
       if (prevPos.current) {
-        const [lat1, lon1] = prevPos.current;
-        const [lat2, lon2] = currentPos;
+        const [lon1, lat1] = prevPos.current;
+        const [lon2, lat2] = currentPos;
         bearing = (Math.atan2(lon2 - lon1, lat2 - lat1) * 180) / Math.PI;
       }
       prevPos.current = currentPos;
 
       map.current.easeTo({
-        center: [currentPos[1], currentPos[0]],
+        center: currentPos,
         zoom: 17,
         pitch: 60,
         bearing: bearing,
@@ -363,51 +447,57 @@ export default function MapDriver() {
     setRoutePath(null);
     setLoading(true);
     try {
-      const stops = selectedRoute.stops || [];
-      const start = stops.length > 0 ? { lat: stops[0].lat, lon: stops[0].lon } : { lat: 28.55, lon: 77.30 };
-      const end = stops.length > 0 ? { lat: stops[stops.length - 1].lat, lon: stops[stops.length - 1].lon } : { lat: 28.55, lon: 77.31 };
+      let routeDetails = selectedRoute;
+      if (!routeDetails.stops || !routeDetails.path_coords) {
+        const routeRes = await api.get(`/api/routes/${selectedRoute.city ? `?city=${selectedRoute.city}` : ""}`);
+        const routes = Array.isArray(routeRes.data) ? routeRes.data : routeRes.data?.results || [];
+        routeDetails = routes.find((route) => String(route.id) === String(selectedRouteId)) || selectedRoute;
+      }
+
+      const savedPath = getRoutePath(routeDetails);
+      const stops = Array.isArray(routeDetails.stops) ? routeDetails.stops : [];
+      const orderedStops = [...stops].sort((a, b) => (a.order || 0) - (b.order || 0));
+      const firstPoint = savedPath[0] || getStopLngLat(orderedStops[0]);
+      const lastPoint = savedPath[savedPath.length - 1] || getStopLngLat(orderedStops[orderedStops.length - 1]);
+
+      if (!firstPoint || !lastPoint) {
+        throw new Error("Selected route does not include coordinates for preview rendering.");
+      }
+
+      const start = { lat: firstPoint[1], lon: firstPoint[0] };
+      const end = { lat: lastPoint[1], lon: lastPoint[0] };
 
       const res = await api.post("/api/admin/routes/preview/", { 
           start, 
           end,
-          stops: stops.map((s, i) => ({ lat: s.lat, lon: s.lon, order: i }))
+          stops: orderedStops
+            .map((stop, i) => {
+              const coord = getStopLngLat(stop);
+              if (!coord) return null;
+              return {
+                lat: coord[1],
+                lon: coord[0],
+                name: stop.name,
+                order: stop.order ?? i,
+              };
+            })
+            .filter(Boolean)
       });
       
       console.log("Preview response data:", res.data);
-      // Backend returns [lon, lat] - GeoJSON format
-      const rawPath = res.data[0]?.path || [];
-      console.log("Raw path sample:", rawPath[0]);
-      const path = rawPath.map(p => [p[0], p[1]]); 
+      const previewOptions = getPreviewOptions(res.data);
+      const activePreview = previewOptions[0] || {};
+      const path = getPreviewPath(activePreview).length > 0 ? getPreviewPath(activePreview) : savedPath;
       console.log("Setting routePath:", path);
       setRoutePath(path);
 
-      // Force immediate map update
-      const source = map.current.getSource("route");
-      if (source) {
-          source.setData({
-            type: "FeatureCollection",
-            features: [{
-              type: "Feature",
-              properties: {},
-              geometry: {
-                  type: "LineString",
-                  coordinates: path || [],
-              },
-            }]
-          });
-          map.current.triggerRepaint();
-          
-          if (path && path.length > 0) {
-            const bounds = new maplibregl.LngLatBounds(path[0], path[0]);
-            path.forEach(coord => bounds.extend(coord));
-            map.current.fitBounds(bounds, { padding: 50 });
-          }
-      }
+      updateRenderedRoute(path);
       
       const combinedTripData = {
-        ...selectedRoute,
+        ...routeDetails,
+        total_distance: activePreview.distance || routeDetails.total_distance || routeDetails.total_distance_meters || selectedRoute.total_distance || 0,
         trip_id: null,
-        stops: selectedRoute.stops || []
+        stops: orderedStops
       };
       console.log("Setting tripData:", combinedTripData);
       setTripData(combinedTripData);

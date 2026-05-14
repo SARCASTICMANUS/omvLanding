@@ -683,8 +683,7 @@ export default function PassengerRouteList({
   };
 
   const css = `
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
-    .prl-root { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .prl-root { font-family: inherit; }
     .prl-root * { box-sizing: border-box; }
 
     /* hide maplibre controls */

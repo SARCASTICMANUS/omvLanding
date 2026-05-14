@@ -20,25 +20,37 @@ import {
   UserSquare,
 } from "lucide-react";
 
+const normalizeRole = (role) =>
+  String(role || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+const FULL_ADMIN_ROLES = new Set([
+  "admin",
+  "city_admin",
+  "cityadmin",
+  "super_admin",
+  "superadmin",
+]);
+
 const AdminPanel = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
-  const isSuperAdmin = user?.role === "admin";
+  const role = normalizeRole(user?.role);
+  const canSeeAllAdminItems = FULL_ADMIN_ROLES.has(role);
   const cityId = user?.city;
 
-  const [activeTab, setActiveTab] = useState(isSuperAdmin ? "cities" : "passengers");
+  const [activeTab, setActiveTab] = useState(canSeeAllAdminItems ? "cities" : "passengers");
 
   const navItems = [
-    // City Admin Specific
-    { id: "passengers", label: "Passengers", icon: <UserSquare size={18} />, hidden: isSuperAdmin },
+    // Admin modules
+    { id: "passengers", label: "Passengers", icon: <UserSquare size={18} />, hidden: !canSeeAllAdminItems },
     { id: "routes", label: "Routes", icon: <RouteIcon size={18} /> },
-    { id: "vehicles", label: "Vehicles", icon: <Bus size={18} />, hidden: isSuperAdmin },
-    { id: "drivers", label: "Drivers", icon: <UserCheck size={18} />, hidden: isSuperAdmin },
-    
-    // Super Admin Specific
-    { id: "cities", label: "Cities", icon: <MapPin size={18} />, hidden: !isSuperAdmin },
-    { id: "users", label: "Users", icon: <Users size={18} />, hidden: !isSuperAdmin },
-    
+    { id: "vehicles", label: "Vehicles", icon: <Bus size={18} />, hidden: !canSeeAllAdminItems },
+    { id: "drivers", label: "Drivers", icon: <UserCheck size={18} />, hidden: !canSeeAllAdminItems },
+    { id: "cities", label: "Cities", icon: <MapPin size={18} />, hidden: !canSeeAllAdminItems },
+    { id: "users", label: "Users", icon: <Users size={18} />, hidden: !canSeeAllAdminItems },
     { id: "stats", label: "Stats", icon: <BarChart3 size={18} /> },
   ];
 
@@ -60,11 +72,10 @@ const AdminPanel = () => {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 py-3.5 px-5 rounded-2xl transition duration-300 font-bold text-sm ${
-                activeTab === item.id
+              className={`w-full flex items-center gap-3 py-3.5 px-5 rounded-2xl transition duration-300 font-bold text-sm ${activeTab === item.id
                   ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
                   : "text-slate-400 hover:bg-slate-800 hover:text-white"
-              }`}
+                }`}
             >
               {item.icon}
               {item.label}

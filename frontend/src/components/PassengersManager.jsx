@@ -153,7 +153,7 @@ const PassengersManager = ({ cityId }) => {
                                                 </div>
                                             </td>
                                             <td className="px-8 py-5">
-                                                <span className="font-mono text-xs font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">
+                                                <span className="text-xs font-black tabular-nums text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">
                                                     {p.profile?.phone_number || "NO PHONE"}
                                                 </span>
                                             </td>

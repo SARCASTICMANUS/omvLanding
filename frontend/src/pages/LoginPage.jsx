@@ -81,10 +81,8 @@ const LoginPage = () => {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
-
         .vayy-root * { box-sizing: border-box; margin: 0; padding: 0; }
-        .vayy-root { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .vayy-root { font-family: inherit; }
 
         .left-panel {
           background: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url("${loginBusImage}") center center / 115% 100% no-repeat; 
@@ -125,7 +123,7 @@ const LoginPage = () => {
           background: white;
           padding: 0 16px 0 44px;
           font-size: 15px;
-          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-family: inherit;
           color: #111827;
           outline: none;
           transition: border-color 0.2s, box-shadow 0.2s;
@@ -145,7 +143,7 @@ const LoginPage = () => {
           color: white;
           font-weight: 700;
           font-size: 16px;
-          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-family: inherit;
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -169,7 +167,7 @@ const LoginPage = () => {
           gap: 10px;
           font-size: 14px;
           font-weight: 600;
-          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-family: inherit;
           color: #374151;
           transition: border-color 0.2s, background 0.2s;
         }
@@ -187,7 +185,7 @@ const LoginPage = () => {
           font-weight: 500;
           color: #374151;
           cursor: pointer;
-          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-family: inherit;
         }
 
         .checkbox-custom {
