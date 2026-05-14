@@ -21,6 +21,7 @@ import {
   StopCircle,
   Plus,
   Minus,
+  Box,
   HelpCircle,
   Menu,
   X
@@ -32,7 +33,6 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 // --- Assets/Icons ---
 import api, { getWsUrl } from "../../lib/api";
 import DriverManifest from "../DriverManifest";
-import Header from "../Layout/Header";
 
 // Helper to decode OSRM polyline string
 function decodePolyline(str, precision = 5) {
@@ -101,6 +101,9 @@ export default function MapDriver() {
   const [mapLoaded, setMapLoaded] = useState(false);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [is3DView, setIs3DView] = useState(false);
+  const [mapPitch, setMapPitch] = useState(0);
+  const [mapBearing, setMapBearing] = useState(0);
 
   // Simulation Refs
   const ws = useRef(null);
@@ -129,32 +132,50 @@ export default function MapDriver() {
   useEffect(() => {
     if (map.current) return;
     
-    const m = new maplibregl.Map({
-      container: mapContainer.current,
-      style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
-      center: [77.3000, 28.5500],
-      zoom: 13,
-      pitch: 0,
-      bearing: 0,
-    });
+    const initMap = (center = [77.3000, 28.5500]) => {
+        const m = new maplibregl.Map({
+          container: mapContainer.current,
+          style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+          center: center,
+          zoom: 14,
+          pitch: 0,
+          bearing: 0,
+        });
 
-    m.on("load", () => {
-      setMapLoaded(true);
-      m.addSource("route", {
-        type: "geojson",
-        data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [] } }
-      });
+        m.on("load", () => {
+          setMapLoaded(true);
+          setMapPitch(m.getPitch());
+          setMapBearing(m.getBearing());
+          m.addSource("route", {
+            type: "geojson",
+            data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [] } }
+          });
 
-      m.addLayer({
-        id: "route",
-        type: "line",
-        source: "route",
-        layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#10b981", "line-width": 8, "line-opacity": 0.4 }
-      });
-    });
+          m.addLayer({
+            id: "route",
+            type: "line",
+            source: "route",
+            layout: { "line-join": "round", "line-cap": "round" },
+            paint: { "line-color": "#10b981", "line-width": 8, "line-opacity": 0.4 }
+          });
+        });
 
-    map.current = m;
+        m.on("moveend", () => {
+          setMapPitch(m.getPitch());
+          setMapBearing(m.getBearing());
+        });
+
+        map.current = m;
+    };
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => initMap([pos.coords.longitude, pos.coords.latitude]),
+            () => initMap() // Fallback on error
+        );
+    } else {
+        initMap();
+    }
 
     return () => {
       if (map.current) {
@@ -167,46 +188,87 @@ export default function MapDriver() {
 
   // Sync Route Path and Stops
   useEffect(() => {
+    console.log("Syncing map route:", routePath);
     if (!map.current || !mapLoaded) return;
+    
     const source = map.current.getSource("route");
+    const layer = map.current.getLayer("route");
+    
     if (source) {
-      source.setData({
-        type: "Feature",
-        properties: {},
-        geometry: {
-          type: "LineString",
-          coordinates: routePath ? routePath.map(p => [p[1], p[0]]) : [],
-        },
-      });
-
-      // Clear existing markers
-      document.querySelectorAll('.stop-marker').forEach(m => m.remove());
-
-      // Render Stops if tripData has stops
-      if (tripData?.stops) {
-        tripData.stops.forEach((stop) => {
-          const el = document.createElement("div");
-          el.className = "stop-marker";
-          el.style.backgroundColor = "#ef4444";
-          el.style.borderRadius = "50%";
-          el.style.width = "12px";
-          el.style.height = "12px";
-          el.style.border = "2px solid white";
-          
-          new maplibregl.Marker({ element: el })
-            .setLngLat([stop.location.coordinates[0], stop.location.coordinates[1]])
-            .setPopup(new maplibregl.Popup({ offset: 25 }).setText(stop.name))
-            .addTo(map.current);
+        console.log("Source found, updating data...");
+        source.setData({
+            type: "FeatureCollection",
+            features: [{
+              type: "Feature",
+              properties: {},
+              geometry: {
+                  type: "LineString",
+                  coordinates: routePath || [],
+              },
+            }]
         });
-      }
+        
+        if (!layer) {
+            console.log("Layer missing, re-adding...");
+            map.current.addLayer({
+                id: "route",
+                type: "line",
+                source: "route",
+                layout: { "line-join": "round", "line-cap": "round" },
+                paint: { "line-color": "#10b981", "line-width": 8, "line-opacity": 0.8 }
+            });
+        }
+        map.current.triggerRepaint();
+    } else {
+        console.log("Source missing, creating it...");
+        map.current.addSource("route", {
+            type: "geojson",
+            data: {
+                type: "FeatureCollection",
+                features: [{
+                  type: "Feature",
+                  properties: {},
+                  geometry: {
+                      type: "LineString",
+                      coordinates: routePath || [],
+                  },
+                }]
+            }
+        });
+        map.current.addLayer({
+            id: "route",
+            type: "line",
+            source: "route",
+            layout: { "line-join": "round", "line-cap": "round" },
+            paint: { "line-color": "#10b981", "line-width": 8, "line-opacity": 0.8 }
+        });
+    }
 
-      if (routePath && routePath.length > 0 && !isDriving) {
-        const bounds = routePath.reduce(
-          (acc, coord) => acc.extend([coord[1], coord[0]]),
-          new maplibregl.LngLatBounds([routePath[0][1], routePath[0][0]], [routePath[0][1], routePath[0][0]])
-        );
-        map.current.fitBounds(bounds, { padding: 50 });
-      }
+    // Clear existing markers
+    document.querySelectorAll('.stop-marker').forEach(m => m.remove());
+
+    // Render Stops if tripData has stops
+    if (tripData?.stops) {
+      tripData.stops.forEach((stop) => {
+        const el = document.createElement("div");
+        el.className = "stop-marker";
+        el.style.backgroundColor = "#ef4444";
+        el.style.borderRadius = "50%";
+        el.style.width = "12px";
+        el.style.height = "12px";
+        el.style.border = "2px solid white";
+        
+        new maplibregl.Marker({ element: el })
+          .setLngLat([stop.location.coordinates[0], stop.location.coordinates[1]])
+          .setPopup(new maplibregl.Popup({ offset: 25 }).setText(stop.name || "Stop"))
+          .addTo(map.current);
+      });
+    }
+
+    if (routePath && routePath.length > 0 && !isDriving) {
+      const bounds = new maplibregl.LngLatBounds(routePath[0], routePath[0]);
+      routePath.forEach(coord => bounds.extend(coord));
+      map.current.fitBounds(bounds, { padding: 50 });
     }
   }, [routePath, tripData, isDriving, mapLoaded]);
 
@@ -294,23 +356,61 @@ export default function MapDriver() {
 
   const handleLoadRoute = async () => {
     if (!selectedRouteId) return;
+    const selectedRoute = availableRoutes.find(r => r.id === selectedRouteId);
+    console.log("Selected route from available:", selectedRoute);
+    if (!selectedRoute) return;
+
+    setRoutePath(null);
     setLoading(true);
     try {
-      // Use the preview endpoint correctly
-      const res = await api.post("/api/admin/routes/preview/", { route_id: selectedRouteId });
-      
-      // Use route_geometry or path from the preview response
-      let path = typeof res.data.route_geometry === "string" 
-        ? decodePolyline(res.data.route_geometry) 
-        : res.data.route_geometry;
-      
-      setRoutePath(path);
-      // Store preview data in tripData so stops are available for rendering
-      setTripData({
-        ...res.data,
-        trip_id: null, // No active trip yet
-        stops: res.data.stops || []
+      const stops = selectedRoute.stops || [];
+      const start = stops.length > 0 ? { lat: stops[0].lat, lon: stops[0].lon } : { lat: 28.55, lon: 77.30 };
+      const end = stops.length > 0 ? { lat: stops[stops.length - 1].lat, lon: stops[stops.length - 1].lon } : { lat: 28.55, lon: 77.31 };
+
+      const res = await api.post("/api/admin/routes/preview/", { 
+          start, 
+          end,
+          stops: stops.map((s, i) => ({ lat: s.lat, lon: s.lon, order: i }))
       });
+      
+      console.log("Preview response data:", res.data);
+      // Backend returns [lon, lat] - GeoJSON format
+      const rawPath = res.data[0]?.path || [];
+      console.log("Raw path sample:", rawPath[0]);
+      const path = rawPath.map(p => [p[0], p[1]]); 
+      console.log("Setting routePath:", path);
+      setRoutePath(path);
+
+      // Force immediate map update
+      const source = map.current.getSource("route");
+      if (source) {
+          source.setData({
+            type: "FeatureCollection",
+            features: [{
+              type: "Feature",
+              properties: {},
+              geometry: {
+                  type: "LineString",
+                  coordinates: path || [],
+              },
+            }]
+          });
+          map.current.triggerRepaint();
+          
+          if (path && path.length > 0) {
+            const bounds = new maplibregl.LngLatBounds(path[0], path[0]);
+            path.forEach(coord => bounds.extend(coord));
+            map.current.fitBounds(bounds, { padding: 50 });
+          }
+      }
+      
+      const combinedTripData = {
+        ...selectedRoute,
+        trip_id: null,
+        stops: selectedRoute.stops || []
+      };
+      console.log("Setting tripData:", combinedTripData);
+      setTripData(combinedTripData);
       
       if (path && path.length > 0) {
         setCurrentPos(path[0]);
@@ -370,14 +470,49 @@ export default function MapDriver() {
     if (map.current && mapLoaded) {
       map.current.easeTo({ pitch: 0, bearing: 0, zoom: 13 });
     }
+    setIs3DView(false);
   };
 
+  const toggle3DView = () => {
+    if (!map.current || !mapLoaded) return;
+
+    const nextIs3DView = !is3DView;
+    setIs3DView(nextIs3DView);
+
+    map.current.easeTo({
+      pitch: nextIs3DView ? 60 : 0,
+      bearing: nextIs3DView ? map.current.getBearing() || -20 : 0,
+      duration: 600,
+    });
+  };
+
+  const zoomMap = (delta) => {
+    if (!map.current || !mapLoaded) return;
+
+    map.current.easeTo({
+      zoom: map.current.getZoom() + delta,
+      duration: 300,
+    });
+  };
+
+  const resetMapView = () => {
+    if (!map.current || !mapLoaded) return;
+
+    setIs3DView(false);
+    map.current.easeTo({
+      pitch: 0,
+      bearing: 0,
+      duration: 600,
+    });
+  };
+
+  const isMapTiltedOrRotated = Math.abs(mapPitch) > 1 || Math.abs(mapBearing) > 1;
+
   return (
-    <div className="relative flex h-screen w-full bg-slate-50 font-sans overflow-hidden">
-      <Header />
+    <div className="relative flex h-screen w-full bg-slate-50 font-sans overflow-x-hidden overflow-y-hidden">
       
       {/* Background Map */}
-      <div ref={mapContainer} className="absolute inset-0 z-0" />
+      <div ref={mapContainer} className="absolute top-0 left-0 w-full h-full z-0 overflow-x-hidden" />
 
       {/* Mobile Toggle Button */}
       <button 
@@ -420,15 +555,16 @@ export default function MapDriver() {
             {!isDriving && !routePath && (
               <SidebarCard title="Route Assignment">
                 <div className="space-y-4">
-                  <div className="relative bg-slate-50 border border-slate-100 rounded-2xl p-4 group">
-                    <div className="flex items-center gap-3">
-                      <Bus size={18} className="text-slate-400" />
+                  <div className="relative bg-slate-50 border border-slate-100 rounded-2xl p-4 w-full overflow-hidden group">
+                    <div className="flex items-center gap-3 w-full">
+                      <Bus size={18} className="text-slate-400 flex-shrink-0" />
                       <select 
-                        className="flex-1 bg-transparent text-xs font-bold text-slate-700 outline-none appearance-none cursor-pointer"
+                        className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none appearance-none cursor-pointer truncate"
+                        style={{ maxWidth: 'calc(100% - 40px)' }}
                         value={selectedRouteId}
                         onChange={(e) => setSelectedRouteId(e.target.value)}
                       >
-                        <option value="">Select Assigned Route...</option>
+                        <option value="">Select Route</option>
                         {availableRoutes.map(r => (
                           <option key={r.id} value={r.id}>{r.name}</option>
                         ))}
@@ -559,7 +695,7 @@ export default function MapDriver() {
       </aside>
 
       {/* Floating Bottom Console */}
-      <div className="absolute bottom-6 sm:bottom-10 left-1/2 transform -translate-x-1/2 z-10 w-[90%] sm:w-max pointer-events-auto">
+      <div className="absolute bottom-6 sm:bottom-10 left-1/2 transform -translate-x-1/2 z-10 w-[90%] sm:w-max pointer-events-auto overflow-x-hidden">
         <AnimatePresence>
           {isDriving && (
             <motion.div 
@@ -606,13 +742,48 @@ export default function MapDriver() {
 
       {/* Map Control: Side */}
       <div className="absolute top-44 right-4 sm:right-6 z-10 flex flex-col gap-2 pointer-events-auto">
-        <button className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl shadow-lg border border-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors">
+        <button
+          onClick={() => zoomMap(1)}
+          disabled={!mapLoaded}
+          aria-label="Zoom in"
+          title="Zoom in"
+          className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl shadow-lg border border-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
           <Plus size={20} />
         </button>
-        <button className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl shadow-lg border border-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors">
+        <button
+          onClick={() => zoomMap(-1)}
+          disabled={!mapLoaded}
+          aria-label="Zoom out"
+          title="Zoom out"
+          className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl shadow-lg border border-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
           <Minus size={20} />
         </button>
-        <button className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl shadow-lg border border-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors mt-2">
+        <button
+          onClick={toggle3DView}
+          disabled={!mapLoaded}
+          aria-label="Toggle 3D view"
+          title="3D view"
+          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl shadow-lg border flex items-center justify-center transition-colors ${
+            is3DView
+              ? 'bg-emerald-500 border-emerald-400 text-white hover:bg-emerald-600'
+              : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50'
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          <Box size={20} />
+        </button>
+        <button
+          onClick={resetMapView}
+          disabled={!mapLoaded}
+          aria-label="Reset map view"
+          title="Reset map view"
+          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl shadow-lg border flex items-center justify-center transition-colors mt-2 ${
+            isMapTiltedOrRotated
+              ? 'bg-slate-900 border-slate-800 text-white hover:bg-slate-800'
+              : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50'
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
           <Compass size={20} />
         </button>
       </div>

@@ -8,7 +8,7 @@ import {
 } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 
-import Header from "./components/Layout/Header";
+import Navbar from "./components/Layout/Navbar";
 import { logout } from "./features/auth/authSlice";
 
 import LoginPage from "./pages/LoginPage";
@@ -167,10 +167,10 @@ const RootRedirect = () => {
 /* ===============================
    App Layout (Header everywhere)
 ================================ */
-const AppLayout = ({ children }) => {
+const AppLayout = ({ children, showNavbar = true, flush = false }) => {
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Header />
+    <div className={`min-h-screen bg-slate-50 ${showNavbar && !flush ? 'pt-20' : ''}`}>
+      {showNavbar && <Navbar />}
       <main>{children}</main>
     </div>
   );
@@ -234,7 +234,7 @@ function App() {
             path="/admin"
             element={
               <ProtectedAdmin>
-                <AppLayout>
+                <AppLayout showNavbar={false}>
                   <AdminPanel />
                 </AppLayout>
               </ProtectedAdmin>
@@ -246,7 +246,7 @@ function App() {
             path="/driver/live"
             element={
               <ProtectedRoute allowedRoles={["driver"]}>
-                <AppLayout>
+                <AppLayout flush={true}>
                   <MapDriver />
                 </AppLayout>
               </ProtectedRoute>
@@ -258,7 +258,9 @@ function App() {
             path="/passenger/live"
             element={
               <ProtectedRoute allowedRoles={["passenger", "student"]}>
-                <PassengerLivePage />
+                <AppLayout>
+                  <PassengerLivePage />
+                </AppLayout>
               </ProtectedRoute>
             }
           />
@@ -268,7 +270,9 @@ function App() {
             path="/"
             element={
               <PublicRoute>
-                <IntroPage />
+                <AppLayout>
+                  <IntroPage />
+                </AppLayout>
               </PublicRoute>
             }
           />
@@ -276,7 +280,9 @@ function App() {
             path="/splash2"
             element={
               <PublicRoute>
-                <SplashScreen2 />
+                <AppLayout>
+                  <SplashScreen2 />
+                </AppLayout>
               </PublicRoute>
             }
           />
@@ -284,7 +290,9 @@ function App() {
             path="/splash3"
             element={
               <PublicRoute>
-                <SplashScreen3 />
+                <AppLayout>
+                  <SplashScreen3 />
+                </AppLayout>
               </PublicRoute>
             }
           />
@@ -292,7 +300,9 @@ function App() {
             path="/splash4"
             element={
               <PublicRoute>
-                <SplashScreen4 />
+                <AppLayout>
+                  <SplashScreen4 />
+                </AppLayout>
               </PublicRoute>
             }
           />

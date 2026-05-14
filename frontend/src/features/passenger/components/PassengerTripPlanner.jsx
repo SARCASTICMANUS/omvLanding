@@ -12,6 +12,7 @@ import {
   Sun,
 } from "lucide-react";
 import LocationSearch from "../../../components/LocationSearch";
+import loginBus from "../../../assets/loginBus.png";
 
 const brandGreen = "#079f4f";
 
@@ -30,7 +31,7 @@ function VayyLogo() {
 
 function CityIllustration() {
   return (
-    <div className="pointer-events-none absolute right-0 top-[38px] hidden h-[230px] w-[620px] overflow-hidden lg:block">
+    <div className="pointer-events-none absolute right-0 top-0 hidden h-[230px] w-[620px] overflow-hidden lg:block">
       <svg
         viewBox="0 0 620 245"
         className="h-full w-full"
@@ -190,56 +191,28 @@ export default function PassengerTripPlanner({
   return (
     <div className="min-h-screen bg-[#f8fbfa] font-sans text-[#071419]">
       <section className="relative flex min-h-screen w-full flex-col overflow-hidden bg-[#f8fbfa]">
-        <header className="relative z-30 flex h-[87px] items-center justify-between border-b border-[#dbe4ea] bg-white/78 px-[38px] backdrop-blur-xl">
-          <div className="flex items-center gap-[28px]">
-            <button
-              type="button"
-              onClick={onBack}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-[#0f6d53] transition hover:bg-[#edf6f1]"
-              aria-label="Open menu"
-            >
-              <Menu size={24} strokeWidth={2.2} />
-            </button>
-            <VayyLogo />
-          </div>
-
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              className="hidden h-11 w-11 items-center justify-center rounded-full border border-[#dde6ee] bg-white text-[#15242d] shadow-sm transition hover:border-[#c7d5df] sm:flex"
-              aria-label="Toggle theme"
-            >
-              <Sun size={21} strokeWidth={2.1} />
-            </button>
-            <button
-              type="button"
-              className="flex h-11 items-center gap-2 rounded-[11px] border border-[#d7e0e8] bg-white px-4 text-[14px] font-semibold text-[#263848] shadow-sm transition hover:border-[#c5d2dc]"
-              aria-label="Select language"
-            >
-              <Globe2 size={19} strokeWidth={2.2} />
-              <span className="hidden sm:inline">English</span>
-              <ChevronDown size={17} strokeWidth={2.2} />
-            </button>
-          </div>
-        </header>
-
-        <main className="relative z-10 flex-1 px-[58px] pb-[30px] pt-[62px]">
+        
+        {/* Main Content Container: Mobile-first responsive layout */}
+        <main className="relative z-10 flex flex-1 flex-col items-center lg:items-start px-[20px] lg:px-[58px] xl:px-[80px] pb-[30px] pt-[20px] w-full max-w-7xl mx-auto">
+          
           <CityIllustration />
 
-          <section className="relative z-10 max-w-[470px]">
-            <h1 className="text-[46px] font-black leading-[1.04] tracking-normal text-[#08161b]">
+          {/* Heading Section: Responsive alignment */}
+          <section className="relative z-10 w-full max-w-[470px] xl:max-w-[550px] mt-4 text-center lg:text-left">
+            <h1 className="text-[32px] sm:text-[46px] xl:text-[52px] font-black leading-[1.1] tracking-normal text-[#08161b]">
               Choose Your{" "}
               <span className="bg-gradient-to-r from-[#078f48] to-[#17b965] bg-clip-text text-transparent">
                 Route
               </span>
             </h1>
-            <p className="mt-[18px] max-w-[390px] text-[16px] font-medium leading-[1.65] text-[#33475b]">
+            <p className="mt-3 max-w-[390px] xl:max-w-[450px] text-[15px] sm:text-[16px] xl:text-[18px] font-medium leading-[1.6] text-[#33475b] mx-auto lg:mx-0">
               Enter your pickup and drop locations to find the best bus routes
               and track in real-time.
             </p>
           </section>
 
-          <section className="relative z-20 mt-[40px] w-full rounded-[13px] border border-[#e6ebef] bg-white/96 p-[24px] shadow-[0_14px_34px_rgba(18,38,48,0.10)] backdrop-blur">
+          {/* Search Card Section */}
+          <section className="relative z-20 mt-[24px] xl:mt-[40px] w-full max-w-[470px] xl:max-w-[500px] rounded-[16px] border border-[#e6ebef] bg-white p-[20px] sm:p-[24px] xl:p-[32px] shadow-[0_10px_25px_rgba(18,38,48,0.08)]">
             <PlannerField
               label="Pickup Point"
               placeholder="Search pickup location"
@@ -247,16 +220,15 @@ export default function PassengerTripPlanner({
               icon={MapPin}
             />
 
-            <div className="relative my-[36px] flex items-center">
-              <div className="h-px flex-1 border-t border-dashed border-[#d5dde7]" />
+            <div className="relative my-[24px] flex items-center justify-center">
+              <div className="absolute h-full border-l border-dashed border-[#d5dde7]" />
               <button
                 type="button"
-                className="mx-0 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#e1e8ee] bg-white text-[#1e303a] shadow-[0_4px_12px_rgba(15,23,42,0.06)]"
+                className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#e1e8ee] bg-white text-[#1e303a] shadow-sm"
                 aria-label="Swap pickup and drop"
               >
                 <ArrowUpDown size={18} strokeWidth={2.2} />
               </button>
-              <div className="h-px flex-1 border-t border-dashed border-[#d5dde7]" />
             </div>
 
             <PlannerField
@@ -270,14 +242,15 @@ export default function PassengerTripPlanner({
               type="button"
               onClick={handleNext}
               disabled={!canProceed || loading}
-              className="mt-[24px] flex h-[53px] w-full items-center justify-center gap-4 rounded-[9px] bg-gradient-to-r from-[#009849] to-[#00aa55] text-[17px] font-extrabold text-white shadow-[0_14px_28px_rgba(0,153,77,0.22)] transition hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:from-[#98cfb1] disabled:to-[#98cfb1] disabled:shadow-none"
+              className="mt-[24px] flex h-[53px] w-full items-center justify-center gap-4 rounded-[12px] bg-[#079f4f] text-[16px] xl:text-[18px] font-bold text-white transition hover:bg-[#068a44] disabled:opacity-50"
             >
-              <Search size={22} strokeWidth={2.4} />
-              {loading ? "Searching for routes..." : "Search Vayy Rides"}
+              <Search size={20} strokeWidth={2.5} />
+              {loading ? "Searching..." : "Search Vayy Rides"}
             </button>
           </section>
 
-          <section className="relative z-10 mt-[34px] grid w-full gap-6 rounded-[13px] bg-[#edf8f3] px-[22px] py-[24px] sm:px-[39px] lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-10">
+          {/* Feature List: Responsive grid */}
+          <section className="relative z-10 mt-[24px] grid w-full max-w-[470px] lg:max-w-none gap-4 rounded-[13px] bg-[#edf8f3] p-[20px] sm:p-[24px] xl:p-[32px] lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-10">
             <FeatureItem
               icon={ShieldCheck}
               title="Safe. Reliable. On Time."

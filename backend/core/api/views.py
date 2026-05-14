@@ -381,9 +381,21 @@ class AdminRoutePreviewView(APIView):
 
         output = []
         for r in route_options:
+            # Assuming r["geometry"] is a shapely object or has coordinates
+            # Try to handle it if it is a list or has a coords property
+            coords = []
+            if hasattr(r["geometry"], "coords"):
+                coords = list(r["geometry"].coords)
+            elif isinstance(r["geometry"], list):
+                coords = r["geometry"]
+            else:
+                # Fallback: try decoding polyline if provided as encoded string
+                # or log an error
+                logging.error(f"Unknown geometry format: {type(r['geometry'])}")
+
             output.append(
                 {
-                    "path": [[y, x] for x, y in r["geometry"].coords],
+                    "path": [[x, y] for x, y in coords],
                     "distance": r["total_distance"],
                     "duration": r["duration"],
                 }
