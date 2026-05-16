@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { ADMIN_ROLES } from "../constants/roles";
 import { APP_ROUTES } from "../constants/routes";
+import { UnknownRoleScreen } from "../components/shared";
 import { getRedirectPathByRole, normalizeRole } from "../utils/roles";
 
 export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
@@ -29,7 +30,7 @@ export const ProtectedAdmin = ({ children, fallback = null }) => {
   }
 
   if (!ADMIN_ROLES.includes(role)) {
-    return fallback || <Navigate to={getRedirectPathByRole(role)} replace />;
+    return fallback || <UnknownRoleScreen role={user?.role} />;
   }
 
   return children;
@@ -45,4 +46,3 @@ export const PublicRoute = ({ children }) => {
 
   return children;
 };
-

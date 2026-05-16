@@ -371,7 +371,7 @@ function MetricChip({ icon: Icon, value, label }) {
         width: 40, height: 40, borderRadius: "50%",
         background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        <Icon size={19} color="#374151" strokeWidth={2} />
+        {React.createElement(Icon, { size: 19, color: "#374151", strokeWidth: 2 })}
       </div>
       <div>
         <div style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>{value}</div>
@@ -574,7 +574,11 @@ function MobileBottomNav() {
           flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
           background: "none", border: "none", cursor: "pointer", padding: "4px 0",
         }}>
-          <Icon size={22} color={active ? "#009849" : "#9ca3af"} strokeWidth={active ? 2.5 : 2} />
+          {React.createElement(Icon, {
+            size: 22,
+            color: active ? "#009849" : "#9ca3af",
+            strokeWidth: active ? 2.5 : 2,
+          })}
           <span style={{ fontSize: 11, fontWeight: active ? 700 : 500, color: active ? "#009849" : "#9ca3af" }}>{label}</span>
         </button>
       ))}

@@ -8,9 +8,9 @@ export const socketKeys = {
 };
 
 export const createSocketPath = {
-  driverManifest: (vehicleId) => API_PATHS.sockets.driverManifest(vehicleId, localStorage.getItem("token")),
-  trip: (tripId) => API_PATHS.sockets.trip(tripId, localStorage.getItem("token")),
-  vehicle: (vehicleId) => API_PATHS.sockets.vehicle(vehicleId, localStorage.getItem("token")),
-  passenger: (passengerId) => API_PATHS.sockets.passenger(passengerId, localStorage.getItem("token")),
+  driverManifest: (vehicleId) => API_PATHS.sockets.driverManifest(vehicleId, localStorage.getItem("access_token")),
+  trip: (tripId) => API_PATHS.sockets.trip(tripId, localStorage.getItem("access_token")),
+  vehicle: (vehicleId) => API_PATHS.sockets.vehicle(vehicleId, localStorage.getItem("access_token")),
+  passenger: (passengerId) => API_PATHS.sockets.passenger(passengerId, localStorage.getItem("access_token")),
 };
 

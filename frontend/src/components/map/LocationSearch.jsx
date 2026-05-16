@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import api from "../lib/api";
-import { Search } from "lucide-react";
+import api from "../../lib/api";
+import { Search, RefreshCw } from "lucide-react";
 
 // Debounce hook to prevent API spam
 const useDebounce = (value, delay) => {
@@ -24,7 +24,8 @@ const LocationSearch = ({
   const [query, setQuery] = useState(initialValue);
   const [results, setResults] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
-  const debouncedQuery = useDebounce(query, 500);
+  const [isLoading, setIsLoading] = useState(false);
+  const debouncedQuery = useDebounce(query, 300);
   const selectedQueryRef = useRef(initialValue ? initialValue.split(",")[0] : "");
 
   // Sync with initialValue if it changes externally (e.g., from dragging a marker)
@@ -50,21 +51,28 @@ const LocationSearch = ({
     // Only search if user typed 3+ chars and it's not the initial value sync
     if (debouncedQuery.length > 2 && debouncedQuery !== (initialValue ? initialValue.split(",")[0] : "")) {
       let ignore = false;
+      setIsLoading(true);
 
       // Using the global search API
       api
         .get(`/api/global-search/?q=${encodeURIComponent(debouncedQuery)}`)
         .then((res) => {
+          setIsLoading(false);
           if (ignore || debouncedQuery === selectedQueryRef.current) return;
           const nextResults = Array.isArray(res.data) ? res.data : [];
           setResults(nextResults);
           setIsOpen(nextResults.length > 0);
         })
-        .catch((err) => console.error("Search failed", err));
+        .catch((err) => {
+          setIsLoading(false);
+          console.error("Search failed", err);
+        });
 
       return () => {
         ignore = true;
       };
+    } else {
+        setIsLoading(false);
     }
   }, [debouncedQuery, initialValue]);
 
@@ -99,7 +107,11 @@ const LocationSearch = ({
           value={query}
           onChange={handleChange}
         />
-        <Search className="absolute left-3 top-3.5 text-gray-400" size={18} />
+        {isLoading ? (
+            <RefreshCw className="absolute left-3 top-3.5 text-emerald-500 animate-spin" size={18} />
+        ) : (
+            <Search className="absolute left-3 top-3.5 text-gray-400" size={18} />
+        )}
       </div>
 
       {isOpen && results.length > 0 && (

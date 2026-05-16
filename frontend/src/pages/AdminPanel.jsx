@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import { useDispatch } from "react-redux";
 import { logout } from "../features/auth/authSlice";
-import AdminRouteManager from "../components/AdminRouteManager";
-import CityManager from "../components/CityManager";
-import AdminUsersManager from "../components/AdminUsersManager";
-import PassengersManager from "../components/PassengersManager";
-import VehiclesManager from "../components/VehiclesManager";
-import DriversManager from "../components/DriversManager";
+import {
+  AdminRouteManager,
+  AdminUsersManager,
+  CityManager,
+  DriversManager,
+  PassengersManager,
+  VehiclesManager,
+} from "../components/admin";
 import { useSelector } from "react-redux";
 import {
   LayoutDashboard,

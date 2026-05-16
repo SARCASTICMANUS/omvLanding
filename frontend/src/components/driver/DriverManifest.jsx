@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Users, MapPin, CheckCircle2, Clock, AlertCircle } from "lucide-react";
-import api, { getWsUrl } from "../lib/api";
+import { getWsUrl } from "../../lib/api";
 
 /**
  * DriverManifest Component
  * Displays a real-time digital manifest for drivers.
  * Connects to ws://host/ws/driver/manifest/<vehicle_id>/
  */
-const DriverManifest = ({ vehicleId, tripId }) => {
-  const [manifest, setManifest] = useState(null);
+const DriverManifest = ({ vehicleId }) => {
   const [next3Stops, setNext3Stops] = useState([]);
   const [totalPending, setTotalPending] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
@@ -17,7 +16,7 @@ const DriverManifest = ({ vehicleId, tripId }) => {
   useEffect(() => {
     if (!vehicleId) return;
 
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("access_token");
     const wsUrl = getWsUrl(`/ws/driver/manifest/${vehicleId}/?token=${token}`);
 
     ws.current = new WebSocket(wsUrl);
@@ -49,7 +48,6 @@ const DriverManifest = ({ vehicleId, tripId }) => {
 
         setNext3Stops(stops);
         setTotalPending(data.total_pending || 0);
-        setManifest(manifest);
       }
     };
 

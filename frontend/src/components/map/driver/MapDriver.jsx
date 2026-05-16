@@ -26,97 +26,22 @@ import {
   Menu,
   X
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+// eslint-disable-next-line no-unused-vars
+import { AnimatePresence, motion } from 'framer-motion';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 // --- Assets/Icons ---
-import api, { getWsUrl } from "../../lib/api";
-import DriverManifest from "../DriverManifest";
-
-// Helper to decode OSRM polyline string
-function decodePolyline(str, precision = 5) {
-  let index = 0, lat = 0, lng = 0, coordinates = [], shift = 0, result = 0, byte = null, latitude_change = 0, longitude_change = 0, factor = Math.pow(10, precision);
-  while (index < str.length) {
-    byte = null; shift = 0; result = 0;
-    do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
-    latitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
-    shift = result = 0;
-    do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
-    longitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
-    lat += latitude_change; lng += longitude_change;
-    coordinates.push([lat / factor, lng / factor]);
-  }
-  return coordinates;
-}
-
-function getDistance(p1, p2) {
-  const R = 6371e3;
-  const phi1 = p1[1] * Math.PI/180;
-  const phi2 = p2[1] * Math.PI/180;
-  const dPhi = (p2[1]-p1[1]) * Math.PI/180;
-  const dLambda = (p2[0]-p1[0]) * Math.PI/180;
-  const a = Math.sin(dPhi/2) * Math.sin(dPhi/2) +
-          Math.cos(phi1) * Math.cos(phi2) *
-          Math.sin(dLambda/2) * Math.sin(dLambda/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
-}
-
-const toNumber = (value) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const isLikelyLonLat = ([first, second]) => Math.abs(first) > 35 || Math.abs(second) <= 35;
-
-const normalizeCoordinate = (coord, fallbackOrder = "lonLat") => {
-  if (!Array.isArray(coord) || coord.length < 2) return null;
-
-  const first = toNumber(coord[0]);
-  const second = toNumber(coord[1]);
-  if (first === null || second === null) return null;
-
-  if (fallbackOrder === "latLon") return [second, first];
-  if (fallbackOrder === "lonLat") return [first, second];
-
-  return isLikelyLonLat([first, second]) ? [first, second] : [second, first];
-};
-
-const normalizePath = (path, fallbackOrder = "auto") => {
-  if (!Array.isArray(path)) return [];
-  return path
-    .map((coord) => normalizeCoordinate(coord, fallbackOrder))
-    .filter(Boolean);
-};
-
-const getStopLngLat = (stop) => {
-  if (!stop) return null;
-
-  if (Array.isArray(stop.location?.coordinates)) {
-    return normalizeCoordinate(stop.location.coordinates, "lonLat");
-  }
-
-  const lat = toNumber(stop.lat);
-  const lon = toNumber(stop.lon ?? stop.lng);
-  if (lat === null || lon === null) return null;
-
-  return [lon, lat];
-};
-
-const getPreviewOptions = (data) => {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.results)) return data.results;
-  if (Array.isArray(data?.routes)) return data.routes;
-  if (data?.path || data?.route_geometry || data?.path_coords) return [data];
-  return [];
-};
-
-const getPreviewPath = (preview) =>
-  normalizePath(preview?.path || preview?.route_geometry || preview?.path_coords, "auto");
-
-const getRoutePath = (route) =>
-  normalizePath(route?.path_coords || route?.route_geometry || route?.path, "latLon");
+import api from "../../../lib/api";
+import DriverManifest from "../../driver/DriverManifest";
+import notificationService from "../../../services/notificationService";
+import {
+  getDistance,
+  getPreviewOptions,
+  getPreviewPath,
+  getRoutePath,
+  getStopLngLat,
+} from "../utils/routeGeometry";
 
 // --- Components ---
 
@@ -130,12 +55,34 @@ const SidebarCard = ({ title, children, className = "" }) => (
 const StatItem = ({ icon: Icon, label, value, colorClass }) => (
   <div className="bg-white border border-slate-100 rounded-xl p-3 flex flex-col gap-1 shadow-sm hover:border-slate-200 transition-colors">
     <div className={`w-8 h-8 rounded-lg ${colorClass} flex items-center justify-center mb-1`}>
-      <Icon size={16} />
+      {React.createElement(Icon, { size: 16 })}
     </div>
     <span className="text-[10px] font-medium text-slate-500">{label}</span>
     <span className="text-xs font-bold text-slate-800">{value}</span>
   </div>
 );
+
+const getOrderedStops = (stops = []) =>
+  [...stops].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+const getNextStopsFromPosition = (stops = [], position, limit = 3) => {
+  const orderedStops = getOrderedStops(stops);
+  if (!position || orderedStops.length === 0) return orderedStops.slice(0, limit);
+
+  let nearestIndex = 0;
+  let nearestDistance = Infinity;
+  orderedStops.forEach((stop, index) => {
+    const coord = getStopLngLat(stop);
+    if (!coord) return;
+    const distance = getDistance(position, coord);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  });
+
+  return orderedStops.slice(nearestIndex, nearestIndex + limit);
+};
 
 export default function MapDriver() {
   const mapContainer = useRef(null);
@@ -159,6 +106,24 @@ export default function MapDriver() {
   const [is3DView, setIs3DView] = useState(false);
   const [mapPitch, setMapPitch] = useState(0);
   const [mapBearing, setMapBearing] = useState(0);
+
+  // Notifications logic
+  useEffect(() => {
+    notificationService.requestPermission();
+    
+    const handleVisibilityChange = () => {
+      if (document.hidden && isDriving) {
+        notificationService.notify("VAYY Driver Active", {
+          body: "Keep the app open for accurate tracking and manifest updates.",
+          tag: "driver-bg-alert",
+          renotify: true
+        });
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [isDriving]);
 
   // Simulation Refs
   const ws = useRef(null);
@@ -211,7 +176,7 @@ export default function MapDriver() {
 
   // Initialize Map
   useEffect(() => {
-    if (map.current) return;
+    if (map.current || !mapContainer.current) return;
     
     const initMap = (center = [77.3000, 28.5500]) => {
         const m = new maplibregl.Map({
@@ -521,6 +486,12 @@ export default function MapDriver() {
       setTripData(res.data);
       setIsDriving(true);
       setCurrentSpeed(35);
+      setNextStops(getNextStopsFromPosition(res.data.stops || tripData?.stops || [], routePath[0]));
+
+      notificationService.notify("Trip Started", {
+        body: `Your trip for ${res.data.route_name} has begun.`,
+        tag: "trip-start"
+      });
       
       let index = 0;
       simulationInterval.current = setInterval(() => {
@@ -530,6 +501,15 @@ export default function MapDriver() {
         }
         setCurrentPos(routePath[index]);
         setCurrentIndex(index);
+        setNextStops(getNextStopsFromPosition(res.data.stops || tripData?.stops || [], routePath[index]));
+        if (index % 6 === 0) {
+          api.post("/api/telemetry/ingest/", {
+            type: "gps",
+            trip_id: res.data.trip_id,
+            lat: routePath[index][1],
+            lon: routePath[index][0],
+          }).catch((err) => console.warn("Driver telemetry sync failed", err));
+        }
         setCurrentSpeed(prev => {
           const delta = Math.floor(Math.random() * 11) - 5;
           const next = prev + delta;
@@ -543,9 +523,16 @@ export default function MapDriver() {
   };
 
   const stopDrive = async () => {
+    const activeTripId = tripData?.trip_id;
     if (simulationInterval.current) clearInterval(simulationInterval.current);
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     if (ws.current) ws.current.close();
+
+    if (activeTripId) {
+      api.post(`/api/trips/end/${activeTripId}/`).catch((err) => {
+        console.warn("Failed to end trip on server", err);
+      });
+    }
 
     setIsDriving(false);
     setRoutePath(null);
@@ -553,6 +540,7 @@ export default function MapDriver() {
     setSelectedRouteId("");
     setCurrentSpeed(0);
     setCurrentIndex(0);
+    setNextStops([]);
     if (vehicleMarker.current) {
       vehicleMarker.current.remove();
       vehicleMarker.current = null;
@@ -599,21 +587,21 @@ export default function MapDriver() {
   const isMapTiltedOrRotated = Math.abs(mapPitch) > 1 || Math.abs(mapBearing) > 1;
 
   return (
-    <div className="relative flex h-screen w-full bg-slate-50 font-sans overflow-x-hidden overflow-y-hidden">
+    <div className="isolate relative flex h-screen w-full bg-slate-50 font-sans overflow-x-hidden overflow-y-hidden">
       
       {/* Background Map */}
-      <div ref={mapContainer} className="absolute top-0 left-0 w-full h-full z-0 overflow-x-hidden" />
+      <div ref={mapContainer} className="absolute inset-0 z-0 h-full w-full overflow-x-hidden" />
 
       {/* Mobile Toggle Button */}
       <button 
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="lg:hidden absolute top-20 left-4 z-[20] w-10 h-10 bg-white rounded-xl shadow-lg flex items-center justify-center text-slate-600 border border-slate-100"
+        className="absolute left-4 top-20 z-[1100] flex h-10 w-10 items-center justify-center rounded-xl border border-slate-100 bg-white text-slate-600 shadow-lg lg:hidden"
       >
         {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
 
       {/* Sidebar Content */}
-      <aside className={`fixed lg:relative z-10 w-full sm:w-[380px] h-full pt-16 sm:pt-20 pb-6 lg:ml-6 flex flex-col pointer-events-none transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      <aside className={`fixed left-0 top-0 z-[1000] flex h-full w-full flex-col pb-6 pt-16 pointer-events-none transition-transform duration-300 sm:w-[380px] sm:pt-20 lg:relative lg:ml-6 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <motion.div 
           initial={{ x: -50, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
@@ -785,7 +773,7 @@ export default function MapDriver() {
       </aside>
 
       {/* Floating Bottom Console */}
-      <div className="absolute bottom-6 sm:bottom-10 left-1/2 transform -translate-x-1/2 z-10 w-[90%] sm:w-max pointer-events-auto overflow-x-hidden">
+      <div className="pointer-events-auto absolute bottom-6 left-1/2 z-[900] w-[90%] -translate-x-1/2 transform overflow-x-hidden sm:bottom-10 sm:w-max">
         <AnimatePresence>
           {isDriving && (
             <motion.div 
@@ -831,7 +819,7 @@ export default function MapDriver() {
       </div>
 
       {/* Map Control: Side */}
-      <div className="absolute top-44 right-4 sm:right-6 z-10 flex flex-col gap-2 pointer-events-auto">
+      <div className="pointer-events-auto absolute right-4 top-44 z-[900] flex flex-col gap-2 sm:right-6">
         <button
           onClick={() => zoomMap(1)}
           disabled={!mapLoaded}
@@ -879,7 +867,7 @@ export default function MapDriver() {
       </div>
 
       {/* Right Bottom Legend */}
-      <div className="hidden sm:block absolute bottom-10 right-6 z-10 pointer-events-auto">
+      <div className="pointer-events-auto absolute bottom-10 right-6 z-[900] hidden sm:block">
         <motion.div 
           initial={{ x: 20, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}

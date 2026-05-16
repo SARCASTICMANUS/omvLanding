@@ -34,3 +34,5 @@ openpyxl>=3.1.0
 whitenoise==6.9.0
 dj-database-url==3.0.0
 python-dotenv
+django-allauth==65.16.1
+dj-rest-auth>=7.2.0

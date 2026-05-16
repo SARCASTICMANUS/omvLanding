@@ -7,7 +7,7 @@ export const vayyApi = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: env.apiUrl,
     prepareHeaders: (headers) => {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("access_token");
       if (token) {
         headers.set("authorization", `Bearer ${token}`);
       }

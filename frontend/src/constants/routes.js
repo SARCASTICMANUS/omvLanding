@@ -5,6 +5,8 @@ export const APP_ROUTES = {
   admin: "/admin",
   driverLive: "/driver/live",
   passengerLive: "/passenger/live",
+  driverProfileUpdate: "/driver/profile/update",
+  passengerProfileUpdate: "/passenger/profile/update",
   about: "/about",
   contact: "/contact",
   routes: "/routes",
@@ -22,4 +24,3 @@ export const ROLE_ROUTES = {
   passenger: APP_ROUTES.passengerLive,
   student: APP_ROUTES.passengerLive,
 };
-

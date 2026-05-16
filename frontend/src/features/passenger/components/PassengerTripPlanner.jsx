@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   ArrowUpDown,
   Bus,
   ChevronDown,
+  Clock,
   Crosshair,
   Globe2,
   MapPin,
@@ -11,8 +12,8 @@ import {
   ShieldCheck,
   Sun,
 } from "lucide-react";
-import LocationSearch from "../../../components/LocationSearch";
-import loginBus from "../../../assets/loginBus.png";
+import { LocationSearch } from "../../../components/map";
+import api from "../../../lib/api";
 
 const brandGreen = "#079f4f";
 
@@ -124,7 +125,7 @@ function CityIllustration() {
   );
 }
 
-function PlannerField({ label, placeholder, onSelect, icon }) {
+function PlannerField({ label, placeholder, onSelect, initialValue, icon }) {
   return (
     <div className="relative z-20">
       <label className="mb-3 flex items-center gap-3 text-[14px] font-extrabold text-[#0b171c]">
@@ -141,6 +142,7 @@ function PlannerField({ label, placeholder, onSelect, icon }) {
         <LocationSearch
           placeholder={placeholder}
           onSelect={onSelect}
+          initialValue={initialValue}
           className="h-[52px] w-full rounded-[10px] border border-[#cfd8e5] bg-white pl-[54px] pr-[54px] text-[15px] font-medium text-[#14242c] shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] outline-none transition focus:border-[#8fa6ba] focus:ring-4 focus:ring-[#dcebe4]"
         />
         <Crosshair
@@ -169,13 +171,43 @@ function FeatureItem({ icon, title, copy }) {
   );
 }
 
+function RecentSearchItem({ search, onClick }) {
+  return (
+    <button
+      onClick={() => onClick(search)}
+      className="group flex w-full items-center gap-3 rounded-[12px] border border-[#f0f3f6] bg-white p-3 text-left transition hover:border-[#079f4f] hover:bg-[#f8fbfa] hover:shadow-sm"
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f1f5f9] text-[#64748b] group-hover:bg-[#dff4ea] group-hover:text-[#079f4f]">
+        <Clock size={16} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13px] font-bold text-[#1e293b]">
+          {search.pickup?.name || search.pickup?.display_name?.split(",")[0]}
+        </div>
+        <div className="truncate text-[11px] font-medium text-[#64748b]">
+          To: {search.destination?.name || search.destination?.display_name?.split(",")[0]}
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export default function PassengerTripPlanner({
-  onBack,
   onNext,
   loading = false,
 }) {
   const [pickup, setPickup] = useState(null);
   const [destination, setDestination] = useState(null);
+  const [recentSearches, setRecentSearches] = useState([]);
+
+  useEffect(() => {
+    // Fetch recent searches
+    api.get("/api/passenger/recent-searches/")
+      .then(res => {
+        setRecentSearches(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch(err => console.error("Failed to fetch recent searches", err));
+  }, []);
 
   const canProceed = useMemo(() => {
     return Boolean(
@@ -186,6 +218,11 @@ export default function PassengerTripPlanner({
   const handleNext = () => {
     if (!canProceed || loading) return;
     onNext?.({ from: pickup, to: destination });
+  };
+
+  const handleRecentClick = (search) => {
+    setPickup(search.pickup);
+    setDestination(search.destination);
   };
 
   return (
@@ -213,40 +250,70 @@ export default function PassengerTripPlanner({
 
           {/* Search Card Section */}
           <section className="relative z-20 mt-[24px] xl:mt-[40px] w-full max-w-[470px] xl:max-w-[500px] rounded-[16px] border border-[#e6ebef] bg-white p-[20px] sm:p-[24px] xl:p-[32px] shadow-[0_10px_25px_rgba(18,38,48,0.08)]">
-            <PlannerField
-              label="Pickup Point"
-              placeholder="Search pickup location"
-              onSelect={setPickup}
-              icon={MapPin}
-            />
+            <div className="space-y-6">
+              <PlannerField
+                label="Pickup Point"
+                placeholder="Search pickup location"
+                onSelect={setPickup}
+                initialValue={pickup?.name || pickup?.display_name || ""}
+                icon={MapPin}
+              />
 
-            <div className="relative my-[24px] flex items-center justify-center">
-              <div className="absolute h-full border-l border-dashed border-[#d5dde7]" />
+              <div className="relative flex items-center justify-center">
+                <div className="absolute h-[50px] border-l border-dashed border-[#d5dde7]" />
+                <button
+                  type="button"
+                  className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#e1e8ee] bg-white text-[#1e303a] shadow-sm"
+                  aria-label="Swap pickup and drop"
+                  onClick={() => {
+                    const temp = pickup;
+                    setPickup(destination);
+                    setDestination(temp);
+                  }}
+                >
+                  <ArrowUpDown size={18} strokeWidth={2.2} />
+                </button>
+              </div>
+
+              <PlannerField
+                label="Drop Location"
+                placeholder="Enter your destination"
+                onSelect={setDestination}
+                initialValue={destination?.name || destination?.display_name || ""}
+                icon={MapPin}
+              />
+
               <button
                 type="button"
-                className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#e1e8ee] bg-white text-[#1e303a] shadow-sm"
-                aria-label="Swap pickup and drop"
+                onClick={handleNext}
+                disabled={!canProceed || loading}
+                className="flex h-[53px] w-full items-center justify-center gap-4 rounded-[12px] bg-[#079f4f] text-[16px] xl:text-[18px] font-bold text-white transition hover:bg-[#068a44] disabled:opacity-50"
               >
-                <ArrowUpDown size={18} strokeWidth={2.2} />
+                <Search size={20} strokeWidth={2.5} />
+                {loading ? "Searching..." : "Search Vayy Rides"}
               </button>
             </div>
 
-            <PlannerField
-              label="Drop Location"
-              placeholder="Enter your destination"
-              onSelect={setDestination}
-              icon={MapPin}
-            />
-
-            <button
-              type="button"
-              onClick={handleNext}
-              disabled={!canProceed || loading}
-              className="mt-[24px] flex h-[53px] w-full items-center justify-center gap-4 rounded-[12px] bg-[#079f4f] text-[16px] xl:text-[18px] font-bold text-white transition hover:bg-[#068a44] disabled:opacity-50"
-            >
-              <Search size={20} strokeWidth={2.5} />
-              {loading ? "Searching..." : "Search Vayy Rides"}
-            </button>
+            {/* Recent Searches Section */}
+            {recentSearches.length > 0 && (
+              <div className="mt-8">
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="text-[13px] font-black uppercase tracking-widest text-[#94a3b8]">
+                    Recent Searches
+                  </span>
+                  <div className="h-px flex-1 bg-[#f1f5f9] ml-4" />
+                </div>
+                <div className="space-y-2">
+                  {recentSearches.map((search, idx) => (
+                    <RecentSearchItem
+                      key={idx}
+                      search={search}
+                      onClick={handleRecentClick}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Feature List: Responsive grid */}
