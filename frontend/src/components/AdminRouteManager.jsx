@@ -718,35 +718,38 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
           </div>
         </div>
 
+        {/* FIXED SUBTABS */}
+        <div className="bg-white px-6 py-4 border-b border-slate-100 shadow-sm z-[20]">
+          {/* Route Workspace Tabs */}
+          <div className="flex items-center gap-2 rounded-2xl bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => setRouteSubTab("library")}
+              className={`flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest transition ${
+                isRouteLibrary
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Saved Routes
+            </button>
+            <button
+              type="button"
+              onClick={() => setRouteSubTab("create")}
+              className={`flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest transition ${
+                isRouteCreate
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Add New Route
+            </button>
+          </div>
+        </div>
+
         {/* Form Container */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="p-6 space-y-6">
-            {/* Route Workspace Tabs */}
-            <div className="flex items-center gap-2 rounded-2xl bg-slate-100 p-1">
-              <button
-                type="button"
-                onClick={() => setRouteSubTab("library")}
-                className={`flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest transition ${
-                  isRouteLibrary
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                Saved Routes
-              </button>
-              <button
-                type="button"
-                onClick={() => setRouteSubTab("create")}
-                className={`flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest transition ${
-                  isRouteCreate
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                Add New Route
-              </button>
-            </div>
-
             {isRouteLibrary && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between px-1">

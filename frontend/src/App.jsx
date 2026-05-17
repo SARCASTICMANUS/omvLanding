@@ -169,9 +169,9 @@ const RootRedirect = () => {
 ================================ */
 const AppLayout = ({ children, showNavbar = true, flush = false }) => {
   return (
-    <div className={`min-h-screen bg-slate-50 ${showNavbar && !flush ? 'pt-20' : ''}`}>
+    <div className={`min-h-screen bg-slate-50 w-full overflow-x-hidden relative ${showNavbar && !flush ? 'pt-[64px] sm:pt-[57px]' : ''}`}>
       {showNavbar && <Navbar />}
-      <main>{children}</main>
+      <main className="w-full">{children}</main>
     </div>
   );
 };

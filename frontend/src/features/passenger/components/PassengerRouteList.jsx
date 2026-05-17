@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
@@ -140,75 +140,6 @@ function getRouteStops(trip, routeCoordinates) {
     ];
   }
   return [];
-}
-
-/* ─────────────────────────────────────────────
-   HERO ROUTE ART  — desktop top-right illustration
-───────────────────────────────────────────── */
-function HeroRouteArt({ eta }) {
-  return (
-    <div
-      className="pointer-events-none absolute right-0 top-0 hidden lg:block"
-      style={{ width: 520, height: 180, overflow: "hidden" }}
-    >
-      <svg viewBox="0 0 520 180" style={{ width: "100%", height: "100%" }}>
-        {/* dashed green route line */}
-        <path
-          d="M60 140 C140 130 200 90 280 80 C340 72 390 60 460 40"
-          fill="none"
-          stroke="#009849"
-          strokeWidth="3"
-          strokeDasharray="10,7"
-          strokeLinecap="round"
-        />
-        {/* green pickup pin */}
-        <g transform="translate(40,108)">
-          <circle cx="12" cy="12" r="18" fill="#dcfce7" />
-          <circle cx="12" cy="12" r="10" fill="#009849" />
-          <circle cx="12" cy="12" r="4" fill="white" />
-        </g>
-        {/* bus illustration */}
-        <g transform="translate(210,55)">
-          {/* bus body */}
-          <rect x="0" y="8" width="80" height="50" rx="8" fill="#009849" />
-          {/* windows */}
-          <rect x="8" y="14" width="18" height="18" rx="3" fill="#b6f5d0" />
-          <rect x="32" y="14" width="18" height="18" rx="3" fill="#b6f5d0" />
-          <rect x="56" y="14" width="18" height="18" rx="3" fill="#b6f5d0" />
-          {/* wheels */}
-          <circle cx="18" cy="60" r="9" fill="#064e2a" />
-          <circle cx="62" cy="60" r="9" fill="#064e2a" />
-          <circle cx="18" cy="60" r="4" fill="#009849" />
-          <circle cx="62" cy="60" r="4" fill="#009849" />
-          {/* front stripe */}
-          <rect x="0" y="36" width="80" height="5" rx="0" fill="#007a3d" />
-        </g>
-        {/* ETA bubble */}
-        <g transform="translate(138,30)">
-          <rect x="0" y="0" width="66" height="70" rx="14" fill="white" stroke="#e5e7eb" strokeWidth="1.5" />
-          <text x="33" y="38" textAnchor="middle" fontSize="28" fontWeight="900" fill="#111827">{eta}</text>
-          <text x="33" y="56" textAnchor="middle" fontSize="14" fill="#6b7280">min</text>
-        </g>
-        {/* destination red pin */}
-        <g transform="translate(456,18)">
-          <path
-            d="M16 0C7.2 0 0 7.2 0 16c0 12 16 34 16 34s16-22 16-34C32 7.2 24.8 0 16 0z"
-            fill="#ef4444"
-          />
-          <circle cx="16" cy="16" r="6" fill="white" />
-        </g>
-        {/* passenger silhouettes */}
-        <g transform="translate(448,68)" opacity="0.5">
-          <circle cx="8" cy="6" r="6" fill="#6b7280" />
-          <path d="M0 22c0-8 4-12 8-12s8 4 8 12" fill="#6b7280" />
-          <circle cx="24" cy="6" r="6" fill="#6b7280" />
-          <path d="M16 22c0-8 4-12 8-12s8 4 8 12" fill="#6b7280" />
-          <circle cx="40" cy="6" r="6" fill="#6b7280" />
-          <path d="M32 22c0-8 4-12 8-12s8 4 8 12" fill="#6b7280" />
-        </g>
-      </svg>
-    </div>
-  );
 }
 
 /* ─────────────────────────────────────────────
@@ -403,7 +334,7 @@ function BestMatchCard({ trip, pickup, destination, onContinue }) {
       background: "white", borderRadius: 18,
       border: "1px solid #f0f0f0",
       boxShadow: "0 4px 24px rgba(0,0,0,0.07)",
-      padding: "20px 20px 0",
+      padding: "24px",
       display: "flex", flexDirection: "column", gap: 0,
     }}>
       {/* Tag row */}
@@ -496,7 +427,7 @@ function BestMatchCard({ trip, pickup, destination, onContinue }) {
       <div style={{
         display: "flex", alignItems: "center",
         borderTop: "1px solid #f0f0f0", borderBottom: "1px solid #f0f0f0",
-        padding: "14px 0", marginBottom: 16,
+        padding: "14px 0",
         gap: 0,
       }}>
         <MetricChip icon={TrendingUp} value={distance} label="Distance" />
@@ -550,88 +481,6 @@ function OtherBusRow({ trip, pickup, destination, onChooseRoute }) {
         {formatEtaMinutes(trip?.eta_seconds)} min
       </span>
     </button>
-  );
-}
-
-/* ─────────────────────────────────────────────
-   MOBILE BOTTOM NAV
-───────────────────────────────────────────── */
-function MobileBottomNav() {
-  const items = [
-    { icon: BusFront, label: "Console", active: true },
-    { icon: Route, label: "Routes" },
-    { icon: Calendar, label: "Trips" },
-    { icon: Calendar, label: "Schedule" },
-    { icon: MoreHorizontal, label: "More" },
-  ];
-  return (
-    <div style={{
-      display: "flex", background: "white",
-      borderTop: "1px solid #f0f0f0", padding: "8px 0 12px",
-    }}>
-      {items.map(({ icon: Icon, label, active }) => (
-        <button key={label} type="button" style={{
-          flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-          background: "none", border: "none", cursor: "pointer", padding: "4px 0",
-        }}>
-          <Icon size={22} color={active ? "#009849" : "#9ca3af"} strokeWidth={active ? 2.5 : 2} />
-          <span style={{ fontSize: 11, fontWeight: active ? 700 : 500, color: active ? "#009849" : "#9ca3af" }}>{label}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────
-   STATUS BAR — bottom strip
-───────────────────────────────────────────── */
-function StatusBar({ trip, onRefresh, loading }) {
-  const isRouteOnly = trip?.is_route_only || trip?.trip_available === false;
-  const busNo = trip?.bus_number || trip?.vehicle_number || (isRouteOnly ? "--" : "UP 32 DC 0003");
-  return (
-    <div style={{
-      background: "white", borderTop: "1px solid #f0f0f0",
-      padding: "14px 24px",
-      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24,
-      flexWrap: "wrap",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ width: 10, height: 10, borderRadius: "50%", background: isRouteOnly ? "#9ca3af" : "#009849", display: "inline-block" }} />
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Live Tracking</div>
-          <div style={{ fontSize: 12, color: isRouteOnly ? "#6b7280" : "#009849", fontWeight: 600 }}>
-            {isRouteOnly ? "No active bus" : "Active"}
-          </div>
-        </div>
-      </div>
-      <div style={{ width: 1, height: 32, background: "#f0f0f0" }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <BusFront size={20} color="#374151" />
-        <div>
-          <div style={{ fontSize: 12, color: "#9ca3af", fontWeight: 500 }}>Vehicle</div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "#111827" }}>{busNo}</div>
-        </div>
-      </div>
-      <div style={{ width: 1, height: 32, background: "#f0f0f0" }} />
-      <button 
-        type="button" 
-        onClick={onRefresh} 
-        disabled={loading}
-        style={{ 
-          display: "flex", alignItems: "center", gap: 10, 
-          background: "none", border: "none", cursor: "pointer",
-          padding: 0, outline: "none"
-        }}
-      >
-        <RefreshCw size={18} color="#374151" className={loading ? "prl-animate-spin" : ""} />
-        <div>
-          <div style={{ fontSize: 12, color: "#9ca3af", fontWeight: 500 }}>Last Updated</div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "#111827" }}>
-            {isRouteOnly ? "--" : new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-          </div>
-        </div>
-      </button>
-    </div>
   );
 }
 
@@ -691,14 +540,6 @@ export default function PassengerRouteList({
     .maplibregl-ctrl-bottom-right,
     .maplibregl-ctrl-top-right { display: none !important; }
 
-    /* mobile bus banner */
-    .mobile-bus-banner {
-      background: white; border-radius: 18px; border: 1px solid #f0f0f0;
-      padding: 14px 16px; display: flex; align-items: center;
-      justify-content: space-between; margin: 12px 16px 0;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-    }
-
     /* responsive: desktop shows 2-col grid, mobile is single col */
     .prl-body-grid {
       display: grid;
@@ -717,12 +558,10 @@ export default function PassengerRouteList({
       .prl-body-grid {
         grid-template-columns: 1fr 1fr;
         gap: 24px;
-        align-items: start;
       }
       .prl-map-col { height: 100%; min-height: 560px; }
       .mobile-only { display: none !important; }
       .desktop-only { display: flex !important; }
-      .prl-mobile-nav { display: none !important; }
     }
     @media (max-width: 1023px) {
       .prl-map-col { height: 300px; }
@@ -737,111 +576,17 @@ export default function PassengerRouteList({
       <div
         className="prl-root"
         style={{
-          minHeight: "100vh", background: "#F8FAF9",
+          minHeight: "calc(100vh - 64px)", background: "#F8FAF9",
           display: "flex", flexDirection: "column",
         }}
       >
-        {/* ══ NAVBAR ══ */}
-        <nav style={{
-          background: "white", borderBottom: "1px solid #f0f0f0",
-          height: 64, padding: "0 24px",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          position: "sticky", top: 0, zIndex: 100,
-        }}>
-          {/* Left: hamburger */}
-          <button type="button" style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
-            <Menu size={22} color="#374151" />
-          </button>
-
-          {/* Center: Logo */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{
-              width: 36, height: 36, background: "#009849", borderRadius: 9,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontWeight: 900, fontSize: 18, color: "white",
-            }}>V</div>
-            <span style={{ fontWeight: 900, fontSize: 20, color: "#111827", letterSpacing: 0.3 }}>VAYY</span>
-          </div>
-
-          {/* Right */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button type="button" style={{
-              width: 36, height: 36, borderRadius: "50%", border: "1px solid #e5e7eb",
-              background: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-            }} aria-label="Toggle theme">
-              <Sun size={16} color="#6b7280" />
-            </button>
-
-            {/* Language — desktop only */}
-            <button type="button" className="desktop-only" style={{
-              alignItems: "center", gap: 6, border: "1px solid #e5e7eb", borderRadius: 9,
-              padding: "6px 13px", background: "white", fontSize: 13, fontWeight: 600,
-              color: "#374151", cursor: "pointer", fontFamily: "inherit",
-            }} aria-label="Select language">
-              <Globe2 size={14} />
-              English
-              <ChevronDown size={12} />
-            </button>
-
-            {/* Avatar */}
-            <div style={{
-              width: 36, height: 36, borderRadius: "50%", overflow: "hidden",
-              background: "#e5e7eb", border: "2px solid #009849",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              position: "relative",
-            }}>
-              <UserRound size={20} color="#6b7280" />
-              <span style={{
-                position: "absolute", bottom: 0, right: 0,
-                width: 10, height: 10, borderRadius: "50%",
-                background: "#009849", border: "2px solid white",
-              }} />
-            </div>
-          </div>
-        </nav>
-
-        {/* ══ MOBILE BUS BANNER ══ */}
-        <div className="mobile-only" style={{ display: "none" }}>
-          <div className="mobile-bus-banner">
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{
-                width: 44, height: 44, borderRadius: 12, background: "#f0fdf4",
-                border: "1px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <BusFront size={24} color="#009849" strokeWidth={2} />
-              </div>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>
-                  {bestTrip?.bus_number || "Bus VAYY 1024"}
-                </div>
-                <div style={{ fontSize: 12, color: "#009849", fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#009849", display: "inline-block" }} />
-                  On Time
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "#111827" }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#009849" }} />
-                Live Tracking
-              </div>
-              <button type="button" style={{ background: "none", border: "none", cursor: "pointer" }}>
-                <RefreshCw size={18} color="#9ca3af" />
-              </button>
-            </div>
-          </div>
-        </div>
+        {/* redundant local navbar removed */}
 
         {/* ══ MAIN CONTENT ══ */}
-        <main style={{ flex: 1, maxWidth: 1400, width: "100%", margin: "0 auto", padding: "24px 20px 24px" }}>
+        <main style={{ flex: 1, maxWidth: 1400, width: "100%", margin: "0 auto", padding: "24px 20px 24px", display: "flex", flexDirection: "column" }}>
 
           {/* Page heading row */}
           <div style={{ position: "relative", marginBottom: 24 }}>
-            {/* Desktop hero art */}
-            <div className="desktop-only" style={{ display: "flex" }}>
-              <HeroRouteArt eta={eta} />
-            </div>
-
             <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative", zIndex: 1 }}>
               <button
                 type="button"
@@ -866,51 +611,13 @@ export default function PassengerRouteList({
                   The best bus option for your trip
                 </p>
               </div>
-
-              {/* Mobile hero art inline */}
-              <div className="mobile-only" style={{ display: "none", marginLeft: "auto" }}>
-                <svg viewBox="0 0 200 80" style={{ width: 180, height: 80 }}>
-                  <path d="M20 60 C60 55 90 35 120 30 C150 25 170 20 190 15"
-                    fill="none" stroke="#009849" strokeWidth="2.5" strokeDasharray="6,4" />
-                  <g transform="translate(6,42)">
-                    <circle cx="10" cy="10" r="14" fill="#dcfce7" />
-                    <circle cx="10" cy="10" r="8" fill="#009849" />
-                    <circle cx="10" cy="10" r="3" fill="white" />
-                  </g>
-                  <g transform="translate(80,14)">
-                    <rect x="0" y="5" width="52" height="34" rx="6" fill="#009849" />
-                    <rect x="5" y="9" width="12" height="12" rx="2" fill="#b6f5d0" />
-                    <rect x="21" y="9" width="12" height="12" rx="2" fill="#b6f5d0" />
-                    <rect x="37" y="9" width="12" height="12" rx="2" fill="#b6f5d0" />
-                    <circle cx="12" cy="41" r="6" fill="#064e2a" />
-                    <circle cx="40" cy="41" r="6" fill="#064e2a" />
-                  </g>
-                  <g transform="translate(48,0)">
-                    <rect x="0" y="0" width="40" height="44" rx="10" fill="white" stroke="#e5e7eb" strokeWidth="1.5" />
-                    <text x="20" y="24" textAnchor="middle" fontSize="18" fontWeight="900" fill="#111827">{eta}</text>
-                    <text x="20" y="37" textAnchor="middle" fontSize="10" fill="#6b7280">min</text>
-                  </g>
-                  <g transform="translate(180,8)">
-                    <path d="M10 0C4.5 0 0 4.5 0 10c0 7.5 10 20 10 20s10-12.5 10-20C20 4.5 15.5 0 10 0z" fill="#ef4444" />
-                    <circle cx="10" cy="10" r="4" fill="white" />
-                  </g>
-                  <g transform="translate(150,30)" opacity="0.5">
-                    <circle cx="6" cy="5" r="5" fill="#9ca3af" />
-                    <path d="M0 18c0-6 3-9 6-9s6 3 6 9" fill="#9ca3af" />
-                    <circle cx="20" cy="5" r="5" fill="#9ca3af" />
-                    <path d="M14 18c0-6 3-9 6-9s6 3 6 9" fill="#9ca3af" />
-                    <circle cx="34" cy="5" r="5" fill="#9ca3af" />
-                    <path d="M28 18c0-6 3-9 6-9s6 3 6 9" fill="#9ca3af" />
-                  </g>
-                </svg>
-              </div>
             </div>
           </div>
 
           {/* ── TWO COLUMN GRID ── */}
-          <div className="prl-body-grid">
+          <div className="prl-body-grid" style={{ flex: 1 }}>
             {/* LEFT: Map */}
-            <div className="prl-map-col">
+            <div className="prl-map-col" style={{ height: "100%" }}>
               <RouteMapPreview
                 trip={bestTrip}
                 pickup={pickup}
@@ -921,7 +628,7 @@ export default function PassengerRouteList({
             </div>
 
             {/* RIGHT: Card + buttons */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
               {loading ? (
                 <div style={{
                   background: "white", borderRadius: 18, padding: 40,
@@ -947,91 +654,70 @@ export default function PassengerRouteList({
                 </div>
               )}
 
-              {/* Continue CTA */}
-              <button
-                type="button"
-                onClick={() => handleContinue(bestTrip)}
-                disabled={!bestTrip || loading}
-                style={{
-                  width: "100%", height: 56, borderRadius: 18, border: "none",
-                  background: !bestTrip || loading ? "#d1d5db" : (isRouteOnly ? "#374151" : "#009849"),
-                  color: "white", fontWeight: 800, fontSize: 16, fontFamily: "inherit",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                  cursor: !bestTrip || loading ? "not-allowed" : "pointer",
-                  boxShadow: !bestTrip || loading ? "none" : (isRouteOnly ? "0 4px 20px rgba(0,0,0,0.1)" : "0 4px 20px rgba(0,152,73,0.3)"),
-                  transition: "background 0.18s, transform 0.12s",
-                }}
-                onMouseEnter={e => { if (bestTrip && !loading) e.currentTarget.style.background = isRouteOnly ? "#1f2937" : "#007a3d"; }}
-                onMouseLeave={e => { if (bestTrip && !loading) e.currentTarget.style.background = isRouteOnly ? "#374151" : "#009849"; }}
-              >
-                {isRouteOnly ? "View Route Details" : "Continue"}
-                {!isRouteOnly && bestTrip && <ArrowRight size={20} strokeWidth={2.5} />}
-              </button>
+              <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+                {/* Continue CTA */}
+                <button
+                  type="button"
+                  onClick={() => handleContinue(bestTrip)}
+                  disabled={!bestTrip || loading}
+                  style={{
+                    width: "100%", height: 56, borderRadius: 18, border: "none",
+                    background: !bestTrip || loading ? "#d1d5db" : (isRouteOnly ? "#374151" : "#009849"),
+                    color: "white", fontWeight: 800, fontSize: 16, fontFamily: "inherit",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                    cursor: !bestTrip || loading ? "not-allowed" : "pointer",
+                    boxShadow: !bestTrip || loading ? "none" : (isRouteOnly ? "0 4px 20px rgba(0,0,0,0.1)" : "0 4px 20px rgba(0,152,73,0.3)"),
+                    transition: "background 0.18s, transform 0.12s",
+                  }}
+                  onMouseEnter={e => { if (bestTrip && !loading) e.currentTarget.style.background = isRouteOnly ? "#1f2937" : "#007a3d"; }}
+                  onMouseLeave={e => { if (bestTrip && !loading) e.currentTarget.style.background = isRouteOnly ? "#374151" : "#009849"; }}
+                >
+                  {isRouteOnly ? "View Route Details" : "Continue"}
+                  {!isRouteOnly && bestTrip && <ArrowRight size={20} strokeWidth={2.5} />}
+                </button>
 
-              {/* View all buses */}
-              <button
-                type="button"
-                onClick={handleViewAllBuses}
-                style={{
-                  width: "100%", height: 52, borderRadius: 18,
-                  border: "1.5px solid #009849", background: "white",
-                  color: "#009849", fontWeight: 800, fontSize: 15, fontFamily: "inherit",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                  cursor: "pointer", transition: "background 0.15s",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#f0fdf4"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "white"; }}
-              >
-                <BusFront size={20} color="#009849" />
-                {showAllBuses ? "Hide buses" : "View all buses"}
-              </button>
+                {/* View all buses */}
+                <button
+                  type="button"
+                  onClick={handleViewAllBuses}
+                  style={{
+                    width: "100%", height: 52, borderRadius: 18,
+                    border: "1.5px solid #009849", background: "white",
+                    color: "#009849", fontWeight: 800, fontSize: 15, fontFamily: "inherit",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                    cursor: "pointer", transition: "background 0.15s",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "#f0fdf4"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "white"; }}
+                >
+                  <BusFront size={20} color="#009849" />
+                  {showAllBuses ? "Hide buses" : "View all buses"}
+                </button>
 
-              {/* Refresh */}
-              <button
-                type="button"
-                onClick={onReSearchRoutes}
-                disabled={!pickup || !destination || loading}
-                style={{
-                  width: "100%", height: 44, borderRadius: 18,
-                  border: "1px solid #e5e7eb", background: "white",
-                  color: "#6b7280", fontWeight: 600, fontSize: 13, fontFamily: "inherit",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  cursor: !pickup || !destination || loading ? "not-allowed" : "pointer",
-                  opacity: !pickup || !destination || loading ? 0.5 : 1,
-                  transition: "background 0.15s",
-                }}
-                onMouseEnter={e => { if (pickup && destination && !loading) e.currentTarget.style.background = "#f9fafb"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "white"; }}
-              >
-                <RefreshCw size={15} className={loading ? "prl-animate-spin" : ""} />
-                Refresh Routes
-              </button>
-
-              {/* All buses expanded list */}
-              {showAllBuses && allTrips.length > 1 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {allTrips.slice(1).map((trip, index) => (
-                    <OtherBusRow
-                      key={trip.trip_id || trip.id || index}
-                      trip={trip}
-                      pickup={pickup}
-                      destination={destination}
-                      onChooseRoute={onChooseRoute}
-                    />
-                  ))}
-                </div>
-              )}
+                {/* Refresh */}
+                <button
+                  type="button"
+                  onClick={onReSearchRoutes}
+                  disabled={!pickup || !destination || loading}
+                  style={{
+                    width: "100%", height: 44, borderRadius: 18,
+                    border: "1px solid #e5e7eb", background: "white",
+                    color: "#6b7280", fontWeight: 600, fontSize: 13, fontFamily: "inherit",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    cursor: !pickup || !destination || loading ? "not-allowed" : "pointer",
+                    opacity: !pickup || !destination || loading ? 0.5 : 1,
+                    transition: "background 0.15s",
+                  }}
+                  onMouseEnter={e => { if (pickup && destination && !loading) e.currentTarget.style.background = "#f9fafb"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "white"; }}
+                >
+                  <RefreshCw size={15} className={loading ? "prl-animate-spin" : ""} />
+                  Refresh Routes
+                </button>
+              </div>
             </div>
           </div>
         </main>
-
-        {/* ══ STATUS BAR ══ */}
-        <StatusBar trip={bestTrip} onRefresh={onReSearchRoutes} loading={loading} />
-
-        {/* ══ MOBILE BOTTOM NAV ══ */}
-        <div className="mobile-only" style={{ display: "none" }}>
-          <MobileBottomNav />
-        </div>
       </div>
     </>
   );
