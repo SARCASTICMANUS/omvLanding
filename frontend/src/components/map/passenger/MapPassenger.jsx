@@ -1,19 +1,22 @@
 // VAYY | src/components/Maps/MapPassenger.jsx | Status: ✅ Public Transport Refactor
 // Passenger can see ALL active public buses — no assignment needed.
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import api, { getWsUrl } from "../../lib/api";
+import api, { getWsUrl } from "../../../lib/api";
 import { Navigation, Clock, Bus, RefreshCw, MapPin, Hand, Search, ArrowRight } from "lucide-react";
-import Header from "../Layout/Header";
+import Header from "../../layout/Header";
 import LocationSearch from "../LocationSearch";
-import ProximityAlertModal from "../Shared/ProximityAlertModal";
+import ProximityAlertModal from "../../passenger/ProximityAlertModal";
+import { getDistanceMeters } from "../../../maps/utils/geo";
+
+const formatDistance = (meters) =>
+  meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`;
 
 const MapPassenger = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
-  const [dashboard, setDashboard] = useState(null);
   const [buses, setBuses] = useState({}); // { trip_id: { pos: [lat, lon], bus_number: "...", eta: [..] } }
   const [loading, setLoading] = useState(true);
   const [wsStatus, setWsStatus] = useState("disconnected");
@@ -30,6 +33,7 @@ const MapPassenger = () => {
   const [filteredTrips, setFilteredTrips] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedTripId, setSelectedTripId] = useState(null);
+  const [nearestStop, setNearestStop] = useState(null);
 
   const ws = useRef(null);
   const watchId = useRef(null);
@@ -51,6 +55,24 @@ const MapPassenger = () => {
     });
 
     map.current.addControl(new maplibregl.NavigationControl(), "top-right");
+    map.current.on("load", () => {
+      map.current.addSource("nearest-stop-path", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.current.addLayer({
+        id: "nearest-stop-path",
+        type: "line",
+        source: "nearest-stop-path",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#4f46e5",
+          "line-width": 4,
+          "line-dasharray": [0.3, 1.6],
+          "line-opacity": 0.9,
+        },
+      });
+    });
 
     return () => {
       if (map.current) {
@@ -68,6 +90,7 @@ const MapPassenger = () => {
     if (myPos) points.push([myPos.lon, myPos.lat]);
     if (pickup) points.push([pickup.lon, pickup.lat]);
     if (destination) points.push([destination.lon, destination.lat]);
+    if (nearestStop) points.push([nearestStop.lon, nearestStop.lat]);
 
     // Update MyPos Marker
     if (myPos) {
@@ -135,6 +158,47 @@ const MapPassenger = () => {
     } else if (markers.current["destination"]) {
       markers.current["destination"].remove();
       delete markers.current["destination"];
+    }
+
+    if (nearestStop) {
+      if (!markers.current["nearest-stop"]) {
+        const el = document.createElement("div");
+        el.style.width = "18px";
+        el.style.height = "18px";
+        el.style.borderRadius = "50%";
+        el.style.backgroundColor = "#4f46e5";
+        el.style.border = "3px solid white";
+        el.style.boxShadow = "0 0 0 6px rgba(79,70,229,0.15)";
+
+        markers.current["nearest-stop"] = new maplibregl.Marker({ element: el })
+          .setLngLat([nearestStop.lon, nearestStop.lat])
+          .setPopup(new maplibregl.Popup().setText(`Nearest stop: ${nearestStop.name}`))
+          .addTo(map.current);
+      } else {
+        markers.current["nearest-stop"].setLngLat([nearestStop.lon, nearestStop.lat]);
+      }
+    } else if (markers.current["nearest-stop"]) {
+      markers.current["nearest-stop"].remove();
+      delete markers.current["nearest-stop"];
+    }
+
+    const anchor = myPos || pickup;
+    const nearestSource = map.current.getSource("nearest-stop-path");
+    if (nearestSource) {
+      nearestSource.setData({
+        type: "FeatureCollection",
+        features: anchor && nearestStop ? [{
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [anchor.lon, anchor.lat],
+              [nearestStop.lon, nearestStop.lat],
+            ],
+          },
+        }] : [],
+      });
     }
 
     // Update Bus Markers
@@ -207,7 +271,7 @@ const MapPassenger = () => {
       const bounds = points.reduce((acc, coord) => acc.extend(coord), new maplibregl.LngLatBounds(points[0], points[0]));
       map.current.fitBounds(bounds, { padding: 80, duration: 1500 });
     }
-  }, [myPos, pickup, destination, buses, selectedTripId]);
+  }, [myPos, pickup, destination, buses, selectedTripId, nearestStop]);
 
   useEffect(() => {
     fetchDashboard();
@@ -230,7 +294,6 @@ const MapPassenger = () => {
       setLoading(true);
       // Use the public passenger dashboard — returns nearby active trips, no assignment required
       const res = await api.get("/api/passenger/dashboard/");
-      setDashboard(res.data);
       // Populate initial buses from REST so map is populated even before WS connects
       const initialBuses = {};
       (res.data.active_trips || []).forEach((trip) => {
@@ -255,7 +318,7 @@ const MapPassenger = () => {
     cleanupWs();
     setWsStatus("connecting");
 
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("access_token");
     // Use the new public WS URL; if no cityId, connect to global 'public' group
     const groupId = cityId || "public";
 
@@ -274,8 +337,20 @@ const MapPassenger = () => {
     ws.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
 
-      // Handle both new (city_vehicle_update) and legacy (university_vehicle_update) event types
-      if (
+      // 1. Handle v_delta (New optimized format)
+      if (data.type === "v_delta") {
+        setBuses((prev) => ({
+          ...prev,
+          [data.id]: {
+            ...prev[data.id],
+            pos: [data.lat, data.lon],
+            // h is heading, d is delay
+            next_stop_eta: data.eta || [],
+          },
+        }));
+      } 
+      // 2. Handle legacy/explicit updates
+      else if (
         data.type === "city_vehicle_update" ||
         data.type === "university_vehicle_update" ||
         data.type === "vehicle_update"
@@ -345,6 +420,44 @@ const MapPassenger = () => {
       setIsSearching(false);
     }
   };
+
+  const fetchNearestStop = useCallback(async (location) => {
+    if (!location) {
+      setNearestStop(null);
+      return;
+    }
+
+    try {
+      const res = await api.get(
+        `/api/passenger/nearby-stops/?lat=${location.lat}&lon=${location.lon}&radius_m=3000`,
+      );
+      const stops = Array.isArray(res.data) ? res.data : [];
+      const anchor = myPos || location;
+      const nearest = stops
+        .map((stop) => {
+          const distanceMeters = getDistanceMeters(
+            [anchor.lat, anchor.lon],
+            [Number(stop.lat), Number(stop.lon)],
+          );
+          return {
+            ...stop,
+            lat: Number(stop.lat),
+            lon: Number(stop.lon),
+            distanceMeters,
+            distanceText: formatDistance(distanceMeters),
+          };
+        })
+        .sort((a, b) => a.distanceMeters - b.distanceMeters)[0];
+      setNearestStop(nearest || null);
+    } catch (err) {
+      console.error("Failed to load nearest stop", err);
+      setNearestStop(null);
+    }
+  }, [myPos]);
+
+  useEffect(() => {
+    fetchNearestStop(pickup);
+  }, [pickup, fetchNearestStop]);
 
   const toggleLocationSharing = () => {
     if (isLocationActive) {
@@ -527,6 +640,22 @@ const MapPassenger = () => {
                       <span>{isSearching ? "Searching..." : "Search Rides"}</span>
                     </button>
                   </div>
+                  {nearestStop && (
+                    <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-slate-700">
+                      <div className="flex items-start gap-3">
+                        <MapPin size={16} className="mt-0.5 text-indigo-600" />
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
+                            Nearest Stop
+                          </p>
+                          <p className="truncate font-bold text-slate-900">{nearestStop.name}</p>
+                          <p className="text-xs font-medium text-slate-500">
+                            {nearestStop.distanceText} from {myPos ? "your live location" : "pickup"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Step 2: List (Filtered) */}
@@ -607,6 +736,15 @@ const MapPassenger = () => {
                         <div>
                           <p className="text-[10px] text-slate-400 font-bold uppercase">Distance to Nearest Stop</p>
                           <p className="font-bold">{stopDistances[selectedTripId]}</p>
+                        </div>
+                      </div>
+                    )}
+                    {nearestStop && (
+                      <div className="flex items-center gap-3 text-sm text-slate-700 bg-white/50 p-3 rounded-xl border border-white">
+                        <Navigation size={16} className="text-indigo-500" />
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Walk to Stop</p>
+                          <p className="font-bold">{nearestStop.distanceText} via dotted path</p>
                         </div>
                       </div>
                     )}

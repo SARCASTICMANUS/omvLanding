@@ -300,6 +300,13 @@ class VayyConsumer(AsyncWebsocketConsumer):
     async def vehicle_stopped(self, event):
         await self.send(text_data=json.dumps(event))
 
+    async def passenger_update(self, event):
+        """Handler for passenger location/status updates."""
+        await self.send(text_data=json.dumps(event))
+
+    async def trip_started(self, event):
+        await self.send(text_data=json.dumps(event))
+
     async def manifest_update(self, event):
         await self.send(text_data=json.dumps(event))
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Search, UserPlus, Trash2, Loader2, UserCheck } from "lucide-react";
-import api from "../utils/api";
+import api from "../../../lib/api";
 
 const VehicleAssignmentModal = ({ vehicle, universityId, onClose }) => {
     const [assignments, setAssignments] = useState([]);

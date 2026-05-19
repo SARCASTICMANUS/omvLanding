@@ -6,6 +6,7 @@ import passengerReducer from "./slices/passengerSlice";
 import routeReducer from "./slices/routeSlice";
 import trackingReducer from "./slices/trackingSlice";
 import websocketReducer from "./slices/websocketSlice";
+import profileReducer from "../features/profile/profileSlice";
 import { vayyApi } from "./api/vayyApi";
 
 export const rootReducer = combineReducers({
@@ -16,6 +17,7 @@ export const rootReducer = combineReducers({
   liveBus: liveBusReducer,
   passenger: passengerReducer,
   driver: driverReducer,
+  profile: profileReducer,
   [vayyApi.reducerPath]: vayyApi.reducer,
 });
 

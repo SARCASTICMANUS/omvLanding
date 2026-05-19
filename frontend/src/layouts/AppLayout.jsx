@@ -1,12 +1,13 @@
 import React from "react";
-import Navbar from "../components/Layout/Navbar";
+import { Navbar } from "../components/layout";
+import { NotificationHandler } from "../components/shared";
 
 const AppLayout = ({ children, showNavbar = true, flush = false }) => (
-  <div className={`min-h-screen bg-slate-50 w-full overflow-x-hidden relative ${showNavbar && !flush ? "pt-[64px] sm:pt-[57px]" : ""}`}>
+  <div className={`min-h-screen bg-slate-50 ${showNavbar && !flush ? "pt-20" : ""}`}>
+    <NotificationHandler />
     {showNavbar && <Navbar />}
     <main className="w-full">{children}</main>
   </div>
 );
 
 export default AppLayout;
-

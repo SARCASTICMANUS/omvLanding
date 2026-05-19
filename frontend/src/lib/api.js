@@ -11,7 +11,7 @@ const api = axios.create({
 // 1. Request Interceptor: Attach Token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("access_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -29,7 +29,7 @@ api.interceptors.response.use(
     // If 401 and we haven't already retried this request
     if (error.response && error.response.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      const refreshToken = localStorage.getItem("refreshToken");
+      const refreshToken = localStorage.getItem("refresh_token");
       
       if (refreshToken) {
         try {
@@ -39,12 +39,12 @@ api.interceptors.response.use(
           );
           
           if (res.data.access) {
-            localStorage.setItem("token", res.data.access);
+            localStorage.setItem("access_token", res.data.access);
             store.dispatch(refreshTokenSuccess({ token: res.data.access }));
             originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
             return api(originalRequest); // retry original
           }
-        } catch (refreshError) {
+        } catch {
           // refresh token invalid/expired -> clear and logout
         }
       }

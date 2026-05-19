@@ -83,7 +83,7 @@ export default function RegisterPage() {
       const res = await api.get("/api/cities/");
       const data = Array.isArray(res.data) ? res.data : res.data.results || [];
       setCities(data);
-    } catch (err) {
+    } catch {
       console.warn("Could not load cities");
     }
   };
@@ -111,7 +111,7 @@ export default function RegisterPage() {
       });
 
       setStep(2);
-    } catch (err) {
+    } catch {
       setError("Failed to send OTP. Please check your email and try again.");
     } finally {
       setLoading(false);
@@ -135,7 +135,7 @@ export default function RegisterPage() {
       });
 
       setStep(3);
-    } catch (err) {
+    } catch {
       setError("Invalid or expired OTP. Please try again.");
     } finally {
       setLoading(false);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { User as UserIcon, Plus, Trash2, Edit, X, Save, Loader2, Search, MapPin } from "lucide-react";
-import api from "../lib/api";
+import api from "../../../lib/api";
 
 const PassengersManager = ({ cityId }) => {
     const [passengers, setPassengers] = useState([]);
@@ -20,6 +20,10 @@ const PassengersManager = ({ cityId }) => {
     }, [cityId]);
 
     const fetchData = async () => {
+        if (!cityId) {
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
             const res = await api.get(`/api/users/?city=${cityId}&role=passenger`);

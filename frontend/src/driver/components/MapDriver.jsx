@@ -22,101 +22,30 @@ import {
   Plus,
   Minus,
   Box,
+  Globe,
   HelpCircle,
   Menu,
   X
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+// eslint-disable-next-line no-unused-vars
+import { AnimatePresence, motion } from 'framer-motion';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 // --- Assets/Icons ---
-import api, { getWsUrl } from "../../lib/api";
-import DriverManifest from "../DriverManifest";
-
-// Helper to decode OSRM polyline string
-function decodePolyline(str, precision = 5) {
-  let index = 0, lat = 0, lng = 0, coordinates = [], shift = 0, result = 0, byte = null, latitude_change = 0, longitude_change = 0, factor = Math.pow(10, precision);
-  while (index < str.length) {
-    byte = null; shift = 0; result = 0;
-    do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
-    latitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
-    shift = result = 0;
-    do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
-    longitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
-    lat += latitude_change; lng += longitude_change;
-    coordinates.push([lat / factor, lng / factor]);
-  }
-  return coordinates;
-}
-
-function getDistance(p1, p2) {
-  const R = 6371e3;
-  const phi1 = p1[1] * Math.PI/180;
-  const phi2 = p2[1] * Math.PI/180;
-  const dPhi = (p2[1]-p1[1]) * Math.PI/180;
-  const dLambda = (p2[0]-p1[0]) * Math.PI/180;
-  const a = Math.sin(dPhi/2) * Math.sin(dPhi/2) +
-          Math.cos(phi1) * Math.cos(phi2) *
-          Math.sin(dLambda/2) * Math.sin(dLambda/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
-}
-
-const toNumber = (value) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const isLikelyLonLat = ([first, second]) => Math.abs(first) > 35 || Math.abs(second) <= 35;
-
-const normalizeCoordinate = (coord, fallbackOrder = "lonLat") => {
-  if (!Array.isArray(coord) || coord.length < 2) return null;
-
-  const first = toNumber(coord[0]);
-  const second = toNumber(coord[1]);
-  if (first === null || second === null) return null;
-
-  if (fallbackOrder === "latLon") return [second, first];
-  if (fallbackOrder === "lonLat") return [first, second];
-
-  return isLikelyLonLat([first, second]) ? [first, second] : [second, first];
-};
-
-const normalizePath = (path, fallbackOrder = "auto") => {
-  if (!Array.isArray(path)) return [];
-  return path
-    .map((coord) => normalizeCoordinate(coord, fallbackOrder))
-    .filter(Boolean);
-};
-
-const getStopLngLat = (stop) => {
-  if (!stop) return null;
-
-  if (Array.isArray(stop.location?.coordinates)) {
-    return normalizeCoordinate(stop.location.coordinates, "lonLat");
-  }
-
-  const lat = toNumber(stop.lat);
-  const lon = toNumber(stop.lon ?? stop.lng);
-  if (lat === null || lon === null) return null;
-
-  return [lon, lat];
-};
-
-const getPreviewOptions = (data) => {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.results)) return data.results;
-  if (Array.isArray(data?.routes)) return data.routes;
-  if (data?.path || data?.route_geometry || data?.path_coords) return [data];
-  return [];
-};
-
-const getPreviewPath = (preview) =>
-  normalizePath(preview?.path || preview?.route_geometry || preview?.path_coords, "auto");
-
-const getRoutePath = (route) =>
-  normalizePath(route?.path_coords || route?.route_geometry || route?.path, "latLon");
+import api from "../../lib/api";
+import DriverManifest from "./DriverManifest";
+import DriverRouteList from "./DriverRouteList";
+import DriverStopsTimeline from "./DriverStopsTimeline";
+import DriverTripPlanner from "./DriverTripPlanner";
+import notificationService from "../../services/notificationService";
+import {
+  getDistance,
+  getPreviewOptions,
+  getPreviewPath,
+  getRoutePath,
+  getStopLngLat,
+} from "../../components/map/utils/routeGeometry";
 
 // --- Components ---
 
@@ -130,14 +59,48 @@ const SidebarCard = ({ title, children, className = "" }) => (
 const StatItem = ({ icon: Icon, label, value, colorClass }) => (
   <div className="bg-white border border-slate-100 rounded-xl p-3 flex flex-col gap-1 shadow-sm hover:border-slate-200 transition-colors">
     <div className={`w-8 h-8 rounded-lg ${colorClass} flex items-center justify-center mb-1`}>
-      <Icon size={16} />
+      {React.createElement(Icon, { size: 16 })}
     </div>
     <span className="text-[10px] font-medium text-slate-500">{label}</span>
     <span className="text-xs font-bold text-slate-800">{value}</span>
   </div>
 );
 
-export default function MapDriver() {
+const getOrderedStops = (stops = []) =>
+  [...stops].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+const getNextStopsFromPosition = (stops = [], position, limit = 3) => {
+  const orderedStops = getOrderedStops(stops);
+  if (!position || orderedStops.length === 0) return orderedStops.slice(0, limit);
+
+  let nearestIndex = 0;
+  let nearestDistance = Infinity;
+  orderedStops.forEach((stop, index) => {
+    const coord = getStopLngLat(stop);
+    if (!coord) return;
+    const distance = getDistance(position, coord);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  });
+
+  return orderedStops.slice(nearestIndex, nearestIndex + limit);
+};
+
+const driverPreviewScreens = {
+  DriverTripPlanner,
+  DriverRouteList,
+  DriverStopsTimeline,
+};
+
+export default function MapDriver({
+  initialRouteData = null,
+  initialTripData = null,
+  startLiveOnMount = false,
+  showTemporaryPreview = true,
+  onBack,
+}) {
   const mapContainer = useRef(null);
   const map = useRef(null);
   
@@ -157,8 +120,30 @@ export default function MapDriver() {
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [is3DView, setIs3DView] = useState(false);
+  const [isSatellite, setIsSatellite] = useState(false);
   const [mapPitch, setMapPitch] = useState(0);
   const [mapBearing, setMapBearing] = useState(0);
+  const [previewScreen, setPreviewScreen] = useState("");
+  const hasEmbeddedTripSeed = Boolean(initialRouteData || initialTripData);
+  const isPreviewTrip = String(initialTripData?.trip_id || tripData?.trip_id || "").startsWith("preview-");
+
+  // Notifications logic
+  useEffect(() => {
+    notificationService.requestPermission();
+    
+    const handleVisibilityChange = () => {
+      if (document.hidden && isDriving) {
+        notificationService.notify("VAYY Driver Active", {
+          body: "Keep the app open for accurate tracking and manifest updates.",
+          tag: "driver-bg-alert",
+          renotify: true
+        });
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [isDriving]);
 
   // Simulation Refs
   const ws = useRef(null);
@@ -182,6 +167,94 @@ export default function MapDriver() {
   }, [routePath, currentIndex]);
 
   const totalTripDistance = tripData?.total_distance || 0;
+
+  const clearIntervals = () => {
+    if (simulationInterval.current) {
+      clearInterval(simulationInterval.current);
+      simulationInterval.current = null;
+    }
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  };
+
+  const beginDriveSimulation = (liveTripData, path) => {
+    if (!Array.isArray(path) || path.length === 0) return;
+
+    clearIntervals();
+    setIsDriving(true);
+    setCurrentSpeed(35);
+    setCurrentPos(path[0]);
+    setCurrentIndex(0);
+    setTripData(liveTripData);
+    setNextStops(getNextStopsFromPosition(liveTripData?.stops || [], path[0]));
+
+    let index = 0;
+    simulationInterval.current = setInterval(() => {
+      if (index >= path.length) {
+        stopDrive();
+        return;
+      }
+
+      setCurrentPos(path[index]);
+      setCurrentIndex(index);
+      setNextStops(getNextStopsFromPosition(liveTripData?.stops || [], path[index]));
+
+      if (liveTripData?.trip_id && !String(liveTripData.trip_id).startsWith("preview-") && index % 6 === 0) {
+        api
+          .post("/api/telemetry/ingest/", {
+            type: "gps",
+            trip_id: liveTripData.trip_id,
+            lat: path[index][1],
+            lon: path[index][0],
+          })
+          .catch((err) => console.warn("Driver telemetry sync failed", err));
+      }
+
+      setCurrentSpeed((prev) => {
+        const delta = Math.floor(Math.random() * 11) - 5;
+        const next = prev + delta;
+        return Math.max(10, Math.min(60, next));
+      });
+
+      index += 2;
+    }, 1000);
+  };
+
+  const applyRouteSeed = (routeSeed, tripSeed = null) => {
+    if (!routeSeed) return;
+
+    const derivedPath =
+      routeSeed?.previewPath?.length > 0
+        ? routeSeed.previewPath
+        : getRoutePath(routeSeed);
+    const orderedStops = getOrderedStops(routeSeed?.stops || tripSeed?.stops || []);
+    const mergedTrip = {
+      ...routeSeed,
+      ...(tripSeed || {}),
+      stops: orderedStops,
+      total_distance:
+        tripSeed?.total_distance ||
+        routeSeed?.total_distance ||
+        routeSeed?.total_distance_meters ||
+        0,
+    };
+
+    setSelectedRouteId(String(routeSeed?.id || tripSeed?.route_id || ""));
+    setRoutePath(derivedPath);
+    setTripData(mergedTrip);
+
+    if (derivedPath.length > 0) {
+      setCurrentPos(derivedPath[0]);
+      setCurrentIndex(0);
+      updateRenderedRoute(derivedPath);
+    }
+
+    if (startLiveOnMount && tripSeed?.trip_id) {
+      beginDriveSimulation(mergedTrip, derivedPath);
+    }
+  };
 
   const updateRenderedRoute = (path) => {
     if (!map.current || !mapLoaded) return;
@@ -211,7 +284,7 @@ export default function MapDriver() {
 
   // Initialize Map
   useEffect(() => {
-    if (map.current) return;
+    if (map.current || !mapContainer.current) return;
     
     const initMap = (center = [77.3000, 28.5500]) => {
         const m = new maplibregl.Map({
@@ -402,6 +475,38 @@ export default function MapDriver() {
     }
   }, [currentPos, isDriving, mapLoaded]);
 
+  // Satellite View Toggle logic
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    if (isSatellite) {
+      if (!map.current.getSource('satellite')) {
+        map.current.addSource('satellite', {
+          type: 'raster',
+          tiles: [
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+          ],
+          tileSize: 256,
+          attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+        });
+      }
+      
+      if (!map.current.getLayer('satellite')) {
+        map.current.addLayer({
+          id: 'satellite',
+          type: 'raster',
+          source: 'satellite',
+        }, map.current.getLayer('route') ? 'route' : undefined);
+      } else {
+        map.current.setLayoutProperty('satellite', 'visibility', 'visible');
+      }
+    } else {
+      if (map.current.getLayer('satellite')) {
+        map.current.setLayoutProperty('satellite', 'visibility', 'none');
+      }
+    }
+  }, [isSatellite, mapLoaded]);
+
   // Load Routes on Mount
   useEffect(() => {
     api.get("/api/driver/routes/")
@@ -409,9 +514,14 @@ export default function MapDriver() {
       .catch((err) => console.error("Failed to load routes", err));
   }, []);
 
+  useEffect(() => {
+    if (!hasEmbeddedTripSeed) return;
+    applyRouteSeed(initialRouteData || initialTripData, initialTripData);
+  }, [hasEmbeddedTripSeed, initialRouteData, initialTripData, startLiveOnMount]);
+
   // Poll Trip Status
   useEffect(() => {
-    if (!isDriving || !tripData?.trip_id) {
+    if (!isDriving || !tripData?.trip_id || isPreviewTrip) {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       return;
     }
@@ -436,7 +546,7 @@ export default function MapDriver() {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [isDriving, tripData]);
+  }, [isDriving, tripData, isPreviewTrip]);
 
   const handleLoadRoute = async () => {
     if (!selectedRouteId) return;
@@ -518,41 +628,41 @@ export default function MapDriver() {
     try {
       // Actually start the trip now
       const res = await api.post("/api/driver/start-trip/", { route_id: selectedRouteId });
-      setTripData(res.data);
-      setIsDriving(true);
-      setCurrentSpeed(35);
-      
-      let index = 0;
-      simulationInterval.current = setInterval(() => {
-        if (index >= routePath.length) {
-          stopDrive();
-          return;
-        }
-        setCurrentPos(routePath[index]);
-        setCurrentIndex(index);
-        setCurrentSpeed(prev => {
-          const delta = Math.floor(Math.random() * 11) - 5;
-          const next = prev + delta;
-          return Math.max(10, Math.min(60, next));
-        });
-        index += 2;
-      }, 1000);
+      const liveTripData = {
+        ...tripData,
+        ...res.data,
+        stops: res.data.stops || tripData?.stops || [],
+      };
+
+      notificationService.notify("Trip Started", {
+        body: `Your trip for ${res.data.route_name} has begun.`,
+        tag: "trip-start"
+      });
+
+      beginDriveSimulation(liveTripData, routePath);
     } catch (err) {
       console.error("Failed to start trip", err);
     }
   };
 
   const stopDrive = async () => {
-    if (simulationInterval.current) clearInterval(simulationInterval.current);
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    const activeTripId = tripData?.trip_id;
+    clearIntervals();
     if (ws.current) ws.current.close();
+
+    if (activeTripId && !String(activeTripId).startsWith("preview-")) {
+      api.post(`/api/trips/end/${activeTripId}/`).catch((err) => {
+        console.warn("Failed to end trip on server", err);
+      });
+    }
 
     setIsDriving(false);
     setRoutePath(null);
     setTripData(null);
-    setSelectedRouteId("");
+    setSelectedRouteId(hasEmbeddedTripSeed ? selectedRouteId : "");
     setCurrentSpeed(0);
     setCurrentIndex(0);
+    setNextStops([]);
     if (vehicleMarker.current) {
       vehicleMarker.current.remove();
       vehicleMarker.current = null;
@@ -561,6 +671,7 @@ export default function MapDriver() {
       map.current.easeTo({ pitch: 0, bearing: 0, zoom: 13 });
     }
     setIs3DView(false);
+    onBack?.();
   };
 
   const toggle3DView = () => {
@@ -597,23 +708,99 @@ export default function MapDriver() {
   };
 
   const isMapTiltedOrRotated = Math.abs(mapPitch) > 1 || Math.abs(mapBearing) > 1;
+  const PreviewComponent = previewScreen ? driverPreviewScreens[previewScreen] : null;
+  const previewRouteSeed = useMemo(() => {
+    const fallbackRoute = availableRoutes.find((route) => route?.stops?.length) || availableRoutes[0];
+    if (!fallbackRoute) return null;
+    return {
+      ...fallbackRoute,
+      source_name: fallbackRoute.source_name || fallbackRoute.stops?.[0]?.name,
+      destination_name:
+        fallbackRoute.destination_name ||
+        fallbackRoute.stops?.[fallbackRoute.stops.length - 1]?.name,
+    };
+  }, [availableRoutes]);
+  const previewSource = useMemo(() => {
+    const firstStop = previewRouteSeed?.stops?.[0];
+    return firstStop
+      ? {
+          name: firstStop.name,
+          display_name: firstStop.name,
+          lat: Number(firstStop.lat),
+          lon: Number(firstStop.lon),
+        }
+      : null;
+  }, [previewRouteSeed]);
+  const previewDestination = useMemo(() => {
+    const lastStop = previewRouteSeed?.stops?.[previewRouteSeed.stops.length - 1];
+    return lastStop
+      ? {
+          name: lastStop.name,
+          display_name: lastStop.name,
+          lat: Number(lastStop.lat),
+          lon: Number(lastStop.lon),
+        }
+      : null;
+  }, [previewRouteSeed]);
+
+  const renderPreviewContent = () => {
+    if (previewScreen === "DriverTripPlanner") {
+      return <DriverTripPlanner />;
+    }
+
+    if (previewScreen === "DriverRouteList") {
+      return (
+        <DriverRouteList
+          source={previewSource}
+          destination={previewDestination}
+          routes={previewRouteSeed ? [previewRouteSeed] : []}
+          allRoutesCount={previewRouteSeed ? 1 : 0}
+          onBack={() => setPreviewScreen("")}
+          onSelectRoute={() => setPreviewScreen("DriverStopsTimeline")}
+        />
+      );
+    }
+
+    if (previewScreen === "DriverStopsTimeline") {
+      return (
+        <div className="h-full min-h-screen bg-slate-950 px-4 pb-4 pt-20 sm:px-6 lg:px-8">
+          <div className="mx-auto flex h-full max-w-5xl flex-col">
+            <button
+              type="button"
+              onClick={() => setPreviewScreen("")}
+              className="mb-4 w-fit rounded-[18px] border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-black text-slate-200"
+            >
+              Back to Preview
+            </button>
+            <DriverStopsTimeline
+              route={previewRouteSeed}
+              currentStopIndex={1}
+              className="flex-1 overflow-hidden"
+            />
+          </div>
+        </div>
+      );
+    }
+
+    return PreviewComponent ? <PreviewComponent /> : null;
+  };
 
   return (
-    <div className="relative flex h-screen w-full bg-slate-50 font-sans overflow-x-hidden overflow-y-hidden">
+    <div className="isolate relative flex h-[calc(100vh-5rem)] w-full bg-slate-50 font-sans overflow-x-hidden overflow-y-hidden">
       
       {/* Background Map */}
-      <div ref={mapContainer} className="absolute top-0 left-0 w-full h-full z-0 overflow-x-hidden" />
+      <div ref={mapContainer} className="absolute inset-0 z-0 h-full w-full overflow-x-hidden" />
 
       {/* Mobile Toggle Button */}
       <button 
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="lg:hidden absolute top-20 left-4 z-[20] w-10 h-10 bg-white rounded-xl shadow-lg flex items-center justify-center text-slate-600 border border-slate-100"
+        className="absolute left-4 top-20 z-[1100] flex h-10 w-10 items-center justify-center rounded-xl border border-slate-100 bg-white text-slate-600 shadow-lg lg:hidden"
       >
         {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
 
       {/* Sidebar Content */}
-      <aside className={`fixed lg:relative z-10 w-full sm:w-[380px] h-full pt-16 sm:pt-20 pb-6 lg:ml-6 flex flex-col pointer-events-none transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      <aside className={`fixed left-0 top-0 z-[1000] flex h-full w-full flex-col pb-6 pt-16 pointer-events-none transition-transform duration-300 sm:w-[380px] sm:pt-20 lg:relative lg:ml-6 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <motion.div 
           initial={{ x: -50, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
@@ -642,7 +829,7 @@ export default function MapDriver() {
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar px-2">
-            {!isDriving && !routePath && (
+            {!hasEmbeddedTripSeed && !isDriving && !routePath && (
               <SidebarCard title="Route Assignment">
                 <div className="space-y-4">
                   <div className="relative bg-slate-50 border border-slate-100 rounded-2xl p-4 w-full overflow-hidden group">
@@ -674,7 +861,40 @@ export default function MapDriver() {
               </SidebarCard>
             )}
 
-            {routePath && !isDriving && (
+            {showTemporaryPreview && (
+              <SidebarCard title="Temporary Preview">
+                <div className="space-y-3">
+                  <p className="text-[11px] leading-5 text-slate-500">
+                    Open driver components from <code>src/driver/components</code> directly in the web app for layout review.
+                  </p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {Object.keys(driverPreviewScreens).map((screenName) => (
+                      <button
+                        key={screenName}
+                        onClick={() => setPreviewScreen(screenName)}
+                        className={`rounded-xl border px-3 py-3 text-left text-xs font-bold transition-colors ${
+                          previewScreen === screenName
+                            ? "border-cyan-300 bg-cyan-50 text-cyan-700"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                        }`}
+                      >
+                        {screenName}
+                      </button>
+                    ))}
+                  </div>
+                  {previewScreen && (
+                    <button
+                      onClick={() => setPreviewScreen("")}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-3 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-200"
+                    >
+                      Close Preview
+                    </button>
+                  )}
+                </div>
+              </SidebarCard>
+            )}
+
+            {!hasEmbeddedTripSeed && routePath && !isDriving && (
               <SidebarCard title="Ready to Start">
                 <div className="space-y-4">
                    <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex justify-between items-center">
@@ -785,7 +1005,7 @@ export default function MapDriver() {
       </aside>
 
       {/* Floating Bottom Console */}
-      <div className="absolute bottom-6 sm:bottom-10 left-1/2 transform -translate-x-1/2 z-10 w-[90%] sm:w-max pointer-events-auto overflow-x-hidden">
+      <div className="pointer-events-auto absolute bottom-6 left-1/2 z-[900] w-[90%] -translate-x-1/2 transform overflow-x-hidden sm:bottom-10 sm:w-max">
         <AnimatePresence>
           {isDriving && (
             <motion.div 
@@ -831,7 +1051,7 @@ export default function MapDriver() {
       </div>
 
       {/* Map Control: Side */}
-      <div className="absolute top-44 right-4 sm:right-6 z-10 flex flex-col gap-2 pointer-events-auto">
+      <div className="pointer-events-auto absolute right-4 top-44 z-[900] flex flex-col gap-2 sm:right-6">
         <button
           onClick={() => zoomMap(1)}
           disabled={!mapLoaded}
@@ -864,6 +1084,19 @@ export default function MapDriver() {
           <Box size={20} />
         </button>
         <button
+          onClick={() => setIsSatellite(!isSatellite)}
+          disabled={!mapLoaded}
+          aria-label="Toggle Satellite view"
+          title="Satellite view"
+          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl shadow-lg border flex items-center justify-center transition-colors ${
+            isSatellite
+              ? 'bg-indigo-500 border-indigo-400 text-white hover:bg-indigo-600'
+              : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50'
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          <Globe size={20} />
+        </button>
+        <button
           onClick={resetMapView}
           disabled={!mapLoaded}
           aria-label="Reset map view"
@@ -879,7 +1112,7 @@ export default function MapDriver() {
       </div>
 
       {/* Right Bottom Legend */}
-      <div className="hidden sm:block absolute bottom-10 right-6 z-10 pointer-events-auto">
+      <div className="pointer-events-auto absolute bottom-10 right-6 z-[900] hidden sm:block">
         <motion.div 
           initial={{ x: 20, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
@@ -922,6 +1155,27 @@ export default function MapDriver() {
                 tripId={tripData?.trip_id}
               />
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {PreviewComponent && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            className="absolute inset-0 z-[1200] overflow-y-auto bg-slate-950/80 backdrop-blur-sm"
+          >
+            <div className="sticky top-0 z-10 flex justify-end p-4">
+              <button
+                onClick={() => setPreviewScreen("")}
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-200"
+              >
+                Close {previewScreen}
+              </button>
+            </div>
+            {renderPreviewContent()}
           </motion.div>
         )}
       </AnimatePresence>

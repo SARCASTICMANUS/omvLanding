@@ -4,6 +4,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { loginUser } from "../features/auth/authSlice";
 import { Loader } from "lucide-react";
 import loginBusImage from "../assets/loginBus.png";
+import { useGoogleLogin } from "@react-oauth/google";
+import { googleLogin } from "../features/auth/authSlice";
 
 /* ─────────────────────────────────────────────
    Inline SVG Icons (no extra deps)
@@ -77,6 +79,13 @@ const LoginPage = () => {
     e.preventDefault();
     dispatch(loginUser(formData));
   };
+
+  const handleGoogleAuth = useGoogleLogin({
+    onSuccess: (tokenResponse) => {
+      dispatch(googleLogin(tokenResponse.access_token));
+    },
+    onError: (error) => console.log("Google Login Failed:", error),
+  });
 
   return (
     <>
@@ -348,7 +357,7 @@ const LoginPage = () => {
 
             {/* Social */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 32 }}>
-              <button className="social-btn">
+              <button className="social-btn" onClick={() => handleGoogleAuth()}>
                 <GoogleIcon /> Continue with Google
               </button>
               <button className="social-btn">

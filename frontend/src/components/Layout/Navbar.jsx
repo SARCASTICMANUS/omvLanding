@@ -8,7 +8,7 @@ import { Sun, Globe, User, LogOut, Menu, X, ChevronDown } from 'lucide-react';
 const Navbar = () => {
   const location = useLocation();
   const dispatch = useDispatch();
-  const { isAuthenticated, user } = useSelector((state) => state.auth || {});
+  const { isAuthenticated } = useSelector((state) => state.auth || {});
   const [isOpen, setIsOpen] = useState(false);
 
   /* ── Close menu on route change ── */

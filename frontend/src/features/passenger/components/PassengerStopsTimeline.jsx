@@ -506,9 +506,9 @@ function SafeReliableCard() {
         </div>
       </div>
       {/* Bus mini illustration */}
-      <div style={{ height: 80, marginTop: 4 }}>
+      {/* <div style={{ height: 80, marginTop: 4 }}>
         <BusMini />
-      </div>
+      </div> */}
     </div>
   );
 }
@@ -537,9 +537,9 @@ function MobileSafeBanner() {
           <div style={{ fontSize: 12, color: "#6b7280", marginTop: 3 }}>Live tracking & real-time updates</div>
         </div>
       </div>
-      <div style={{ width: 110, height: 80, flexShrink: 0 }}>
+      {/* <div style={{ width: 110, height: 80, flexShrink: 0 }}>
         <BusMini />
-      </div>
+      </div> */}
     </div>
   );
 }
@@ -615,66 +615,11 @@ export default function PassengerStopsTimeline({
         }}
       >
 
-        {/* ══════════════════════════════════
-            MOBILE NAVBAR
-        ══════════════════════════════════ */}
-        <nav
-          className="pst-mobile-header"
-          style={{
-            display: "none",
-            alignItems: "center", justifyContent: "space-between",
-            padding: "12px 20px", background: "white",
-            borderBottom: "1px solid #f0f0f0",
-            position: "sticky", top: 0, zIndex: 100,
-          }}
-        >
-          <button
-            type="button"
-            onClick={onBack}
-            style={{
-              width: 36, height: 36, borderRadius: "50%",
-              border: "1.5px solid #e5e7eb", background: "white",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", flexShrink: 0,
-            }}
-          >
-            <ArrowLeft size={18} color="#374151" strokeWidth={2.2} />
-          </button>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{
-              width: 32, height: 32, background: "#009849", borderRadius: 8,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontWeight: 900, fontSize: 16, color: "white",
-            }}>V</div>
-            <span style={{ fontWeight: 900, fontSize: 18, color: "#111827" }}>VAYY</span>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button type="button" style={{
-              display: "flex", alignItems: "center", gap: 5,
-              border: "1px solid #e5e7eb", borderRadius: 20,
-              padding: "5px 10px", background: "white",
-              fontSize: 13, fontWeight: 600, color: "#374151",
-              cursor: "pointer", fontFamily: "inherit",
-            }}>
-              <Globe2 size={13} /> English <ChevronDown size={11} />
-            </button>
-            <button type="button" style={{
-              width: 34, height: 34, borderRadius: "50%",
-              border: "1.5px solid #e5e7eb", background: "#f9fafb",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer",
-            }}>
-              <User size={16} color="#009849" />
-            </button>
-          </div>
-        </nav>
 
         {/* ══════════════════════════════════
             SHARED PAGE HEADING
         ══════════════════════════════════ */}
-        <div style={{ padding: "24px 24px 0", maxWidth: 1400, width: "100%", margin: "0 auto" }}>
+        <div style={{ padding: "4px 24px 0", maxWidth: 1400, width: "100%", margin: "-20px auto 0" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
             {/* Back btn — desktop only (mobile uses navbar) */}
             <button
@@ -755,7 +700,7 @@ export default function PassengerStopsTimeline({
             <SafeReliableCard />
 
             {/* Feature rows card */}
-            <div style={{
+            {/* <div style={{
               background: "white", borderRadius: 18,
               border: "1px solid #f0f0f0",
               boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
@@ -783,7 +728,7 @@ export default function PassengerStopsTimeline({
                   desc="Your safety is our priority"
                 />
               </div>
-            </div>
+            </div> */}
 
             {/* CTA */}
             <ConfirmBtn onClick={onTrackNow} />

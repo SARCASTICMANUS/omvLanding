@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Bus, Plus, Trash2, Edit, X, Save, Loader2 } from "lucide-react";
-import api from "../lib/api";
+import api from "../../../lib/api";
 
 const VehiclesManager = ({ cityId }) => {
   const [vehicles, setVehicles] = useState([]);
@@ -21,6 +21,10 @@ const VehiclesManager = ({ cityId }) => {
   }, [cityId]);
 
   const fetchData = async () => {
+    if (!cityId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [vRes, rRes, dRes] = await Promise.all([

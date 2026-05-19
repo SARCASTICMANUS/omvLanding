@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
@@ -58,30 +58,30 @@ function hasValidCoords(point) {
     Number.isFinite(point.lon)
   );
 }
-function createCircleMarker(color, size = 24) {
+function createCircleMarker(color, size = 16) {
   const el = document.createElement("div");
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
   el.style.borderRadius = "9999px";
   el.style.backgroundColor = color;
-  el.style.border = "5px solid white";
-  el.style.boxShadow = `0 8px 22px ${color}55, 0 8px 22px rgba(0,0,0,0.20)`;
+  el.style.border = "3px solid white";
+  el.style.boxShadow = `0 4px 12px ${color}55, 0 4px 12px rgba(0,0,0,0.20)`;
   el.style.cursor = "grab";
   return el;
 }
 function createStopMarker(label) {
   const el = document.createElement("div");
-  el.style.width = "28px";
-  el.style.height = "28px";
+  el.style.width = "20px";
+  el.style.height = "20px";
   el.style.borderRadius = "9999px";
   el.style.background = "#009849";
-  el.style.border = "3px solid rgba(255,255,255,0.92)";
-  el.style.boxShadow = "0 8px 18px rgba(0,152,73,0.35)";
+  el.style.border = "2px solid rgba(255,255,255,0.92)";
+  el.style.boxShadow = "0 4px 10px rgba(0,152,73,0.35)";
   el.style.color = "white";
   el.style.display = "flex";
   el.style.alignItems = "center";
   el.style.justifyContent = "center";
-  el.style.fontSize = "12px";
+  el.style.fontSize = "9px";
   el.style.fontWeight = "900";
   el.textContent = label;
   return el;
@@ -297,16 +297,16 @@ function RouteMapPreview({ trip, pickup, destination, onUpdatePickup, onUpdateDe
 ───────────────────────────────────────────── */
 function MetricChip({ icon: Icon, value, label }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, justifyContent: "center" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "center" }}>
       <div style={{
-        width: 40, height: 40, borderRadius: "50%",
+        width: 32, height: 32, borderRadius: "50%",
         background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        <Icon size={19} color="#374151" strokeWidth={2} />
+        {React.createElement(Icon, { size: 15, color: "#374151", strokeWidth: 2 })}
       </div>
       <div>
-        <div style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>{value}</div>
-        <div style={{ fontSize: 12, color: "#9ca3af", fontWeight: 500 }}>{label}</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#111827" }}>{value}</div>
+        <div style={{ fontSize: 10, color: "#9ca3af", fontWeight: 500 }}>{label}</div>
       </div>
     </div>
   );
@@ -331,67 +331,67 @@ function BestMatchCard({ trip, pickup, destination, onContinue }) {
 
   return (
     <div style={{
-      background: "white", borderRadius: 18,
+      background: "white", borderRadius: 12,
       border: "1px solid #f0f0f0",
-      boxShadow: "0 4px 24px rgba(0,0,0,0.07)",
-      padding: "24px",
+      boxShadow: "0 4px 20px rgba(0,0,0,0.07)",
+      padding: "16px",
       display: "flex", flexDirection: "column", gap: 0,
     }}>
       {/* Tag row */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <span style={{
           background: isRouteOnly ? "#fef3c7" : "#f0fdf4",
           color: isRouteOnly ? "#92400e" : "#15803d",
-          fontSize: 11, fontWeight: 800, padding: "4px 12px", borderRadius: 20,
+          fontSize: 9, fontWeight: 800, padding: "2px 8px", borderRadius: 20,
           letterSpacing: 0.5, textTransform: "uppercase",
         }}>
           {isRouteOnly ? "Route Found" : "Next Arriving Bus"}
         </span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: isRouteOnly ? "#b45309" : "#15803d" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: isRouteOnly ? "#b45309" : "#15803d" }}>
           {isRouteOnly ? "No active bus" : `Arrives in ${eta} min`}
         </span>
       </div>
 
       {/* Bus identity */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{
-            width: 52, height: 52, borderRadius: 14,
+            width: 38, height: 38, borderRadius: 10,
             background: isRouteOnly ? "#fff7ed" : "#f0fdf4",
             border: isRouteOnly ? "1.5px solid #fed7aa" : "1.5px solid #bbf7d0",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <BusFront size={28} color={isRouteOnly ? "#d97706" : "#009849"} strokeWidth={2} />
+            <BusFront size={20} color={isRouteOnly ? "#d97706" : "#009849"} strokeWidth={2} />
           </div>
           <div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: "#111827", lineHeight: 1 }}>{busNo}</div>
-            <div style={{ fontSize: 13, color: "#6b7280", marginTop: 4, fontWeight: 500 }}>{seatType}</div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: "#111827", lineHeight: 1 }}>{busNo}</div>
+            <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2, fontWeight: 500 }}>{seatType}</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 16, fontWeight: 800, color: "#111827" }}>
-          <Star size={16} fill="#111827" strokeWidth={0} />
+        <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 800, color: "#111827" }}>
+          <Star size={13} fill="#111827" strokeWidth={0} />
           {rating}
         </div>
       </div>
 
       {/* Route line */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "4px 0" }}>
-        <span style={{ width: 14, height: 14, borderRadius: "50%", background: "#009849", flexShrink: 0 }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0" }}>
+        <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#009849", flexShrink: 0 }} />
         <div style={{ flex: 1, borderTop: "2px dashed #009849" }} />
-        <ArrowRight size={18} color="#374151" strokeWidth={2.5} />
+        <ArrowRight size={16} color="#374151" strokeWidth={2.5} />
         <div style={{ flex: 1, borderTop: "2px dashed #d1d5db" }} />
-        <span style={{ width: 14, height: 14, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
+        <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
       </div>
 
       {/* From / To */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", marginTop: 8, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", marginTop: 6, marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 900, color: "#111827" }}>{fromLabel}</div>
-          <div style={{ fontSize: 13, color: "#6b7280", marginTop: 3 }}>{startTime}</div>
+          <div style={{ fontSize: 16, fontWeight: 900, color: "#111827" }}>{fromLabel}</div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{startTime}</div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 18, fontWeight: 900, color: "#111827" }}>{toLabel}</div>
-          <div style={{ fontSize: 13, color: "#6b7280", marginTop: 3 }}>{endTime}</div>
+          <div style={{ fontSize: 16, fontWeight: 900, color: "#111827" }}>{toLabel}</div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{endTime}</div>
         </div>
       </div>
 
@@ -399,27 +399,27 @@ function BestMatchCard({ trip, pickup, destination, onContinue }) {
       <div style={{
         background: isRouteOnly ? "#fff7ed" : "#f0fdf4",
         border: isRouteOnly ? "1.5px solid #fed7aa" : "1.5px solid #bbf7d0",
-        borderRadius: 14,
-        padding: "12px 16px", display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: 16,
+        borderRadius: 12,
+        padding: "10px 14px", display: "flex", justifyContent: "space-between",
+        alignItems: "center", marginBottom: 14,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{
-            width: 30, height: 30, borderRadius: "50%",
+            width: 26, height: 26, borderRadius: "50%",
             border: isRouteOnly ? "2px solid #d97706" : "2px solid #009849",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <Check size={15} color={isRouteOnly ? "#d97706" : "#009849"} strokeWidth={2.5} />
+            <Check size={13} color={isRouteOnly ? "#d97706" : "#009849"} strokeWidth={2.5} />
           </div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: isRouteOnly ? "#b45309" : "#009849" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: isRouteOnly ? "#b45309" : "#009849" }}>
               {isRouteOnly ? "Route found but no active bus" : "Passing your stop"}
             </div>
-            <div style={{ fontSize: 12, color: "#374151", marginTop: 2 }}>Board at {fromLabel}</div>
+            <div style={{ fontSize: 11, color: "#374151", marginTop: 1 }}>Board at {fromLabel}</div>
           </div>
         </div>
         <button type="button" onClick={() => window.history.back()} style={{
-          fontSize: 13, fontWeight: 700, color: isRouteOnly ? "#b45309" : "#009849", background: "none", border: "none", cursor: "pointer",
+          fontSize: 12, fontWeight: 700, color: isRouteOnly ? "#b45309" : "#009849", background: "none", border: "none", cursor: "pointer",
         }}>Change</button>
       </div>
 
@@ -427,13 +427,13 @@ function BestMatchCard({ trip, pickup, destination, onContinue }) {
       <div style={{
         display: "flex", alignItems: "center",
         borderTop: "1px solid #f0f0f0", borderBottom: "1px solid #f0f0f0",
-        padding: "14px 0",
+        padding: "12px 0",
         gap: 0,
       }}>
         <MetricChip icon={TrendingUp} value={distance} label="Distance" />
-        <div style={{ width: 1, height: 36, background: "#f0f0f0" }} />
+        <div style={{ width: 1, height: 28, background: "#f0f0f0" }} />
         <MetricChip icon={Clock3} value={duration} label="Duration" />
-        <div style={{ width: 1, height: 36, background: "#f0f0f0" }} />
+        <div style={{ width: 1, height: 28, background: "#f0f0f0" }} />
         <MetricChip icon={BusFront} value={stopsCount} label="Stops" />
       </div>
 
@@ -481,6 +481,92 @@ function OtherBusRow({ trip, pickup, destination, onChooseRoute }) {
         {formatEtaMinutes(trip?.eta_seconds)} min
       </span>
     </button>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   MOBILE BOTTOM NAV
+───────────────────────────────────────────── */
+function MobileBottomNav() {
+  const items = [
+    { icon: BusFront, label: "Console", active: true },
+    { icon: Route, label: "Routes" },
+    { icon: Calendar, label: "Trips" },
+    { icon: Calendar, label: "Schedule" },
+    { icon: MoreHorizontal, label: "More" },
+  ];
+  return (
+    <div style={{
+      display: "flex", background: "white",
+      borderTop: "1px solid #f0f0f0", padding: "8px 0 12px",
+    }}>
+      {items.map(({ icon: Icon, label, active }) => (
+        <button key={label} type="button" style={{
+          flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+          background: "none", border: "none", cursor: "pointer", padding: "4px 0",
+        }}>
+          {React.createElement(Icon, {
+            size: 22,
+            color: active ? "#009849" : "#9ca3af",
+            strokeWidth: active ? 2.5 : 2,
+          })}
+          <span style={{ fontSize: 11, fontWeight: active ? 700 : 500, color: active ? "#009849" : "#9ca3af" }}>{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   STATUS BAR — bottom strip
+───────────────────────────────────────────── */
+function StatusBar({ trip, onRefresh, loading }) {
+  const isRouteOnly = trip?.is_route_only || trip?.trip_available === false;
+  const busNo = trip?.bus_number || trip?.vehicle_number || (isRouteOnly ? "--" : "UP 32 DC 0003");
+  return (
+    <div style={{
+      background: "white", borderTop: "1px solid #f0f0f0",
+      padding: "14px 24px",
+      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24,
+      flexWrap: "wrap",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ width: 10, height: 10, borderRadius: "50%", background: isRouteOnly ? "#9ca3af" : "#009849", display: "inline-block" }} />
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Live Tracking</div>
+          <div style={{ fontSize: 12, color: isRouteOnly ? "#6b7280" : "#009849", fontWeight: 600 }}>
+            {isRouteOnly ? "No active bus" : "Active"}
+          </div>
+        </div>
+      </div>
+      <div style={{ width: 1, height: 32, background: "#f0f0f0" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <BusFront size={20} color="#374151" />
+        <div>
+          <div style={{ fontSize: 12, color: "#9ca3af", fontWeight: 500 }}>Vehicle</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#111827" }}>{busNo}</div>
+        </div>
+      </div>
+      <div style={{ width: 1, height: 32, background: "#f0f0f0" }} />
+      <button 
+        type="button" 
+        onClick={onRefresh} 
+        disabled={loading}
+        style={{ 
+          display: "flex", alignItems: "center", gap: 10, 
+          background: "none", border: "none", cursor: "pointer",
+          padding: 0, outline: "none"
+        }}
+      >
+        <RefreshCw size={18} color="#374151" className={loading ? "prl-animate-spin" : ""} />
+        <div>
+          <div style={{ fontSize: 12, color: "#9ca3af", fontWeight: 500 }}>Last Updated</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#111827" }}>
+            {isRouteOnly ? "--" : new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+          </div>
+        </div>
+      </button>
+    </div>
   );
 }
 

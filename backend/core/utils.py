@@ -315,6 +315,29 @@ def process_gps_update(trip_id, lat, lon, source="gps"):
                     # Prevent repeated alerts for the same arrival event
                     r.set(arrival_key, "ALREADY_NOTIFIED", ex=600)
 
+        # ─── New: General Proximity Alert (Passengers within 500m) ───────────
+        # We find all passengers within 500m of the vehicle update
+        nearby_passengers = r.georadius(
+            "passenger_locations", float(lon), float(lat), 500, unit="m", withdist=True
+        )
+        
+        for p_data in nearby_passengers:
+            p_id, p_dist = p_data[0].decode(), p_data[1]
+            # Only notify if not already notified recently for this trip
+            alert_throttle_key = f"passenger_nearby_alerted:{p_id}:{trip_id}"
+            if not r.get(alert_throttle_key):
+                if channel_layer:
+                    async_to_sync(channel_layer.group_send)(
+                        f"user_{p_id}",
+                        {
+                            "type": "proximity_alert",
+                            "trip_id": str(trip_id),
+                            "distance": p_dist,
+                            "message": f"Bus {bus_number} is only {int(p_dist)}m away from you!",
+                        },
+                    )
+                r.set(alert_throttle_key, "1", ex=300) # Throttle for 5 mins
+
         # 5. Update VehicleState
         if trip.vehicle:
             v_state, _ = VehicleState.objects.get_or_create(vehicle=trip.vehicle)
@@ -332,6 +355,31 @@ def process_gps_update(trip_id, lat, lon, source="gps"):
 
                 heading = _json.loads(kf_state_raw).get("heading", 0)
 
+            # Compute real-time next stop ETA
+            next_stop_eta = []
+            try:
+                # Fetch route stops
+                stops = list(trip.route.stops.order_by("order"))
+                if stops:
+                    sources = [(lon, lat)]
+                    destinations = [(s.location.x, s.location.y) for s in stops]
+                    table = _run(get_table_eta_async(sources, destinations))
+                    if table and table.get("durations"):
+                        durations = table["durations"][0]
+                        for idx, s in enumerate(stops):
+                            # Skip stops already passed
+                            if s.order <= (current_stop_order or 0):
+                                continue
+                            
+                            next_stop_eta.append({
+                                "stop_id": str(s.id),
+                                "stop_name": s.name,
+                                "duration_seconds": durations[idx],
+                                "distance_meters": table["distances"][0][idx] if table.get("distances") else 0
+                            })
+            except Exception as e:
+                logger.error(f"Error computing next_stop_eta: {e}")
+
             payload = {
                 "trip_id": str(trip_id),
                 "lat": lat,
@@ -341,7 +389,7 @@ def process_gps_update(trip_id, lat, lon, source="gps"):
                 "route_id": route_id,
                 "source": source,
                 "delay_minutes": delay_minutes,
-                "next_stop_eta": [],
+                "next_stop_eta": next_stop_eta,
             }
 
             # Broadcast to Trip Group

@@ -4,7 +4,6 @@
 import { configureStore } from "@reduxjs/toolkit";
 import {
   persistStore,
-  persistReducer,
   FLUSH,
   REHYDRATE,
   PAUSE,
@@ -12,21 +11,20 @@ import {
   PURGE,
   REGISTER,
 } from "redux-persist";
-import storage from "redux-persist/lib/storage";
 import { rootReducer } from "../redux/rootReducer";
 import { vayyApi } from "../redux/api/vayyApi";
 
-const persistConfig = {
-  key: "vayy-root",
-  version: 1,
-  storage,
-  whitelist: ["auth"],
-};
+// const persistConfig = {
+//   key: "vayy-root",
+//   version: 1,
+//   storage,
+//   whitelist: ["auth"],
+// };
 
-const persistedReducer = persistReducer(persistConfig, rootReducer);
+// const persistedReducer = persistReducer(persistConfig, rootReducer);
 
 export const store = configureStore({
-  reducer: persistedReducer,
+  reducer: rootReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
@@ -36,4 +34,3 @@ export const store = configureStore({
 });
 
 export const persistor = persistStore(store);
-

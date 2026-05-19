@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import api from "../lib/api";
+import api from "../../../lib/api";
 import {
   Trash2,
   Save,
@@ -9,6 +9,7 @@ import {
   Navigation,
   XCircle,
   Plus,
+  Minus,
   ArrowUp,
   ArrowDown,
   ChevronDown,
@@ -17,142 +18,22 @@ import {
   Upload,
   FileJson,
   FileSpreadsheet,
+  Box,
+  Compass,
+  HelpCircle,
 } from "lucide-react";
-import LocationSearch from "./LocationSearch";
+import LocationSearch from "../../map/LocationSearch";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
+import { normalizeExcelRoutes, normalizeJsonRoutes } from "./routeImportUtils";
 
-const normalizeImportKey = (key) =>
-  String(key || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-
-const normalizeImportRow = (row) =>
-  Object.entries(row || {}).reduce((acc, [key, value]) => {
-    acc[normalizeImportKey(key)] = value;
-    return acc;
-  }, {});
-
-const firstValue = (source, keys) => {
-  for (const key of keys) {
-    const value = source?.[key];
-    if (value !== undefined && value !== null && String(value).trim() !== "") {
-      return value;
-    }
-  }
-  return "";
-};
-
-const toFiniteNumber = (value) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const normalizePoint = (value) => {
-  if (Array.isArray(value) && value.length >= 2) {
-    const first = toFiniteNumber(value[0]);
-    const second = toFiniteNumber(value[1]);
-    if (first === null || second === null) return null;
-    return Math.abs(first) > 35 ? { lat: second, lon: first } : { lat: first, lon: second };
-  }
-
-  if (value && typeof value === "object") {
-    const normalized = normalizeImportRow(value);
-    const lat = toFiniteNumber(firstValue(normalized, ["lat", "latitude"]));
-    const lon = toFiniteNumber(firstValue(normalized, ["lon", "lng", "longitude"]));
-    if (lat !== null && lon !== null) return { lat, lon };
-  }
-
-  return null;
-};
-
-const pointFromRow = (row, prefix) => {
-  const lat = toFiniteNumber(firstValue(row, [`${prefix}_lat`, `${prefix}_latitude`]));
-  const lon = toFiniteNumber(firstValue(row, [`${prefix}_lon`, `${prefix}_lng`, `${prefix}_longitude`]));
-  return lat !== null && lon !== null ? { lat, lon } : null;
-};
-
-const normalizeStop = (stop, index = 0) => {
-  const normalized = normalizeImportRow(stop);
-  const point = normalizePoint(stop) || pointFromRow(normalized, "stop");
-  if (!point) return null;
-
-  return {
-    ...point,
-    name: firstValue(normalized, ["stop_name", "name"]) || `Stop ${index + 1}`,
-    order: toFiniteNumber(firstValue(normalized, ["stop_order", "order", "sequence"])) ?? index,
-  };
-};
-
-const normalizePathForBackend = (path) => {
-  if (!Array.isArray(path)) return undefined;
-  const normalized = path
-    .map((point) => normalizePoint(point))
-    .filter(Boolean)
-    .map((point) => [point.lat, point.lon]);
-  return normalized.length > 1 ? normalized : undefined;
-};
-
-const normalizeJsonRoutes = (payload) => {
-  const routes = Array.isArray(payload) ? payload : payload?.routes;
-  if (!Array.isArray(routes)) {
-    throw new Error("JSON file must contain an array of routes or an object with a routes array.");
-  }
-
-  return routes.map((route, index) => {
-    const normalized = normalizeImportRow(route);
-    const start = normalizePoint(route.start) || pointFromRow(normalized, "start") || pointFromRow(normalized, "origin");
-    const end = normalizePoint(route.end) || pointFromRow(normalized, "end") || pointFromRow(normalized, "destination");
-    const stops = Array.isArray(route.stops)
-      ? route.stops.map((stop, stopIndex) => normalizeStop(stop, stopIndex)).filter(Boolean)
-      : [];
-
-    return {
-      name: firstValue(normalized, ["route_name", "name"]) || `Imported Route ${index + 1}`,
-      bus_number: firstValue(normalized, ["bus_number", "bus", "vehicle_number"]),
-      start_name: firstValue(normalized, ["start_name", "origin_name"]) || "Start",
-      end_name: firstValue(normalized, ["end_name", "destination_name"]) || "End",
-      total_distance: toFiniteNumber(firstValue(normalized, ["total_distance", "total_distance_meters", "distance"])),
-      path: normalizePathForBackend(route.path || route.path_coords || route.route_geometry),
-      start,
-      end,
-      stops,
-    };
-  });
-};
-
-const normalizeExcelRoutes = (rows) => {
-  const groupedRoutes = new Map();
-
-  rows.map(normalizeImportRow).forEach((row, index) => {
-    const routeName = firstValue(row, ["route_name", "name"]) || `Imported Route ${index + 1}`;
-    const routeKey = firstValue(row, ["route_id", "route_key", "route_code", "route_name", "name"]) || routeName;
-
-    if (!groupedRoutes.has(routeKey)) {
-      groupedRoutes.set(routeKey, {
-        name: routeName,
-        bus_number: firstValue(row, ["bus_number", "bus", "vehicle_number"]),
-        start_name: firstValue(row, ["start_name", "origin_name"]) || "Start",
-        end_name: firstValue(row, ["end_name", "destination_name"]) || "End",
-        start: pointFromRow(row, "start") || pointFromRow(row, "origin"),
-        end: pointFromRow(row, "end") || pointFromRow(row, "destination"),
-        stops: [],
-      });
-    }
-
-    const route = groupedRoutes.get(routeKey);
-    route.start = route.start || pointFromRow(row, "start") || pointFromRow(row, "origin");
-    route.end = route.end || pointFromRow(row, "end") || pointFromRow(row, "destination");
-
-    const stop = normalizeStop(row, route.stops.length);
-    if (stop) route.stops.push(stop);
-  });
-
-  return Array.from(groupedRoutes.values()).map((route) => ({
-    ...route,
-    stops: route.stops.sort((a, b) => a.order - b.order),
-  }));
-};
+const pointToStop = (point, name, order, flags = {}) => ({
+  lat: point.lat,
+  lon: point.lon,
+  name: name || flags.defaultName || `Stop ${order + 1}`,
+  order,
+  ...flags,
+});
 
 const AdminRouteManager = ({ onBack, preSelectedCity }) => {
   const mapContainer = useRef(null);
@@ -164,6 +45,20 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [routeSubTab, setRouteSubTab] = useState("library");
   const [expandedRouteId, setExpandedRouteId] = useState(null);
+  const [is3DView, setIs3DView] = useState(false);
+  const [mapPitch, setMapPitch] = useState(0);
+  const [mapBearing, setMapBearing] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef(null);
+
+  useGSAP(() => {
+    gsap.to(helpRef.current, {
+      height: helpOpen ? "auto" : 0,
+      opacity: helpOpen ? 1 : 0,
+      duration: 0.3,
+      ease: "power2.out"
+    });
+  }, [helpOpen]);
 
   // Design State
   const [newPoints, setNewPoints] = useState({ start: null, end: null });
@@ -180,6 +75,40 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
 
   const markers = useRef({}); // { type_id: markerInstance }
 
+  const fetchPreviews = async (currentPoints, currentStops) => {
+    if (!currentPoints.start || !currentPoints.end) {
+      setPreviews([]);
+      return;
+    }
+
+    try {
+      const res = await api.post("/api/admin/routes/preview/", {
+        start: {
+          lat: currentPoints.start.lat,
+          lon: currentPoints.start.lon,
+          name: names.start,
+        },
+        end: {
+          lat: currentPoints.end.lat,
+          lon: currentPoints.end.lon,
+          name: names.end,
+        },
+        stops: currentStops.map((s, i) => ({ 
+          lat: s.lat, 
+          lon: s.lon, 
+          name: s.name, 
+          order: i 
+        })),
+      });
+      console.log("Preview API Response:", res.data);
+      setPreviews(res.data || []);
+      setSelectedIndex(0);
+    } catch (e) {
+      console.error("Preview fetch failed", e);
+      setPreviews([]);
+    }
+  };
+
   // Initialize Map
   useEffect(() => {
     if (map.current) return;
@@ -189,8 +118,6 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
       center: [78.9629, 20.5937],
       zoom: 5,
     });
-
-    map.current.addControl(new maplibregl.NavigationControl(), "top-right");
 
     map.current.on("load", () => {
       map.current.addSource("route-previews", {
@@ -217,8 +144,9 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
       });
     });
 
-    map.current.on("click", () => {
-      // Logic handled in a separate effect to have access to state
+    map.current.on("moveend", () => {
+      setMapPitch(map.current.getPitch());
+      setMapBearing(map.current.getBearing());
     });
 
     return () => {
@@ -228,6 +156,36 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
       }
     };
   }, []);
+
+  const toggle3DView = () => {
+    if (!map.current) return;
+    const nextIs3DView = !is3DView;
+    setIs3DView(nextIs3DView);
+    map.current.easeTo({
+      pitch: nextIs3DView ? 60 : 0,
+      bearing: nextIs3DView ? -20 : 0,
+      duration: 600,
+    });
+  };
+
+  const resetMapView = () => {
+    if (!map.current) return;
+    setIs3DView(false);
+    map.current.easeTo({
+      pitch: 0,
+      bearing: 0,
+      style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+      duration: 600,
+    });
+  };
+
+  const zoomMap = (delta) => {
+    if (!map.current) return;
+    map.current.easeTo({
+      zoom: map.current.getZoom() + delta,
+      duration: 300,
+    });
+  };
 
   // Handle Map Clicks
   useEffect(() => {
@@ -258,16 +216,16 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
         const el = document.createElement("div");
         el.className = "w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-lg cursor-move";
         const marker = new maplibregl.Marker({ element: el, draggable: true })
-          .setLngLat([newPoints.start.lng || newPoints.start.lon, newPoints.start.lat])
+          .setLngLat([newPoints.start.lon, newPoints.start.lat])
           .addTo(map.current);
         
         marker.on("dragend", () => {
           const lngLat = marker.getLngLat();
-          handleDrag("start", { lat: lngLat.lat, lng: lngLat.lng });
+          handleDrag("start", { lat: lngLat.lat, lon: lngLat.lng });
         });
         markers.current["start"] = marker;
       } else {
-        markers.current["start"].setLngLat([newPoints.start.lng || newPoints.start.lon, newPoints.start.lat]);
+        markers.current["start"].setLngLat([newPoints.start.lon, newPoints.start.lat]);
       }
     } else if (markers.current["start"]) {
       markers.current["start"].remove();
@@ -280,16 +238,16 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
         const el = document.createElement("div");
         el.className = "w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg cursor-move";
         const marker = new maplibregl.Marker({ element: el, draggable: true })
-          .setLngLat([newPoints.end.lng || newPoints.end.lon, newPoints.end.lat])
+          .setLngLat([newPoints.end.lon, newPoints.end.lat])
           .addTo(map.current);
         
         marker.on("dragend", () => {
           const lngLat = marker.getLngLat();
-          handleDrag("end", { lat: lngLat.lat, lng: lngLat.lng });
+          handleDrag("end", { lat: lngLat.lat, lon: lngLat.lng });
         });
         markers.current["end"] = marker;
       } else {
-        markers.current["end"].setLngLat([newPoints.end.lng || newPoints.end.lon, newPoints.end.lat]);
+        markers.current["end"].setLngLat([newPoints.end.lon, newPoints.end.lat]);
       }
     } else if (markers.current["end"]) {
       markers.current["end"].remove();
@@ -307,17 +265,17 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
           el.className = "flex items-center justify-center bg-indigo-600 text-white w-6 h-6 rounded-full border-2 border-white shadow-md text-[10px] font-bold cursor-move";
           el.innerHTML = i + 1;
           const marker = new maplibregl.Marker({ element: el, draggable: true })
-            .setLngLat([s.lng || s.lon, s.lat])
+            .setLngLat([s.lon, s.lat])
             .setPopup(new maplibregl.Popup({ offset: 15 }).setText(s.name))
             .addTo(map.current);
           
           marker.on("dragend", () => {
             const lngLat = marker.getLngLat();
-            handleDrag("stop", { lat: lngLat.lat, lng: lngLat.lng }, i);
+            handleDrag("stop", { lat: lngLat.lat, lon: lngLat.lng }, i);
           });
           markers.current[id] = marker;
         } else {
-          markers.current[id].setLngLat([s.lng || s.lon, s.lat]);
+          markers.current[id].setLngLat([s.lon, s.lat]);
           markers.current[id].getElement().innerHTML = i + 1;
         }
       });
@@ -333,11 +291,11 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
           el.className = "flex items-center justify-center bg-indigo-600 text-white w-6 h-6 rounded-full border-2 border-white shadow-md text-[10px] font-bold";
           el.innerHTML = i + 1;
           markers.current[id] = new maplibregl.Marker({ element: el })
-            .setLngLat([s.lng || s.lon, s.lat])
+            .setLngLat([s.lon, s.lat])
             .setPopup(new maplibregl.Popup({ offset: 15 }).setText(s.name))
             .addTo(map.current);
         } else {
-          markers.current[id].setLngLat([s.lng || s.lon, s.lat]);
+          markers.current[id].setLngLat([s.lon, s.lat]);
         }
       });
     }
@@ -360,7 +318,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
             properties: { selected: true, index: 0 },
             geometry: {
               type: "LineString",
-              coordinates: selectedRoute.path_coords.map(p => [p[1], p[0]]),
+              coordinates: selectedRoute.path_coords.map(p => [p[0], p[1]]),
             },
           });
         } else if (previews.length > 0) {
@@ -369,7 +327,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
             properties: { selected: idx === selectedIndex, index: idx },
             geometry: {
               type: "LineString",
-              coordinates: p.path.map(coord => [coord[1], coord[0]]),
+              coordinates: p.path.map(coord => [coord[0], coord[1]]),
             },
           }));
         } else if (newPoints.start && newPoints.end) {
@@ -379,8 +337,8 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
             geometry: {
               type: "LineString",
               coordinates: [
-                [newPoints.start.lng || newPoints.start.lon, newPoints.start.lat],
-                [newPoints.end.lng || newPoints.end.lon, newPoints.end.lat]
+                [newPoints.start.lon, newPoints.start.lat],
+                [newPoints.end.lon, newPoints.end.lat]
               ],
             },
           });
@@ -393,11 +351,11 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
     if (selectedRoute || (newPoints.start && newPoints.end)) {
       const points = [];
       if (selectedRoute) {
-        selectedRoute.path_coords.forEach(p => points.push([p[1], p[0]]));
+        selectedRoute.path_coords.forEach(p => points.push([p[0], p[1]]));
       } else {
-        if (newPoints.start) points.push([newPoints.start.lng || newPoints.start.lon, newPoints.start.lat]);
-        if (newPoints.end) points.push([newPoints.end.lng || newPoints.end.lon, newPoints.end.lat]);
-        stops.forEach(s => points.push([s.lng || s.lon, s.lat]));
+        if (newPoints.start) points.push([newPoints.start.lon, newPoints.start.lat]);
+        if (newPoints.end) points.push([newPoints.end.lon, newPoints.end.lat]);
+        stops.forEach(s => points.push([s.lon, s.lat]));
       }
       
       if (points.length > 0) {
@@ -440,41 +398,51 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
 
   const handleMapClick = (latlng) => {
     setSelectedRoute(null);
-    if (isAddingStop) {
-      const newStop = { lat: latlng.lat, lng: latlng.lng, name: `Stop ${stops.length + 1}` };
-      setStops([...stops, newStop]);
+    if (isAddingStop && newPoints.start && newPoints.end) {
+      const newStop = { lat: latlng.lat, lon: latlng.lng, name: `Stop ${stops.length + 1}` };
+      const updatedStops = [...stops, newStop];
+      setStops(updatedStops);
       setIsAddingStop(false);
       // Automatically reverse geocode the stop
       reverseGeocode(latlng, (name) => {
         setStops(prev => {
           const updated = [...prev];
-          const idx = updated.findIndex(s => s.lat === latlng.lat && s.lng === latlng.lng);
+          const idx = updated.findIndex(s => s.lat === latlng.lat && s.lon === latlng.lng);
           if (idx !== -1) updated[idx].name = name;
           return updated;
         });
       });
+      fetchPreviews(newPoints, updatedStops);
     } else if (!newPoints.start) {
-      setNewPoints({ ...newPoints, start: { lat: latlng.lat, lng: latlng.lng } });
+      const start = { lat: latlng.lat, lon: latlng.lng };
+      const updatedPoints = { ...newPoints, start };
+      setNewPoints(updatedPoints);
       reverseGeocode(latlng, (name) => setNames(prev => ({ ...prev, start: name })));
+      fetchPreviews(updatedPoints, stops);
     } else if (!newPoints.end) {
-      setNewPoints({ ...newPoints, end: { lat: latlng.lat, lng: latlng.lng } });
+      const end = { lat: latlng.lat, lon: latlng.lng };
+      const updatedPoints = { ...newPoints, end };
+      setNewPoints(updatedPoints);
       reverseGeocode(latlng, (name) => setNames(prev => ({ ...prev, end: name })));
+      fetchPreviews(updatedPoints, stops);
     }
   };
 
   const reverseGeocode = async (latlng, callback) => {
     try {
-      const res = await api.get(`/api/reverse-search/?lat=${latlng.lat}&lon=${latlng.lng || latlng.lon}`);
+      const res = await api.get(`/api/reverse-search/?lat=${latlng.lat}&lon=${latlng.lon || latlng.lng}`);
       if (res.data && res.data.display_name) {
         callback(res.data.display_name);
       }
     } catch (e) {
-      console.error("Reverse geocode failed", e);
+      console.warn("Reverse geocode failed, skipping name update:", e);
+      // Silently fail: keep the existing name or use a default
     }
   };
 
+
   const handleDrag = (type, latlng, index = null) => {
-    const coords = { lat: latlng.lat, lng: latlng.lng };
+    const coords = { lat: latlng.lat, lon: latlng.lon || latlng.lng };
     if (type === "stop") {
       const newStops = [...stops];
       newStops[index] = {
@@ -489,37 +457,12 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
           return updated;
         });
       });
+      fetchPreviews(newPoints, newStops);
     } else {
-      setNewPoints({ ...newPoints, [type]: coords });
+      const updatedPoints = { ...newPoints, [type]: coords };
+      setNewPoints(updatedPoints);
       reverseGeocode(latlng, (name) => setNames(prev => ({ ...prev, [type]: name })));
-    }
-  };
-
-  // New: Fetch Route Previews
-  useEffect(() => {
-    if (newPoints.start && newPoints.end) {
-      fetchPreviews();
-    } else {
-      setPreviews([]);
-    }
-  }, [newPoints, stops]);
-
-  const fetchPreviews = async () => {
-    try {
-      const res = await api.post("/api/admin/routes/preview/", {
-        start: { lat: newPoints.start.lat, lon: newPoints.start.lng || newPoints.start.lon },
-        end: { lat: newPoints.end.lat, lon: newPoints.end.lng || newPoints.end.lon },
-        stops: stops.map((s, i) => ({ 
-          lat: s.lat, 
-          lon: s.lng || s.lon, 
-          name: s.name, 
-          order: i 
-        })),
-      });
-      setPreviews(res.data);
-      setSelectedIndex(0); // Default to first (usually shortest/best)
-    } catch (e) {
-      console.error("Preview fetch failed", e);
+      fetchPreviews(updatedPoints, stops);
     }
   };
 
@@ -529,13 +472,18 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
     if (target < 0 || target >= stops.length) return;
     [newStops[index], newStops[target]] = [newStops[target], newStops[index]];
     setStops(newStops);
+    fetchPreviews(newPoints, newStops);
   };
-
   const saveRoute = async () => {
     if (!newPoints.start || !newPoints.end || !selectedCity) return;
     setLoading(true);
 
     const activePreview = previews[selectedIndex];
+    const routeStops = [
+      pointToStop(newPoints.start, names.start, 0, { is_start: true, defaultName: "Start" }),
+      ...stops.map((stop, index) => pointToStop(stop, stop.name, index + 1)),
+      pointToStop(newPoints.end, names.end, stops.length + 1, { is_end: true, defaultName: "End" }),
+    ];
 
     try {
       await api.post("/api/admin/routes/", {
@@ -543,14 +491,11 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
         name: names.route || "New Route",
         start_name: names.start,
         end_name: names.end,
-        start: { lat: newPoints.start.lat, lon: newPoints.start.lng || newPoints.start.lon },
-        end: { lat: newPoints.end.lat, lon: newPoints.end.lng || newPoints.end.lon },
-        stops: stops.map((s, i) => ({ 
-          lat: s.lat, 
-          lon: s.lng || s.lon, 
-          name: s.name, 
-          order: i 
-        })),
+        start: { lat: newPoints.start.lat, lon: newPoints.start.lon, name: names.start },
+        end: { lat: newPoints.end.lat, lon: newPoints.end.lon, name: names.end },
+        start_stop_index: 0,
+        end_stop_index: routeStops.length - 1,
+        stops: routeStops,
         // Pass the selected alternative's path
         path: activePreview?.path,
         total_distance: activePreview?.distance,
@@ -679,6 +624,8 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
 
   const isRouteLibrary = routeSubTab === "library";
   const isRouteCreate = routeSubTab === "create";
+  const endpointStopCount = (newPoints.start ? 1 : 0) + (newPoints.end ? 1 : 0);
+  const totalRouteStopCount = stops.length + endpointStopCount;
 
   return (
     <div className="flex h-screen w-full bg-slate-50 overflow-hidden font-sans">
@@ -968,8 +915,11 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
                       <LocationSearch
                         placeholder="Search Start Point"
                         onSelect={(item) => {
-                          setNewPoints({ ...newPoints, start: { lat: item.lat, lng: item.lon } });
+                          const start = { lat: item.lat, lon: item.lon };
+                          const updatedPoints = { ...newPoints, start };
+                          setNewPoints(updatedPoints);
                           setNames({ ...names, start: item.display_name });
+                          fetchPreviews(updatedPoints, stops);
                         }}
                         initialValue={names.start}
                       />
@@ -982,8 +932,11 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
                       <LocationSearch
                         placeholder="Search End Point"
                         onSelect={(item) => {
-                          setNewPoints({ ...newPoints, end: { lat: item.lat, lng: item.lon } });
+                          const end = { lat: item.lat, lon: item.lon };
+                          const updatedPoints = { ...newPoints, end };
+                          setNewPoints(updatedPoints);
                           setNames({ ...names, end: item.display_name });
+                          fetchPreviews(updatedPoints, stops);
                         }}
                         initialValue={names.end}
                       />
@@ -995,75 +948,132 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
               {/* Stop Management */}
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-                    Transit Stops ({stops.length})
-                  </label>
+                  <div className="flex flex-col">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                      Transit Stops ({totalRouteStopCount})
+                    </label>
+                    {(!newPoints.start || !newPoints.end) && (
+                      <span className="text-[9px] font-bold text-amber-500 uppercase tracking-tight mt-0.5">
+                        Define Origin & Destination first
+                      </span>
+                    )}
+                  </div>
                   <button
                     onClick={() => setIsAddingStop(!isAddingStop)}
-                    className={`flex items-center gap-2 text-[10px] font-bold px-3 py-1.5 rounded-full transition ${isAddingStop ? "bg-red-100 text-red-600" : "bg-indigo-100 text-indigo-600 hover:bg-indigo-200"}`}
+                    disabled={!newPoints.start || !newPoints.end}
+                    className={`flex items-center gap-2 text-[10px] font-bold px-3 py-1.5 rounded-full transition ${
+                      !newPoints.start || !newPoints.end
+                        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                        : isAddingStop 
+                          ? "bg-red-100 text-red-600" 
+                          : "bg-indigo-100 text-indigo-600 hover:bg-indigo-200"
+                    }`}
                   >
                     {isAddingStop ? <XCircle size={14} /> : <Plus size={14} />}
                     {isAddingStop ? "Cancel" : "Add Stop"}
                   </button>
                 </div>
 
-                {isAddingStop && (
-                  <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-[11px] text-amber-700 flex items-center gap-2 animate-pulse">
-                    <MapPin size={14} /> Click any point on the map to mark a new
-                    stop.
-                  </div>
-                )}
+                {(!newPoints.start || !newPoints.end) ? (
+                   <div className="bg-slate-50 border border-slate-200 border-dashed p-6 rounded-2xl flex flex-col items-center justify-center text-center gap-2">
+                     <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                       <Navigation size={20} />
+                     </div>
+                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                       Section Locked
+                     </p>
+                     <p className="text-[10px] text-slate-400 font-medium max-w-[200px]">
+                       Origin and destination are saved as the first and last stops before intermediate stops are added.
+                     </p>
+                   </div>
+                ) : (
+                  <>
+                    {isAddingStop && (
+                      <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-[11px] text-amber-700 flex items-center gap-2 animate-pulse">
+                        <MapPin size={14} /> Click any point on the map to mark a new
+                        stop.
+                      </div>
+                    )}
 
-                <div className="space-y-2">
-                  {stops.map((stop, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 group hover:shadow-md transition"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
-                        {i + 1}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3 bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">
+                          1
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">
+                            {names.start || "Origin stop"}
+                          </p>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">
+                            Selected start stop
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <LocationSearch
-                          placeholder="Search Stop Name"
-                          onSelect={(item) => {
-                            const newStops = [...stops];
-                            newStops[i] = {
-                              ...newStops[i],
-                              name: item.display_name,
-                              lat: item.lat,
-                              lon: item.lon,
-                            };
-                            setStops(newStops);
-                          }}
-                          initialValue={stop.name}
-                        />
-                      </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => reorderStop(i, -1)}
-                          className="p-1.5 hover:bg-slate-100 rounded text-slate-400"
+                      {stops.map((stop, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 group hover:shadow-md transition"
                         >
-                          <ArrowUp size={14} />
-                        </button>
-                        <button
-                          onClick={() => reorderStop(i, 1)}
-                          className="p-1.5 hover:bg-slate-100 rounded text-slate-400"
-                        >
-                          <ArrowDown size={14} />
-                        </button>
-                        <button
-                          onClick={() =>
-                            setStops(stops.filter((_, idx) => idx !== i))
-                          }
-                          className="p-1.5 hover:bg-red-50 rounded text-red-400"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                          <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                            {i + 2}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <LocationSearch
+                              placeholder="Search Stop Name"
+                              onSelect={(item) => {
+                                const newStops = [...stops];
+                                newStops[i] = {
+                                  ...newStops[i],
+                                  name: item.display_name,
+                                  lat: item.lat,
+                                  lon: item.lon,
+                                };
+                                setStops(newStops);
+                                fetchPreviews(newPoints, newStops);
+                              }}
+                              initialValue={stop.name}
+                            />
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => reorderStop(i, -1)}
+                              className="p-1.5 hover:bg-slate-100 rounded text-slate-400"
+                            >
+                              <ArrowUp size={14} />
+                            </button>
+                            <button
+                              onClick={() => reorderStop(i, 1)}
+                              className="p-1.5 hover:bg-slate-100 rounded text-slate-400"
+                            >
+                              <ArrowDown size={14} />
+                            </button>
+                            <button
+                              onClick={() =>
+                                setStops(stops.filter((_, idx) => idx !== i))
+                              }
+                              className="p-1.5 hover:bg-red-50 rounded text-red-400"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-3 bg-red-50 p-3 rounded-xl border border-red-100">
+                        <div className="w-8 h-8 rounded-lg bg-red-500 text-white flex items-center justify-center font-bold text-xs">
+                          {stops.length + 2}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">
+                            {names.end || "Destination stop"}
+                          </p>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-red-500">
+                            Selected end stop
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
               </div>
 
               <button
@@ -1084,26 +1094,78 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
       <div className="flex-1 relative">
         <div ref={mapContainer} className="h-full w-full" />
 
-        {/* Floating Help */}
-        <div className="absolute top-6 right-6 flex flex-col items-end gap-3 z-[1000]">
-          <div className="bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-2xl border border-white/50 space-y-2">
-            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">
-              Map Instructions
-            </h4>
-            <ul className="text-[11px] text-slate-600 space-y-1 font-medium">
-              <li className="flex items-center gap-2">
-                🖱️ Click 1: Origin Point
-              </li>
-              <li className="flex items-center gap-2">
-                🖱️ Click 2: Destination Point
-              </li>
-              <li className="flex items-center gap-2">
-                📍 Click "Add Stop" then map to mark stops
-              </li>
-              <li className="flex items-center gap-2">
-                🎯 Drag markers to refine locations
-              </li>
-            </ul>
+        {/* Floating Controls */}
+        <div className="absolute top-6 right-6 flex flex-col items-end gap-2 z-[1000]">
+          <div className="bg-white/90 backdrop-blur-md p-2 rounded-2xl shadow-2xl border border-white/50 flex flex-col gap-2">
+            <button
+              onClick={() => zoomMap(1)}
+              aria-label="Zoom in"
+              title="Zoom in"
+              className="w-10 h-10 text-slate-600 hover:bg-slate-100 rounded-xl flex items-center justify-center transition-colors"
+            >
+              <Plus size={20} />
+            </button>
+            <button
+              onClick={() => zoomMap(-1)}
+              aria-label="Zoom out"
+              title="Zoom out"
+              className="w-10 h-10 text-slate-600 hover:bg-slate-100 rounded-xl flex items-center justify-center transition-colors"
+            >
+              <Minus size={20} />
+            </button>
+            <button
+              onClick={toggle3DView}
+              aria-label="Toggle 3D view"
+              title="3D view"
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                is3DView
+                  ? 'bg-indigo-500 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Box size={20} />
+            </button>
+            <button
+              onClick={resetMapView}
+              aria-label="Reset map view"
+              title="Reset map view"
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                Math.abs(mapPitch) > 1 || Math.abs(mapBearing) > 1
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Compass size={20} />
+            </button>
+            <button
+              onClick={() => setHelpOpen(!helpOpen)}
+              aria-label="Toggle Help"
+              title="Help"
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                helpOpen
+                  ? 'bg-amber-500 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <HelpCircle size={20} />
+            </button>
+          </div>
+          <div 
+            ref={helpRef}
+            className="bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/50 overflow-hidden w-64"
+            style={{ height: 0, opacity: 0 }}
+          >
+            <div className="p-4 space-y-2">
+              <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">
+                Map Instructions
+              </h4>
+              <ul className="text-[11px] text-slate-600 space-y-1 font-medium">
+                <li className="flex items-center gap-2">🖱️ Click 1: Origin Point</li>
+                <li className="flex items-center gap-2">🖱️ Click 2: Destination Point</li>
+                <li className="flex items-center gap-2">📍 Click "Add Stop" then map to mark stops</li>
+                <li className="flex items-center gap-2">🎯 Drag markers to refine locations</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>

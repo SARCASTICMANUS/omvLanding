@@ -7,7 +7,7 @@ const getPersistedUser = () => {
   try {
     const userStr = localStorage.getItem("user");
     return userStr ? JSON.parse(userStr) : null;
-  } catch (e) {
+  } catch {
     return null;
   }
 };
@@ -26,8 +26,8 @@ export const loginUser = createAsyncThunk(
         city: data.city,
       };
 
-      localStorage.setItem("token", data.access);
-      localStorage.setItem("refreshToken", data.refresh);
+      localStorage.setItem("access_token", data.access);
+      localStorage.setItem("refresh_token", data.refresh);
       localStorage.setItem("user", JSON.stringify(userData));
 
       return { ...data, user: userData };
@@ -37,6 +37,24 @@ export const loginUser = createAsyncThunk(
       );
     }
   },
+);
+
+export const googleLogin = createAsyncThunk(
+  "auth/googleLogin",
+  async (accessToken, thunkAPI) => {
+    try {
+      const response = await api.post("/api/dj-rest-auth/google/", { access_token: accessToken });
+      const data = response.data;
+
+      localStorage.setItem("access_token", data.access);
+      localStorage.setItem("refresh_token", data.refresh);
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      return data;
+    } catch (error) {
+      return thunkAPI.rejectWithValue(error.response?.data || "Google Login Failed");
+    }
+  }
 );
 
 export const registerUser = createAsyncThunk(
@@ -55,16 +73,16 @@ const authSlice = createSlice({
   name: "auth",
   initialState: {
     user: getPersistedUser(),
-    token: localStorage.getItem("token"),
-    refreshToken: localStorage.getItem("refreshToken"),
-    isAuthenticated: !!localStorage.getItem("token") && !!getPersistedUser(),
+    token: localStorage.getItem("access_token"),
+    refreshToken: localStorage.getItem("refresh_token"),
+    isAuthenticated: !!localStorage.getItem("access_token") && !!getPersistedUser(),
     loading: false,
     error: null,
   },
   reducers: {
     logout: (state) => {
-      localStorage.removeItem("token");
-      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
       localStorage.removeItem("user");
       state.user = null;
       state.token = null;
@@ -112,15 +130,30 @@ const authSlice = createSlice({
           state.token = action.payload.access;
           state.refreshToken = action.payload.refresh;
           state.user = action.payload.user;
-          localStorage.setItem("token", action.payload.access);
-          localStorage.setItem("refreshToken", action.payload.refresh);
+          localStorage.setItem("access_token", action.payload.access);
+          localStorage.setItem("refresh_token", action.payload.refresh);
           localStorage.setItem("user", JSON.stringify(action.payload.user));
         }
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      });
+      })
+      .addCase(googleLogin.pending, (state) => {
+      state.loading = true;
+       state.error = null;
+      })
+      .addCase(googleLogin.fulfilled, (state, action) => {
+      state.loading = false;
+      state.isAuthenticated = true;
+      state.token = action.payload.access;
+      state.refreshToken = action.payload.refresh;
+      state.user = action.payload.user; 
+      })
+      .addCase(googleLogin.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload;
+      })
   },
 });
 

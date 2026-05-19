@@ -1,4 +1,3 @@
-
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from rest_framework_simplejwt.tokens import AccessToken
@@ -6,6 +5,7 @@ from django.contrib.auth import get_user_model
 from urllib.parse import parse_qs
 
 User = get_user_model()
+
 
 @database_sync_to_async
 def get_user(token):
@@ -16,18 +16,20 @@ def get_user(token):
     except Exception:
         return AnonymousUser()
 
+
 class JWTAuthMiddleware:
     """
     Custom middleware to authenticate WebSockets using JWT in the query string.
     Usage: ws://host:port/ws/path/?token=your_jwt_token
     """
+
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
         query_string = scope.get("query_string", b"").decode()
         query_params = parse_qs(query_string)
-        token = query_params.get("token", [None])[0]
+        token = query_params.get("access_token", [None])[0]
 
         if token:
             scope["user"] = await get_user(token)

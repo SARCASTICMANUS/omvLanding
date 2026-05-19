@@ -1,0 +1,38 @@
+import React from "react";
+import { AlertTriangle } from "lucide-react";
+import Driver3DMapView from "./Driver3DMapView";
+
+export default function DriverLiveTracking({ route, activeTrip, onBack }) {
+  if (!route || !activeTrip) {
+    return (
+      <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center bg-slate-950 px-6 text-center text-white">
+        <div>
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10 text-red-400">
+            <AlertTriangle size={28} />
+          </div>
+          <h2 className="mt-5 text-2xl font-black">Live trip data unavailable</h2>
+          <p className="mt-3 text-sm text-slate-400">
+            The trip could not be initialized for live tracking.
+          </p>
+          <button
+            type="button"
+            onClick={onBack}
+            className="mt-6 rounded-[18px] bg-[#009849] px-5 py-3 text-sm font-black text-white"
+          >
+            Return to Review
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Driver3DMapView
+      initialRouteData={route}
+      initialTripData={activeTrip}
+      startLiveOnMount
+      showTemporaryPreview={false}
+      onBack={onBack}
+    />
+  );
+}

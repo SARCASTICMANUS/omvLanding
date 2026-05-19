@@ -190,7 +190,7 @@ export default function PassengerFlow({ onBackToDashboard }) {
   if (currentStep === STEPS.LIVE) {
     return (
       <PassengerLiveTracking
-        selectedTrip={selectedTrip}
+        tripId={selectedTrip?.trip_id || selectedTrip?.id}
         pickup={pickup}
         destination={destination}
         onBack={() => setCurrentStep(STEPS.STOPS)}

@@ -13,9 +13,20 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.gis.geos import Point, LineString
 from django.contrib.auth import authenticate
 from django.utils import timezone
+from django.db import transaction
+import openpyxl
 from rest_framework_simplejwt.tokens import RefreshToken
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
+from core.utils import _run, get_table_eta_async
+from core.services.geocoding import (
+    GeocodingUnavailable,
+    reverse_location,
+    search_locations,
+)
+from core.services.routes import (
+    create_route_from_payload,
+    get_next_stops_for_trip,
+    normalize_route_points,
+)
 
 from core.models import (
     City,
@@ -26,6 +37,8 @@ from core.models import (
     PublicPassengerProfile,
     PublicDriverProfile,
     BoardingRequest,
+    TripSchedule,
+    StopTime,
 )
 from core.utils import create_route_geometry
 from core.api.serializers import (
@@ -39,11 +52,21 @@ from core.api.serializers import (
     PublicDriverProfileSerializer,
     PassengerProfileSerializer,
     BoardingRequestSerializer,
+    ImportRouteSerializer,
 )
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+from dj_rest_auth.registration.views import SocialLoginView
 
 logger = logging.getLogger(__name__)
 
 OTP_EXPIRY_MINUTES = 10
+
+
+class GoogleLogin(SocialLoginView):
+    adapter_class = GoogleOAuth2Adapter
+    callback_url = "http://localhost:3000"
+    client_class = OAuth2Client
 
 
 # ─── Helper: make / decode verification token ─────────────────────────────────
@@ -217,20 +240,8 @@ class GlobalSearchView(APIView):
         if not query:
             return Response([])
         try:
-            geolocator = Nominatim(user_agent="vayy-app")
-            locations = geolocator.geocode(query, exactly_one=False, limit=5)
-            results = []
-            if locations:
-                for loc in locations:
-                    results.append(
-                        {
-                            "display_name": loc.address,
-                            "lat": loc.latitude,
-                            "lon": loc.longitude,
-                        }
-                    )
-            return Response(results)
-        except (GeocoderTimedOut, GeocoderUnavailable):
+            return Response(search_locations(query, limit=5))
+        except GeocodingUnavailable:
             return Response({"error": "Search service busy"}, status=503)
         except Exception:
             return Response([], status=200)
@@ -245,18 +256,11 @@ class ReverseSearchView(APIView):
         if not lat or not lon:
             return Response({"error": "lat and lon are required"}, status=400)
         try:
-            geolocator = Nominatim(user_agent="vayy-app")
-            location = geolocator.reverse(f"{lat}, {lon}")
+            location = reverse_location(lat, lon)
             if location:
-                return Response(
-                    {
-                        "display_name": location.address,
-                        "lat": location.latitude,
-                        "lon": location.longitude,
-                    }
-                )
+                return Response(location)
             return Response({"error": "No location found"}, status=404)
-        except (GeocoderTimedOut, GeocoderUnavailable):
+        except GeocodingUnavailable:
             return Response({"error": "Search service busy"}, status=503)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
@@ -277,55 +281,23 @@ class AdminRouteView(APIView):
     def post(self, request):
         start = request.data.get("start")
         end = request.data.get("end")
-        city_id = request.data.get("city")
-        stops_data = request.data.get("stops", [])
         custom_geometry = request.data.get("path")
 
         if not custom_geometry and (not start or not end):
-            return Response({"error": "Start and end locations are required for new routes."}, status=400)
+            return Response(
+                {"error": "Start and end locations are required for new routes."},
+                status=400,
+            )
 
-        if custom_geometry:
-            path_coords = [(lon, lat) for lat, lon in custom_geometry]
-            path = LineString(path_coords, srid=4326)
-            total_distance = request.data.get("total_distance", 0)
-        else:
-            try:
-                waypoints = [(start["lon"], start["lat"])]
-                for s in stops_data:
-                    waypoints.append((float(s["lon"]), float(s["lat"])))
-                waypoints.append((end["lon"], end["lat"]))
+        try:
+            route = create_route_from_payload(request.data)
+        except (KeyError, TypeError, ValueError) as e:
+            return Response({"error": f"Invalid location format: {e}"}, status=400)
 
-                route_data = create_route_geometry(waypoints)
-            except (KeyError, TypeError, ValueError) as e:
-                return Response({"error": f"Invalid location format: {e}"}, status=400)
-
-            if route_data is None:
-                return Response(
-                    {
-                        "error": "Routing service unreachable or could not calculate route"
-                    },
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
-            path = route_data["geometry"]
-            total_distance = route_data["total_distance"]
-
-        route = Route.objects.create(
-            city_id=city_id or None,
-            path=path,
-            total_distance_meters=total_distance,
-            start_name=request.data.get("start_name", "Start"),
-            end_name=request.data.get("end_name", "End"),
-            name=request.data.get("name", "New Route"),
-            bus_number=request.data.get("bus_number", ""),
-            is_public=request.data.get("is_public", True),
-        )
-
-        for idx, s in enumerate(stops_data):
-            Stop.objects.create(
-                route=route,
-                name=s.get("name", f"Stop {idx+1}"),
-                location=Point(float(s["lon"]), float(s["lat"])),
-                order=idx,
+        if route is None:
+            return Response(
+                {"error": "Routing service unreachable or could not calculate route"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         return Response(RouteSerializer(route).data, status=201)
@@ -355,13 +327,12 @@ class AdminRoutePreviewView(APIView):
         stops_data = request.data.get("stops", [])
 
         if not start or not end:
-            return Response({"error": "Start and end locations are required."}, status=400)
+            return Response(
+                {"error": "Start and end locations are required."}, status=400
+            )
 
         try:
-            waypoints = [(start["lon"], start["lat"])]
-            for s in sorted(stops_data, key=lambda x: x.get("order", 0)):
-                waypoints.append((float(s["lon"]), float(s["lat"])))
-            waypoints.append((end["lon"], end["lat"]))
+            _, waypoints = normalize_route_points(start, end, stops_data)
         except (KeyError, TypeError, ValueError) as e:
             return Response({"error": f"Invalid location data format: {e}"}, status=400)
 
@@ -401,6 +372,205 @@ class AdminRoutePreviewView(APIView):
                 }
             )
         return Response(output)
+
+
+class BulkImportView(APIView):
+    """
+    Bulk import routes, stops, and timings from JSON or XLSX files.
+    Skips invalid records and returns a summary of the operation.
+    """
+
+    # permission_classes = [IsAuthenticated] # Optional: restrict to authenticated users
+
+    def post(self, request):
+        file_obj = request.FILES.get("file")
+        city_id = request.data.get("city_id")
+
+        if not file_obj:
+            return Response({"error": "No file uploaded"}, status=400)
+
+        file_name = file_obj.name
+        try:
+            if file_name.endswith(".json"):
+                data = json.load(file_obj)
+                if not isinstance(data, list):
+                    data = [data]
+                parsed_routes = data
+            elif file_name.endswith((".xlsx", ".xls")):
+                parsed_routes = self._parse_excel(file_obj)
+            else:
+                return Response(
+                    {"error": "Unsupported file format. Use JSON or XLSX."}, status=400
+                )
+        except Exception as e:
+            return Response({"error": f"Failed to parse file: {str(e)}"}, status=400)
+
+        summary = {"total": len(parsed_routes), "success": 0, "failed": 0, "errors": []}
+
+        for route_data in parsed_routes:
+            # Inject city_id if not present in route_data but provided in request
+            if not route_data.get("city_id") and city_id:
+                route_data["city_id"] = city_id
+
+            serializer = ImportRouteSerializer(data=route_data)
+            if not serializer.is_valid():
+                summary["failed"] += 1
+                summary["errors"].append(
+                    {
+                        "route": route_data.get("name", "Unknown"),
+                        "reason": serializer.errors,
+                    }
+                )
+                continue
+
+            validated_data = serializer.validated_data
+            try:
+                with transaction.atomic():
+                    self._create_route_full(validated_data)
+                    summary["success"] += 1
+            except Exception as e:
+                summary["failed"] += 1
+                summary["errors"].append(
+                    {"route": validated_data.get("name"), "reason": str(e)}
+                )
+
+        return Response(
+            summary,
+            status=(
+                status.HTTP_201_CREATED
+                if summary["success"] > 0
+                else status.HTTP_200_OK
+            ),
+        )
+
+    def _parse_excel(self, file_obj):
+        wb = openpyxl.load_workbook(file_obj, data_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            return []
+
+        header = [str(cell).lower().strip() if cell else "" for cell in rows[0]]
+        data_rows = rows[1:]
+
+        routes_map = {}
+
+        for row in data_rows:
+            row_dict = dict(zip(header, row))
+            route_name = row_dict.get("route_name") or row_dict.get("name")
+            if not route_name:
+                continue
+
+            if route_name not in routes_map:
+                routes_map[route_name] = {
+                    "name": route_name,
+                    "bus_number": str(row_dict.get("bus_number") or ""),
+                    "start_name": row_dict.get("start_name", "Start"),
+                    "end_name": row_dict.get("end_name", "End"),
+                    "stops": [],
+                    "schedules": {},
+                }
+
+            route = routes_map[route_name]
+
+            # Add stop if present
+            stop_name = row_dict.get("stop_name")
+            stop_lat = row_dict.get("stop_lat")
+            stop_lon = row_dict.get("stop_lon")
+            if stop_name and stop_lat is not None and stop_lon is not None:
+                # Check if stop already exists in this route
+                existing_stop = next(
+                    (s for s in route["stops"] if s["name"] == stop_name), None
+                )
+                if not existing_stop:
+                    route["stops"].append(
+                        {
+                            "name": stop_name,
+                            "lat": float(stop_lat),
+                            "lon": float(stop_lon),
+                            "order": int(
+                                row_dict.get("stop_order") or len(route["stops"])
+                            ),
+                        }
+                    )
+
+            # Add schedule if present
+            sched_label = row_dict.get("schedule_label")
+            sched_start = row_dict.get("schedule_start_time")
+            if sched_label and sched_start:
+                if sched_label not in route["schedules"]:
+                    route["schedules"][sched_label] = {
+                        "label": sched_label,
+                        "start_time": sched_start,
+                        "stop_times": [],
+                    }
+
+                arrival_time = row_dict.get("arrival_time")
+                if arrival_time:
+                    route["schedules"][sched_label]["stop_times"].append(
+                        {"stop_name": stop_name, "arrival_time": arrival_time}
+                    )
+
+        # Convert schedules map to list
+        for route in routes_map.values():
+            route["schedules"] = list(route["schedules"].values())
+            # Sort stops by order
+            route["stops"].sort(key=lambda x: x["order"])
+
+        return list(routes_map.values())
+
+    def _create_route_full(self, data):
+        stops_data = data.pop("stops")
+        schedules_data = data.pop("schedules", [])
+        city_id = data.get("city_id")
+
+        # 1. Create Route Geometry
+        waypoints = [(s["lon"], s["lat"]) for s in stops_data]
+        route_geo = create_route_geometry(waypoints)
+
+        path = route_geo["geometry"] if route_geo else LineString(waypoints, srid=4326)
+        distance = route_geo["total_distance"] if route_geo else 0
+
+        route = Route.objects.create(
+            city_id=city_id,
+            name=data["name"],
+            bus_number=data.get("bus_number", ""),
+            start_name=data.get("start_name", "Start"),
+            end_name=data.get("end_name", "End"),
+            path=path,
+            total_distance_meters=distance,
+            is_public=data.get("is_public", True),
+        )
+
+        # 2. Create Stops
+        stops_map = {}
+        for s in stops_data:
+            stop = Stop.objects.create(
+                route=route,
+                name=s["name"],
+                location=Point(s["lon"], s["lat"], srid=4326),
+                order=s["order"],
+            )
+            stops_map[s["name"]] = stop
+
+        # 3. Create Schedules
+        for s_data in schedules_data:
+            schedule = TripSchedule.objects.create(
+                route=route,
+                label=s_data["label"],
+                scheduled_start_time=s_data["start_time"],
+            )
+
+            # 4. Create StopTimes
+            for st_idx, st_data in enumerate(s_data["stop_times"]):
+                stop = stops_map.get(st_data["stop_name"])
+                if stop:
+                    StopTime.objects.create(
+                        trip_schedule=schedule,
+                        stop=stop,
+                        arrival_time=st_data["arrival_time"],
+                        stop_sequence=st_idx,
+                    )
 
 
 # ─── Driver Views ─────────────────────────────────────────────────────────────
@@ -458,6 +628,22 @@ class DriverStartTripView(APIView):
             status="active",
         )
 
+        # Broadcast trip started alert to driver's user group
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            async_to_sync(channel_layer.group_send)(
+                f"user_{request.user.id}",
+                {
+                    "type": "trip_started",
+                    "trip_id": str(trip.id),
+                    "route_name": route.name,
+                    "message": f"Your trip for route {route.name} has started.",
+                },
+            )
+
         # Increment driver's total trips
         try:
             profile = request.user.driver_profile
@@ -502,19 +688,41 @@ class TripNextStopsView(APIView):
         except ActiveTrip.DoesNotExist:
             return Response({"error": "Trip not found"}, status=404)
 
-        stops = list(trip.route.stops.order_by("order")[:3])
-        result = []
-        for stop in stops:
-            result.append(
-                {
-                    "stop_id": str(stop.id),
-                    "name": stop.name,
-                    "lat": stop.location.y,
-                    "lon": stop.location.x,
-                    "order": stop.order,
-                }
+        return Response(get_next_stops_for_trip(trip))
+
+
+class DriverTripStatusView(APIView):
+    """Compatibility endpoint for the driver console polling loop."""
+
+    def get(self, request, trip_id):
+        try:
+            trip = ActiveTrip.objects.select_related("route", "vehicle", "driver").get(
+                id=trip_id
             )
-        return Response(result)
+        except ActiveTrip.DoesNotExist:
+            return Response({"error": "Trip not found"}, status=404)
+
+        requests = BoardingRequest.objects.filter(
+            trip=trip, status__in=["pending", "approaching", "boarded"]
+        ).select_related("passenger", "pickup_stop")
+
+        return Response(
+            {
+                "trip_id": str(trip.id),
+                "status": trip.status,
+                "next_stops": get_next_stops_for_trip(trip),
+                "passengers": {
+                    str(req.passenger_id): {
+                        "id": str(req.passenger_id),
+                        "name": req.passenger.get_full_name() or req.passenger.email,
+                        "stop_id": str(req.pickup_stop_id),
+                        "stop_name": req.pickup_stop.name,
+                        "status": req.status,
+                    }
+                    for req in requests
+                },
+            }
+        )
 
 
 # ─── Passenger Views ──────────────────────────────────────────────────────────
@@ -560,19 +768,77 @@ class PassengerNearbyStopsView(APIView):
     def get(self, request):
         lat = request.query_params.get("lat")
         lon = request.query_params.get("lon")
-        radius = float(request.query_params.get("radius", 0.01))  # ~1.1km
+        radius = float(
+            request.query_params.get("radius_m")
+            or request.query_params.get("radius", 1500)
+        )
+        if radius <= 1:
+            radius *= 111_320
 
         if not lat or not lon:
             return Response({"error": "lat and lon are required"}, status=400)
 
         p_point = Point(float(lon), float(lat), srid=4326)
-        stops = Stop.objects.filter(
-            location__dwithin=(p_point, radius),
-            route__is_public=True,
-        ).select_related("route")
+        stops = (
+            Stop.objects.filter(
+                location__dwithin=(p_point, radius),
+                route__is_public=True,
+            )
+            .select_related("route")
+            .annotate(distance=Distance("location", p_point))
+            .order_by("distance", "order")[:20]
+        )
 
-        serializer = StopSerializer(stops, many=True)
-        return Response(serializer.data)
+        return Response(
+            [
+                {
+                    **StopSerializer(stop).data,
+                    "route_id": str(stop.route_id),
+                    "route_name": stop.route.name,
+                    "distance_meters": round(stop.distance.m),
+                }
+                for stop in stops
+            ]
+        )
+
+
+class PassengerTripDetailView(APIView):
+    """Return full details for a specific active trip."""
+
+    def get(self, request, trip_id):
+        try:
+            trip = ActiveTrip.objects.select_related("route", "vehicle", "driver").get(
+                id=trip_id
+            )
+        except (ActiveTrip.DoesNotExist, ValueError):
+            return Response({"error": "Trip not found"}, status=404)
+
+        stops = list(trip.route.stops.order_by("order"))
+
+        return Response(
+            {
+                "trip_id": str(trip.id),
+                "bus_number": trip.route.bus_number,
+                "route_name": trip.route.name,
+                "route_geometry": [[y, x] for x, y in trip.route.path.coords],
+                "driver_name": trip.driver.get_full_name() if trip.driver else "",
+                "vehicle_number": (
+                    trip.vehicle.vehicle_number if trip.vehicle else "N/A"
+                ),
+                "stops": [
+                    {
+                        "id": str(s.id),
+                        "name": s.name,
+                        "lat": s.location.y,
+                        "lon": s.location.x,
+                        "order": s.order,
+                    }
+                    for s in stops
+                ],
+                "status": trip.status,
+                "last_updated": trip.last_updated,
+            }
+        )
 
 
 class PassengerDashboardView(APIView):
@@ -625,12 +891,15 @@ class PassengerDashboardView(APIView):
         )
 
 
-from django.db import models
 from django.db.models import F, Q
 from django.db.models.functions import Cast
 from django.contrib.gis.db.models import GeometryField
-from django.contrib.gis.db.models.functions import LineLocatePoint
-from core.services.redis_service import get_redis_client
+from django.contrib.gis.db.models.functions import Distance, LineLocatePoint
+from core.services.redis_service import (
+    get_redis_client,
+    add_recent_search,
+    get_recent_searches,
+)
 
 # Redis setup (sync for view)
 r_client = get_redis_client()
@@ -644,13 +913,25 @@ class PassengerFilteredTripsView(APIView):
     and the vehicle hasn't passed the pickup point yet.
     """
 
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         pickup_data = request.data.get("pickup")  # {lat, lon, name}
         dest_data = request.data.get("destination")  # {lat, lon, name}
         print(f"PassengerFilteredTrips: request pickup={pickup_data}, dest={dest_data}")
 
         if not pickup_data or not dest_data:
-            return Response({"error": "Pickup and destination are required"}, status=400)
+            return Response(
+                {"error": "Pickup and destination are required"}, status=400
+            )
+
+        # Save to recent searches in Redis
+        try:
+            add_recent_search(
+                request.user.id, {"pickup": pickup_data, "destination": dest_data}
+            )
+        except Exception as e:
+            logger.error(f"Failed to save recent search: {e}")
 
         p_lat, p_lon = float(pickup_data["lat"]), float(pickup_data["lon"])
         d_lat, d_lon = float(dest_data["lat"]), float(dest_data["lon"])
@@ -658,34 +939,41 @@ class PassengerFilteredTripsView(APIView):
         d_point = Point(d_lon, d_lat, srid=4326)
 
         # 1. Find candidate routes via multiple strategies
-        radius_m = float(request.data.get("radius_m", 5000)) # Increased default to 5km
+        radius_m = float(request.data.get("radius_m", 5000))  # Increased default to 5km
         routes = Route.objects.none()
 
         # STRATEGY A: Path-based matching (DWithin)
-        routes_geo = Route.objects.filter(
-            Q(path__dwithin=(p_point, radius_m)) & Q(path__dwithin=(d_point, radius_m))
-        ).annotate(
-            p_frac=LineLocatePoint(Cast("path", GeometryField()), p_point),
-            d_frac=LineLocatePoint(Cast("path", GeometryField()), d_point),
-        ).filter(p_frac__lt=F("d_frac") + 0.1) # Increased buffer
-        
+        routes_geo = (
+            Route.objects.filter(
+                Q(path__dwithin=(p_point, radius_m))
+                & Q(path__dwithin=(d_point, radius_m))
+            )
+            .annotate(
+                p_frac=LineLocatePoint(Cast("path", GeometryField()), p_point),
+                d_frac=LineLocatePoint(Cast("path", GeometryField()), d_point),
+            )
+            .filter(p_frac__lt=F("d_frac") + 0.1)
+        )  # Increased buffer
+
         routes = routes_geo
 
         # STRATEGY B: Name-based fallback (Resilient to geocoding differences)
         if not routes.exists() and ("name" in pickup_data or "name" in dest_data):
             p_name = pickup_data.get("name", "").lower()
             d_name = dest_data.get("name", "").lower()
-            
+
             # Match by start/end names or route name - using words for better match
-            p_terms = [t for t in p_name.replace(',', ' ').split() if len(t) > 2]
-            d_terms = [t for t in d_name.replace(',', ' ').split() if len(t) > 2]
-            
+            p_terms = [t for t in p_name.replace(",", " ").split() if len(t) > 2]
+            d_terms = [t for t in d_name.replace(",", " ").split() if len(t) > 2]
+
             if p_terms and d_terms:
                 name_q = Q()
-                for t in p_terms: name_q |= Q(start_name__icontains=t) | Q(name__icontains=t)
+                for t in p_terms:
+                    name_q |= Q(start_name__icontains=t) | Q(name__icontains=t)
                 dest_q = Q()
-                for t in d_terms: dest_q |= Q(end_name__icontains=t) | Q(name__icontains=t)
-                
+                for t in d_terms:
+                    dest_q |= Q(end_name__icontains=t) | Q(name__icontains=t)
+
                 name_routes = Route.objects.filter(name_q & dest_q).annotate(
                     p_frac=LineLocatePoint(Cast("path", GeometryField()), p_point),
                     d_frac=LineLocatePoint(Cast("path", GeometryField()), d_point),
@@ -694,9 +982,13 @@ class PassengerFilteredTripsView(APIView):
 
         # STRATEGY C: Wide Stop Proximity Fallback
         if not routes.exists():
-            wide_radius = radius_m * 2 # 10km fallback
-            p_stop_routes = Stop.objects.filter(location__dwithin=(p_point, wide_radius)).values_list('route_id', flat=True)
-            d_stop_routes = Stop.objects.filter(location__dwithin=(d_point, wide_radius)).values_list('route_id', flat=True)
+            wide_radius = radius_m * 2  # 10km fallback
+            p_stop_routes = Stop.objects.filter(
+                location__dwithin=(p_point, wide_radius)
+            ).values_list("route_id", flat=True)
+            d_stop_routes = Stop.objects.filter(
+                location__dwithin=(d_point, wide_radius)
+            ).values_list("route_id", flat=True)
             common_route_ids = set(p_stop_routes) & set(d_stop_routes)
             if common_route_ids:
                 routes = Route.objects.filter(id__in=common_route_ids).annotate(
@@ -720,12 +1012,29 @@ class PassengerFilteredTripsView(APIView):
                 "route_name": route.name,
                 "pickup_name": route.start_name,
                 "destination_name": route.end_name,
-                "route_geometry": [[y, x] for x, y in route.path.coords] if route.path else [],
-                "path_coords": [[y, x] for x, y in route.path.coords] if route.path else [],
-                "distance_text": f"{round((route.total_distance_meters or 0) / 1000, 1)} km" if route.total_distance_meters else "",
+                "route_geometry": (
+                    [[y, x] for x, y in route.path.coords] if route.path else []
+                ),
+                "path_coords": (
+                    [[y, x] for x, y in route.path.coords] if route.path else []
+                ),
+                "distance_text": (
+                    f"{round((route.total_distance_meters or 0) / 1000, 1)} km"
+                    if route.total_distance_meters
+                    else ""
+                ),
                 "duration_text": "",
                 "stops_count": len(stops),
-                "stops": [{"id": str(s.id), "name": s.name, "lat": s.location.y, "lon": s.location.x, "order": s.order} for s in stops],
+                "stops": [
+                    {
+                        "id": str(s.id),
+                        "name": s.name,
+                        "lat": s.location.y,
+                        "lon": s.location.x,
+                        "order": s.order,
+                    }
+                    for s in stops
+                ],
                 "next_stop": stops[0].name if stops else "N/A",
                 "eta_seconds": 0,
                 "current_lat": p_lat,
@@ -740,31 +1049,46 @@ class PassengerFilteredTripsView(APIView):
         ).select_related("route", "vehicle", "driver")
 
         if not active_trips.exists():
-            print(f"PassengerFilteredTrips: Found {routes.count()} routes, but no active trips within 15m cutoff")
+            print(
+                f"PassengerFilteredTrips: Found {routes.count()} routes, but no active trips within 15m cutoff"
+            )
             return Response([serialize_route_candidate(route) for route in routes])
 
         results = []
-        route_frac_map = {r.id: getattr(r, 'p_frac', 0) for r in routes}
+        route_frac_map = {r.id: getattr(r, "p_frac", 0) for r in routes}
 
         for trip in active_trips:
             # Check Redis for the absolutely most recent position
+            curr_pos = None
             curr_loc_raw = r_client.get(f"driver_pos:{trip.id}")
             if curr_loc_raw:
-                lon, lat = map(float, curr_loc_raw.decode().split(","))
-                curr_pos = (lon, lat)
-            elif trip.current_location:
-                curr_pos = (trip.current_location.x, trip.current_location.y)
-            else:
-                curr_pos = (trip.route.path.coords[0][0], trip.route.path.coords[0][1])
+                try:
+                    # Redis client has decode_responses=True, so curr_loc_raw is already a string
+                    lon_s, lat_s = curr_loc_raw.split(",")
+                    curr_pos = (float(lon_s), float(lat_s))
+                except (ValueError, AttributeError):
+                    curr_pos = None
+            
+            if not curr_pos:
+                if trip.current_location:
+                    curr_pos = (trip.current_location.x, trip.current_location.y)
+                else:
+                    # Fallback to start of route
+                    curr_pos = (trip.route.path.coords[0][0], trip.route.path.coords[0][1])
 
             # DIRECTIONAL CHECK: Has the bus passed the pickup?
             c_point = Point(curr_pos[0], curr_pos[1], srid=4326)
-            
+
             # Annotate current fraction for this trip specifically
-            c_frac_data = Route.objects.filter(id=trip.route_id).annotate(
-                c_frac=LineLocatePoint(Cast("path", GeometryField()), c_point)
-            ).values("c_frac").first()
-            
+            c_frac_data = (
+                Route.objects.filter(id=trip.route_id)
+                .annotate(
+                    c_frac=LineLocatePoint(Cast("path", GeometryField()), c_point)
+                )
+                .values("c_frac")
+                .first()
+            )
+
             curr_frac = c_frac_data["c_frac"] if c_frac_data else 0
             pickup_frac = route_frac_map.get(trip.route_id, 0)
 
@@ -790,31 +1114,71 @@ class PassengerFilteredTripsView(APIView):
                             eta_seconds = durations[idx]
                             break
 
-            results.append({
-                "trip_id": str(trip.id),
-                "route_id": str(trip.route.id),
-                "bus_number": trip.route.bus_number,
-                "vehicle_number": trip.vehicle.vehicle_number if trip.vehicle else "N/A",
-                "route_name": trip.route.name,
-                "pickup_name": trip.route.start_name,
-                "destination_name": trip.route.end_name,
-                "route_geometry": [[y, x] for x, y in trip.route.path.coords] if trip.route.path else [],
-                "path_coords": [[y, x] for x, y in trip.route.path.coords] if trip.route.path else [],
-                "distance_text": f"{round((trip.route.total_distance_meters or 0) / 1000, 1)} km" if trip.route.total_distance_meters else "",
-                "stops_count": trip.route.stops.count(),
-                "stops": [{"id": str(s.id), "name": s.name, "lat": s.location.y, "lon": s.location.x, "order": s.order} for s in stops],
-                "next_stop": next_stop_name,
-                "eta_seconds": eta_seconds,
-                "current_lat": curr_pos[1],
-                "current_lon": curr_pos[0],
-            })
+            results.append(
+                {
+                    "trip_id": str(trip.id),
+                    "route_id": str(trip.route.id),
+                    "bus_number": trip.route.bus_number,
+                    "vehicle_number": (
+                        trip.vehicle.vehicle_number if trip.vehicle else "N/A"
+                    ),
+                    "route_name": trip.route.name,
+                    "pickup_name": trip.route.start_name,
+                    "destination_name": trip.route.end_name,
+                    "route_geometry": (
+                        [[y, x] for x, y in trip.route.path.coords]
+                        if trip.route.path
+                        else []
+                    ),
+                    "path_coords": (
+                        [[y, x] for x, y in trip.route.path.coords]
+                        if trip.route.path
+                        else []
+                    ),
+                    "distance_text": (
+                        f"{round((trip.route.total_distance_meters or 0) / 1000, 1)} km"
+                        if trip.route.total_distance_meters
+                        else ""
+                    ),
+                    "stops_count": trip.route.stops.count(),
+                    "stops": [
+                        {
+                            "id": str(s.id),
+                            "name": s.name,
+                            "lat": s.location.y,
+                            "lon": s.location.x,
+                            "order": s.order,
+                        }
+                        for s in stops
+                    ],
+                    "next_stop": next_stop_name,
+                    "eta_seconds": eta_seconds,
+                    "current_lat": curr_pos[1],
+                    "current_lon": curr_pos[0],
+                }
+            )
 
         if not results:
-            print("PassengerFilteredTrips: Found active trips but none headed towards pickup point")
+            print(
+                "PassengerFilteredTrips: Found active trips but none headed towards pickup point"
+            )
             return Response([serialize_route_candidate(route) for route in routes])
 
         return Response(results)
 
+
+class PassengerRecentSearchesView(APIView):
+    """Returns the last 3 searches for the authenticated passenger."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            searches = get_recent_searches(request.user.id)
+            return Response(searches)
+        except Exception as e:
+            logger.error(f"Failed to fetch recent searches: {e}")
+            return Response([], status=200)
 
 
 # ─── Ingestion Views ──────────────────────────────────────────────────────────

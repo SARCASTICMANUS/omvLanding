@@ -293,3 +293,34 @@ class BoardingRequestSerializer(serializers.ModelSerializer):
 class OTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
     otp = serializers.CharField(max_length=6, required=False)
+
+
+# ─── Bulk Import Serializers ──────────────────────────────────────────────────
+
+class ImportStopSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255)
+    lat = serializers.FloatField()
+    lon = serializers.FloatField()
+    order = serializers.IntegerField(default=0)
+
+
+class ImportStopTimeSerializer(serializers.Serializer):
+    stop_name = serializers.CharField(max_length=255)
+    arrival_time = serializers.TimeField()
+
+
+class ImportScheduleSerializer(serializers.Serializer):
+    label = serializers.CharField(max_length=100)
+    start_time = serializers.TimeField()
+    stop_times = ImportStopTimeSerializer(many=True, required=False, default=[])
+
+
+class ImportRouteSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=255)
+    bus_number = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
+    city_id = serializers.UUIDField(required=False, allow_null=True)
+    start_name = serializers.CharField(max_length=255, required=False, allow_blank=True, default="Start")
+    end_name = serializers.CharField(max_length=255, required=False, allow_blank=True, default="End")
+    is_public = serializers.BooleanField(default=True)
+    stops = ImportStopSerializer(many=True)
+    schedules = ImportScheduleSerializer(many=True, required=False, default=[])
