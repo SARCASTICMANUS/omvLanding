@@ -28,20 +28,23 @@ import {
   getDistance,
   getStopLngLat,
 } from "../../components/map/utils/routeGeometry";
+import MobileBackButton from "../../components/Layout/MobileBackButton";
+
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Real Map Implementation using MapLibre
    ───────────────────────────────────────────────────────────────────────────── */
 function LiveMap({ path, currentPos, is3D, isSatellite, mapRef }) {
   const mapContainer = useRef(null);
-  const map = useRef(null);
+  const isInitialized = useRef(false);
   const markers = useRef({});
   const prevPos = useRef(null);
 
+  // Initialize Map Instance
   useEffect(() => {
-    if (!mapContainer.current || map.current) return;
-
-    map.current = new maplibregl.Map({
+    if (isInitialized.current) return;
+    
+    mapRef.current = new maplibregl.Map({
       container: mapContainer.current,
       style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
       center: currentPos || (path && path[0]) || [77.209, 28.6139],
@@ -50,95 +53,82 @@ function LiveMap({ path, currentPos, is3D, isSatellite, mapRef }) {
       bearing: 0,
     });
 
-    if (mapRef) mapRef.current = map.current;
-
-    map.current.on('load', () => {
+    mapRef.current.on('load', () => {
       // Add route line
-      if (!map.current.getSource('route')) {
-        map.current.addSource('route', {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            geometry: { type: 'LineString', coordinates: path || [] }
-          }
-        });
-        map.current.addLayer({
-          id: 'route',
-          type: 'line',
-          source: 'route',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: { 'line-color': '#009849', 'line-width': 8, 'line-opacity': 0.6 }
-        });
-      }
+      mapRef.current.addSource('route', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: path || [] }
+        }
+      });
+      mapRef.current.addLayer({
+        id: 'route',
+        type: 'line',
+        source: 'route',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#009849', 'line-width': 8, 'line-opacity': 0.6 }
+      });
       
       // Satellite source setup
-      if (!map.current.getSource('satellite')) {
-        map.current.addSource('satellite', {
-          type: 'raster',
-          tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-          tileSize: 256
-        });
-        map.current.addLayer({
-          id: 'satellite',
-          type: 'raster',
-          source: 'satellite',
-          layout: { visibility: isSatellite ? 'visible' : 'none' }
-        }, 'route'); 
-      }
+      mapRef.current.addSource('satellite', {
+        type: 'raster',
+        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+        tileSize: 256
+      });
+      mapRef.current.addLayer({
+        id: 'satellite',
+        type: 'raster',
+        source: 'satellite',
+        layout: { visibility: isSatellite ? 'visible' : 'none' }
+      }, 'route'); 
       
       if (path && path.length > 0) {
         const bounds = new maplibregl.LngLatBounds(path[0], path[0]);
         path.forEach(p => bounds.extend(p));
-        map.current.fitBounds(bounds, { padding: 50 });
+        mapRef.current.fitBounds(bounds, { padding: 50 });
       }
+      isInitialized.current = true;
     });
 
     return () => {
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        isInitialized.current = false;
       }
     };
-  }, []);
+  }, []); // Only on mount
 
-  // Sync 3D/Satellite View
+  // Update logic
   useEffect(() => {
-    if (!map.current || !map.current.isStyleLoaded()) return;
-    
-    map.current.easeTo({
-      pitch: is3D ? 60 : 0,
-      duration: 1000
-    });
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
 
-    if (map.current.getLayer('satellite')) {
-      map.current.setLayoutProperty('satellite', 'visibility', isSatellite ? 'visible' : 'none');
+    // Update 3D/Satellite View
+    map.easeTo({ pitch: is3D ? 60 : 0, duration: 1000 });
+    if (map.getLayer('satellite')) {
+      map.setLayoutProperty('satellite', 'visibility', isSatellite ? 'visible' : 'none');
     }
-  }, [is3D, isSatellite]);
 
-  // Sync route path updates
-  useEffect(() => {
-    if (!map.current || !map.current.isStyleLoaded() || !path) return;
-    const source = map.current.getSource('route');
-    if (source) {
-      source.setData({
-        type: 'Feature',
-        geometry: { type: 'LineString', coordinates: path }
-      });
+    // Sync route path updates
+    if (path) {
+      const source = map.getSource('route');
+      if (source) {
+        source.setData({
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: path }
+        });
+      }
     }
-  }, [path]);
 
-  // Sync markers and vehicle position
-  useEffect(() => {
-    if (!map.current || !map.current.isStyleLoaded()) return;
-
-    // Bus Marker logic
+    // Sync markers and vehicle position
     if (currentPos) {
       let bearing = 0;
       if (prevPos.current) {
         const [lon1, lat1] = prevPos.current;
         const [lon2, lat2] = currentPos;
         if (lon1 !== lon2 || lat1 !== lat2) {
-          // Standard bearing calculation
           const y = Math.sin((lon2 - lon1) * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180);
           const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
                     Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos((lon2 - lon1) * Math.PI / 180);
@@ -160,38 +150,30 @@ function LiveMap({ path, currentPos, is3D, isSatellite, mapRef }) {
             </div>
           </div>
         `;
-        markers.current.bus = new maplibregl.Marker({ element: el }).setLngLat(currentPos).addTo(map.current);
+        markers.current.bus = new maplibregl.Marker({ element: el }).setLngLat(currentPos).addTo(map);
       } else {
         markers.current.bus.setLngLat(currentPos);
       }
 
       const model = markers.current.bus.getElement().querySelector('.bus-model');
-      if (model) {
-        model.style.transform = `rotate(${bearing}deg)`;
-      }
+      if (model) model.style.transform = `rotate(${bearing}deg)`;
 
-      // Smooth camera follow
-      map.current.easeTo({ 
-        center: currentPos, 
-        bearing: is3D ? bearing : 0, 
-        duration: 1500,
-        zoom: is3D ? 17 : 15
-      });
+      map.easeTo({ center: currentPos, bearing: is3D ? bearing : 0, duration: 1500, zoom: is3D ? 17 : 15 });
     }
 
-    // Destination Marker logic
+    // Destination Marker
     if (path && path.length > 0) {
       const dest = path[path.length - 1];
       if (!markers.current.dest) {
         const el = document.createElement('div');
         el.className = 'flex items-center justify-center bg-red-500 text-white w-8 h-8 rounded-full border-2 border-white shadow-lg';
         el.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>`;
-        markers.current.dest = new maplibregl.Marker({ element: el }).setLngLat(dest).addTo(map.current);
+        markers.current.dest = new maplibregl.Marker({ element: el }).setLngLat(dest).addTo(map);
       } else {
         markers.current.dest.setLngLat(dest);
       }
     }
-  }, [currentPos, path, is3D]);
+  }, [currentPos, path, is3D, isSatellite]);
 
   return <div ref={mapContainer} className="w-full h-full block relative" />;
 }
@@ -377,7 +359,7 @@ export default function DriverLiveTracking({ route, activeTrip, onBack }) {
   const MobileView = () => (
     <div className="flex flex-col h-screen bg-gray-50 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-100">
-        <button onClick={onBack} className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center"><ArrowLeft size={20} /></button>
+        <div className="w-10 h-10" />
         <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-gray-200 bg-gray-50">
           <span className="w-2 h-2 rounded-full bg-[#009849]" />
           <span className="text-xs font-bold text-[#009849]">ONLINE</span>
@@ -450,6 +432,7 @@ export default function DriverLiveTracking({ route, activeTrip, onBack }) {
 
   return (
     <div className="font-sans">
+      {isMobile && <MobileBackButton onClick={onBack} />}
       {isMobile ? <MobileView /> : <DesktopView />}
     </div>
   );

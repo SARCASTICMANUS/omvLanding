@@ -13,6 +13,8 @@ import {
   ChevronDown,
   User,
 } from "lucide-react";
+import MobileBackButton from "../../../components/Layout/MobileBackButton";
+
 
 /* ─────────────────────────────────────────────
    HELPER — derive display values from selectedTrip
@@ -605,6 +607,7 @@ export default function PassengerStopsTimeline({
   return (
     <>
       <style>{css}</style>
+      <MobileBackButton onClick={onBack} />
       <div
         className="pst-root"
         style={{
@@ -621,23 +624,6 @@ export default function PassengerStopsTimeline({
         ══════════════════════════════════ */}
         <div style={{ padding: "4px 24px 0", maxWidth: 1400, width: "100%", margin: "-20px auto 0" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-            {/* Back btn — desktop only (mobile uses navbar) */}
-            <button
-              type="button"
-              onClick={onBack}
-              className="pst-mobile-header"
-              style={{
-                display: "none", /* shown only desktop via CSS override below */
-                width: 40, height: 40, borderRadius: "50%",
-                border: "1.5px solid #e5e7eb", background: "white",
-                alignItems: "center", justifyContent: "center",
-                cursor: "pointer", flexShrink: 0,
-                boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
-              }}
-            >
-              <ArrowLeft size={18} color="#374151" strokeWidth={2.2} />
-            </button>
-
             {/* Desktop back btn */}
             <button
               type="button"
@@ -744,7 +730,7 @@ export default function PassengerStopsTimeline({
             display: "none",
             flexDirection: "column",
             gap: 14,
-            padding: "0 16px 100px", /* 100px for sticky CTA */
+            padding: "0 16px 140px", /* 140px for sticky CTA */
             maxWidth: 480,
             width: "100%",
             margin: "0 auto",

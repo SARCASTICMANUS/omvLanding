@@ -45,7 +45,6 @@ router.register(r"boarding-requests", BoardingRequestViewSet)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/", include(router.urls)),
     # ─── Social Auth ──────────────────────
     path("api/dj-rest-auth/", include("dj_rest_auth.urls")),
     path("api/dj-rest-auth/registration/", include("dj_rest_auth.registration.urls")),
@@ -71,6 +70,7 @@ urlpatterns = [
     path("api/admin/routes/bulk-import/", BulkImportView.as_view()),
     path("api/routes/", AdminRouteView.as_view()),  # Alias for driver/passenger GET
     # ── Driver ────────────────────────────────────────────────────────────────
+    path("api/driver/recent-searches/", PassengerRecentSearchesView.as_view()),
     path("api/driver/routes/", DriverStartTripView.as_view()),
     path("api/driver/start-trip/", DriverStartTripView.as_view()),
     path("api/driver/trip-status/<str:trip_id>/", DriverTripStatusView.as_view()),
@@ -78,16 +78,18 @@ urlpatterns = [
     path("api/trips/end/<str:trip_id>/", TripEndView.as_view()),
     path("api/trips/next-stops/<str:trip_id>/", TripNextStopsView.as_view()),
     # ── Passenger ─────────────────────────────────────────────────────────────
+    path("api/passenger/recent-searches/", PassengerRecentSearchesView.as_view()),
     path("api/passenger/match/", PassengerMatchView.as_view()),
     path("api/passenger/nearby-stops/", PassengerNearbyStopsView.as_view()),
     path("api/passenger/dashboard/", PassengerDashboardView.as_view()),
     path("api/passenger/filtered-trips/", PassengerFilteredTripsView.as_view()),
-    path("api/passenger/recent-searches/", PassengerRecentSearchesView.as_view()),
     path("api/passenger/trips/<str:trip_id>/", PassengerTripDetailView.as_view()),
     # ── Telemetry ─────────────────────────────────────────────────────────────
     path("api/telemetry/ingest/", TelemetryIngestView.as_view()),
     # Legacy aliases (keep existing frontend working during transition)
     path("api/student/dashboard/", PassengerDashboardView.as_view()),
+    # ── Router (Fallthrough) ──────────────────────────────────────────────────
+    path("api/", include(router.urls)),
 ]
 
 if settings.DEBUG:

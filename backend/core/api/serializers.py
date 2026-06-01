@@ -65,6 +65,7 @@ class PassengerProfileSerializer(serializers.ModelSerializer):
             "user",
             "display_name",
             "phone_number",
+            "bio",
             "profile_photo",
             "last_active_at",
         )
@@ -82,6 +83,7 @@ class PublicDriverProfileSerializer(serializers.ModelSerializer):
             "user",
             "display_name",
             "phone_number",
+            "bio",
             "license_number",
             "vehicle_number",
             "vehicle_type",

@@ -10,15 +10,14 @@ import RegisterPage from "../pages/RegisterPage";
 import PassengerLivePage from "../pages/PassengerLivePage";
 import DriverProfileUpdate from "../pages/DriverProfileUpdate";
 import PassengerProfileUpdate from "../pages/PassengerProfileUpdate";
+import ProfilePage from "../pages/ProfilePage";
 import AboutPage from "../pages/AboutPage";
+import NotificationsPage from "../pages/NotificationsPage";
 import ContactUsPage from "../pages/ContactUsPage";
 import RoutesPage from "../pages/RoutesPage";
-import {
-  SplashScreen1 as IntroPage,
-  SplashScreen2,
-  SplashScreen3,
-  SplashScreen4,
-} from "../components/onboarding";
+import HomeVayy from "../pages/HomeVayy";
+import AllBusesPage from "../pages/AllBusesPage";
+import TrackingPage from "../pages/TrackingPage";
 import { ProtectedAdmin, ProtectedRoute, PublicRoute } from "./guards";
 
 export const appRouteConfig = [
@@ -69,6 +68,26 @@ export const appRouteConfig = [
     ),
   },
   {
+    path: APP_ROUTES.allBuses,
+    element: (
+      <ProtectedRoute allowedRoles={PASSENGER_ROLES}>
+        <AppLayout>
+          <AllBusesPage />
+        </AppLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: APP_ROUTES.tracking,
+    element: (
+      <ProtectedRoute allowedRoles={PASSENGER_ROLES}>
+        <AppLayout>
+          <TrackingPage />
+        </AppLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: APP_ROUTES.driverProfileUpdate,
     element: (
       <ProtectedRoute allowedRoles={[USER_ROLES.driver]}>
@@ -89,47 +108,26 @@ export const appRouteConfig = [
     ),
   },
   {
+    path: APP_ROUTES.profile,
+    element: (
+      <ProtectedRoute allowedRoles={[...PASSENGER_ROLES, USER_ROLES.driver]}>
+        <AppLayout>
+          <ProfilePage />
+        </AppLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: APP_ROUTES.root,
     element: (
-      <PublicRoute>
-        <AppLayout>
-          <IntroPage />
-        </AppLayout>
-      </PublicRoute>
-    ),
-  },
-  {
-    path: APP_ROUTES.splash2,
-    element: (
-      <PublicRoute>
-        <AppLayout>
-          <SplashScreen2 />
-        </AppLayout>
-      </PublicRoute>
-    ),
-  },
-  {
-    path: APP_ROUTES.splash3,
-    element: (
-      <PublicRoute>
-        <AppLayout>
-          <SplashScreen3 />
-        </AppLayout>
-      </PublicRoute>
-    ),
-  },
-  {
-    path: APP_ROUTES.splash4,
-    element: (
-      <PublicRoute>
-        <AppLayout>
-          <SplashScreen4 />
-        </AppLayout>
-      </PublicRoute>
+      <AppLayout flush={false}>
+        <HomeVayy />
+      </AppLayout>
     ),
   },
   { path: APP_ROUTES.about, element: <AppLayout><AboutPage /></AppLayout> },
   { path: APP_ROUTES.contact, element: <AppLayout><ContactUsPage /></AppLayout> },
   { path: APP_ROUTES.routes, element: <AppLayout><RoutesPage /></AppLayout> },
+  { path: "/notifications", element: <AppLayout><NotificationsPage /></AppLayout> },
   { path: "*", element: <Navigate to={APP_ROUTES.root} replace /> },
 ];

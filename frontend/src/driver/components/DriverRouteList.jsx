@@ -18,6 +18,7 @@ import {
   buildRouteSummary,
   estimateStopTimeline,
 } from "./driverFlowUtils";
+import { MobileBackButton } from "../../components/Layout";
 
 /* ─────────────────────────────────────────────
    CSS
@@ -450,6 +451,7 @@ export default function DriverRouteList({
 
   return (
     <>
+      <MobileBackButton onClick={onBack} />
       <style>{CSS}</style>
       <div
         className="drl-root"
@@ -474,10 +476,11 @@ export default function DriverRouteList({
               <button
                 type="button"
                 onClick={onBack}
+                className="hidden lg:flex"
                 style={{
                   width: 44, height: 44, borderRadius: 14,
                   border: "1.5px solid #e5e7eb", background: "white",
-                  display: "flex", alignItems: "center", justifyContent: "center",
+                  alignItems: "center", justifyContent: "center",
                   cursor: "pointer", flexShrink: 0, marginTop: 4,
                   boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
                 }}

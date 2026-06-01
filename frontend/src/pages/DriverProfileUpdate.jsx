@@ -2,17 +2,21 @@ import React, { useEffect, useState } from "react";
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { fetchProfile, updateDriverProfile } from "../features/profile/profileSlice";
-import { Loader2, ArrowLeft, Save, User, Phone, CreditCard, Bus, ChevronDown } from "lucide-react";
+import { fetchProfile, updateDriverProfile, updateUser, clearProfileError } from "../features/profile/profileSlice";
+import { Loader2, ArrowLeft, Save, User, Phone, CreditCard, Bus, AlertCircle } from "lucide-react";
+import MobileBackButton from "../components/Layout/MobileBackButton";
 
 const DriverProfileUpdate = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { data: profile, loading, updateLoading } = useSelector((state) => state.profile);
+  const { data: profile, loading, updateLoading, updateError } = useSelector((state) => state.profile);
 
   const [formData, setFormData] = useState({
+    first_name: "",
+    last_name: "",
     display_name: "",
     phone_number: "",
+    bio: "",
     license_number: "",
     vehicle_number: "",
     vehicle_type: "bus",
@@ -21,16 +25,25 @@ const DriverProfileUpdate = () => {
   useEffect(() => {
     if (!profile) {
       dispatch(fetchProfile());
-    } else if (profile.role === "driver") {
+    } else {
       setFormData({
+        first_name: profile.first_name || "",
+        last_name: profile.last_name || "",
         display_name: profile.profile?.display_name || "",
-        phone_number: profile.profile?.phone_number || "",
+        phone_number: profile.profile?.phone_number || profile.phone_number || "",
+        bio: profile.profile?.bio || "",
         license_number: profile.profile?.license_number || "",
         vehicle_number: profile.profile?.vehicle_number || "",
         vehicle_type: profile.profile?.vehicle_type || "bus",
       });
     }
   }, [profile, dispatch]);
+
+  useEffect(() => {
+    return () => {
+      dispatch(clearProfileError());
+    };
+  }, [dispatch]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -39,167 +52,215 @@ const DriverProfileUpdate = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const resultAction = await dispatch(updateDriverProfile({ id: profile.profile.id, data: formData }));
-    if (updateDriverProfile.fulfilled.match(resultAction)) {
+    if (!profile) return;
+
+    try {
+      // 1. Update User model
+      const userResult = await dispatch(updateUser({ 
+        id: profile.id, 
+        data: { 
+          first_name: formData.first_name, 
+          last_name: formData.last_name 
+        } 
+      }));
+
+      if (updateUser.rejected.match(userResult)) return;
+
+      // 2. Update Driver Profile model
+      if (profile.profile?.id) {
+        const profileResult = await dispatch(updateDriverProfile({ 
+          id: profile.profile.id, 
+          data: {
+            display_name: formData.display_name,
+            phone_number: formData.phone_number,
+            bio: formData.bio,
+            license_number: formData.license_number,
+            vehicle_number: formData.vehicle_number,
+            vehicle_type: formData.vehicle_type,
+          } 
+        }));
+
+        if (updateDriverProfile.rejected.match(profileResult)) return;
+      }
+
+      // 3. Re-fetch full profile
+      await dispatch(fetchProfile());
+
       navigate("/profile");
+    } catch (err) {
+      console.error("Update failed", err);
     }
   };
 
   if (loading && !profile) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#009849]" />
       </div>
     );
   }
 
-  if (profile && profile.role !== "driver") {
-    return <div className="p-8 text-center">Unauthorized. Only drivers can access this page.</div>;
-  }
-
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
+    <div className="max-w-3xl mx-auto px-4 py-8">
+      <MobileBackButton />
       <button 
         onClick={() => navigate(-1)}
-        className="mb-6 flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+        className="mb-6 hidden lg:flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
       >
         <ArrowLeft size={16} /> Back
       </button>
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-gray-100">
+        <div className="p-6 border-b border-gray-100 bg-gray-50/50">
           <h2 className="text-xl font-bold text-gray-900">Update Driver Profile</h2>
           <p className="text-sm text-gray-500 mt-1">
-            Update your personal and vehicle information to keep your profile accurate.
+            Manage your personal and vehicle information.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label htmlFor="display_name" className="text-sm font-semibold text-gray-700">
-                Full Name
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  id="display_name"
-                  name="display_name"
-                  value={formData.display_name}
-                  onChange={handleInputChange}
-                  placeholder="John Doe"
-                  required
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="phone_number" className="text-sm font-semibold text-gray-700">
-                Phone Number
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Phone className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
-                  type="tel"
-                  id="phone_number"
-                  name="phone_number"
-                  value={formData.phone_number}
-                  onChange={handleInputChange}
-                  placeholder="+91 9876543210"
-                  required
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
-                />
-              </div>
+        {updateError && (
+          <div className="m-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-600 text-sm">
+            <AlertCircle size={18} className="shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Update Failed</p>
+              <p>{typeof updateError === 'string' ? updateError : JSON.stringify(updateError)}</p>
             </div>
           </div>
+        )}
 
-          <div className="space-y-2">
-            <label htmlFor="license_number" className="text-sm font-semibold text-gray-700">
-              License Number
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <CreditCard className="h-4 w-4 text-gray-400" />
+        <form onSubmit={handleSubmit} className="p-6 space-y-8">
+          {/* Section: Personal Info */}
+          <div className="space-y-6">
+            <h3 className="text-sm font-bold text-[#009849] uppercase tracking-wider">Personal Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700">First Name</label>
+                <input
+                  type="text"
+                  name="first_name"
+                  value={formData.first_name}
+                  onChange={handleInputChange}
+                  required
+                  className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#009849] focus:border-transparent text-sm"
+                />
               </div>
-              <input
-                type="text"
-                id="license_number"
-                name="license_number"
-                value={formData.license_number}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700">Last Name</label>
+                <input
+                  type="text"
+                  name="last_name"
+                  value={formData.last_name}
+                  onChange={handleInputChange}
+                  required
+                  className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#009849] focus:border-transparent text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700">Display Name</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    name="display_name"
+                    value={formData.display_name}
+                    onChange={handleInputChange}
+                    className="block w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#009849] focus:border-transparent text-sm"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700">Phone Number</label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <input
+                    type="tel"
+                    name="phone_number"
+                    value={formData.phone_number}
+                    onChange={handleInputChange}
+                    required
+                    className="block w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#009849] focus:border-transparent text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700">Bio</label>
+              <textarea
+                name="bio"
+                value={formData.bio}
                 onChange={handleInputChange}
-                placeholder="DL-XXXXXXXXXXXX"
-                required
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                rows={3}
+                className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#009849] focus:border-transparent text-sm"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label htmlFor="vehicle_number" className="text-sm font-semibold text-gray-700">
-                Vehicle Number
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Bus className="h-4 w-4 text-gray-400" />
+          {/* Section: Professional Info */}
+          <div className="space-y-6 pt-6 border-t border-gray-100">
+            <h3 className="text-sm font-bold text-[#009849] uppercase tracking-wider">Vehicle & License</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700">License Number</label>
+                <div className="relative">
+                  <CreditCard className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    name="license_number"
+                    value={formData.license_number}
+                    onChange={handleInputChange}
+                    className="block w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#009849] focus:border-transparent text-sm"
+                  />
                 </div>
-                <input
-                  type="text"
-                  id="vehicle_number"
-                  name="vehicle_number"
-                  value={formData.vehicle_number}
-                  onChange={handleInputChange}
-                  placeholder="MH-12-AB-1234"
-                  required
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
-                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700">Vehicle Number</label>
+                <div className="relative">
+                  <Bus className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    name="vehicle_number"
+                    value={formData.vehicle_number}
+                    onChange={handleInputChange}
+                    className="block w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#009849] focus:border-transparent text-sm"
+                  />
+                </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="vehicle_type" className="text-sm font-semibold text-gray-700">
-                Vehicle Type
-              </label>
-              <div className="relative">
-                <select
-                  id="vehicle_type"
-                  name="vehicle_type"
-                  value={formData.vehicle_type}
-                  onChange={handleInputChange}
-                  className="block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm bg-white"
-                >
-                  <option value="bus">Bus</option>
-                  <option value="van">Van</option>
-                  <option value="minibus">Minibus</option>
-                  <option value="car">Car</option>
-                  <option value="auto">Auto-Rickshaw</option>
-                  <option value="tempo">Tempo Traveller</option>
-                </select>
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                  <ChevronDown className="h-4 w-4 text-gray-400" />
-                </div>
-              </div>
+              <label className="text-sm font-semibold text-gray-700">Vehicle Type</label>
+              <select
+                name="vehicle_type"
+                value={formData.vehicle_type}
+                onChange={handleInputChange}
+                className="block w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#009849] focus:border-transparent text-sm appearance-none bg-white"
+              >
+                <option value="bus">Bus</option>
+                <option value="van">Van</option>
+                <option value="minibus">Minibus</option>
+                <option value="car">Car</option>
+                <option value="auto">Auto-Rickshaw</option>
+                <option value="tempo">Tempo Traveller</option>
+              </select>
             </div>
           </div>
 
-          <div className="pt-4 flex items-center justify-end gap-3 border-t border-gray-100">
+          <div className="pt-6 flex items-center justify-end gap-3 border-t border-gray-100">
             <button
               type="button"
               onClick={() => navigate(-1)}
-              className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              className="px-6 py-2.5 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={updateLoading}
-              className="flex items-center gap-2 px-6 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-8 py-2.5 text-sm font-bold text-white bg-[#009849] rounded-xl hover:bg-[#007a3d] transition-colors disabled:opacity-50 shadow-lg shadow-green-100"
             >
               {updateLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

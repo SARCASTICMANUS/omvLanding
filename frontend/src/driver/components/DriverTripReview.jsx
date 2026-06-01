@@ -17,6 +17,8 @@ import {
   Users,
 } from "lucide-react";
 import { buildRouteSummary } from "./driverFlowUtils";
+import MobileBackButton from "../../components/Layout/MobileBackButton";
+
 
 /* ─────────────────────────────────────────────
    CSS
@@ -24,7 +26,7 @@ import { buildRouteSummary } from "./driverFlowUtils";
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
 
-  .dtr { font-family: 'Plus Jakarta Sans', sans-serif; }
+  .dtr { font-family: 'Plus Jakarta Sans', sans-serif; }still
   .dtr * { box-sizing: border-box; }
 
   .dtr-line { display: flex; align-items: center; margin: 12px 0 10px; }
@@ -406,7 +408,8 @@ export default function DriverTripReview({
   return (
     <>
       <style>{CSS}</style>
-      <div className="dtr" style={{ minHeight: "100vh", background: "#F8FAF9", paddingBottom: 80 }}>
+      <MobileBackButton onClick={onBack} />
+      <div className="dtr" style={{ minHeight: "100vh", background: "#F8FAF9", paddingBottom: 120 }}>
         <div style={{
           maxWidth: 1360, width: "100%", margin: "0 auto",
           padding: "28px 20px 32px",
@@ -416,7 +419,7 @@ export default function DriverTripReview({
           {/* Header */}
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-              <button type="button" onClick={onBack} style={{
+              <button type="button" onClick={onBack} className="dtr-desk" style={{
                 width: 40, height: 40, borderRadius: "50%",
                 border: "1.5px solid #e5e7eb", background: "white",
                 display: "flex", alignItems: "center", justifyContent: "center",

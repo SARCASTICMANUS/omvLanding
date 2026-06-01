@@ -284,6 +284,7 @@ class PublicPassengerProfile(models.Model):
     )
     display_name = models.CharField(max_length=255, default="", blank=True)
     phone_number = models.CharField(max_length=20, default="", blank=True)
+    bio = models.TextField(default="", blank=True)
     profile_photo = models.CharField(max_length=500, default="", blank=True)  # S3 URL
     home_location = gis_models.PointField(srid=4326, null=True, blank=True)
     current_location = gis_models.PointField(srid=4326, null=True, blank=True)
@@ -360,6 +361,7 @@ class PublicDriverProfile(models.Model):
     )
     display_name = models.CharField(max_length=255, default="", blank=True)
     phone_number = models.CharField(max_length=20, default="", blank=True)
+    bio = models.TextField(default="", blank=True)
     license_number = models.CharField(
         max_length=100, unique=True, null=True, blank=True, default=None
     )

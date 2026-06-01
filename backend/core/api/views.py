@@ -1168,17 +1168,34 @@ class PassengerFilteredTripsView(APIView):
 
 
 class PassengerRecentSearchesView(APIView):
-    """Returns the last 3 searches for the authenticated passenger."""
+    """Returns or saves the last 3 searches for the authenticated user."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
             searches = get_recent_searches(request.user.id)
+            print(f"DEBUG: Fetched {len(searches)} searches for user {request.user.id}")
             return Response(searches)
         except Exception as e:
             logger.error(f"Failed to fetch recent searches: {e}")
             return Response([], status=200)
+
+    def post(self, request):
+        """Allows manual saving of a recent search."""
+        try:
+            pickup = request.data.get("pickup") or request.data.get("source")
+            destination = request.data.get("destination")
+            print(f"DEBUG: Saving search for user {request.user.id}: pickup={pickup}, dest={destination}")
+            if pickup and destination:
+                add_recent_search(
+                    request.user.id, {"pickup": pickup, "destination": destination}
+                )
+                return Response({"status": "saved"})
+            return Response({"error": "pickup and destination required"}, status=400)
+        except Exception as e:
+            logger.error(f"Failed to save recent search: {e}")
+            return Response({"error": str(e)}, status=500)
 
 
 # ─── Ingestion Views ──────────────────────────────────────────────────────────

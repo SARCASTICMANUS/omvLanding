@@ -162,6 +162,10 @@ export default function DriverFlow() {
     setActiveTrip(null);
     dispatch(resetDriverState());
 
+    // Save to recent searches - using passenger endpoint as a known working path
+    api.post("/api/passenger/recent-searches/", { pickup: from, destination: to })
+      .catch(err => console.error("Failed to save recent search", err));
+
     try {
       setLoadingRoutes(true);
       dispatch(setDriverLoading(true));

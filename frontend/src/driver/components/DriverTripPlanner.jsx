@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   ArrowUpDown,
   Bus,
+  Clock,
   Clock3,
   Crosshair,
   MapPin,
@@ -11,6 +12,7 @@ import {
   TrafficCone,
 } from "lucide-react";
 import { LocationSearch } from "../../components/map";
+import api from "../../lib/api";
 import splashScreen1 from "../../assets/SplashScreen1.png";
 import { hasValidCoords } from "./driverFlowUtils";
 
@@ -62,6 +64,33 @@ function FeatureItem({ icon: Icon, title, copy }) {
   );
 }
 
+function RecentSearchItem({ search, onClick }) {
+  const pickup = search.pickup || search.source;
+  const destination = search.destination;
+
+  const pickupLabel = pickup?.name || pickup?.display_name?.split(",")[0] || "Unknown Start";
+  const destLabel = destination?.name || destination?.display_name?.split(",")[0] || "Unknown End";
+
+  return (
+    <button
+      onClick={() => onClick(search)}
+      className="group flex w-full items-center gap-3 rounded-[12px] border border-[#f0f3f6] bg-white p-3 text-left transition hover:border-[#079f4f] hover:bg-[#f8fbfa] hover:shadow-sm"
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f1f5f9] text-[#64748b] group-hover:bg-[#dff4ea] group-hover:text-[#079f4f]">
+        <Clock size={16} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13px] font-bold text-[#1e293b]">
+          {pickupLabel}
+        </div>
+        <div className="truncate text-[11px] font-medium text-[#64748b]">
+          To: {destLabel}
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export default function DriverTripPlanner({
   onNext,
   loading = false,
@@ -71,6 +100,16 @@ export default function DriverTripPlanner({
 }) {
   const [source, setSource] = useState(initialSource);
   const [destination, setDestination] = useState(initialDestination);
+  const [recentSearches, setRecentSearches] = useState([]);
+
+  useEffect(() => {
+    // Fetch recent searches - using passenger endpoint as a known working path
+    api.get("/api/passenger/recent-searches/")
+      .then(res => {
+        setRecentSearches(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch(err => console.error("Failed to fetch recent searches", err));
+  }, []);
 
   const canProceed = useMemo(
     () => hasValidCoords(source) && hasValidCoords(destination),
@@ -85,6 +124,11 @@ export default function DriverTripPlanner({
   const handleNext = () => {
     if (!canProceed || loading) return;
     onNext?.({ from: source, to: destination });
+  };
+
+  const handleRecentClick = (search) => {
+    setSource(search.pickup || search.source);
+    setDestination(search.destination);
   };
 
   return (
@@ -157,7 +201,28 @@ export default function DriverTripPlanner({
               {loading ? "Searching Routes..." : "Search Saved Routes"}
             </button>
 
-            <div className="mt-8 rounded-[18px] border border-[#ebf2ed] bg-[#f6fbf8] p-4">
+            {/* Recent Searches Section */}
+            {recentSearches.length > 0 && (
+              <div className="mt-8">
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="text-[13px] font-black uppercase tracking-widest text-[#94a3b8]">
+                    Recent Trips
+                  </span>
+                  <div className="h-px flex-1 bg-[#f1f5f9] ml-4" />
+                </div>
+                <div className="space-y-2">
+                  {recentSearches.map((search, idx) => (
+                    <RecentSearchItem
+                      key={idx}
+                      search={search}
+                      onClick={handleRecentClick}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* <div className="mt-8 rounded-[18px] border border-[#ebf2ed] bg-[#f6fbf8] p-4">
               <div className="mb-3 flex items-center gap-2">
                 <Route size={16} className="text-[#079f4f]" />
                 <span className="text-[13px] font-black uppercase tracking-widest text-[#5f6f83]">
@@ -169,45 +234,9 @@ export default function DriverTripPlanner({
                 <li>Review route cards, timings, stop count, and live status.</li>
                 <li>Confirm the route and start live bus operations.</li>
               </ul>
-            </div>
+            </div> */}
 
-            {onOpenPreview && (
-              <div className="mt-6 rounded-[18px] border border-dashed border-[#cfe4d5] bg-[#fbfefd] p-4">
-                <span className="text-[13px] font-black uppercase tracking-widest text-[#94a3b8]">
-                  Temporary Preview
-                </span>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => onOpenPreview("routes")}
-                    className="rounded-[12px] border border-[#dce7df] bg-white px-4 py-3 text-left text-[12px] font-bold text-[#1e293b] transition hover:border-[#079f4f] hover:bg-[#f8fbfa]"
-                  >
-                    Preview Route List
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onOpenPreview("review")}
-                    className="rounded-[12px] border border-[#dce7df] bg-white px-4 py-3 text-left text-[12px] font-bold text-[#1e293b] transition hover:border-[#079f4f] hover:bg-[#f8fbfa]"
-                  >
-                    Preview Trip Review
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onOpenPreview("timeline")}
-                    className="rounded-[12px] border border-[#dce7df] bg-white px-4 py-3 text-left text-[12px] font-bold text-[#1e293b] transition hover:border-[#079f4f] hover:bg-[#f8fbfa]"
-                  >
-                    Preview Stops Timeline
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onOpenPreview("live")}
-                    className="rounded-[12px] border border-[#dce7df] bg-white px-4 py-3 text-left text-[12px] font-bold text-[#1e293b] transition hover:border-[#079f4f] hover:bg-[#f8fbfa]"
-                  >
-                    Preview Live Tracking
-                  </button>
-                </div>
-              </div>
-            )}
+            {/* code */}
           </section>
 
           <section className="relative z-20 mt-0 grid w-full gap-8 bg-[#edf8f3] p-[30px] sm:p-[32px] lg:grid-cols-[1fr_auto_1fr_auto_1fr] lg:items-center lg:p-[40px]">

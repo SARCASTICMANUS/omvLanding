@@ -18,6 +18,8 @@ import {
 import api, { getWsUrl } from "../../../lib/api";
 import notificationService from "../../../services/notificationService";
 import { getWalkingRoute } from "../../../maps/utils/routing";
+import MobileBackButton from "../../../components/Layout/MobileBackButton";
+
 
 const PassengerLiveTracking = ({ tripId, onBack }) => {
   const mapContainer = useRef(null);
@@ -336,14 +338,17 @@ const PassengerLiveTracking = ({ tripId, onBack }) => {
 
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden font-sans">
+      <MobileBackButton onClick={onBack} />
       {/* Top Header Overlay */}
       <div className="absolute top-0 left-0 right-0 z-[1000] p-4 flex items-center justify-between pointer-events-none">
         <button 
           onClick={onBack}
-          className="p-3 bg-white/90 backdrop-blur-md rounded-2xl shadow-lg border border-slate-100 pointer-events-auto active:scale-95 transition-transform"
+          className="lg:block hidden p-3 bg-white/90 backdrop-blur-md rounded-2xl shadow-lg border border-slate-100 pointer-events-auto active:scale-95 transition-transform"
         >
           <ChevronLeft size={24} className="text-slate-700" />
         </button>
+        <div className="lg:hidden w-12 h-12 pointer-events-none" />
+
         
         <div className="flex flex-col items-end gap-2">
           <div className="px-4 py-2 bg-slate-900/90 backdrop-blur-md text-white rounded-2xl shadow-xl flex items-center gap-2 border border-slate-700">

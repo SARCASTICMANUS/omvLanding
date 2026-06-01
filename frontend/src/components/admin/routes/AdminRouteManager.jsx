@@ -628,7 +628,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
   const totalRouteStopCount = stops.length + endpointStopCount;
 
   return (
-    <div className="flex h-screen w-full bg-slate-50 overflow-hidden font-sans">
+    <div className="flex h-full w-full bg-slate-50 overflow-hidden font-sans">
       {/* --- Sidebar --- */}
       <div className="w-[400px] bg-white border-r border-slate-200 shadow-xl z-[1000] flex flex-col h-full overflow-hidden">
         {/* Header */}

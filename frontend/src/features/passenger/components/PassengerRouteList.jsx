@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
@@ -24,6 +25,9 @@ import {
   Calendar,
   MoreHorizontal,
 } from "lucide-react";
+import MobileBackButton from "../../../components/Layout/MobileBackButton";
+import { APP_ROUTES } from "../../../constants/routes";
+
 
 /* ─────────────────────────────────────────────
    ALL ORIGINAL HELPER FUNCTIONS — UNTOUCHED
@@ -586,6 +590,7 @@ export default function PassengerRouteList({
   onReSearchRoutes,
   onShowAllBuses,
 }) {
+  const navigate = useNavigate();
   const [showAllBuses, setShowAllBuses] = useState(false);
 
   const allTrips = useMemo(() => {
@@ -613,8 +618,18 @@ export default function PassengerRouteList({
 
   const handleContinue = (trip) => { if (!trip) return; onChooseRoute?.(trip); };
   const handleViewAllBuses = () => {
-    if (!showAllBuses && onShowAllBuses) onShowAllBuses();
-    setShowAllBuses((prev) => !prev);
+    const params = new URLSearchParams();
+    if (pickup) {
+      params.append("pLat", pickup.lat);
+      params.append("pLon", pickup.lon);
+      params.append("pName", pickup.name || pickup.display_name || "");
+    }
+    if (destination) {
+      params.append("dLat", destination.lat);
+      params.append("dLon", destination.lon);
+      params.append("dName", destination.name || destination.display_name || "");
+    }
+    navigate(`${APP_ROUTES.allBuses}?${params.toString()}`);
   };
 
   const css = `
@@ -659,6 +674,7 @@ export default function PassengerRouteList({
   return (
     <>
       <style>{css}</style>
+      <MobileBackButton onClick={onBack} />
       <div
         className="prl-root"
         style={{
@@ -677,6 +693,7 @@ export default function PassengerRouteList({
               <button
                 type="button"
                 onClick={onBack}
+                className="desktop-only"
                 style={{
                   width: 44, height: 44, borderRadius: "50%",
                   border: "1.5px solid #e5e7eb", background: "white",
