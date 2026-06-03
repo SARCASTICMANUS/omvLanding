@@ -26,6 +26,7 @@ import LocationSearch from "../../map/LocationSearch";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { normalizeExcelRoutes, normalizeJsonRoutes } from "./routeImportUtils";
+import { getRoutePath, getPreviewPath } from "../../map/utils/routeGeometry";
 
 const pointToStop = (point, name, order, flags = {}) => ({
   lat: point.lat,
@@ -318,7 +319,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
             properties: { selected: true, index: 0 },
             geometry: {
               type: "LineString",
-              coordinates: selectedRoute.path_coords.map(p => [p[0], p[1]]),
+              coordinates: getRoutePath(selectedRoute),
             },
           });
         } else if (previews.length > 0) {
@@ -327,7 +328,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
             properties: { selected: idx === selectedIndex, index: idx },
             geometry: {
               type: "LineString",
-              coordinates: p.path.map(coord => [coord[0], coord[1]]),
+              coordinates: getPreviewPath(p),
             },
           }));
         } else if (newPoints.start && newPoints.end) {
@@ -351,7 +352,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
     if (selectedRoute || (newPoints.start && newPoints.end)) {
       const points = [];
       if (selectedRoute) {
-        selectedRoute.path_coords.forEach(p => points.push([p[0], p[1]]));
+        getRoutePath(selectedRoute).forEach(p => points.push(p));
       } else {
         if (newPoints.start) points.push([newPoints.start.lon, newPoints.start.lat]);
         if (newPoints.end) points.push([newPoints.end.lon, newPoints.end.lat]);

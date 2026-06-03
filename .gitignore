@@ -31,6 +31,12 @@ backend/osrm-data/*.pbf
 backend/osrm-data/*.osrm*
 backend/osrm-data/*.lua
 
+backend/osrm-data2
+backend/osrm-data2/*
+backend/osrm-data2/*.pbf
+backend/osrm-data2/*.osrm*
+backend/osrm-data2/*.lua
+
 # Django migrations
 backend/**/migrations/*.py
 !backend/**/migrations/__init__.py
@@ -46,3 +52,13 @@ frontend/.env.local
 frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*
+
+# --- Mobile App (Expo) ---
+vayy_app/node_modules/
+vayy_app/.expo/
+vayy_app/dist/
+vayy_app/web-build/
+vayy_app/.env
+vayy_app/npm-debug.log*
+vayy_app/yarn-debug.log*
+vayy_app/yarn-error.log*

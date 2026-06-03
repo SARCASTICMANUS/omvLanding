@@ -21,6 +21,11 @@ class VayyConsumer(AsyncWebsocketConsumer):
         # Resolve city_id from trip if not in URL
         if not self.city_id and self.trip_id:
             self.city_id = await self._get_city_from_trip(self.trip_id)
+            if self.city_id:
+                self.city_group_name = f"city_{self.city_id}"
+                await self.channel_layer.group_add(
+                    self.city_group_name, self.channel_name
+                )
 
         # Join city-level group (all active buses in a city)
         if self.city_id:
@@ -47,18 +52,10 @@ class VayyConsumer(AsyncWebsocketConsumer):
         await self.accept()
 
     async def disconnect(self, close_code):
-        if self.role == "driver" and self.trip_id:
-            # Broadcast stop event to city group
-            await self.channel_layer.group_send(
-                self.city_group_name,
-                {"type": "vehicle_stopped", "trip_id": str(self.trip_id)},
-            )
-            # Clear Redis position
-            try:
-                await self.redis.delete(f"driver_pos:{self.trip_id}")
-            except Exception:
-                pass
-
+        # We no longer broadcast 'vehicle_stopped' here because a simple socket 
+        # flicker or page refresh shouldn't end the trip for everyone else.
+        # Trip status is managed via API and background cleanup tasks.
+        
         await self.channel_layer.group_discard(self.city_group_name, self.channel_name)
         if self.trip_group_name:
             await self.channel_layer.group_discard(
@@ -73,8 +70,20 @@ class VayyConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         try:
             data = json.loads(text_data)
-
-            if self.role == "driver" and self.trip_id:
+            t_id = data.get("trip_id") or data.get("tripId") or self.trip_id
+            if self.role == "driver" and t_id:
+                trip_exists = await self._check_trip_exists(t_id)
+                if not trip_exists:
+                    await self.send(
+                        text_data=json.dumps(
+                            {
+                                "type": "vehicle_stopped",
+                                "trip_id": str(self.trip_id),
+                                "reason": "trip_not_found",
+                            }
+                        )
+                    )
+                    return
                 lat = float(data["lat"])
                 lon = float(data["lon"])
 
@@ -83,7 +92,7 @@ class VayyConsumer(AsyncWebsocketConsumer):
                 from core.utils import process_gps_update
 
                 await database_sync_to_async(process_gps_update)(
-                    trip_id=self.trip_id, lat=lat, lon=lon, source="websocket"
+                    trip_id=t_id, lat=lat, lon=lon, source="websocket"
                 )
 
                 # 2. (Optional) Still compute next stop ETAs for trip-specific back-broadcast
@@ -236,6 +245,15 @@ class VayyConsumer(AsyncWebsocketConsumer):
                 }
             )
         return result
+
+    @database_sync_to_async
+    def _check_trip_exists(self, trip_id):
+        from core.models import ActiveTrip
+
+        try:
+            return ActiveTrip.objects.filter(id=trip_id, status="active").exists()
+        except Exception:
+            return False
 
     @database_sync_to_async
     def _get_stop_coords_cached(self, stop_id):

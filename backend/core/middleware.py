@@ -37,3 +37,23 @@ class JWTAuthMiddleware:
             scope["user"] = AnonymousUser()
 
         return await self.app(scope, receive, send)
+
+
+class QueryAuthMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        query_params = scope["query_string"].decode()
+        token = None
+        for param in query_params.split("&"):
+            if param.startswith("token="):
+                token = param.split("=")[1]
+                break
+
+        if token:
+            scope["user"] = await get_user(token)
+        else:
+            scope["user"] = AnonymousUser()
+
+        return await self.app(scope, receive, send)

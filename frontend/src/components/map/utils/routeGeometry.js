@@ -73,4 +73,4 @@ export const getPreviewPath = (preview) =>
   );
 
 export const getRoutePath = (route) =>
-  normalizePath(route?.path_coords || route?.route_geometry || route?.path, "latLon");
+  normalizePath(route?.path_coords || route?.route_geometry || route?.path, "auto");

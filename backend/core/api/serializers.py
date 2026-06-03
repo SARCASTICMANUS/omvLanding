@@ -51,7 +51,7 @@ class RouteSerializer(serializers.ModelSerializer):
         )
 
     def get_path_coords(self, obj):
-        return [[y, x] for x, y in obj.path.coords]
+        return [[x, y] for x, y in obj.path.coords]
 
     def get_stops_count(self, obj):
         return obj.stops.count()

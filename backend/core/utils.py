@@ -221,13 +221,32 @@ def process_gps_update(trip_id, lat, lon, source="gps"):
         # Update ActiveTrip in DB for real-time status
         ActiveTrip.objects.filter(id=trip_id).update(
             current_location=Point(float(lon), float(lat), srid=4326),
-            last_updated=timezone.now()
+            last_updated=timezone.now(),
         )
 
         # 2. Fetch Metadata for Broadcast
-        trip = ActiveTrip.objects.select_related(
-            "route", "trip_schedule", "vehicle"
-        ).get(id=trip_id)
+        trip = (
+            ActiveTrip.objects.select_related("route", "trip_schedule", "vehicle")
+            .filter(id=trip_id)
+            .first()
+        )
+        if not trip:
+            logger.warning(f"Process GPS Update: Trip {trip_id} no longer exists.")
+            # Notify the driver via WebSocket that the trip is invalid
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                async_to_sync(channel_layer.group_send)(
+                    f"trip_{trip_id}",
+                    {
+                        "type": "vehicle_stopped",
+                        "trip_id": str(trip_id),
+                        "reason": "stale_trip",
+                    },
+                )
+            return False
         bus_number = trip.route.bus_number
         route_id = str(trip.route_id)
         city_id = str(trip.route.city_id) if trip.route.city_id else "public"
@@ -320,9 +339,9 @@ def process_gps_update(trip_id, lat, lon, source="gps"):
         nearby_passengers = r.georadius(
             "passenger_locations", float(lon), float(lat), 500, unit="m", withdist=True
         )
-        
+
         for p_data in nearby_passengers:
-            p_id, p_dist = p_data[0].decode(), p_data[1]
+            p_id, p_dist = p_data[0], p_data[1]
             # Only notify if not already notified recently for this trip
             alert_throttle_key = f"passenger_nearby_alerted:{p_id}:{trip_id}"
             if not r.get(alert_throttle_key):
@@ -336,7 +355,7 @@ def process_gps_update(trip_id, lat, lon, source="gps"):
                             "message": f"Bus {bus_number} is only {int(p_dist)}m away from you!",
                         },
                     )
-                r.set(alert_throttle_key, "1", ex=300) # Throttle for 5 mins
+                r.set(alert_throttle_key, "1", ex=300)  # Throttle for 5 mins
 
         # 5. Update VehicleState
         if trip.vehicle:
@@ -370,13 +389,19 @@ def process_gps_update(trip_id, lat, lon, source="gps"):
                             # Skip stops already passed
                             if s.order <= (current_stop_order or 0):
                                 continue
-                            
-                            next_stop_eta.append({
-                                "stop_id": str(s.id),
-                                "stop_name": s.name,
-                                "duration_seconds": durations[idx],
-                                "distance_meters": table["distances"][0][idx] if table.get("distances") else 0
-                            })
+
+                            next_stop_eta.append(
+                                {
+                                    "stop_id": str(s.id),
+                                    "stop_name": s.name,
+                                    "duration_seconds": durations[idx],
+                                    "distance_meters": (
+                                        table["distances"][0][idx]
+                                        if table.get("distances")
+                                        else 0
+                                    ),
+                                }
+                            )
             except Exception as e:
                 logger.error(f"Error computing next_stop_eta: {e}")
 

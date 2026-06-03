@@ -14,7 +14,7 @@ export const API_PATHS = {
   },
   sockets: {
     driverManifest: (vehicleId, token) => `/ws/driver/manifest/${vehicleId}/?token=${token}`,
-    trip: (tripId, token) => `/ws/trips/${tripId}/?token=${token}`,
+    trip: (tripId, token, role) => `/ws/trip/${tripId}/${role}/?token=${token}`,
     vehicle: (vehicleId, token) => `/ws/vehicles/${vehicleId}/?token=${token}`,
     passenger: (passengerId, token) => `/ws/passenger/${passengerId}/?token=${token}`,
   },

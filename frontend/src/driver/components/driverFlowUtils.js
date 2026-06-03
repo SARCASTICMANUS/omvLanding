@@ -6,12 +6,19 @@ import {
   getStopLngLat,
 } from "../../components/map/utils/routeGeometry";
 
-export const hasValidCoords = (point) =>
-  point &&
-  typeof point.lat === "number" &&
-  Number.isFinite(point.lat) &&
-  typeof point.lon === "number" &&
-  Number.isFinite(point.lon);
+export const hasValidCoords = (point) => {
+  if (!point || typeof point !== "object") return false;
+
+  const lat = Number(point?.lat ?? point?.latitude ?? point?.y);
+  const lon = Number(point?.lon ?? point?.lng ?? point?.longitude ?? point?.x);
+
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    lat !== 0 &&
+    lon !== 0
+  );
+};
 
 export const normalizeDriverRoutes = (data) => {
   if (Array.isArray(data)) return data;

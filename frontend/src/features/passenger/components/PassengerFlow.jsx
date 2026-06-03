@@ -1,9 +1,19 @@
-import React, { useState } from "react";
+import React from "react";
+import { useDispatch, useSelector } from "react-redux";
 import PassengerTripPlanner from "./PassengerTripPlanner";
 import PassengerRouteList from "./PassengerRouteList";
 import PassengerStopsTimeline from "./PassengerStopsTimeline";
 import PassengerLiveTracking from "./PassengerLiveTracking";
 import api from "../../../lib/api";
+import {
+  setJourneyStep,
+  setJourneyPoints,
+  setFilteredTrips,
+  setSelectedTrip,
+  setPickupPoint,
+  setDestinationPoint,
+  setJourneyLoading,
+} from "../../../redux/slices/journeySlice";
 
 const STEPS = {
   PLANNER: "planner",
@@ -13,12 +23,15 @@ const STEPS = {
 };
 
 export default function PassengerFlow({ onBackToDashboard }) {
-  const [currentStep, setCurrentStep] = useState(STEPS.PLANNER);
-  const [pickup, setPickup] = useState(null);
-  const [destination, setDestination] = useState(null);
-  const [filteredTrips, setFilteredTrips] = useState([]);
-  const [selectedTrip, setSelectedTrip] = useState(null);
-  const [loadingRoutes, setLoadingRoutes] = useState(false);
+  const dispatch = useDispatch();
+  const {
+    currentStep,
+    pickup,
+    destination,
+    filteredTrips,
+    selectedTrip,
+    loading: loadingRoutes,
+  } = useSelector((state) => state.journey);
 
   const hasValidCoords = (point) =>
     point &&
@@ -39,7 +52,6 @@ export default function PassengerFlow({ onBackToDashboard }) {
     return [];
   };
 
-  // ✅ USE API HERE
   const fetchFilteredTrips = async (from, to) => {
     if (!hasValidCoords(from) || !hasValidCoords(to)) {
       console.error("Invalid pickup/drop coordinates", { from, to });
@@ -69,7 +81,6 @@ export default function PassengerFlow({ onBackToDashboard }) {
   const fetchAllTrips = async () => {
     try {
       const response = await api.get("/api/passenger/dashboard/");
-      // Dashboard view returns { active_trips: [...] }
       return normalizeTrips(response.data);
     } catch (error) {
       console.error("Failed to fetch all trips", error);
@@ -78,72 +89,65 @@ export default function PassengerFlow({ onBackToDashboard }) {
   };
 
   const handlePlannerNext = async ({ from, to }) => {
-    setPickup(from);
-    setDestination(to);
-    setSelectedTrip(null);
-    setFilteredTrips([]);
+    dispatch(setJourneyPoints({ pickup: from, destination: to }));
 
     try {
-      setLoadingRoutes(true);
+      dispatch(setJourneyLoading(true));
       const trips = await fetchFilteredTrips(from, to);
-      setFilteredTrips(trips);
-      setCurrentStep(STEPS.ROUTE_LIST);
+      dispatch(setFilteredTrips(trips));
+      dispatch(setJourneyStep(STEPS.ROUTE_LIST));
     } catch (error) {
       console.error("Failed to load trips", error);
-      setFilteredTrips([]);
-      setCurrentStep(STEPS.ROUTE_LIST);
+      dispatch(setFilteredTrips([]));
+      dispatch(setJourneyStep(STEPS.ROUTE_LIST));
     } finally {
-      setLoadingRoutes(false);
+      dispatch(setJourneyLoading(false));
     }
   };
 
   const handleShowAllBuses = async () => {
     try {
-      setLoadingRoutes(true);
+      dispatch(setJourneyLoading(true));
       const allTrips = await fetchAllTrips();
-      setFilteredTrips(allTrips);
+      dispatch(setFilteredTrips(allTrips));
     } catch (error) {
       console.error("Failed to load all buses", error);
     } finally {
-      setLoadingRoutes(false);
+      dispatch(setJourneyLoading(false));
     }
   };
 
   const handleChooseRoute = (trip) => {
-    setSelectedTrip(trip);
-    setCurrentStep(STEPS.STOPS);
+    dispatch(setSelectedTrip(trip));
+    dispatch(setJourneyStep(STEPS.STOPS));
   };
 
   const handleTrackNow = () => {
     if (!selectedTrip) return;
-    setCurrentStep(STEPS.LIVE);
+    dispatch(setJourneyStep(STEPS.LIVE));
   };
 
   const handleUpdatePickup = (nextPickup) => {
-    setPickup(nextPickup);
-    setSelectedTrip(null);
+    dispatch(setPickupPoint(nextPickup));
   };
 
   const handleUpdateDestination = (nextDestination) => {
-    setDestination(nextDestination);
-    setSelectedTrip(null);
+    dispatch(setDestinationPoint(nextDestination));
   };
 
   const handleReSearchRoutes = async () => {
     if (!hasValidCoords(pickup) || !hasValidCoords(destination)) return;
 
     try {
-      setLoadingRoutes(true);
-      setSelectedTrip(null);
-
+      dispatch(setJourneyLoading(true));
       const trips = await fetchFilteredTrips(pickup, destination);
-      setFilteredTrips(trips);
-      setCurrentStep(STEPS.ROUTE_LIST);
+      dispatch(setFilteredTrips(trips));
+      dispatch(setJourneyStep(STEPS.ROUTE_LIST));
     } catch (error) {
       console.error("Failed to refresh trips", error);
-      setFilteredTrips([]);
+      dispatch(setFilteredTrips([]));
     } finally {
-      setLoadingRoutes(false);
+      dispatch(setJourneyLoading(false));
     }
   };
 
@@ -164,7 +168,7 @@ export default function PassengerFlow({ onBackToDashboard }) {
         destination={destination}
         trips={filteredTrips}
         loading={loadingRoutes}
-        onBack={() => setCurrentStep(STEPS.PLANNER)}
+        onBack={() => dispatch(setJourneyStep(STEPS.PLANNER))}
         onChooseRoute={handleChooseRoute}
         onUpdatePickup={handleUpdatePickup}
         onUpdateDestination={handleUpdateDestination}
@@ -180,9 +184,9 @@ export default function PassengerFlow({ onBackToDashboard }) {
         selectedTrip={selectedTrip}
         pickup={pickup}
         destination={destination}
-        onBack={() => setCurrentStep(STEPS.ROUTE_LIST)}
+        onBack={() => dispatch(setJourneyStep(STEPS.ROUTE_LIST))}
         onTrackNow={handleTrackNow}
-        onEditRoute={() => setCurrentStep(STEPS.ROUTE_LIST)}
+        onEditRoute={() => dispatch(setJourneyStep(STEPS.ROUTE_LIST))}
       />
     );
   }
@@ -193,7 +197,7 @@ export default function PassengerFlow({ onBackToDashboard }) {
         tripId={selectedTrip?.trip_id || selectedTrip?.id}
         pickup={pickup}
         destination={destination}
-        onBack={() => setCurrentStep(STEPS.STOPS)}
+        onBack={() => dispatch(setJourneyStep(STEPS.STOPS))}
         onUpdatePickup={handleUpdatePickup}
         onUpdateDestination={handleUpdateDestination}
         onRefreshRoutes={handleReSearchRoutes}

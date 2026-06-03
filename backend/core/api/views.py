@@ -576,6 +576,20 @@ class BulkImportView(APIView):
 # ─── Driver Views ─────────────────────────────────────────────────────────────
 
 
+class DriverRecentSearchesView(APIView):
+    """Returns the last 3 searches for the authenticated driver."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            searches = get_recent_searches(request.user.id)
+            return Response(searches)
+        except Exception as e:
+            logger.error(f"Failed to fetch recent driver searches: {e}")
+            return Response([], status=200)
+
+
 class DriverStartTripView(APIView):
     def get(self, request):
         """Return all public routes (optionally filtered by city) for route selection."""
@@ -585,6 +599,34 @@ class DriverStartTripView(APIView):
         routes = Route.objects.filter(is_public=True)
         if city_id:
             routes = routes.filter(city_id=city_id)
+
+        # Handle recent search tracking for driver filters
+        source_name = request.query_params.get("source_name")
+        source_lat = request.query_params.get("source_lat")
+        source_lon = request.query_params.get("source_lon")
+        dest_name = request.query_params.get("dest_name")
+        dest_lat = request.query_params.get("dest_lat")
+        dest_lon = request.query_params.get("dest_lon")
+
+        if source_lat and source_lon and dest_lat and dest_lon:
+            try:
+                add_recent_search(
+                    request.user.id,
+                    {
+                        "pickup": {
+                            "lat": source_lat,
+                            "lon": source_lon,
+                            "name": source_name or "Source",
+                        },
+                        "destination": {
+                            "lat": dest_lat,
+                            "lon": dest_lon,
+                            "name": dest_name or "Destination",
+                        },
+                    },
+                )
+            except Exception as e:
+                logger.error(f"Failed to save recent search for driver: {e}")
 
         return Response(
             [

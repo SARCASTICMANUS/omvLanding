@@ -99,6 +99,9 @@ const LocationSearch = ({
       setResults([]);
       setIsOpen(false);
     }
+    if (!nextQuery) {
+        onSelect(null);
+    }
     setQuery(nextQuery);
   };
 

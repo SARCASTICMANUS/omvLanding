@@ -63,10 +63,19 @@ export const useSocketSubscription = ({
     };
   }, [dispatch, enabled, key, path, stableOptions]);
 
+  const send = useMemo(() => {
+    return (payload) => socketManager.send(key, payload);
+  }, [key]);
+
+  const disconnect = useMemo(() => {
+    return () => socketManager.disconnect(key);
+  }, [key]);
+
   return {
     status,
-    send: (payload) => socketManager.send(key, payload),
-    disconnect: () => socketManager.disconnect(key),
+    // send: (payload) => socketManager.send(key, payload),
+    // disconnect: () => socketManager.disconnect(key),
+    send,
+    disconnect,
   };
 };
-

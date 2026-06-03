@@ -1,43 +1,51 @@
 import { createSlice } from "@reduxjs/toolkit";
 
-const initialState = {
+const DEFAULT_STATE = {
+  currentStep: "planner",
   assignedRouteIds: [],
   activeTrip: null,
-  manifest: null,
-  nextStops: [],
-  passengersById: {},
+  selectedRoute: null,
+  source: null,
+  destination: null,
   status: "idle",
   loading: false,
   error: null,
 };
 
+const loadDriverContext = () => {
+  try {
+    const serialized = localStorage.getItem("VAYY_DRIVER_CONTEXT");
+    if (!serialized) return null;
+    const parsed = JSON.parse(serialized);
+    // Ensure loading is false on boot
+    return { ...parsed, loading: false };
+  } catch (e) {
+    return null;
+  }
+};
+
 const driverSlice = createSlice({
   name: "driver",
-  initialState,
+  initialState: loadDriverContext() || DEFAULT_STATE,
   reducers: {
-    setAssignedRoutes: (state, action) => {
-      state.assignedRouteIds = action.payload || [];
+    setStep: (state, action) => {
+      state.currentStep = action.payload;
+      localStorage.setItem("VAYY_DRIVER_CONTEXT", JSON.stringify(state));
     },
     setDriverActiveTrip: (state, action) => {
       state.activeTrip = action.payload;
       state.status = action.payload ? "active" : "idle";
+      state.currentStep = action.payload ? "live" : "planner";
+      localStorage.setItem("VAYY_DRIVER_CONTEXT", JSON.stringify(state));
     },
-    setDriverManifest: (state, action) => {
-      state.manifest = action.payload;
+    setSelectedRoute: (state, action) => {
+      state.selectedRoute = action.payload;
+      localStorage.setItem("VAYY_DRIVER_CONTEXT", JSON.stringify(state));
     },
-    setDriverNextStops: (state, action) => {
-      state.nextStops = action.payload || [];
-    },
-    setDriverPassengers: (state, action) => {
-      state.passengersById = action.payload || {};
-    },
-    upsertDriverPassenger: (state, action) => {
-      const passenger = action.payload;
-      if (!passenger?.id) return;
-      state.passengersById[passenger.id] = passenger;
-    },
-    setDriverStatus: (state, action) => {
-      state.status = action.payload;
+    setSearchQuery: (state, action) => {
+      state.source = action.payload.source;
+      state.destination = action.payload.destination;
+      localStorage.setItem("VAYY_DRIVER_CONTEXT", JSON.stringify(state));
     },
     setDriverLoading: (state, action) => {
       state.loading = action.payload;
@@ -45,22 +53,30 @@ const driverSlice = createSlice({
     setDriverError: (state, action) => {
       state.error = action.payload;
     },
-    resetDriverState: () => initialState,
+    setDriverStatus: (state, action) => {
+      state.status = action.payload;
+    },
+    setAssignedRoutes: (state, action) => {
+      state.assignedRouteIds = action.payload;
+      localStorage.setItem("VAYY_DRIVER_CONTEXT", JSON.stringify(state));
+    },
+    resetDriverState: () => {
+      localStorage.removeItem("VAYY_DRIVER_CONTEXT");
+      return DEFAULT_STATE;
+    },
   },
 });
 
 export const {
-  setAssignedRoutes,
+  setStep,
   setDriverActiveTrip,
-  setDriverManifest,
-  setDriverNextStops,
-  setDriverPassengers,
-  upsertDriverPassenger,
-  setDriverStatus,
-  setDriverLoading,
-  setDriverError,
+  setSelectedRoute,
+  setSearchQuery,
   resetDriverState,
+  setDriverLoading,
+  setDriverStatus,
+  setAssignedRoutes,
+  setDriverError,
 } = driverSlice.actions;
 
 export default driverSlice.reducer;
-

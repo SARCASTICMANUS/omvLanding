@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
+import { lerp, lerpCoords, getBearing, lngLatToWorld } from "../../maps/utils/threeHelpers";
 import {
   AlertTriangle,
-  Volume2,
-  Phone,
-  TriangleAlert,
   Users,
   Gauge,
   Zap,
@@ -18,8 +19,6 @@ import {
   Minus,
   Crosshair,
   Bell,
-  Menu,
-  Route,
   ArrowLeft,
   Box,
   Globe,
@@ -32,9 +31,127 @@ import MobileBackButton from "../../components/Layout/MobileBackButton";
 
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Real Map Implementation using MapLibre
+   1. Sub-components (Moved Outside to prevent remounting)
    ───────────────────────────────────────────────────────────────────────────── */
-function LiveMap({ path, currentPos, is3D, isSatellite, mapRef }) {
+
+const MapControls = ({
+  mapRef,
+  is3D,
+  setIs3D,
+  isSatellite,
+  setIsSatellite,
+  currentPos,
+}) => (
+  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 z-10">
+    {[
+      { Icon: Plus, label: "Zoom in", onClick: () => mapRef.current?.zoomIn() },
+      {
+        Icon: Minus,
+        label: "Zoom out",
+        onClick: () => mapRef.current?.zoomOut(),
+      },
+      {
+        Icon: Box,
+        label: "3D View",
+        onClick: () => setIs3D(!is3D),
+        active: is3D,
+      },
+      {
+        Icon: Globe,
+        label: "Satellite",
+        onClick: () => setIsSatellite(!isSatellite),
+        active: isSatellite,
+      },
+      {
+        Icon: Crosshair,
+        label: "My location",
+        onClick: () => {
+          if (currentPos)
+            mapRef.current?.easeTo({ center: currentPos, zoom: 17, pitch: 60 });
+        },
+      },
+    ].map(({ Icon, label, onClick, active }) => (
+      <button
+        key={label}
+        onClick={onClick}
+        className={`w-9 h-9 rounded-lg border flex items-center justify-center shadow-sm transition-colors cursor-pointer ${active
+          ? "bg-[#009849] border-[#009849] text-white"
+          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+          }`}
+      >
+        <Icon size={16} />
+      </button>
+    ))}
+  </div>
+);
+
+const BusHeader = ({ t, compact = false }) => (
+  <div
+    className={`flex items-center gap-3 bg-white border-b border-gray-100 ${compact ? "px-4 py-3" : "px-5 py-4"}`}
+  >
+    <div
+      className={`flex items-center justify-center rounded-xl bg-green-50 flex-shrink-0`}
+      style={{ width: compact ? 44 : 52, height: compact ? 44 : 52 }}
+    >
+      <Bus size={compact ? 22 : 28} className="text-[#009849]" />
+    </div>
+    <div className="flex-1 min-w-0">
+      <p
+        className={`font-black text-gray-900 leading-tight ${compact ? "text-[17px]" : "text-xl"}`}
+      >
+        Bus {t.busId}
+      </p>
+      <p className="text-xs text-gray-500 mt-0.5 truncate">
+        <span className="font-semibold text-gray-700">Route:</span>{" "}
+        <span className="text-[#009849]">{t.route.from}</span>
+        {" → "}
+        {t.route.to}
+      </p>
+    </div>
+    <div className="flex items-center gap-1.5 text-xs font-semibold text-[#009849] px-3 py-1.5 rounded-full border border-green-300 bg-green-50 whitespace-nowrap flex-shrink-0">
+      {!compact && (
+        <span className="w-2 h-2 rounded-full bg-[#009849] inline-block" />
+      )}
+      {t.status}
+    </div>
+  </div>
+);
+
+const Stats = ({ t }) => (
+  <div className="flex items-center divide-x divide-gray-100">
+    {[
+      { Icon: Users, label: "Boarded", val: t.stats.boarded, green: false },
+      {
+        Icon: Gauge,
+        label: "Speed",
+        val: `${t.stats.speed} km/h`,
+        green: true,
+      },
+      { Icon: Zap, label: "Traffic", val: t.stats.traffic, green: true },
+    ].map(({ Icon, label, val, green }) => (
+      <div
+        key={label}
+        className="flex-1 flex flex-col items-center gap-1 py-3 px-2"
+      >
+        <Icon size={16} className="text-gray-400" />
+        <span className="text-[11px] text-gray-400 text-center">{label}</span>
+        <span
+          className={`text-[15px] font-bold leading-none ${green ? "text-[#009849]" : "text-gray-900"}`}
+        >
+          {val}
+        </span>
+      </div>
+    ))}
+  </div>
+);
+
+const LiveMap = React.memo(function LiveMap({
+  path,
+  currentPos,
+  is3D,
+  isSatellite,
+  mapRef,
+}) {
   const mapContainer = useRef(null);
   const isInitialized = useRef(false);
   const markers = useRef({});
@@ -51,6 +168,7 @@ function LiveMap({ path, currentPos, is3D, isSatellite, mapRef }) {
       zoom: 16,
       pitch: is3D ? 60 : 0,
       bearing: 0,
+      antialias: true,
     });
 
     mapRef.current.on('load', () => {
@@ -176,181 +294,333 @@ function LiveMap({ path, currentPos, is3D, isSatellite, mapRef }) {
   }, [currentPos, path, is3D, isSatellite]);
 
   return <div ref={mapContainer} className="w-full h-full block relative" />;
-}
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   2. Layout Views (Moved outside and passed props)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+const MobileView = ({
+  onBack,
+  t,
+  currentPos,
+  is3D,
+  setIs3D,
+  isSatellite,
+  setIsSatellite,
+  mapRef,
+  displayNextStop,
+}) => (
+  <div className="flex flex-col h-screen bg-gray-50 overflow-hidden">
+    <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-100">
+      <button
+        onClick={onBack}
+        className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center"
+      >
+        <ArrowLeft size={20} />
+      </button>
+      <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-gray-200 bg-gray-50">
+        <span className="w-2 h-2 rounded-full bg-[#009849]" />
+        <span className="text-xs font-bold text-[#009849]">ONLINE</span>
+      </div>
+      <button className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center">
+        <Bell size={20} />
+      </button>
+    </div>
+    <BusHeader t={t} compact />
+    <div className="relative flex-1 bg-slate-200">
+      <LiveMap
+        path={t.path}
+        currentPos={currentPos}
+        is3D={is3D}
+        isSatellite={isSatellite}
+        mapRef={mapRef}
+      />
+      <MapControls
+        mapRef={mapRef}
+        is3D={is3D}
+        setIs3D={setIs3D}
+        isSatellite={isSatellite}
+        setIsSatellite={setIsSatellite}
+        currentPos={currentPos}
+      />
+    </div>
+    <div className="bg-white border-t border-gray-100 px-4 pt-4 pb-6">
+      <div className="flex items-center gap-6 mb-4">
+        <div className="flex-1">
+          <p className="text-xs text-gray-400">Next Stop</p>
+          <p className="text-lg font-black">{displayNextStop.name}</p>
+        </div>
+        <div className="flex-shrink-0 text-right">
+          <p className="text-xs text-gray-400">ETA</p>
+          <p className="text-3xl font-black text-[#009849]">
+            {displayNextStop.eta}{" "}
+            <span className="text-sm font-medium">min</span>
+          </p>
+        </div>
+      </div>
+      <Stats t={t} />
+    </div>
+  </div>
+);
+
+const DesktopView = ({
+  t,
+  currentPos,
+  is3D,
+  setIs3D,
+  isSatellite,
+  setIsSatellite,
+  mapRef,
+  displayNextStop,
+  user,
+}) => (
+  <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex gap-6 p-6 items-start flex-1 overflow-hidden">
+      <aside className="w-80 flex-shrink-0 flex flex-col gap-4">
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+          <p className="text-xs text-gray-400 mb-1">Next Stop</p>
+          <p className="text-2xl font-black text-gray-900 leading-tight">
+            {displayNextStop.name}
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            {displayNextStop.distance} away
+          </p>
+          <div className="h-px bg-gray-100 my-4" />
+          <div className="flex items-baseline gap-2">
+            <span className="text-5xl font-black text-[#009849]">
+              {displayNextStop.eta}
+            </span>
+            <span className="text-lg font-medium text-gray-700">min</span>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <Stats t={t} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            {
+              Icon: MapPin,
+              label: "Total Distance",
+              val: t.summary.totalDistance,
+            },
+            {
+              Icon: Clock,
+              label: "Estimated Time",
+              val: t.summary.estimatedTime,
+            },
+            { Icon: Users, label: "Total Stops", val: t.summary.totalStops },
+            { Icon: Car, label: "Vehicle No.", val: t.summary.vehicleNo },
+          ].map(({ Icon, label, val }) => (
+            <div
+              key={label}
+              className="flex flex-col items-center gap-1 py-3 px-2 bg-white rounded-xl border border-gray-100 text-center"
+            >
+              <Icon size={18} className="text-[#009849]" />
+              <span className="text-[10px] text-gray-400 uppercase">
+                {label}
+              </span>
+              <span className="text-xs font-black text-gray-800">{val}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-auto">
+          <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">
+              Active Driver
+            </p>
+            <p className="text-sm font-black text-slate-800">
+              {user?.name || "Driver Console"}
+            </p>
+          </div>
+        </div>
+      </aside>
+      <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm h-full">
+        <BusHeader t={t} />
+        <div className="relative flex-1 bg-slate-200">
+          <LiveMap
+            path={t.path}
+            currentPos={currentPos}
+            is3D={is3D}
+            isSatellite={isSatellite}
+            mapRef={mapRef}
+          />
+          <MapControls
+            mapRef={mapRef}
+            is3D={is3D}
+            setIs3D={setIs3D}
+            isSatellite={isSatellite}
+            setIsSatellite={setIsSatellite}
+            currentPos={currentPos}
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Main export — Driver Tracking Dashboard
    ───────────────────────────────────────────────────────────────────────────── */
+
 export default function DriverLiveTracking({ route, activeTrip, onBack }) {
   const user = useSelector((state) => state.auth?.user);
+  const token = useSelector((state) => state.auth?.token);
   const mapRef = useRef(null);
-
+  const lastSentRef = useRef(0);
   // Set 3D default to true
   const [is3D, setIs3D] = useState(true);
   const [isSatellite, setIsSatellite] = useState(false);
 
   // Responsive state
-  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : true);
-  
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 768 : true,
+  );
+
+  const [currentPos, setCurrentPos] = useState(
+    activeTrip.currentPos || activeTrip.previewPath?.[0] || null,
+  );
+  const [speed, setSpeed] = useState(0);
+  const [liveData, setLiveData] = useState(null);
+
+  // 1. WebSocket Setup
+  const { send } = useSocketSubscription({
+    key: `trip-${activeTrip.id}`,
+    path: API_PATHS.sockets.trip(activeTrip.id, token, "driver"),
+    enabled: !!activeTrip.id && !!token,
+    onMessage: (message) => {
+      // If the backend says the trip is stopped or stale, kick the driver out
+      if (message.type === "vehicle_stopped") {
+        // Only alert and redirect if it's NOT just a socket flicker
+        // (Backend now handles this more gracefully, but we check just in case)
+        if (
+          message.reason === "trip_not_active" ||
+          message.reason === "trip_not_found"
+        ) {
+          alert("This trip session has ended.");
+          onBack();
+        }
+      }
+
+      if (message.type === "v_delta" || message.type === "vehicle_update") {
+        setLiveData(message);
+      }
+    },
+  });
+
+  // 2. Real Geolocation Tracking
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const {
+          latitude,
+          longitude,
+          heading,
+          speed: currentSpeed,
+        } = position.coords;
+        const newPos = [longitude, latitude];
+
+        setCurrentPos(newPos);
+        setSpeed(Math.round((currentSpeed || 0) * 3.6)); // Convert m/s to km/h
+        const now = Date.now();
+
+        // PUSH TO SERVER via WebSocket (Flat structure)
+        if (now - lastSentRef.current >= 5000) {
+          lastSentRef.current = now;
+          send({
+            trip_id: activeTrip.id,
+            lat: latitude,
+            lon: longitude,
+            heading: heading || 0,
+            speed: currentSpeed || 0,
+          });
+        }
+      },
+      (error) => console.error("Location error:", error),
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 },
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [activeTrip.id]);
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   // Data normalization
   const t = useMemo(() => {
     const path = activeTrip.previewPath || [];
     return {
-      busId: activeTrip.bus_number || activeTrip.vehicleNumber || activeTrip.vehicle_id || "VAYY-LIVE",
-      status: activeTrip.status_label || "On Time",
+      busId:
+        activeTrip.bus_number ||
+        activeTrip.vehicleNumber ||
+        activeTrip.vehicle_id ||
+        "VAYY-LIVE",
+      status:
+        activeTrip.status_label ||
+        (liveData?.delay_minutes > 5
+          ? `${liveData.delay_minutes}m Delayed`
+          : "On Time"),
       route: {
         from: activeTrip.startLabel || "--",
         to: activeTrip.endLabel || "--",
       },
-      nextStop: {
-        name: activeTrip.next_stop_name || (activeTrip.stops?.[1]?.name) || "Upcoming Stop",
-        distance: activeTrip.next_stop_distance_text || "Checking...",
-        eta: activeTrip.next_stop_eta_minutes || "--",
-      },
       stats: {
-        boarded: activeTrip.passenger_count ?? activeTrip.boarded_passengers ?? 0,
-        speed: activeTrip.current_speed ?? 0,
+        boarded:
+          activeTrip.passenger_count ?? activeTrip.boarded_passengers ?? 0,
+        speed: speed,
         traffic: activeTrip.traffic_status || "Light",
       },
       summary: {
         totalDistance: activeTrip.distanceText || "--",
         estimatedTime: activeTrip.durationText || "--",
-        totalStops: activeTrip.stopsCount || 0,
+        totalStops: activeTrip.stopsCount || activeTrip.stops?.length || 0,
         vehicleNo: activeTrip.vehicleNumber || activeTrip.bus_number || "--",
       },
       path,
-      currentPos: activeTrip.currentPos || path[0] || null,
       stops: activeTrip.stops || [],
     };
-  }, [activeTrip]);
-
-  const [currentPos, setCurrentPos] = useState(t.currentPos);
-  const [simulatedStopIndex, setSimulatedStopIndex] = useState(0);
-  const [simulatedDistance, setSimulatedDistance] = useState("--");
-
-  // Simulation for all trips in LIVE view to show movement
-  useEffect(() => {
-    if (t.path.length > 0) {
-      let idx = 0;
-      let lastStopIdx = 0;
-      
-      const interval = setInterval(() => {
-        idx = (idx + 1);
-        if (idx >= t.path.length) {
-          clearInterval(interval);
-          return;
-        }
-        
-        const pos = t.path[idx];
-        setCurrentPos(pos);
-
-        // Update stop logic
-        const stops = t.stops;
-        if (stops.length > 0) {
-          const nextStop = stops[lastStopIdx + 1];
-          if (nextStop) {
-            const stopCoord = getStopLngLat(nextStop);
-            if (stopCoord) {
-              const dist = getDistance(pos, stopCoord);
-              setSimulatedDistance(dist >= 1000 ? `${(dist / 1000).toFixed(1)} km` : `${Math.round(dist)} m`);
-              
-              if (dist < 100) {
-                lastStopIdx++;
-                setSimulatedStopIndex(lastStopIdx);
-              }
-            }
-          }
-        }
-      }, 2000); // Steady movement for the simulation
-      return () => clearInterval(interval);
-    }
-  }, [t.path, t.stops]);
+  }, [activeTrip, speed, liveData]);
 
   const displayNextStop = useMemo(() => {
-    const next = t.stops[simulatedStopIndex + 1] || t.stops[t.stops.length - 1];
+    if (liveData?.next_stop_eta?.length > 0) {
+      const next = liveData.next_stop_eta[0];
+      return {
+        name: next.stop_name,
+        distance:
+          next.distance_meters > 1000
+            ? `${(next.distance_meters / 1000).toFixed(1)} km`
+            : `${Math.round(next.distance_meters)} m`,
+        eta: Math.max(1, Math.round(next.duration_seconds / 60)),
+      };
+    }
+
+    // Basic fallback logic
+    const next = t.stops[1] || t.stops[0];
     return {
       name: next?.name || "End of Route",
-      distance: simulatedDistance,
-      eta: Math.max(1, 15 - simulatedStopIndex) // Dummy simulated ETA
+      distance: "Calculating...",
+      eta: "--",
     };
-  }, [t.stops, simulatedStopIndex, simulatedDistance]);
-
-  /* ── Sub-components ── */
-
-  const MapControls = () => (
-    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 z-10">
-      {[
-        { Icon: Plus, label: "Zoom in", onClick: () => mapRef.current?.zoomIn() },
-        { Icon: Minus, label: "Zoom out", onClick: () => mapRef.current?.zoomOut() },
-        { Icon: Box, label: "3D View", onClick: () => setIs3D(!is3D), active: is3D },
-        { Icon: Globe, label: "Satellite", onClick: () => setIsSatellite(!isSatellite), active: isSatellite },
-        { Icon: Crosshair, label: "My location", onClick: () => {
-          if (currentPos) mapRef.current?.easeTo({ center: currentPos, zoom: 17, pitch: 60 });
-        }},
-      ].map(({ Icon, label, onClick, active }) => (
-        <button
-          key={label}
-          onClick={onClick}
-          className={`w-9 h-9 rounded-lg border flex items-center justify-center shadow-sm transition-colors cursor-pointer ${
-            active 
-              ? "bg-[#009849] border-[#009849] text-white" 
-              : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-          }`}
-        >
-          <Icon size={16} />
-        </button>
-      ))}
-    </div>
-  );
-
-  const BusHeader = ({ compact = false }) => (
-    <div className={`flex items-center gap-3 bg-white border-b border-gray-100 ${compact ? "px-4 py-3" : "px-5 py-4"}`}>
-      <div className={`flex items-center justify-center rounded-xl bg-green-50 flex-shrink-0`} style={{ width: compact ? 44 : 52, height: compact ? 44 : 52 }}>
-        <Bus size={compact ? 22 : 28} className="text-[#009849]" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className={`font-black text-gray-900 leading-tight ${compact ? "text-[17px]" : "text-xl"}`}>Bus {t.busId}</p>
-        <p className="text-xs text-gray-500 mt-0.5 truncate">
-          <span className="font-semibold text-gray-700">Route:</span> <span className="text-[#009849]">{t.route.from}</span>{" → "}{t.route.to}
-        </p>
-      </div>
-      <div className="flex items-center gap-1.5 text-xs font-semibold text-[#009849] px-3 py-1.5 rounded-full border border-green-300 bg-green-50 whitespace-nowrap flex-shrink-0">
-        {!compact && <span className="w-2 h-2 rounded-full bg-[#009849] inline-block" />}
-        {t.status}
-      </div>
-    </div>
-  );
-
-  const Stats = () => (
-    <div className="flex items-center divide-x divide-gray-100">
-      {[
-        { Icon: Users, label: "Boarded", val: t.stats.boarded, green: false },
-        { Icon: Gauge, label: "Speed", val: `45 km/h`, green: true },
-        { Icon: Zap, label: "Traffic", val: t.stats.traffic, green: true },
-      ].map(({ Icon, label, val, green }) => (
-        <div key={label} className="flex-1 flex flex-col items-center gap-1 py-3 px-2">
-          <Icon size={16} className="text-gray-400" />
-          <span className="text-[11px] text-gray-400 text-center">{label}</span>
-          <span className={`text-[15px] font-bold leading-none ${green ? "text-[#009849]" : "text-gray-900"}`}>{val}</span>
-        </div>
-      ))}
-    </div>
-  );
+  }, [t.stops, liveData]);
 
   /* ── Error State ── */
-  if (!route || !activeTrip) {
+  if (!activeTrip) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-center text-white">
         <div>
           <AlertTriangle size={48} className="mx-auto text-red-400 mb-4" />
           <h2 className="text-2xl font-black">Tracking Unavailable</h2>
-          <button onClick={onBack} className="mt-6 rounded-2xl bg-[#009849] px-6 py-3 font-bold">Return to Review</button>
+          <button
+            onClick={onBack}
+            className="mt-6 rounded-2xl bg-[#009849] px-6 py-3 font-bold"
+          >
+            Return to Review
+          </button>
         </div>
       </div>
     );

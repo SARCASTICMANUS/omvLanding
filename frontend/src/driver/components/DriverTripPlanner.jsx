@@ -15,10 +15,17 @@ import { LocationSearch } from "../../components/map";
 import api from "../../lib/api";
 import splashScreen1 from "../../assets/SplashScreen1.png";
 import { hasValidCoords } from "./driverFlowUtils";
+import api from "../../lib/api";
 
 const brandGreen = "#009849";
 
-function PlannerField({ label, placeholder, onSelect, initialValue, icon: Icon }) {
+function PlannerField({
+  label,
+  placeholder,
+  onSelect,
+  initialValue,
+  icon: Icon,
+}) {
   return (
     <div className="relative z-20">
       <label className="mb-3 flex items-center gap-3 text-[17px] font-extrabold text-[#0b171c] lg:text-[14px]">
@@ -117,8 +124,10 @@ export default function DriverTripPlanner({
   );
 
   const handleSwap = () => {
-    setSource(destination);
-    setDestination(source);
+    const s = source;
+    const d = destination;
+    setSource(d);
+    setDestination(s);
   };
 
   const handleNext = () => {
@@ -153,10 +162,8 @@ export default function DriverTripPlanner({
                 </span>
               </h1>
               <p className="mt-4 max-w-[450px] text-[15px] font-medium leading-[1.6] text-[#33475b] sm:text-[16px] lg:text-[14px]">
-                Enter source and destination points
-                to search saved operational routes,
-                review route details,
-                and start the trip live.
+                Enter source and destination points to search saved operational
+                routes, review route details, and start the trip live.
               </p>
             </div>
           </section>
@@ -186,7 +193,9 @@ export default function DriverTripPlanner({
               label="Destination"
               placeholder="Search destination / terminal / last stop"
               onSelect={setDestination}
-              initialValue={destination?.display_name || destination?.name || ""}
+              initialValue={
+                destination?.display_name || destination?.name || ""
+              }
               icon={MapPin}
             />
 
@@ -231,7 +240,9 @@ export default function DriverTripPlanner({
               </div>
               <ul className="space-y-2 text-[13px] font-medium text-[#425466]">
                 <li>Search all matching saved operational routes.</li>
-                <li>Review route cards, timings, stop count, and live status.</li>
+                <li>
+                  Review route cards, timings, stop count, and live status.
+                </li>
                 <li>Confirm the route and start live bus operations.</li>
               </ul>
             </div> */}
