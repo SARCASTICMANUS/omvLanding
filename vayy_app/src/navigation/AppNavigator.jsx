@@ -3,7 +3,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { useDispatch, useSelector } from "react-redux";
 
-import { restoreAuthFromStorage } from "../features/auth/authSlice";
+import { restoreAuthFromStorage } from "../auth/authSlice";
 import AuthNavigator from "./AuthNavigator";
 import DriverNavigator from "./DriverNavigator";
 import PassengerNavigator from "./PassengerNavigator";

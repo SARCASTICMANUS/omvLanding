@@ -1,0 +1,407 @@
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  Image,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  StyleSheet,
+  Dimensions,
+  StatusBar,
+  Platform,
+  ActivityIndicator,
+  ScrollView,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useDispatch, useSelector } from "react-redux";
+import { googleLogin, loginUser } from "../authSlice";
+import { Lock, Mail, Eye, EyeOff, User, LogIn, ChevronRight } from "lucide-react-native";
+
+import COLORS from "../../shared/constants/colors";
+import SPACING from "../../shared/constants/spacing";
+
+const { height } = Dimensions.get("window");
+
+const LoginPage = ({ navigation }) => {
+  const dispatch = useDispatch();
+  const insets = useSafeAreaInsets();
+  const { loading, error } = useSelector((state) => state.auth);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+
+  const handleSignIn = () => {
+    dispatch(loginUser({ email, password }));
+  };
+
+  const toggleShowPassword = () => {
+    setShowPassword(!showPassword);
+  };
+
+  const handleGoogleSignIn = () => {
+    dispatch(googleLogin(""));
+  };
+
+  const handleMicrosoftSignIn = () => {
+    // Microsoft login not implemented yet
+  };
+
+  const handleForgotPassword = () => {
+    navigation.navigate("PasswordReset");
+  };
+
+  const handleCreateAccount = () => {
+    navigation.navigate("RegisterPage");
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === "ios" ? "padding" : "padding"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : -150}
+    >
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+
+      <ScrollView 
+        bounces={false}
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Hero Image */}
+        <View style={styles.heroContainer}>
+          <Image
+            source={require("../../../assets/LoginAuto.png")}
+            style={styles.heroImage}
+            resizeMode="cover"
+          />
+        </View>
+
+        {/* Bottom Sheet */}
+        <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16 }]}>
+          <View style={styles.dragHandle} />
+
+          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.subtitle}>Sign in to continue to your account</Text>
+
+          {error ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>
+                {typeof error === "string"
+                  ? error.slice(0, 100)
+                  : error.detail || error.error || "Invalid email or password."}
+              </Text>
+            </View>
+          ) : null}
+
+          <Text style={styles.label}>Email Address</Text>
+          <View style={[styles.inputWrapper, emailFocused && styles.inputWrapperFocused]}>
+            <Mail size={20} color="#888" />
+            <TextInput
+              style={styles.input}
+              placeholder="name@company.com"
+              placeholderTextColor="#aaa"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+              onFocus={() => setEmailFocused(true)}
+              onBlur={() => setEmailFocused(false)}
+            />
+          </View>
+
+          <Text style={styles.label}>Password</Text>
+          <View style={[styles.inputWrapper, passwordFocused && styles.inputWrapperFocused]}>
+            <Lock size={20} color="#888" />
+            <TextInput
+              style={styles.input}
+              placeholder="••••••••"
+              placeholderTextColor="#aaa"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoComplete="password"
+              onFocus={() => setPasswordFocused(true)}
+              onBlur={() => setPasswordFocused(false)}
+            />
+            <TouchableOpacity onPress={toggleShowPassword}>
+              {showPassword ? <EyeOff size={20} color="#888" /> : <Eye size={20} color="#888" />}
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.row}>
+            <TouchableOpacity
+              style={styles.rememberRow}
+              onPress={() => setRememberMe(!rememberMe)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                {rememberMe && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+              <Text style={styles.rememberText}>Remember me</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleForgotPassword} activeOpacity={0.7}>
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity 
+            style={[styles.signInButton, loading && styles.disabledButton]} 
+            onPress={handleSignIn} 
+            activeOpacity={0.85}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.signInText}>Sign In  →</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or continue with</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <View style={styles.socialRow}>
+            <TouchableOpacity style={styles.socialButton} onPress={handleGoogleSignIn} activeOpacity={0.8}>
+              <Text style={styles.googleIcon}>G</Text>
+              <Text style={styles.socialText}>Google</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.socialButton} onPress={handleMicrosoftSignIn} activeOpacity={0.8}>
+              <Text style={styles.microsoftIcon}>⊞</Text>
+              <Text style={styles.socialText}>Microsoft</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.createRow}>
+            <Text style={styles.createText}>Don't have an account? </Text>
+            <TouchableOpacity onPress={handleCreateAccount} activeOpacity={0.7}>
+              <Text style={styles.createLink}>Create free account</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+};
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: "#0d1f0f",
+  },
+  heroContainer: {
+    height: height * 0.3,
+    backgroundColor: "#053D24",
+  },
+  heroImage: {
+    width: "100%",
+    height: "100%",
+  },
+  bottomSheet: {
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 30,
+    flex: 1,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: "#e0e0e0",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#111111",
+    marginBottom: 4,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: "#888888",
+    marginBottom: 18,
+    fontWeight: "400",
+  },
+  errorBox: {
+    backgroundColor: "#fef2f2",
+    borderColor: "#fecaca",
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 16,
+    padding: 12,
+  },
+  errorText: {
+    color: "#ef4444",
+    fontSize: 13,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#333333",
+    marginBottom: 6,
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#e5e5e5",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === "ios" ? 13 : 9,
+    marginBottom: 14,
+    backgroundColor: "#fafafa",
+  },
+  inputWrapperFocused: {
+    borderColor: "#1a8a2e",
+    backgroundColor: "#f0faf2",
+  },
+  inputIcon: {
+    fontSize: 15,
+    marginRight: 10,
+    color: "#888",
+  },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    color: "#111111",
+    padding: 0,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  rememberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderWidth: 1.5,
+    borderColor: "#cccccc",
+    borderRadius: 4,
+    marginRight: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+  },
+  checkboxChecked: {
+    backgroundColor: "#1a8a2e",
+    borderColor: "#1a8a2e",
+  },
+  checkmark: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  rememberText: {
+    fontSize: 13,
+    color: "#444444",
+    fontWeight: "500",
+  },
+  forgotText: {
+    fontSize: 13,
+    color: "#1a8a2e",
+    fontWeight: "600",
+  },
+  signInButton: {
+    backgroundColor: "#1a8a2e",
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    shadowColor: "#1a8a2e",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  disabledButton: {
+    opacity: 0.7,
+  },
+  signInText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#eeeeee",
+  },
+  dividerText: {
+    fontSize: 12,
+    color: "#aaaaaa",
+    marginHorizontal: 12,
+    fontWeight: "500",
+  },
+  socialRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 20,
+  },
+  socialButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#e5e5e5",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    backgroundColor: "#ffffff",
+    gap: 8,
+  },
+  googleIcon: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#4285F4",
+  },
+  microsoftIcon: {
+    fontSize: 15,
+    color: "#F25022",
+  },
+  socialText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#333333",
+  },
+  createRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  createText: {
+    fontSize: 13,
+    color: "#888888",
+  },
+  createLink: {
+    fontSize: 13,
+    color: "#1a8a2e",
+    fontWeight: "700",
+  },
+});
+
+export default LoginPage;

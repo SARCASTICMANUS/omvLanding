@@ -3,10 +3,12 @@ import { Text, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 
-import COLORS from "../constants/colors";
-import DriverRouteList from "../screens/driver/DriverRouteList";
-import DriverLiveTracking from "../screens/driver/DriverLiveTracking";
-import DriverTripReview from "../screens/driver/DriverTripReview";
+import COLORS from "../shared/constants/colors";
+import DriverRouteList from "../routes/screens/DriverRouteList";
+import DriverLiveTracking from "../tracking/screens/DriverLiveTracking";
+import DriverTripReview from "../routes/screens/DriverTripReview";
+import ProfileScreen from "../shared/screens/ProfileScreen";
+import { LayoutDashboard, Map, User } from "lucide-react-native";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -32,9 +34,9 @@ function DriverTabs() {
         },
       }}
     >
-      <Tab.Screen name="DriverHomeScreen" component={PlaceholderScreen} options={{ title: "Console" }} />
-      <Tab.Screen name="DriverRouteList" component={DriverRouteList} options={{ title: "Routes" }} />
-      <Tab.Screen name="ProfileScreen" component={PlaceholderScreen} options={{ title: "Profile" }} />
+      <Tab.Screen name="DriverHomeScreen" component={PlaceholderScreen} options={{ title: "Console", tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} /> }} />
+      <Tab.Screen name="DriverRouteList" component={DriverRouteList} options={{ title: "Routes", tabBarIcon: ({ color, size }) => <Map size={size} color={color} /> }} />
+      <Tab.Screen name="ProfileScreen" component={ProfileScreen} options={{ title: "Profile", tabBarIcon: ({ color, size }) => <User size={size} color={color} /> }} />
     </Tab.Navigator>
   );
 }

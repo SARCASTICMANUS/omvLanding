@@ -3,22 +3,19 @@ import { Text, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 
-import COLORS from "../constants/colors";
-import AllBusesPage from "../screens/passenger/AllBusesPage";
-import IntroPage from "../screens/passenger/IntroPage";
-import PassengerRouteList from "../screens/passenger/PassengerRouteList";
-import PassengerLiveTracking from "../screens/passenger/PassengerLiveTracking";
-import PassengerStopsTimeline from "../screens/passenger/PassengerStopsTimeline";
-import PassengerTripPlanner from "../screens/passenger/PassengerTripPlanner";
+import COLORS from "../shared/constants/colors";
+import AllBusesPage from "../routes/screens/AllBusesPage";
+import IntroPage from "../passenger/screens/IntroPage";
+import PassengerRouteList from "../routes/screens/PassengerRouteList";
+import PassengerLiveTracking from "../tracking/screens/PassengerLiveTracking";
+import PassengerStopsTimeline from "../routes/screens/PassengerStopsTimeline";
+import PassengerTripPlanner from "../passenger/screens/PassengerTripPlanner";
+import ProfileScreen from "../shared/screens/ProfileScreen";
+import PassengerAlertsScreen from "../handshake/screens/PassengerAlertsScreen";
+import { Home, Map, Navigation, Bell, User } from "lucide-react-native";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
-
-const PlaceholderScreen = ({ route }) => (
-  <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-    <Text>{route.name}</Text>
-  </View>
-);
 
 function PassengerTabs() {
   return (
@@ -47,27 +44,27 @@ function PassengerTabs() {
       <Tab.Screen
         name="PassengerHome"
         component={IntroPage}
-        options={{ title: "Home", tabBarIcon: ({ color }) => <Text style={{ color }}>H</Text> }}
+        options={{ title: "Home", tabBarIcon: ({ color, size }) => <Home size={size} color={color} /> }}
       />
       <Tab.Screen
         name="PassengerRoutes"
         component={AllBusesPage}
-        options={{ title: "Routes", tabBarIcon: ({ color }) => <Text style={{ color }}>R</Text> }}
+        options={{ title: "Routes", tabBarIcon: ({ color, size }) => <Map size={size} color={color} /> }}
       />
       <Tab.Screen
         name="PassengerTripPlanner"
         component={PassengerTripPlanner}
-        options={{ title: "Live Map", tabBarIcon: ({ color }) => <Text style={{ color }}>M</Text> }}
+        options={{ title: "Live Map", tabBarIcon: ({ color, size }) => <Navigation size={size} color={color} /> }}
       />
       <Tab.Screen
         name="PassengerAlerts"
-        component={PlaceholderScreen}
-        options={{ title: "Alerts", tabBarIcon: ({ color }) => <Text style={{ color }}>A</Text> }}
+        component={PassengerAlertsScreen}
+        options={{ title: "Alerts", tabBarIcon: ({ color, size }) => <Bell size={size} color={color} /> }}
       />
       <Tab.Screen
         name="ProfileScreen"
-        component={PlaceholderScreen}
-        options={{ title: "Profile", tabBarIcon: ({ color }) => <Text style={{ color }}>P</Text> }}
+        component={ProfileScreen}
+        options={{ title: "Profile", tabBarIcon: ({ color, size }) => <User size={size} color={color} /> }}
       />
     </Tab.Navigator>
   );

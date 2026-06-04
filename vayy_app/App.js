@@ -6,7 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import AppNavigator from "./src/navigation/AppNavigator";
-import { LanguageProvider } from "./src/i18n/LanguageContext";
+import { LanguageProvider } from "./src/shared/lib/i18n/LanguageContext";
 import { store } from "./src/store/store";
 
 export default function App() {
