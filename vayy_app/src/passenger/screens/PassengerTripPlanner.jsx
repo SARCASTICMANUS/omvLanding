@@ -176,6 +176,8 @@ export default function PassengerTripPlanner({ navigation, route }) {
   const [recentSearches, setRecentSearches] = useState([]);
   const [fetchingRecent, setFetchingRecent] = useState(false);
   const loading = route?.params?.loading || false;
+  const mode = route?.params?.mode || "auto";
+  const isBike = mode === "bike";
 
   const fetchRecentSearches = async () => {
     try {
@@ -204,7 +206,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
       return;
     }
 
-    navigation.navigate("PassengerRouteList", { pickup, destination });
+    navigation.navigate("PassengerRouteList", { pickup, destination, mode });
   };
 
   const handleSwap = () => {
@@ -243,7 +245,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
               <Text style={styles.heroTitleGreen}>Route</Text>
               <Text style={styles.heroSubtitle}>
                 Enter your pickup and drop locations{"\n"}
-                to find the best bus routes{"\n"}
+                to find the best {isBike ? "bike" : "bus"} routes{"\n"}
                 and track in real-time.
               </Text>
             </View>
@@ -275,11 +277,15 @@ export default function PassengerTripPlanner({ navigation, route }) {
               activeOpacity={0.86}
               disabled={!canProceed || loading}
               onPress={handleNext}
-              style={[styles.searchButton, (!canProceed || loading) && styles.searchDisabled]}
+              style={[
+                styles.searchButton,
+                isBike && { backgroundColor: "#534AB7" },
+                (!canProceed || loading) && styles.searchDisabled,
+              ]}
             >
               <Text style={styles.searchButtonIcon}>o</Text>
               <Text style={styles.searchButtonText}>
-                {loading ? "Searching..." : "Search Vayy Rides"}
+                {loading ? "Searching..." : isBike ? "Search Bike Rides" : "Search Vayy Rides"}
               </Text>
             </TouchableOpacity>
           </View>

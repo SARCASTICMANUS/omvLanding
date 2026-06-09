@@ -178,8 +178,11 @@ export default function PassengerRouteList({ navigation, route }) {
     loading = false,
     pickup: initialPickup,
     destination: initialDestination,
+    mode = "auto",
   } = route?.params || {};
 
+  const isBike = mode === "bike";
+  const accent = isBike ? "#534AB7" : "#009849";
   const pickup = initialPickup;
   const destination = initialDestination;
   const [showAllBuses, setShowAllBuses] = useState(false);
@@ -208,6 +211,7 @@ export default function PassengerRouteList({ navigation, route }) {
     navigation.navigate("AllBusesPage", {
       pickupName: shortPlace(pickup, ""),
       destName:   shortPlace(destination, ""),
+      mode,
     });
   };
   const handleViewStops = (trip) => {
@@ -239,7 +243,7 @@ export default function PassengerRouteList({ navigation, route }) {
 
         <View style={s.headerMid}>
           <Text style={s.headerTitle}>Best Match</Text>
-          <Text style={s.headerSub}>Auto routes</Text>
+          <Text style={[s.headerSub, { color: accent }]}>{isBike ? "Bike" : "Auto"} routes</Text>
         </View>
 
         <TouchableOpacity style={s.iconBtn}>

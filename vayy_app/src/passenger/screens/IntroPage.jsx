@@ -202,7 +202,7 @@ export default function PassengerHomeScreen({ navigation }) {
 
   const handleBikeBook = () => {
     dispatch(setVehicleMode("BIKE"));
-    navigation.navigate("BikeBookingScreen");
+    navigation.navigate("PassengerTripPlanner", { mode: "bike" });
   };
 
   return (

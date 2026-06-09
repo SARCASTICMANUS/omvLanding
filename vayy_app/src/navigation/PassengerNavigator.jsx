@@ -1,5 +1,5 @@
-import React from "react";
-import { Text, View } from "react-native";
+import React, { lazy, Suspense } from "react";
+import { Text, View, ActivityIndicator } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 
@@ -12,7 +12,17 @@ import PassengerStopsTimeline from "../routes/screens/PassengerStopsTimeline";
 import PassengerTripPlanner from "../passenger/screens/PassengerTripPlanner";
 import ProfileScreen from "../shared/screens/ProfileScreen";
 import PassengerAlertsScreen from "../handshake/screens/PassengerAlertsScreen";
-import { Home, Map, Navigation, Bell, User } from "lucide-react-native";
+import PassengerActionsScreen from "../passenger/screens/PassengerActionsScreen";
+import JourneyHistoryScreen from "../passenger/screens/JourneyHistoryScreen";
+import DestinationSearchScreen from "../passenger/screens/DestinationSearchScreen";
+const DeveloperNavigator = lazy(() => import("../screens/Developer/DeveloperNavigator"));
+import { Home, Map, Navigation, Bell, User, Settings } from "lucide-react-native";
+
+// Bike Flow Screens
+import { BikeMapPreRideScreen } from "../passenger/bike-ride/MapPreRideScreen";
+import { BikeMapPostAcceptScreen } from "../passenger/bike-ride/MapPostAcceptScreen";
+import { RiderPopupScreen } from "../passenger/bike-ride/RiderPopupScreen";
+import { RideStatsScreen } from "../passenger/bike-ride/RideStatsScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -62,6 +72,11 @@ function PassengerTabs() {
         options={{ title: "Alerts", tabBarIcon: ({ color, size }) => <Bell size={size} color={color} /> }}
       />
       <Tab.Screen
+        name="PassengerActions"
+        component={PassengerActionsScreen}
+        options={{ title: "Actions", tabBarIcon: ({ color, size }) => <Navigation size={size} color={color} /> }}
+      />
+      <Tab.Screen
         name="ProfileScreen"
         component={ProfileScreen}
         options={{ title: "Profile", tabBarIcon: ({ color, size }) => <User size={size} color={color} /> }}
@@ -78,6 +93,14 @@ export default function PassengerNavigator() {
       <Stack.Screen name="AllBusesPage" component={AllBusesPage} />
       <Stack.Screen name="PassengerStopsTimeline" component={PassengerStopsTimeline} />
       <Stack.Screen name="PassengerLiveTracking" component={PassengerLiveTracking} />
+      <Stack.Screen name="JourneyHistoryScreen" component={JourneyHistoryScreen} />
+      <Stack.Screen name="DestinationSearchScreen" component={DestinationSearchScreen} />
+      
+      {/* Bike Flow */}
+      <Stack.Screen name="BikeMapPreRide" component={BikeMapPreRideScreen} />
+      <Stack.Screen name="BikeMapPostAccept" component={BikeMapPostAcceptScreen} />
+      <Stack.Screen name="RiderPopup" component={RiderPopupScreen} />
+      <Stack.Screen name="RideStats" component={RideStatsScreen} />
     </Stack.Navigator>
   );
 }
