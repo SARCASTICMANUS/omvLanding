@@ -4,27 +4,30 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 
 import COLORS from "../shared/constants/colors";
-import DriverHomeScreen from "../driver/screens/DriverHomeScreen";
-import DriverRouteList from "../routes/screens/DriverRouteList";
-import DriverLiveTracking from "../tracking/screens/DriverLiveTracking";
-import DriverTripReview from "../routes/screens/DriverTripReview";
-import DriverActionsScreen from "../driver/screens/DriverActionsScreen";
+import DriverBikeHomeScreen from "../driver/bike-ride/DriverBikeHomeScreen";
+import DriverRouteList from "../driver/screens/DriverRouteList";
+import DriverLiveTracking from "../driver/screens/DriverLiveTracking";
+import DriverTripReview from "../driver/screens/DriverTripReview";
+import DriverActionsScreen from "../driver/bike-ride/DriverActionsScreen";
 import DriverTripHistoryScreen from "../driver/screens/DriverTripHistoryScreen";
 import VehicleSelectionScreen from "../driver/screens/VehicleSelectionScreen";
 import ProfileScreen from "../shared/screens/ProfileScreen";
+import BikeFindPassengerScreen from "../driver/bike-ride/BikeFindPassengerScreen";
 import { LayoutDashboard, Map, User, Settings } from "lucide-react-native";
 
-// Auto Flow Screens
-import AutoAheadAlertScreen from "../auto/screens/AutoAheadAlertScreen";
-import AutoBoardedPopupScreen from "../auto/screens/AutoBoardedPopupScreen";
-import { FindPassengerScreen as AutoFindPassengerScreen } from "../auto/screens/AutoFindPassengerScreen";
-import AutoLiveTrackingScreen from "../auto/screens/AutoLiveTrackingScreen";
+// Auto Flow Screens (for future)
+import AutoAheadAlertScreen from "../driver/shared-auto/AutoAheadAlertScreen";
+import AutoBoardedPopupScreen from "../driver/shared-auto/AutoBoardedPopupScreen";
+import AutoLiveTrackingScreen from "../driver/shared-auto/AutoLiveTrackingScreen";
 
 // Bike Flow Screens
-import { FindRideBuddyScreen as BikeSearchingScreen } from "../bike/screens/BikeSearchingScreen";
-import { BuddyRequestPopupScreen } from "../bike/screens/BikeBookingScreen";
-import BikeOTPHandshakeScreen from "../bike/screens/BikeOTPHandshakeScreen";
-import BikeTrackingScreen from "../bike/screens/BikeTrackingScreen";
+import { BikeSearchingScreen } from "../passenger/bike-ride/BikeSearchingScreen";
+import { BuddyRequestPopupScreen } from "../driver/bike-ride/BikeBookingScreen";
+import BikeOTPEntryScreen from "../driver/bike-ride/BikeOTPEntryScreen";
+import BikeRideToPickupScreen from "../driver/bike-ride/BikeRideToPickupScreen";
+import BikeRideToDestinationScreen from "../driver/bike-ride/BikeRideToDestinationScreen";
+import BikeTripCompleteScreen from "../driver/bike-ride/BikeTripCompleteScreen";
+import BikeTrackingScreen from "../driver/bike-ride/BikeTrackingScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -37,16 +40,24 @@ function DriverTabs() {
         headerShown: false,
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textLight,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: "700",
+        },
         tabBarStyle: {
           backgroundColor: COLORS.white,
           borderTopColor: COLORS.border,
-          height: 60,
-          paddingBottom: 10,
+          borderTopLeftRadius: 12,
+          borderTopRightRadius: 12,
+          height: 58,
+          paddingBottom: 8,
+          paddingTop: 4,
+          position: "absolute",
         },
       }}
     >
-      <Tab.Screen name="DriverHomeScreen" component={DriverHomeScreen} options={{ title: "Console", tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} /> }} />
-      <Tab.Screen name="DriverRouteList" component={DriverRouteList} options={{ title: "Routes", tabBarIcon: ({ color, size }) => <Map size={size} color={color} /> }} />
+      <Tab.Screen name="DriverHome" component={DriverBikeHomeScreen} options={{ title: "Home", tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} /> }} />
+      <Tab.Screen name="DriverRoutes" component={DriverRouteList} options={{ title: "Routes", tabBarIcon: ({ color, size }) => <Map size={size} color={color} /> }} />
       <Tab.Screen name="DriverActions" component={DriverActionsScreen} options={{ title: "Actions", tabBarIcon: ({ color, size }) => <Settings size={size} color={color} /> }} />
       <Tab.Screen name="ProfileScreen" component={ProfileScreen} options={{ title: "Profile", tabBarIcon: ({ color, size }) => <User size={size} color={color} /> }} />
     </Tab.Navigator>
@@ -61,13 +72,16 @@ export default function DriverNavigator() {
       <Stack.Screen name="DriverLiveTracking" component={DriverLiveTracking} />
       <Stack.Screen name="DriverTripHistoryScreen" component={DriverTripHistoryScreen} />
       <Stack.Screen name="VehicleSelectionScreen" component={VehicleSelectionScreen} />
-      <Stack.Screen name="FindPassenger" component={AutoFindPassengerScreen} />
+      <Stack.Screen name="FindPassenger" component={BikeFindPassengerScreen} />
       <Stack.Screen name="AheadAlert" component={AutoAheadAlertScreen} />
       <Stack.Screen name="BoardedPopup" component={AutoBoardedPopupScreen} />
       <Stack.Screen name="AutoRideActive" component={AutoLiveTrackingScreen} />
       <Stack.Screen name="BikeSearching" component={BikeSearchingScreen} />
       <Stack.Screen name="BuddyRequestPopup" component={BuddyRequestPopupScreen} />
-      <Stack.Screen name="BikeOTPHandshake" component={BikeOTPHandshakeScreen} />
+      <Stack.Screen name="BikeOTPEntry" component={BikeOTPEntryScreen} />
+      <Stack.Screen name="BikeRideToPickup" component={BikeRideToPickupScreen} />
+      <Stack.Screen name="BikeRideToDestination" component={BikeRideToDestinationScreen} />
+      <Stack.Screen name="BikeTripComplete" component={BikeTripCompleteScreen} />
       <Stack.Screen name="BikeTracking" component={BikeTrackingScreen} />
     </Stack.Navigator>
   );

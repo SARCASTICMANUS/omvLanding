@@ -23,6 +23,13 @@ import { BikeMapPreRideScreen } from "../passenger/bike-ride/MapPreRideScreen";
 import { BikeMapPostAcceptScreen } from "../passenger/bike-ride/MapPostAcceptScreen";
 import { RiderPopupScreen } from "../passenger/bike-ride/RiderPopupScreen";
 import { RideStatsScreen } from "../passenger/bike-ride/RideStatsScreen";
+import { BikeSearchingScreen } from "../passenger/bike-ride/BikeSearchingScreen";
+import { RideCompleteScreen } from "../passenger/bike-ride/RideCompleteScreen";
+
+// Auto Flow Screens
+import { AutoPreRideScreen } from "../passenger/shared-auto/AutoPreRideScreen";
+import { AutoSearchingScreen } from "../passenger/shared-auto/AutoSearchingScreen";
+import { AutoRideCompleteScreen } from "../passenger/shared-auto/AutoRideCompleteScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -101,6 +108,13 @@ export default function PassengerNavigator() {
       <Stack.Screen name="BikeMapPostAccept" component={BikeMapPostAcceptScreen} />
       <Stack.Screen name="RiderPopup" component={RiderPopupScreen} />
       <Stack.Screen name="RideStats" component={RideStatsScreen} />
+      <Stack.Screen name="BikeSearching" component={BikeSearchingScreen} />
+      <Stack.Screen name="RideComplete" component={RideCompleteScreen} />
+
+      {/* Auto Flow */}
+      <Stack.Screen name="AutoPreRide" component={AutoPreRideScreen} />
+      <Stack.Screen name="AutoSearching" component={AutoSearchingScreen} />
+      <Stack.Screen name="AutoRideComplete" component={AutoRideCompleteScreen} />
     </Stack.Navigator>
   );
 }

@@ -1,13 +1,13 @@
 import React from "react";
 import { createStackNavigator } from "@react-navigation/stack";
 
-import AutoAheadAlertScreen from "../auto/screens/AutoAheadAlertScreen";
-import AutoBestMatchRouteScreen from "../auto/screens/AutoBestMatchRouteScreen";
-import AutoBoardedPopupScreen from "../auto/screens/AutoBoardedPopupScreen";
-import AutoFindPassengerScreen from "../auto/screens/AutoFindPassengerScreen";
+import AutoAheadAlertScreen from "../driver/shared-auto/AutoAheadAlertScreen";
+import AutoBestMatchRouteScreen from "../driver/shared-auto/AutoBestMatchRouteScreen";
+import AutoBoardedPopupScreen from "../driver/shared-auto/AutoBoardedPopupScreen";
+import AutoFindPassengerScreen from "../driver/shared-auto/AutoFindPassengerScreen";
 import FromToScreen from "../shared/screens/FromToScreen";
-import DriverLoginScreen from "../auth/screens/DriverLoginScreen";
-import AutoLiveTrackingScreen from "../auto/screens/AutoLiveTrackingScreen";
+import DriverLoginScreen from "../driver/screens/DriverLoginScreen";
+import AutoLiveTrackingScreen from "../driver/shared-auto/AutoLiveTrackingScreen";
 import DriverTripHistoryScreen from "../driver/screens/DriverTripHistoryScreen";
 
 const Stack = createStackNavigator();

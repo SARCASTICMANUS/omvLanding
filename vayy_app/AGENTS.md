@@ -83,3 +83,21 @@ Driver Trip Planner
 * Avoid long explanations
 * Keep changes focused
 * Do not generate duplicate implementations
+
+
+CRITICAL:
+
+Before editing any file:
+
+- Read complete file.
+- Read imported components used by the file.
+- Preserve all business logic.
+- Preserve all hooks.
+- Preserve all state.
+- Preserve all navigation.
+- Preserve all API calls.
+- Never generate simplified examples.
+- Never return placeholder code.
+- Never rewrite a screen from scratch unless explicitly requested.
+
+If the file cannot be read, stop and report missing context.

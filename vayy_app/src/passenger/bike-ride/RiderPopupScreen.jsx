@@ -1,489 +1,530 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  ScrollView,
-  StyleSheet,
+  View,
   Text,
   TouchableOpacity,
-  View,
-  Image,
+  StyleSheet,
+  Dimensions,
+  StatusBar,
+  Platform,
 } from "react-native";
-import AppFrame from "../../components/AppFrame";
-import { colors } from "../../theme/colors";
-import { spacing } from "../../theme/spacing";
-import { typography } from "../../theme/typography";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  Ionicons,
+  MaterialIcons,
+} from "@expo/vector-icons";
 
-// ─── Dummy data (matches design) ─────────────────────────────────────────────
-const DRIVER = {
-  name: "Priya Sharma",
-  rating: 4.9,
-  badge: "VAYY Partner",
-  vehicle: "Auto",
-  arrivingIn: "6 min",
-  distanceAway: "2.1 km",
-  otp: ["2", "7", "4", "1"],
-  photo: null, // swap with require(...) when real asset available
-};
+import { ConfirmPopup } from "./ConfirmPopup";
 
-const ACCENT = colors.primary ?? "#1D9E75"; // teal — matches design green
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function MapPlaceholder() {
-  return (
-    <View style={styles.mapContainer}>
-      {/* Pickup chip */}
-      <View style={[styles.mapChip, styles.mapChipTop]}>
-        <Text style={styles.mapChipLabel}>Pickup</Text>
-        <Text style={styles.mapChipValue}>Hazratganj Metro{"\n"}Gate 2</Text>
-      </View>
-
-      {/* Distance chip */}
-      <View style={[styles.mapChip, styles.mapChipMid]}>
-        <Text style={[styles.mapChipValue, { color: ACCENT }]}>2.1 km away</Text>
-      </View>
-
-      {/* Stop chip */}
-      <View style={[styles.mapChip, styles.mapChipBot]}>
-        <Text style={[styles.mapChipLabel, { color: ACCENT }]}>Your Stop</Text>
-        <Text style={styles.mapChipValue}>Alambagh Bus{"\n"}Terminal</Text>
-      </View>
-
-      {/* Recenter button */}
-      <View style={styles.recenterBtn}>
-        <Text style={styles.recenterIcon}>◎</Text>
-      </View>
-
-      {/* Map label (placeholder background text) */}
-      <Text style={styles.mapBgText}>MAP</Text>
-    </View>
-  );
-}
-
-function DriverAvatar({ photo, name }) {
-  const initials = name
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
-  return (
-    <View style={styles.avatarWrap}>
-      {photo ? (
-        <Image source={photo} style={styles.avatarImg} />
-      ) : (
-        <View style={[styles.avatarFallback, { backgroundColor: ACCENT + "22" }]}>
-          <Text style={[styles.avatarInitials, { color: ACCENT }]}>{initials}</Text>
-        </View>
-      )}
-    </View>
-  );
-}
-
-function StatsGrid({ driver }) {
-  const stats = [
-    { icon: "🕐", label: "Arriving in", value: driver.arrivingIn },
-    { icon: "🛵", label: "Distance away", value: driver.distanceAway },
-    { icon: "🚗", label: "Vehicle", value: driver.vehicle },
-    { icon: "📍", label: "Live location", value: "Track on map", isLink: true },
-  ];
-
-  return (
-    <View style={styles.statsGrid}>
-      {stats.map((s, i) => (
-        <View
-          key={i}
-          style={[
-            styles.statCell,
-            i % 2 === 0 && i < stats.length - 1 && styles.statCellBorderRight,
-            i < 2 && styles.statCellBorderBottom,
-          ]}
-        >
-          <Text style={styles.statIcon}>{s.icon}</Text>
-          <Text style={styles.statLabel}>{s.label}</Text>
-          <Text style={[styles.statValue, s.isLink && { color: ACCENT }]}>
-            {s.value}
-            {s.isLink && <Text style={{ color: ACCENT }}> ›</Text>}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function OTPRow({ otp }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <View style={styles.otpSection}>
-      <View style={styles.otpHeader}>
-        <View style={[styles.otpIconCircle, { backgroundColor: ACCENT + "18" }]}>
-          <Text style={styles.otpIconEmoji}>🤝</Text>
-        </View>
-        <View style={styles.otpHeaderText}>
-          <Text style={styles.otpTitle}>Handshake OTP</Text>
-          <Text style={styles.otpSubtitle}>Share this OTP with driver</Text>
-        </View>
-        <View style={styles.otpDigitsRow}>
-          {otp.map((digit, i) => (
-            <View key={i} style={[styles.otpBox, { borderColor: ACCENT + "44" }]}>
-              <Text style={[styles.otpDigit, { color: ACCENT }]}>{digit}</Text>
-            </View>
-          ))}
-          <TouchableOpacity onPress={handleCopy} style={styles.copyBtn}>
-            <Text style={[styles.copyText, { color: ACCENT }]}>
-              {copied ? "✓ Copied" : "⎘ Copy"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Safety note */}
-      <View style={[styles.safetyBanner, { backgroundColor: ACCENT + "12", borderColor: ACCENT + "30" }]}>
-        <Text style={[styles.safetyText, { color: ACCENT }]}>
-          ✓  For your safety, verify the OTP before boarding
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+const { width } = Dimensions.get("window");
 
 export function RiderPopupScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const [step, setStep] = useState(0);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const labels = ["1.2 km", "800 m", "400 m", "Arrived"];
+  const etas = ["5 min", "3 min", "2 min", "0 min"];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setStep((v) => {
+        if (v === labels.length - 1) {
+          clearInterval(timer);
+          // Simulate OTP verification and auto-redirect to active ride stats
+          setTimeout(() => {
+            navigation.navigate('RideStats');
+          }, 2000);
+          return v;
+        }
+        return v + 1;
+      });
+    }, 3500);
+    return () => clearInterval(timer);
+  }, [navigation]);
+
   return (
-    <AppFrame
-      navigation={navigation}
-      title="Ride request"
-      accent={ACCENT}
-      hideHeader
-    >
-      <View style={styles.root}>
-        {/* Top: Map */}
-        <MapPlaceholder />
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-        {/* Bottom: Sheet */}
-        <ScrollView
-          style={styles.sheet}
-          contentContainerStyle={styles.sheetContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Sheet handle */}
-          <View style={styles.sheetHandle} />
-
-          {/* Accepted banner */}
-          <View style={styles.acceptedBanner}>
-            <View style={[styles.acceptedIcon, { backgroundColor: ACCENT + "18" }]}>
-              <Text style={[styles.acceptedIconText, { color: ACCENT }]}>✓</Text>
-            </View>
-            <View style={styles.acceptedText}>
-              <Text style={styles.acceptedTitle}>Ride Accepted!</Text>
-              <Text style={styles.acceptedSub}>Your driver is on the way</Text>
-            </View>
-            <Text style={styles.acceptedTime}>15 sec ago</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Driver row */}
-          <View style={styles.driverRow}>
-            <DriverAvatar photo={DRIVER.photo} name={DRIVER.name} />
-            <View style={styles.driverInfo}>
-              <View style={styles.driverNameRow}>
-                <Text style={styles.driverName}>{DRIVER.name}</Text>
-                <View style={[styles.verifiedBadge, { backgroundColor: ACCENT + "18" }]}>
-                  <Text style={[styles.verifiedIcon, { color: ACCENT }]}>✓</Text>
-                </View>
-              </View>
-              <View style={styles.driverMeta}>
-                <Text style={styles.starIcon}>⭐</Text>
-                <Text style={styles.ratingText}>{DRIVER.rating}</Text>
-                <Text style={styles.metaDot}> • </Text>
-                <Text style={styles.badgeText}>{DRIVER.badge}</Text>
-              </View>
-            </View>
-            <TouchableOpacity style={[styles.callBtn, { backgroundColor: ACCENT + "18" }]}>
-              <Text style={[styles.callIcon, { color: ACCENT }]}>📞</Text>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.headerLeft}>
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="chevron-back" size={24} color="#111827" />
             </TouchableOpacity>
-          </View>
+          )}
+          <Text style={styles.headerTitle}>Ride Accepted!</Text>
+        </View>
 
-          <View style={styles.divider} />
-
-          {/* Stats 2×2 grid */}
-          <StatsGrid driver={DRIVER} />
-
-          <View style={styles.divider} />
-
-          {/* OTP Section */}
-          <OTPRow otp={DRIVER.otp} />
-
-          {/* Cancel button */}
-          <TouchableOpacity
-            style={styles.cancelBtn}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.cancelText}>Cancel Ride</Text>
-          </TouchableOpacity>
-        </ScrollView>
+        <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowCancelConfirm(true)}>
+          <Text style={styles.cancelText}>Cancel</Text>
+          <Ionicons name="close-circle-outline" size={24} color="#EF4444" />
+        </TouchableOpacity>
       </View>
-    </AppFrame>
+
+      {/* Map Area */}
+      <View style={styles.mapArea}>
+        <View style={styles.mapBg}>
+          <View style={styles.gridLineH} />
+          <View style={[styles.gridLineH, { top: "40%" }]} />
+          <View style={[styles.gridLineH, { top: "70%" }]} />
+          <View style={styles.gridLineV} />
+          <View style={[styles.gridLineV, { left: "40%" }]} />
+          <View style={[styles.gridLineV, { left: "70%" }]} />
+        </View>
+
+        {/* User Location Marker */}
+        <View style={styles.userMarkerOuter}>
+          <View style={styles.userMarker}>
+             <View style={styles.userDot} />
+          </View>
+          <View style={styles.markerLabel}>
+            <Text style={styles.markerLabelText}>You</Text>
+          </View>
+        </View>
+
+        {/* Driver Tracking Callout */}
+        <View style={[styles.driverCallout, { bottom: 250 - step * 40, left: 100 + step * 30 }]}>
+          <View style={styles.calloutBox}>
+            <Text style={styles.calloutValue}>{labels[step]}</Text>
+            <Text style={styles.calloutLabel}>{step === labels.length - 1 ? 'at pickup' : 'away'}</Text>
+          </View>
+          <View style={styles.calloutArrow} />
+          <View style={styles.driverIconCircle}>
+            <Text style={{ fontSize: 20 }}>🏍️</Text>
+          </View>
+        </View>
+
+        {/* Recenter Button */}
+        <TouchableOpacity style={styles.recenterBtn}>
+          <MaterialIcons name="my-location" size={24} color="#111827" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Bottom Sheet Notification */}
+      <View style={styles.bottomSheet}>
+        <View style={styles.handle} />
+
+        {/* Status Notification */}
+        <View style={styles.acceptedBanner}>
+           <View style={styles.checkCircle}>
+              <Ionicons name="checkmark" size={20} color="#009849" />
+           </View>
+           <View style={styles.acceptedInfo}>
+              <Text style={styles.acceptedTitle}>Ride Accepted!</Text>
+              <Text style={styles.acceptedSubtitle}>Your driver is on the way to you</Text>
+           </View>
+           <Text style={styles.timestamp}>Just now</Text>
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* Driver Row */}
+        <View style={styles.driverRow}>
+          <View style={styles.avatar}>
+             <Text style={styles.avatarInitial}>P</Text>
+             <View style={styles.badge}>
+                <Ionicons name="star" size={10} color="#FFB800" />
+                <Text style={styles.ratingText}>4.9</Text>
+             </View>
+          </View>
+          <View style={styles.driverDetails}>
+             <View style={styles.nameRow}>
+                <Text style={styles.driverName}>Priya Sharma</Text>
+                <MaterialIcons name="verified" size={16} color="#009849" />
+             </View>
+             <Text style={styles.vehicleInfo}>Royal Enfield Classic • UP 32 AZ 1234</Text>
+          </View>
+          <TouchableOpacity style={styles.callBtn}>
+             <Ionicons name="call" size={22} color="#009849" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* OTP Section */}
+        <View style={styles.otpContainer}>
+           <View>
+              <Text style={styles.otpLabel}>Handshake OTP</Text>
+              <Text style={styles.otpSub}>Share with driver to start ride</Text>
+           </View>
+           <View style={styles.otpRow}>
+              {['2','7','4','1'].map((d, i) => (
+                 <View key={i} style={styles.otpBox}>
+                    <Text style={styles.otpDigit}>{d}</Text>
+                 </View>
+              ))}
+           </View>
+        </View>
+
+        <View style={styles.arrivalNote}>
+            <Text style={styles.arrivalNoteText}>
+                {step === labels.length - 1 
+                  ? "Driver has arrived. Verifying OTP..." 
+                  : `Driver is ${labels[step]} away • Arriving in ${etas[step]}`}
+            </Text>
+        </View>
+      </View>
+
+      <ConfirmPopup
+        visible={showCancelConfirm}
+        title="Cancel Ride?"
+        message="Your ride with Priya Sharma will be cancelled."
+        confirmLabel="Yes, Cancel"
+        confirmColor="#EF4444"
+        icon="close-circle-outline"
+        onConfirm={() => {
+          setShowCancelConfirm(false);
+          navigation.goBack();
+        }}
+        onCancel={() => setShowCancelConfirm(false)}
+      />
+    </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-  root: {
+  container: {
     flex: 1,
-    backgroundColor: "#E8F0E8",
+    backgroundColor: "#F8FAF9",
   },
-
-  // ── Map ──
-  mapContainer: {
-    flex: 1,
-    backgroundColor: "#DDE8DD",
-    position: "relative",
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingBottom: 12,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: -0.5,
+  },
+  iconBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
-    minHeight: 300,
-  },
-  mapBgText: {
-    fontSize: 48,
-    fontWeight: "700",
-    color: "#C8D8C8",
-    letterSpacing: 12,
-  },
-  mapChip: {
-    position: "absolute",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    padding: spacing.sm,
-    paddingHorizontal: 12,
     shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
     elevation: 3,
   },
-  mapChipTop: { top: 20, right: 16 },
-  mapChipMid: { top: "40%", right: 16 },
-  mapChipBot: { bottom: 32, left: 16 },
-  mapChipLabel: {
-    ...typography.caption,
-    color: ACCENT,
-    fontWeight: "600",
-    marginBottom: 2,
+  cancelBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FEF2F2",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
   },
-  mapChipValue: {
-    ...typography.bodySmall,
+  cancelText: {
+    color: "#EF4444",
+    fontSize: 13,
     fontWeight: "700",
-    color: "#1A1A1A",
+  },
+  mapArea: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+    position: 'relative',
+  },
+  mapBg: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  gridLineH: {
+    position: "absolute",
+    width: "100%",
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    top: "20%",
+  },
+  gridLineV: {
+    position: "absolute",
+    width: 1,
+    height: "100%",
+    backgroundColor: "#E5E7EB",
+    left: "20%",
+  },
+  userMarkerOuter: {
+    position: 'absolute',
+    bottom: '45%',
+    right: '25%',
+    alignItems: 'center',
+  },
+  userMarker: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(37, 99, 235, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#2563EB',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  markerLabel: {
+     backgroundColor: '#111827',
+     paddingHorizontal: 6,
+     paddingVertical: 2,
+     borderRadius: 4,
+     marginTop: 4,
+  },
+  markerLabelText: {
+     color: '#FFFFFF',
+     fontSize: 9,
+     fontWeight: '800',
+  },
+  driverCallout: {
+    position: "absolute",
+    alignItems: "center",
+  },
+  calloutBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: "#009849",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  calloutValue: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#009849",
+  },
+  calloutLabel: {
+    fontSize: 10,
+    color: "#6B7280",
+    fontWeight: "600",
+  },
+  calloutArrow: {
+    width: 10,
+    height: 10,
+    backgroundColor: "#FFFFFF",
+    borderRightWidth: 1.5,
+    borderBottomWidth: 1.5,
+    borderColor: "#009849",
+    transform: [{ rotate: "45deg" }],
+    marginTop: -5,
+  },
+  driverIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
   recenterBtn: {
     position: "absolute",
-    right: 16,
-    bottom: 32,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#FFF",
+    right: 20,
+    bottom: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  recenterIcon: { fontSize: 18, color: "#555" },
-
-  // ── Sheet ──
-  sheet: {
+  bottomSheet: {
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "65%",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 40,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 15,
   },
-  sheetContent: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xl,
-  },
-  sheetHandle: {
-    alignSelf: "center",
+  handle: {
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#E0E0E0",
-    marginTop: 10,
-    marginBottom: spacing.md,
+    backgroundColor: "#E5E7EB",
+    alignSelf: "center",
+    marginBottom: 20,
   },
-
-  // ── Accepted banner ──
   acceptedBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  acceptedIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
+  checkCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F0FAF2',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  acceptedIconText: { fontSize: 16, fontWeight: "700" },
-  acceptedText: { flex: 1 },
-  acceptedTitle: { ...typography.h4, color: "#1A1A1A" },
-  acceptedSub: { ...typography.caption, color: "#888" },
-  acceptedTime: { ...typography.caption, color: "#AAA" },
-
+  acceptedInfo: {
+    flex: 1,
+  },
+  acceptedTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  acceptedSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  timestamp: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '600',
+  },
   divider: {
-    height: 0.5,
-    backgroundColor: "#EBEBEB",
-    marginVertical: spacing.md,
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginVertical: 18,
   },
-
-  // ── Driver row ──
   driverRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
-  avatarWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    overflow: "hidden",
-    backgroundColor: "#F0F0F0",
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
   },
-  avatarImg: { width: "100%", height: "100%", resizeMode: "cover" },
-  avatarFallback: {
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
+  avatarInitial: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#009849',
   },
-  avatarInitials: { fontSize: 22, fontWeight: "700" },
-  driverInfo: { flex: 1 },
-  driverNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  driverName: { ...typography.h3, color: "#1A1A1A" },
-  verifiedBadge: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: "center",
-    alignItems: "center",
+  badge: {
+    position: 'absolute',
+    bottom: -4,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
-  verifiedIcon: { fontSize: 10, fontWeight: "700" },
-  driverMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 4,
+  ratingText: {
+    fontSize: 10,
+    fontWeight: '800',
+    marginLeft: 2,
   },
-  starIcon: { fontSize: 13 },
-  ratingText: { ...typography.bodySmall, fontWeight: "700", color: "#1A1A1A", marginLeft: 2 },
-  metaDot: { color: "#CCC", marginHorizontal: 2 },
-  badgeText: { ...typography.bodySmall, color: "#888" },
-  callBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: "center",
-    alignItems: "center",
+  driverDetails: {
+    flex: 1,
   },
-  callIcon: { fontSize: 18 },
-
-  // ── Stats grid ──
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    borderWidth: 0.5,
-    borderColor: "#EBEBEB",
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  statCell: {
-    width: "50%",
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    alignItems: "flex-start",
-  },
-  statCellBorderRight: {
-    borderRightWidth: 0.5,
-    borderRightColor: "#EBEBEB",
-  },
-  statCellBorderBottom: {
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#EBEBEB",
-  },
-  statIcon: { fontSize: 20, marginBottom: 4 },
-  statLabel: { ...typography.caption, color: "#888", marginBottom: 2 },
-  statValue: { ...typography.h4, color: "#1A1A1A" },
-
-  // ── OTP ──
-  otpSection: { gap: spacing.sm },
-  otpHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    flexWrap: "wrap",
-  },
-  otpIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  otpIconEmoji: { fontSize: 20 },
-  otpHeaderText: { flex: 1 },
-  otpTitle: { ...typography.body, fontWeight: "600", color: "#1A1A1A" },
-  otpSubtitle: { ...typography.caption, color: "#888" },
-  otpDigitsRow: {
-    flexDirection: "row",
-    alignItems: "center",
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
-    marginTop: 8,
-    width: "100%",
+  },
+  driverName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  vehicleInfo: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  callBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F0FAF2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  otpContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  otpLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  otpSub: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  otpRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
   otpBox: {
-    width: 40,
-    height: 44,
+    width: 38,
+    height: 42,
     borderRadius: 8,
+    backgroundColor: '#F9FAFB',
     borderWidth: 1.5,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F8FFF8",
+    borderColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  otpDigit: { fontSize: 22, fontWeight: "700" },
-  copyBtn: { marginLeft: 6 },
-  copyText: { ...typography.bodySmall, fontWeight: "600" },
-  safetyBanner: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    alignItems: "center",
+  otpDigit: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#009849',
   },
-  safetyText: { ...typography.caption, fontWeight: "500", textAlign: "center" },
-
-  // ── Cancel button ──
-  cancelBtn: {
-    marginTop: spacing.lg,
-    borderWidth: 1.5,
-    borderColor: "#E24B4A",
+  arrivalNote: {
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 12,
     borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
+    alignItems: 'center',
   },
-  cancelText: {
-    ...typography.body,
-    fontWeight: "700",
-    color: "#E24B4A",
+  arrivalNoteText: {
+    fontSize: 13,
+    color: '#4B5563',
+    fontWeight: '700',
   },
 });

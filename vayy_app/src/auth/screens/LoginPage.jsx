@@ -15,8 +15,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
-import { googleLogin, loginUser } from "../authSlice";
-import { Lock, Mail, Eye, EyeOff, User, LogIn, ChevronRight } from "lucide-react-native";
+import { googleLogin, loginUser, restoreAuth } from "../authSlice";
+import { Lock, Mail, Eye, EyeOff, User, LogIn, ChevronRight, Navigation } from "lucide-react-native";
 
 import COLORS from "../../shared/constants/colors";
 import SPACING from "../../shared/constants/spacing";
@@ -34,9 +34,17 @@ const LoginPage = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [role, setRole] = useState("driver");
 
   const handleSignIn = () => {
-    dispatch(loginUser({ email, password }));
+    // dispatch(loginUser({ email, password }));
+    // navigation.navigate("PassengerTripPlanner");
+    
+    // Bypass login by setting auth state directly
+    dispatch(restoreAuth({
+      user: { id: 1, role, name: 'Demo User' },
+      token: 'demo-token'
+    }));
   };
 
   const toggleShowPassword = () => {
@@ -87,6 +95,29 @@ const LoginPage = ({ navigation }) => {
 
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to continue to your account</Text>
+
+          <View style={styles.roleToggle}>
+            <TouchableOpacity
+              style={[styles.rolePill, role === 'passenger' && styles.rolePillActive]}
+              onPress={() => setRole('passenger')}
+              activeOpacity={0.7}
+            >
+              <User size={16} color={role === 'passenger' ? '#fff' : '#666'} />
+              <Text style={[styles.rolePillText, role === 'passenger' && styles.rolePillTextActive]}>
+                Passenger
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.rolePill, role === 'driver' && styles.rolePillActive]}
+              onPress={() => setRole('driver')}
+              activeOpacity={0.7}
+            >
+              <Navigation size={16} color={role === 'driver' ? '#fff' : '#666'} />
+              <Text style={[styles.rolePillText, role === 'driver' && styles.rolePillTextActive]}>
+                Driver
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {error ? (
             <View style={styles.errorBox}>
@@ -233,6 +264,38 @@ const styles = StyleSheet.create({
     color: "#888888",
     marginBottom: 18,
     fontWeight: "400",
+  },
+  roleToggle: {
+    flexDirection: "row",
+    backgroundColor: "#f0f0f0",
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 18,
+  },
+  rolePill: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  rolePillActive: {
+    backgroundColor: "#1a8a2e",
+    shadowColor: "#1a8a2e",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  rolePillText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#666",
+  },
+  rolePillTextActive: {
+    color: "#fff",
   },
   errorBox: {
     backgroundColor: "#fef2f2",

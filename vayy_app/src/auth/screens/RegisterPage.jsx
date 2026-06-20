@@ -13,8 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
-
-import { Lock, Eye, EyeOff } from "lucide-react-native";
+import { Lock, Eye, EyeOff, User, Mail, ArrowLeft } from "lucide-react-native";
 
 import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
@@ -30,13 +29,12 @@ const RegisterPage = ({ navigation }) => {
     role: "passenger",
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
 
   const dispatch = useDispatch();
   const { loading, error } = useSelector((state) => state.auth);
 
-  const toggleShowPassword = () => {
-    setShowPassword(!showPassword);
-  };
+  const toggleShowPassword = () => setShowPassword(!showPassword);
 
   const updateField = (field, value) => {
     setFormData((current) => ({ ...current, [field]: value }));
@@ -46,13 +44,18 @@ const RegisterPage = ({ navigation }) => {
     dispatch(registerUser(formData));
   };
 
+  const getInputWrapperStyle = (field) => [
+    styles.inputWrapper,
+    focusedField === field && styles.inputWrapperFocused,
+  ];
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "padding"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : -150}
-          style={styles.keyboardView}
-        >
+        behavior={Platform.OS === "ios" ? "padding" : "padding"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : -150}
+        style={styles.keyboardView}
+      >
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
@@ -62,11 +65,13 @@ const RegisterPage = ({ navigation }) => {
               style={styles.backButton} 
               onPress={() => navigation.goBack()}
             >
-              <Text style={styles.backIcon}>←</Text>
+              <ArrowLeft size={24} color={COLORS.black} />
             </TouchableOpacity>
-            <Text style={styles.title}>Create Account</Text>
+            <View>
+              <Text style={styles.title}>Create Account</Text>
+              <Text style={styles.subtitle}>Join VAYY to start your journey</Text>
+            </View>
           </View>
-          <Text style={styles.subtitle}>Use your email and password to start.</Text>
 
           {error ? (
             <View style={styles.errorBox}>
@@ -80,35 +85,52 @@ const RegisterPage = ({ navigation }) => {
           ) : null}
 
           <View style={styles.row}>
+            <View style={[getInputWrapperStyle("first_name"), { flex: 1 }]}>
+              <User size={20} color={focusedField === "first_name" ? COLORS.primary : COLORS.textLight} style={styles.inputIcon} />
+              <TextInput
+                onFocus={() => setFocusedField("first_name")}
+                onBlur={() => setFocusedField(null)}
+                onChangeText={(value) => updateField("first_name", value)}
+                placeholder="First name"
+                placeholderTextColor={COLORS.textLight}
+                style={styles.input}
+                value={formData.first_name}
+              />
+            </View>
+            <View style={[getInputWrapperStyle("last_name"), { flex: 1 }]}>
+              <User size={20} color={focusedField === "last_name" ? COLORS.primary : COLORS.textLight} style={styles.inputIcon} />
+              <TextInput
+                onFocus={() => setFocusedField("last_name")}
+                onBlur={() => setFocusedField(null)}
+                onChangeText={(value) => updateField("last_name", value)}
+                placeholder="Last name"
+                placeholderTextColor={COLORS.textLight}
+                style={styles.input}
+                value={formData.last_name}
+              />
+            </View>
+          </View>
+
+          <View style={getInputWrapperStyle("email")}>
+            <Mail size={20} color={focusedField === "email" ? COLORS.primary : COLORS.textLight} style={styles.inputIcon} />
             <TextInput
-              onChangeText={(value) => updateField("first_name", value)}
-              placeholder="First name"
+              onFocus={() => setFocusedField("email")}
+              onBlur={() => setFocusedField(null)}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              onChangeText={(value) => updateField("email", value)}
+              placeholder="Email address"
               placeholderTextColor={COLORS.textLight}
-              style={[styles.input, styles.halfInput]}
-              value={formData.first_name}
-            />
-            <TextInput
-              onChangeText={(value) => updateField("last_name", value)}
-              placeholder="Last name"
-              placeholderTextColor={COLORS.textLight}
-              style={[styles.input, styles.halfInput]}
-              value={formData.last_name}
+              style={styles.input}
+              value={formData.email}
             />
           </View>
 
-          <TextInput
-            autoCapitalize="none"
-            keyboardType="email-address"
-            onChangeText={(value) => updateField("email", value)}
-            placeholder="Email address"
-            placeholderTextColor={COLORS.textLight}
-            style={styles.input}
-            value={formData.email}
-          />
-
-          <View style={styles.inputWrapper}>
-            <Lock size={20} color={COLORS.textLight} style={styles.inputIcon} />
+          <View style={getInputWrapperStyle("password")}>
+            <Lock size={20} color={focusedField === "password" ? COLORS.primary : COLORS.textLight} style={styles.inputIcon} />
             <TextInput
+              onFocus={() => setFocusedField("password")}
+              onBlur={() => setFocusedField(null)}
               onChangeText={(value) => updateField("password", value)}
               placeholder="Password"
               placeholderTextColor={COLORS.textLight}
@@ -117,7 +139,11 @@ const RegisterPage = ({ navigation }) => {
               value={formData.password}
             />
             <TouchableOpacity onPress={toggleShowPassword}>
-              {showPassword ? <EyeOff size={20} color={COLORS.textLight} /> : <Eye size={20} color={COLORS.textLight} />}
+              {showPassword ? (
+                <EyeOff size={20} color={COLORS.textLight} />
+              ) : (
+                <Eye size={20} color={COLORS.textLight} />
+              )}
             </TouchableOpacity>
           </View>
 
@@ -152,12 +178,12 @@ const RegisterPage = ({ navigation }) => {
             {loading ? (
               <ActivityIndicator color={COLORS.white} />
             ) : (
-              <Text style={styles.primaryText}>Create Account</Text>
+              <Text style={styles.primaryText}>Create Account  →</Text>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.linkButton}>
-            <Text style={styles.linkText}>Back to sign in</Text>
+            <Text style={styles.linkText}>Already have an account? <Text style={styles.linkHighlight}>Sign in</Text></Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -181,37 +207,34 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 32,
     gap: 16,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: 20,
-    backgroundColor: "#f5f5f5",
-  },
-  backIcon: {
-    fontSize: 20,
-    color: "#111111",
-    fontWeight: "600",
+    borderRadius: 22,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.borderMedium,
   },
   title: {
     color: COLORS.black,
-    fontSize: 24,
-    fontWeight: "900",
+    fontSize: 26,
+    fontWeight: "800",
+    letterSpacing: -0.5,
   },
   subtitle: {
     color: COLORS.textMuted,
-    fontSize: 15,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.xl,
+    fontSize: 14,
+    marginTop: 2,
   },
   errorBox: {
     backgroundColor: COLORS.errorLight,
     borderColor: "#fecaca",
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
     marginBottom: SPACING.lg,
     padding: SPACING.md,
@@ -229,16 +252,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1.5,
     borderColor: COLORS.borderMedium,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.base,
-    marginBottom: SPACING.md,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    marginBottom: 16,
     backgroundColor: COLORS.white,
-    height: 52,
+    height: 56,
+  },
+  inputWrapperFocused: {
+    borderColor: COLORS.primary,
+    backgroundColor: "#f0faf2",
   },
   inputIcon: {
-    fontSize: 16,
-    marginRight: SPACING.sm,
-    color: COLORS.textLight,
+    marginRight: 12,
   },
   input: {
     flex: 1,
@@ -249,16 +274,16 @@ const styles = StyleSheet.create({
   roleRow: {
     flexDirection: "row",
     gap: SPACING.md,
-    marginBottom: SPACING.lg,
+    marginBottom: 24,
   },
   roleButton: {
     alignItems: "center",
     backgroundColor: COLORS.white,
     borderColor: COLORS.borderMedium,
-    borderRadius: RADIUS.md,
+    borderRadius: 14,
     borderWidth: 1.5,
     flex: 1,
-    height: 46,
+    height: 48,
     justifyContent: "center",
   },
   roleButtonActive: {
@@ -276,12 +301,17 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignItems: "center",
     backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.md,
-    height: 54,
+    borderRadius: 16,
+    height: 56,
     justifyContent: "center",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   disabledButton: {
-    opacity: 0.72,
+    opacity: 0.7,
   },
   primaryText: {
     color: COLORS.white,
@@ -290,12 +320,16 @@ const styles = StyleSheet.create({
   },
   linkButton: {
     alignItems: "center",
-    marginTop: SPACING.lg,
+    marginTop: 24,
     padding: SPACING.sm,
   },
   linkText: {
-    color: COLORS.primary,
+    color: COLORS.textMuted,
     fontSize: 14,
+    fontWeight: "500",
+  },
+  linkHighlight: {
+    color: COLORS.primary,
     fontWeight: "700",
   },
 });

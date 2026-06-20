@@ -19,6 +19,7 @@
     "@reduxjs/toolkit": "^2.2.5",
     "axios": "^1.7.2",
     "expo": "~54.0.0",
+    "expo-av": "~16.0.8",
     "expo-location": "~19.0.8",
     "expo-notifications": "~0.32.17",
     "expo-status-bar": "~3.0.9",

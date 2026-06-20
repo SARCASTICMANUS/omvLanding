@@ -13,7 +13,7 @@ import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
 import SHADOW from "../../shared/constants/shadow";
 import SPACING from "../../shared/constants/spacing";
-import { buildRouteSummary } from "../../routes/utils/driverFlowUtils";
+import { buildRouteSummary } from "../utils/driverFlowUtils";
 
 const toCoord = (point) => {
   const lat = Number(point?.lat ?? point?.latitude);

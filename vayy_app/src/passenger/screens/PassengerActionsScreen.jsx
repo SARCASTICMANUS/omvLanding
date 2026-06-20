@@ -1,37 +1,58 @@
 import React from "react";
-import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity } from "react-native";
+import { 
+  StyleSheet, 
+  Text, 
+  View, 
+  SafeAreaView, 
+  TouchableOpacity, 
+  ScrollView 
+} from "react-native";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 
 export default function PassengerActionsScreen({ navigation }) {
+  // Moved Bike Search to the TOP for easier access
   const actions = [
+    { title: "Bike Search State", screen: "BikeSearching" },
+    { title: "Bike Map Pre-Ride", screen: "BikeMapPreRide" },
+    { title: "Rider Popup (Accepted)", screen: "RiderPopup" },
+    { title: "Ride Stats (In-Ride)", screen: "RideStats" },
     { title: "Trip Planner", screen: "PassengerTripPlanner" },
     { title: "Routes", screen: "PassengerRoutes" },
     { title: "Alerts", screen: "PassengerAlerts" },
     { title: "Journey History", screen: "JourneyHistoryScreen" },
     { title: "Find Destination", screen: "DestinationSearchScreen" },
     { title: "Live Tracking", screen: "PassengerLiveTracking" },
+    { title: "Ride Complete", screen: "RideComplete" },
     { title: "Route List", screen: "PassengerRouteList" },
-    { title: "Bike Map Pre-Ride", screen: "BikeMapPreRide" },
-    { title: "Bike Map Post-Accept", screen: "BikeMapPostAccept" },
-    { title: "Rider Popup", screen: "RiderPopup" },
-    { title: "Ride Stats", screen: "RideStats" },
+    { title: "Auto Pre-Ride", screen: "AutoPreRide" },
+    { title: "Auto Search State", screen: "AutoSearching" },
+    { title: "Auto Ride Complete", screen: "AutoRideComplete" },
   ];
 
   return (
     <SafeAreaView style={styles.root}>
-      <View style={styles.container}>
-        <Text style={styles.header}>Passenger Actions</Text>
-        {actions.map((action) => (
-          <TouchableOpacity
-            key={action.title}
-            style={styles.button}
-            onPress={() => navigation.navigate(action.screen)}
-          >
-            <Text style={styles.buttonText}>{action.title}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.container}>
+          <Text style={styles.header}>Passenger Dev Actions</Text>
+          
+          <View style={styles.grid}>
+            {actions.map((action) => (
+              <TouchableOpacity
+                key={action.title}
+                style={styles.button}
+                onPress={() => navigation.navigate(action.screen)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.buttonText}>{action.title}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -41,27 +62,38 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  scrollContent: {
+    paddingBottom: 100, // Extra space for bottom tabs
+  },
   container: {
-    flex: 1,
     padding: spacing.md,
-    justifyContent: "center",
-    gap: spacing.md,
   },
   header: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: spacing.md,
+    fontSize: 22,
+    fontWeight: "900",
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
     textAlign: "center",
+    color: colors.text,
+  },
+  grid: {
+    gap: spacing.md,
   },
   button: {
     backgroundColor: colors.primary,
-    padding: spacing.md,
-    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 16,
     alignItems: "center",
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   buttonText: {
     color: colors.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "800",
   },
 });

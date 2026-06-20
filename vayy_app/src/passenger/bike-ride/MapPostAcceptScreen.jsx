@@ -1,70 +1,577 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import AppFrame from "../../components/AppFrame";
-import MapPlaceholder from "../../components/MapPlaceholder";
-import { colors } from "../../theme/colors";
-import { spacing } from "../../theme/spacing";
-import { typography } from "../../theme/typography";
-import PrimaryButton from "../../shared/components/common/PrimaryButton";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+  StatusBar,
+  Image,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  Ionicons,
+  MaterialIcons,
+  Feather,
+} from "@expo/vector-icons";
+
+import { ConfirmPopup } from "./ConfirmPopup";
+
+const { width } = Dimensions.get("window");
 
 export function BikeMapPostAcceptScreen({ navigation }) {
-  const labels = ["Priya is 1.2 km away", "Priya is 800m away", "Priya is 400m away"];
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const labels = ["1.2 km", "800 m", "400 m"];
+  const etas = ["5 min", "3 min", "2 min"];
+
   useEffect(() => {
-    const timer = setInterval(() => setStep((value) => Math.min(value + 1, labels.length - 1)), 2000);
+    const timer = setInterval(() => {
+      setStep((v) => (v + 1) % labels.length);
+    }, 4000);
     return () => clearInterval(timer);
-  }, [labels.length]);
+  }, []);
+
   return (
-    <AppFrame navigation={navigation} title="Driver arriving" accent={colors.bikeAccent}>
-      <View style={styles.mapPage}>
-        <MapPlaceholder accent={colors.bikeAccent} vehicle="🏍️" />
-        <View style={styles.arrivalCard}>
-          <Text style={styles.heroSmall}>{labels[step]}</Text>
-          <Text style={styles.muted}>Arriving in {5 - step * 2} min</Text>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.dangerLink}>Cancel ride</Text>
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <View style={styles.statusContainer}>
+            {/* <Ionicons name="ellipse" size={8} color="#009849" />fo */}
+            <Text style={styles.statusText}>Driver arriving</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowCancelConfirm(true)}>
+          <Text style={styles.cancelText}>Cancel</Text>
+          <Ionicons name="close-circle-outline" size={24} color="#EF4444" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Map Area */}
+      <View style={styles.mapArea}>
+        <View style={styles.mapBg}>
+          <View style={styles.gridLineH} />
+          <View style={[styles.gridLineH, { top: "40%" }]} />
+          <View style={[styles.gridLineH, { top: "70%" }]} />
+          <View style={styles.gridLineV} />
+          <View style={[styles.gridLineV, { left: "40%" }]} />
+          <View style={[styles.gridLineV, { left: "70%" }]} />
+        </View>
+
+        {/* Pickup Marker */}
+        <View style={styles.pickupMarkerOuter}>
+          <View style={styles.pickupMarker}>
+            <Ionicons name="pin" size={18} color="#FFFFFF" />
+          </View>
+          <View style={styles.markerLabel}>
+            <Text style={styles.markerLabelText}>You are here</Text>
+          </View>
+        </View>
+
+        {/* Driver Tracking Callout */}
+        <View style={[styles.driverCallout, { bottom: 200 + step * 40, left: 60 + step * 30 }]}>
+          <View style={styles.calloutBox}>
+            <Text style={styles.calloutValue}>{labels[step]}</Text>
+            <Text style={styles.calloutLabel}>away</Text>
+          </View>
+          <View style={styles.calloutArrow} />
+          <View style={styles.driverDot}>
+            <Text style={{ fontSize: 20 }}>🏍️</Text>
+          </View>
+        </View>
+
+        {/* Route Line (Dynamic feel) */}
+        <View style={styles.routeContainer}>
+            <View style={[styles.routePath, { width: 150 - step * 30, height: 180 - step * 30 }]} />
+        </View>
+
+        {/* Floating Button */}
+        <TouchableOpacity style={styles.recenterBtn}>
+          <MaterialIcons name="my-location" size={24} color="#111827" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Bottom Sheet */}
+      <View style={styles.bottomSheet}>
+        <View style={styles.handle} />
+
+        {/* Driver Profile Row */}
+        <View style={styles.driverRow}>
+          <View style={styles.avatarContainer}>
+             <View style={styles.avatar}>
+                <Text style={styles.avatarInitial}>P</Text>
+             </View>
+             <View style={styles.ratingBadge}>
+                <Ionicons name="star" size={10} color="#FFB800" />
+                <Text style={styles.ratingText}>4.9</Text>
+             </View>
+          </View>
+          
+          <View style={styles.driverInfo}>
+            <View style={styles.nameRow}>
+               <Text style={styles.driverName}>Priya Sharma</Text>
+               <View style={styles.verifiedBadge}>
+                 <MaterialIcons name="verified" size={16} color="#009849" />
+               </View>
+            </View>
+            <Text style={styles.vehicleText}>Royal Enfield Classic • UP 32 AZ 1234</Text>
+          </View>
+
+          <TouchableOpacity style={styles.callBtn}>
+            <Ionicons name="call" size={22} color="#009849" />
           </TouchableOpacity>
         </View>
-        <View style={styles.mapBottom}>
-          <PrimaryButton label="Show Rider Popup" accent={colors.bikeAccent} onPress={() => navigation.navigate("RiderPopup")} />
+
+        <View style={styles.divider} />
+
+        {/* OTP Section */}
+        <View style={styles.otpContainer}>
+            <View style={styles.otpInfo}>
+                <Text style={styles.otpTitle}>Handshake OTP</Text>
+                <Text style={styles.otpSubtitle}>Share this with driver to start ride</Text>
+            </View>
+            <View style={styles.otpRow}>
+                {['2','7','4','1'].map((digit, i) => (
+                    <View key={i} style={styles.otpBox}>
+                        <Text style={styles.otpDigit}>{digit}</Text>
+                    </View>
+                ))}
+            </View>
+        </View>
+
+        {/* Driver Progress */}
+        <View style={styles.progressSection}>
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressTitle}>Driver is on the way</Text>
+            <Text style={styles.progressValue}>{etas[step]}</Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressBar, { width: `${((labels.length - 1 - step) / (labels.length - 1)) * 100}%` }]} />
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCol}>
+            <Text style={styles.statLabel}>Arriving in</Text>
+            <Text style={styles.statValue}>{etas[step]}</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCol}>
+            <Text style={styles.statLabel}>Distance</Text>
+            <Text style={styles.statValue}>{labels[step]}</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCol}>
+            <Text style={styles.statLabel}>Ride Fare</Text>
+            <Text style={styles.statValue}>₹45</Text>
+          </View>
         </View>
       </View>
-    </AppFrame>
+
+      <ConfirmPopup
+        visible={showCancelConfirm}
+        title="Cancel Ride?"
+        message="Your ride with Priya Sharma will be cancelled."
+        confirmLabel="Yes, Cancel"
+        confirmColor="#EF4444"
+        icon="close-circle-outline"
+        onConfirm={() => {
+          setShowCancelConfirm(false);
+          navigation.goBack();
+        }}
+        onCancel={() => setShowCancelConfirm(false)}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  mapPage: {
+  container: {
     flex: 1,
-    padding: spacing.md,
+    backgroundColor: "#F8FAF9",
   },
-  arrivalCard: {
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingBottom: 12,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  statusContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  statusText: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: -0.4,
+  },
+  iconBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  cancelBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FEF2F2",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+  },
+  cancelText: {
+    color: "#EF4444",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  mapArea: {
+    flex: 1,
+    position: "relative",
+    backgroundColor: "#F9FAFB",
+  },
+  mapBg: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#F9FAFB",
+  },
+  gridLineH: {
     position: "absolute",
-    top: spacing.xl,
-    left: spacing.xl,
-    right: spacing.xl,
-    backgroundColor: colors.surface,
+    width: "100%",
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    top: "20%",
+  },
+  gridLineV: {
+    position: "absolute",
+    width: 1,
+    height: "100%",
+    backgroundColor: "#E5E7EB",
+    left: "20%",
+  },
+  pickupMarkerOuter: {
+    position: "absolute",
+    bottom: "40%",
+    right: "30%",
+    alignItems: "center",
+  },
+  pickupMarker: {
+    width: 36,
+    height: 36,
     borderRadius: 18,
-    padding: spacing.md,
-    gap: spacing.sm,
+    backgroundColor: "#009849",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 3,
+    borderColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 4,
   },
-  heroSmall: {
-    ...typography.h2,
-    color: colors.textPrimary,
+  markerLabel: {
+    backgroundColor: "#111827",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginTop: 4,
   },
-  muted: {
-    ...typography.body,
-    color: colors.textSecondary,
+  markerLabelText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "700",
   },
-  dangerLink: {
-    color: colors.danger,
-    fontWeight: "900",
-  },
-  mapBottom: {
+  driverCallout: {
     position: "absolute",
-    left: spacing.md,
-    right: spacing.md,
-    bottom: spacing.md,
-    gap: spacing.md,
+    alignItems: "center",
+  },
+  calloutBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: "#009849",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  calloutValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#009849",
+  },
+  calloutLabel: {
+    fontSize: 10,
+    color: "#6B7280",
+    fontWeight: "600",
+  },
+  calloutArrow: {
+    width: 10,
+    height: 10,
+    backgroundColor: "#FFFFFF",
+    borderRightWidth: 1.5,
+    borderBottomWidth: 1.5,
+    borderColor: "#009849",
+    transform: [{ rotate: "45deg" }],
+    marginTop: -5,
+    zIndex: -1,
+  },
+  driverDot: {
+    marginTop: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  routeContainer: {
+    position: 'absolute',
+    bottom: '40%',
+    right: '30%',
+    zIndex: -2,
+  },
+  routePath: {
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderColor: '#009849',
+    borderStyle: 'dashed',
+    borderTopLeftRadius: 40,
+  },
+  recenterBtn: {
+    position: "absolute",
+    right: 20,
+    bottom: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  bottomSheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 32,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 15,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#E5E7EB",
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  driverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  avatarContainer: {
+    position: 'relative',
+  },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitial: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#009849',
+  },
+  ratingBadge: {
+    position: 'absolute',
+    bottom: -4,
+    alignSelf: 'center',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  ratingText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  driverInfo: {
+    flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  driverName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  vehicleText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  callBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F0FAF2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressSection: {
+    marginBottom: 4,
+  },
+  progressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  progressTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  progressValue: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#009849",
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#F3F4F6",
+    overflow: "hidden",
+  },
+  progressBar: {
+    height: "100%",
+    borderRadius: 3,
+    backgroundColor: "#009849",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginVertical: 20,
+  },
+  otpContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  otpInfo: {
+    flex: 1,
+  },
+  otpTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  otpSubtitle: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  otpRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  otpBox: {
+    width: 40,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  otpDigit: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#009849',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statCol: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  statDivider: {
+    width: 1,
+    height: '100%',
+    backgroundColor: '#F3F4F6',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#888888',
+    fontWeight: '500',
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
   },
 });

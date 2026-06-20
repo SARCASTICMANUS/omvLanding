@@ -83,6 +83,30 @@ export default function ProfileScreen({ navigation }) {
           </VayyCard>
         </View>
 
+        {isDriver && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Earnings</Text>
+            <VayyCard style={styles.earningsCard}>
+              <View style={styles.earningsRow}>
+                <View style={styles.earningsStat}>
+                  <Text style={styles.earningsLabel}>Today</Text>
+                  <Text style={styles.earningsValue}>₹0</Text>
+                </View>
+                <View style={styles.earningsDivider} />
+                <View style={styles.earningsStat}>
+                  <Text style={styles.earningsLabel}>Trips</Text>
+                  <Text style={styles.earningsValue}>0</Text>
+                </View>
+                <View style={styles.earningsDivider} />
+                <View style={styles.earningsStat}>
+                  <Text style={styles.earningsLabel}>Online</Text>
+                  <Text style={styles.earningsValue}>0h</Text>
+                </View>
+              </View>
+            </VayyCard>
+          </View>
+        )}
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Settings</Text>
           <VayyCard style={styles.settingsCard}>
@@ -241,5 +265,36 @@ const styles = StyleSheet.create({
   versionText: {
     fontSize: 12,
     color: COLORS.textLight,
+  },
+
+  /* earnings */
+  earningsCard: {
+    padding: SPACING.lg,
+  },
+  earningsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  earningsStat: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+  },
+  earningsLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: COLORS.textLight,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  earningsValue: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+  earningsDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: COLORS.border,
   },
 });

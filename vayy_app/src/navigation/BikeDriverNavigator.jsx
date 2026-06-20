@@ -1,13 +1,13 @@
 import React from "react";
 import { createStackNavigator } from "@react-navigation/stack";
 
-import { BestMatchRouteScreen } from "../auto/screens/AutoBestMatchRouteScreen";
-import BikeBookingScreen from "../bike/screens/BikeBookingScreen";
-import BikeSearchingScreen from "../bike/screens/BikeSearchingScreen";
+import { BestMatchRouteScreen } from "../driver/shared-auto/AutoBestMatchRouteScreen";
+import BikeBookingScreen from "../driver/bike-ride/BikeBookingScreen";
+import BikeSearchingScreen from "../driver/bike-ride/BikeSearchingScreen";
 import FromToScreen from "../shared/screens/FromToScreen";
-import DriverLoginScreen from "../auth/screens/DriverLoginScreen";
-import BikeOTPHandshakeScreen from "../bike/screens/BikeOTPHandshakeScreen";
-import AutoLiveTrackingScreen from "../auto/screens/AutoLiveTrackingScreen";
+import DriverLoginScreen from "../driver/screens/DriverLoginScreen";
+import BikeOTPHandshakeScreen from "../driver/bike-ride/BikeOTPHandshakeScreen";
+import AutoLiveTrackingScreen from "../driver/shared-auto/AutoLiveTrackingScreen";
 import DriverTripHistoryScreen from "../driver/screens/DriverTripHistoryScreen";
 
 const Stack = createStackNavigator();
