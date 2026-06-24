@@ -40,7 +40,7 @@ export default function DriverTripReview({ navigation, route: navRoute }) {
     <SafeAreaView style={styles.safeArea}>
       <Header
         onBack={onBack}
-        right={<VayyButton label="Edit Route" onPress={onBack} size="sm" variant="outline" />}
+        right={<VayyButton label="Back to Routes" onPress={() => navigation.navigate("DriverRoutes")} size="sm" variant="outline" />}
         subtitle="Review your route, stops and trip details"
         title="Trip Review"
       />
@@ -73,7 +73,7 @@ export default function DriverTripReview({ navigation, route: navRoute }) {
         <VayyCard style={styles.stopsCard}>
           <View style={styles.cardHeader}>
             <Text style={styles.sectionTitle}>Route Stops</Text>
-            <VayyButton label="View on Map" onPress={() => {}} size="sm" variant="outline" />
+            <VayyButton label="View on Map" onPress={() => navigation.navigate("DriverLiveTracking", { route })} size="sm" variant="outline" />
           </View>
 
           <View style={styles.columnHeader}>

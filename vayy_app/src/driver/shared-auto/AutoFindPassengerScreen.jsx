@@ -1,490 +1,879 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  View,
+  Animated,
+  Dimensions,
+  Easing,
+  Modal,
+  Pressable,
+  StatusBar,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-  StatusBar,
-  Platform,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
-import { ConfirmPopup } from "../../passenger/bike-ride/ConfirmPopup";
+import MapView from "react-native-maps";
 
-const { width } = Dimensions.get("window");
-const STOP_DISTANCE = 200;
-const WITHIN_RANGE = STOP_DISTANCE <= 500;
+const { width, height } = Dimensions.get("window");
 
-export function FindPassengerScreen({ navigation, route: navRoute }) {
+const CHECKS = [
+  { key: "network", label: "Network", icon: "wifi" },
+  { key: "gps", label: "GPS Signal", icon: "navigate" },
+  { key: "location", label: "Location", icon: "location" },
+  { key: "device", label: "Device Status", icon: "phone-portrait" },
+];
+
+export default function AutoFindPassengerScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [showOutOfRange, setShowOutOfRange] = useState(false);
-  const [withinRange] = useState(WITHIN_RANGE);
-  const [radarActive, setRadarActive] = useState(false);
 
-  const selectedRoute = navRoute?.params?.route;
+  const [showVerify, setShowVerify] = useState(true);
+  const [checks, setChecks] = useState(CHECKS.map((c) => ({ ...c, status: "pending" })));
+  const [allPassed, setAllPassed] = useState(false);
+  const [online, setOnline] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [speed, setSpeed] = useState(0);
+  const [eta, setEta] = useState("--");
+  const [nextStop, setNextStop] = useState("--");
+  const [progress, setProgress] = useState(0);
 
-  const handleOpenRadar = () => {
-    if (!withinRange) {
-      setShowOutOfRange(true);
-      return;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const verifySlide = useRef(new Animated.Value(0)).current;
+  const vehicleY = useRef(new Animated.Value(0)).current;
+  const notifSlide = useRef(new Animated.Value(-100)).current;
+  const scanDot = useRef(new Animated.Value(0)).current;
+  const dotAnim = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    if (!showVerify) return;
+    Animated.spring(verifySlide, { toValue: 1, friction: 8, tension: 60, useNativeDriver: true }).start();
+  }, [showVerify, verifySlide]);
+
+  useEffect(() => {
+    if (!showVerify) return;
+    const run = async () => {
+      const updated = [...checks];
+      for (let i = 0; i < updated.length; i++) {
+        updated[i] = { ...updated[i], status: "checking" };
+        setChecks([...updated]);
+        await new Promise((r) => setTimeout(r, 700 + Math.random() * 600));
+        updated[i] = { ...updated[i], status: "passed" };
+        setChecks([...updated]);
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      setAllPassed(true);
+    };
+    run();
+  }, [showVerify]);
+
+  useEffect(() => {
+    if (!allPassed) return;
+    Animated.loop(
+      Animated.timing(spinAnim, { toValue: 1, duration: 2000, easing: Easing.linear, useNativeDriver: true }),
+    ).start();
+  }, [allPassed, spinAnim]);
+
+  useEffect(() => {
+    if (!showVerify && online) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.4, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]),
+      );
+      pulse.start();
+      const move = Animated.loop(
+        Animated.sequence([
+          Animated.timing(vehicleY, { toValue: -height * 0.4, duration: 18000, easing: Easing.linear, useNativeDriver: true }),
+          Animated.timing(vehicleY, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ]),
+      );
+      move.start();
+      const dot = Animated.loop(
+        Animated.timing(scanDot, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      );
+      dot.start();
+      return () => {
+        pulse.stop();
+        move.stop();
+        dot.stop();
+      };
     }
-    setShowConfirm(true);
+  }, [showVerify, online, pulseAnim, vehicleY, scanDot]);
+
+  useEffect(() => {
+    if (!online || showVerify) return;
+    const stops = ["Hazratganj", "Lalbagh", "Charbagh", "Gomti Nagar", "IT City"];
+    let stopIdx = 0;
+    const interval = setInterval(() => {
+      setSpeed(20 + Math.floor(Math.random() * 20));
+      setEta(`${3 + Math.floor(Math.random() * 8)} min`);
+      if (Math.random() > 0.7) stopIdx = (stopIdx + 1) % stops.length;
+      setNextStop(stops[stopIdx]);
+      setProgress((prev) => Math.min(1, +(prev + 0.02 + Math.random() * 0.03).toFixed(3)));
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [online, showVerify]);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(dotAnim, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(dotAnim, { toValue: 0.3, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [dotAnim]);
+
+  useEffect(() => {
+    if (!online || showVerify) return;
+    const timer = setTimeout(() => {
+      const distances = ["400m", "800m", "1.2km", "2km"];
+      const dist = distances[Math.floor(Math.random() * distances.length)];
+      setNotification(dist);
+      Animated.spring(notifSlide, { toValue: 0, friction: 10, tension: 50, useNativeDriver: true }).start();
+      setTimeout(() => {
+        Animated.timing(notifSlide, { toValue: -100, duration: 300, useNativeDriver: true }).start(() => {
+          setNotification(null);
+        });
+      }, 2500);
+    }, 4000 + Math.random() * 3000);
+    return () => clearTimeout(timer);
+  }, [online, showVerify, notification, notifSlide]);
+
+  const handleStart = () => {
+    Animated.timing(verifySlide, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
+      setShowVerify(false);
+      setOnline(true);
+    });
   };
 
-  const handleConfirmRadar = () => {
-    setShowConfirm(false);
-    setRadarActive(true);
-    navigation.navigate("AheadAlert", { route: selectedRoute });
+  const handleStop = () => {
+    setShowMenu(false);
+    setOnline(false);
+    setNotification(null);
   };
+
+  const spinRotate = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+
+  const verifyTranslate = verifySlide.interpolate({
+    inputRange: [0, 1],
+    outputRange: [height, 0],
+  });
 
   return (
-    <View style={styles.container}>
+    <View style={styles.root}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.headerLeft}>
-          {Platform.OS === "ios" && (
-            <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-              <Ionicons name="chevron-back" size={24} color="#111827" />
-            </TouchableOpacity>
-          )}
-          <Text style={styles.headerTitle}>Find Passengers</Text>
-        </View>
-      </View>
+      {/* Map area */}
+      <View style={styles.mapArea}>
+        <MapView
+          style={styles.mapBg}
+          initialRegion={{
+            latitude: 26.8467,
+            longitude: 80.9462,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }}
+          scrollEnabled={false}
+          zoomEnabled={false}
+        />
 
-      <View style={styles.distanceCard}>
-        <View style={styles.flagWrapper}>
-          <Ionicons name="location" size={24} color={COLORS.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardLabel}>Nearest passenger</Text>
-          <Text style={styles.cardDistance}>
-            <Text style={styles.greenText}>{STOP_DISTANCE} m</Text> away
-          </Text>
-          <View style={styles.walkRow}>
-            <Ionicons name="walk" size={14} color="#6B7280" />
-            <Text style={styles.walkText}>~3 min walk</Text>
+        {/* Moving vehicle */}
+        {!showVerify && online && (
+          <Animated.View style={[styles.vehicleWrap, { transform: [{ translateY: vehicleY }] }]}>
+            <Animated.View style={[styles.radarRing, { transform: [{ scale: pulseAnim }] }]} />
+            <Animated.View style={[styles.radarRing, styles.radarRing2, { transform: [{ scale: pulseAnim }] }]} />
+            <Animated.View style={[styles.radarRing, styles.radarRing3, { transform: [{ scale: pulseAnim }] }]} />
+            <View style={styles.vehicleDot}>
+              <Ionicons name="car-sport" size={22} color="#fff" />
+            </View>
+            <View style={styles.vehicleShadow} />
+          </Animated.View>
+        )}
+
+        {/* Offline state */}
+        {!showVerify && !online && (
+          <View style={styles.offlineCenter}>
+            <View style={styles.vehicleDot}>
+              <Ionicons name="car-sport" size={22} color="#fff" />
+            </View>
+            <Text style={styles.offlineText}>Radar Offline</Text>
+          </View>
+        )}
+
+        {/* Header */}
+        <View style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={22} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Live Radar</Text>
+          <View style={styles.menuWrap}>
+            <TouchableOpacity onPress={() => setShowMenu(true)} style={styles.menuBtn}>
+              <Ionicons name="ellipsis-vertical" size={22} color="#111827" />
+            </TouchableOpacity>
           </View>
         </View>
-        <View style={[styles.statusBadge, withinRange ? styles.statusBadgeActive : styles.statusBadgeInactive]}>
-          <View style={[styles.statusDot, withinRange ? styles.statusDotActive : styles.statusDotInactive]} />
-          <Text style={[styles.statusLabel, withinRange ? styles.statusLabelActive : styles.statusLabelInactive]}>
-            {withinRange ? "In range" : `${STOP_DISTANCE - 500}m away`}
-          </Text>
-        </View>
+
+        {/* Passenger notification banner */}
+        {notification && (
+          <Animated.View style={[styles.notifBanner, { transform: [{ translateY: notifSlide }] }]}>
+            <View style={styles.notifDot} />
+            <Text style={styles.notifText}>
+              Passenger waiting <Text style={styles.notifDist}>{notification}</Text> ahead
+            </Text>
+          </Animated.View>
+        )}
+
       </View>
 
-      <View style={styles.mapArea}>
-        <View style={styles.mapBg}>
-          <View style={styles.gridLineH} />
-          <View style={[styles.gridLineH, { top: "40%" }]} />
-          <View style={[styles.gridLineH, { top: "70%" }]} />
-          <View style={styles.gridLineV} />
-          <View style={[styles.gridLineV, { left: "40%" }]} />
-          <View style={[styles.gridLineV, { left: "70%" }]} />
-        </View>
+      {/* Bottom card */}
+      {!showVerify && (
+        <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16 }]}>
+          <View style={styles.handle} />
 
-        <View style={styles.poiLabel}>
-          <Ionicons name="train-outline" size={14} color="#60A5FA" />
-          <Text style={styles.poiLabelText}>Bus Stop</Text>
-        </View>
+          <View style={styles.rideInfo}>
+            <View style={styles.rideBadge}>
+              <View style={[styles.rideDot, { backgroundColor: online ? "#22C55E" : "#EF4444" }]} />
+              <Text style={styles.rideStatus}>{online ? "Online" : "Offline"}</Text>
+            </View>
+            <Text style={styles.rideRoute}>Hazratganj → Gomti Nagar</Text>
+          </View>
 
-        <View style={styles.radarCenter}>
-          <View style={styles.radarOuter}>
-            <View style={styles.radarInner}>
-              <Ionicons name="navigate" size={28} color={COLORS.primary} />
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Ionicons name="speedometer" size={16} color="#3B82F6" />
+              <View style={styles.statValueRow}>
+                <Text style={styles.statValue}>{speed}</Text>
+                <Text style={styles.statUnit}>km/h</Text>
+              </View>
+              <Text style={styles.statLabel}>Speed</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Ionicons name="time-outline" size={16} color="#F59E0B" />
+              <Text style={styles.statValue}>{eta}</Text>
+              <Text style={styles.statLabel}>ETA</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Ionicons name="location" size={16} color={COLORS.primary} />
+              <Text style={styles.statValue} numberOfLines={1}>{nextStop}</Text>
+              <Text style={styles.statLabel}>Next Stop</Text>
+            </View>
+          </View>
+
+          <View style={styles.progressSection}>
+            <View style={styles.progressLabelRow}>
+              <Text style={styles.progressLabel}>Route progress</Text>
+              <Text style={styles.progressPct}>{Math.round(progress * 100)}%</Text>
+            </View>
+            <View style={styles.progressTrack}>
+              <Animated.View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: `${progress * 100}%`,
+                    backgroundColor: progress > 0.7 ? COLORS.primary : "#22C55E",
+                  },
+                ]}
+              />
+              <Animated.View
+                style={[
+                  styles.progressThumb,
+                  {
+                    left: `${progress * 100}%`,
+                    backgroundColor: progress > 0.7 ? COLORS.primary : "#22C55E",
+                    transform: [{ scale: dotAnim.interpolate({ inputRange: [0.3, 1], outputRange: [1, 1.4] }) }],
+                  },
+                ]}
+              />
+            </View>
+            <View style={styles.progressEndpoints}>
+              <Text style={styles.progressEndpoint}>Start</Text>
+              <Text style={styles.progressEndpoint}>End</Text>
             </View>
           </View>
         </View>
+      )}
 
-        <View style={[styles.passengerDot, { top: "48%", left: "58%" }]}>
-          <Ionicons name="person" size={14} color="#fff" />
-        </View>
-        <View style={[styles.passengerDot, { top: "35%", left: "38%" }]}>
-          <Ionicons name="person" size={14} color="#fff" />
-        </View>
-      </View>
-
-      <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + 16 }]}>
-        <View style={styles.routeInfo}>
-          <Ionicons name="git-branch-outline" size={16} color={COLORS.textMuted} />
-          <Text style={styles.routeInfoText} numberOfLines={1}>
-            {selectedRoute?.name || selectedRoute?.route_name || "Route selected"}
-          </Text>
-        </View>
-
-        <Text style={styles.rangeNote}>
-          {withinRange
-            ? "Passengers are within your range. Open radar to find them."
-            : `You are ${STOP_DISTANCE - 500}m away from the nearest passenger. Move closer.`}
-        </Text>
-
-        <TouchableOpacity
-          style={[
-            styles.radarBtn,
-            !withinRange && styles.radarBtnDisabled,
-            radarActive && styles.radarBtnActive,
-          ]}
-          onPress={handleOpenRadar}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name={radarActive ? "radio" : "locate"}
-            size={20}
-            color={COLORS.white}
-          />
-          <Text style={styles.radarBtnText}>
-            {radarActive ? "Radar Active" : withinRange ? "Open Radar" : "Out of Range"}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <ConfirmPopup
-        visible={showConfirm}
-        confirmColor={COLORS.primary}
-        confirmLabel="Yes, Scan"
-        message="Start scanning for nearby passengers on your route?"
-        onCancel={() => setShowConfirm(false)}
-        onConfirm={handleConfirmRadar}
-        title="Open Radar"
-      />
-
-      {showOutOfRange && (
-        <View style={styles.outOfRangeOverlay}>
-          <View style={styles.outOfRangeCard}>
-            <Ionicons name="warning-outline" size={40} color={COLORS.warning} />
-            <Text style={styles.outOfRangeTitle}>Out of Range</Text>
-            <Text style={styles.outOfRangeText}>
-              You need to be within 500m of passengers to open radar. Move closer to a stop.
-            </Text>
-            <TouchableOpacity
-              style={styles.outOfRangeBtn}
-              onPress={() => setShowOutOfRange(false)}
-            >
-              <Text style={styles.outOfRangeBtnText}>Got it</Text>
-            </TouchableOpacity>
+      {/* 3-dot menu */}
+      <Modal visible={showMenu} transparent animationType="none">
+        <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
+          <View style={[styles.menuDropdown, { top: insets.top + 52, right: 16 }]}>
+            {online ? (
+              <TouchableOpacity style={styles.menuItem} onPress={handleStop}>
+                <Ionicons name="radio-button-off" size={18} color="#EF4444" />
+                <Text style={[styles.menuItemText, { color: "#EF4444" }]}>Stop Radar</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.menuItem} onPress={handleStart}>
+                <Ionicons name="radio" size={18} color={COLORS.primary} />
+                <Text style={styles.menuItemText}>Start Radar</Text>
+              </TouchableOpacity>
+            )}
           </View>
-        </View>
+        </Pressable>
+      </Modal>
+
+      {/* Verification overlay */}
+      {showVerify && (
+        <Animated.View style={[styles.verifyOverlay, { transform: [{ translateY: verifyTranslate }] }]}>
+          <View style={[styles.verifyCard, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 }]}>
+            <View style={styles.verifyIconRow}>
+              <View style={styles.verifyShield}>
+                <Ionicons name="shield-checkmark" size={32} color={COLORS.primary} />
+              </View>
+            </View>
+            <Text style={styles.verifyTitle}>Pre-Flight Check</Text>
+            <Text style={styles.verifySub}>Ensuring everything is ready before we start</Text>
+
+            <View style={styles.checksList}>
+              {checks.map((check) => (
+                <View key={check.key} style={styles.checkRow}>
+                  <View style={styles.checkIconWrap}>
+                    {check.status === "checking" ? (
+                      <Animated.View style={{ transform: [{ rotate: spinRotate }] }}>
+                        <Ionicons name="sync" size={18} color="#F59E0B" />
+                      </Animated.View>
+                    ) : check.status === "passed" ? (
+                      <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />
+                    ) : (
+                      <Ionicons name="ellipse" size={10} color="rgba(255,255,255,0.45)" />
+                    )}
+                  </View>
+                  <Text style={[styles.checkLabel, check.status === "checking" && styles.checkLabelActive]}>
+                    {check.label}
+                  </Text>
+                  {check.status === "checking" && (
+                    <View style={styles.checkProgressWrap}>
+                      <View style={styles.checkProgressTrack}>
+                        <View style={styles.checkProgressFill} />
+                      </View>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+
+            {allPassed && (
+              <TouchableOpacity style={styles.startBtn} onPress={handleStart} activeOpacity={0.85}>
+                <Ionicons name="radio" size={20} color="#fff" />
+                <Text style={styles.startBtnText}>Start Radar</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </Animated.View>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: "#F4F6F4",
+    backgroundColor: "#F0F7F3",
+  },
+
+  /* map area */
+  mapArea: {
+    flex: 1,
+    position: "relative",
+    backgroundColor: "#E8F2EC",
+    overflow: "hidden",
+  },
+  mapBg: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  roadH: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: "rgba(0,152,73,0.12)",
+    borderTopWidth: 4,
+    borderTopColor: "rgba(0,152,73,0.06)",
+    borderBottomWidth: 4,
+    borderBottomColor: "rgba(0,152,73,0.06)",
+  },
+  roadV: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: "rgba(0,152,73,0.12)",
+    borderLeftWidth: 4,
+    borderLeftColor: "rgba(0,152,73,0.06)",
+    borderRightWidth: 4,
+    borderRightColor: "rgba(0,152,73,0.06)",
+  },
+
+  /* vehicle */
+  vehicleWrap: {
+    position: "absolute",
+    bottom: "20%",
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 140,
+    height: 140,
+  },
+  radarRing: {
+    position: "absolute",
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 1,
+    borderColor: "rgba(0,152,73,0.15)",
+  },
+  radarRing2: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+  },
+  radarRing3: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderColor: "rgba(0,152,73,0.2)",
+  },
+  vehicleDot: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 2,
+  },
+  vehicleShadow: {
+    position: "absolute",
+    bottom: -4,
+    width: 32,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(0,0,0,0.08)",
+    zIndex: 1,
+  },
+
+  /* offline */
+  offlineCenter: {
+    position: "absolute",
+    top: "40%",
+    alignSelf: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  offlineText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#9CA3AF",
   },
 
   /* header */
-  header: {
+  mapHeader: {
+    position: "absolute",
+    top: 0, left: 0, right: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingBottom: 8,
-    backgroundColor: COLORS.white,
+    zIndex: 10,
   },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  iconBtn: {
+  backBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#f3f4f6",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: COLORS.text,
-  },
-
-  /* distance card */
-  distanceCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.white,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 18,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-    gap: 12,
-  },
-  flagWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: COLORS.primary + "12",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cardLabel: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  cardDistance: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: COLORS.text,
-    marginTop: 2,
-  },
-  greenText: {
-    color: COLORS.primary,
-  },
-  walkRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 4,
-  },
-  walkText: {
-    fontSize: 11,
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  statusBadgeActive: {
-    backgroundColor: COLORS.primary + "15",
-  },
-  statusBadgeInactive: {
-    backgroundColor: "#FEF3C7",
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statusDotActive: {
-    backgroundColor: COLORS.primary,
-  },
-  statusDotInactive: {
-    backgroundColor: "#F59E0B",
-  },
-  statusLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  statusLabelActive: {
-    color: COLORS.primary,
-  },
-  statusLabelInactive: {
-    color: "#F59E0B",
-  },
-
-  /* map / radar */
-  mapArea: {
-    flex: 1,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 18,
-    overflow: "hidden",
-    backgroundColor: "#E8F0FE",
-  },
-  mapBg: {
-    flex: 1,
-    backgroundColor: "rgba(0, 152, 73, 0.04)",
-  },
-  gridLineH: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: "rgba(0, 152, 73, 0.08)",
-    top: "20%",
-  },
-  gridLineV: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    width: 1,
-    backgroundColor: "rgba(0, 152, 73, 0.08)",
-    left: "20%",
-  },
-  poiLabel: {
-    position: "absolute",
-    top: 16,
-    left: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
     backgroundColor: "rgba(255,255,255,0.9)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  poiLabelText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#4B5563",
-  },
-  radarCenter: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    marginLeft: -36,
-    marginTop: -36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  radarOuter: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "rgba(0, 152, 73, 0.08)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  radarInner: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: COLORS.white,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.06,
     shadowRadius: 6,
-    elevation: 3,
+    elevation: 2,
   },
-  passengerDot: {
-    position: "absolute",
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.primary,
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  menuWrap: {
+    width: 40,
+    height: 40,
+  },
+  menuBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.9)",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
     elevation: 2,
   },
 
-  /* bottom panel */
-  bottomPanel: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    gap: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  routeInfo: {
-    flexDirection: "row",
+  /* notification banner */
+  notifBanner: {
+    position: "absolute",
+    top: 0, left: 0, right: 0,
+    paddingTop: 80,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     alignItems: "center",
-    gap: 8,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    zIndex: 20,
   },
-  routeInfoText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: COLORS.textMuted,
-    flex: 1,
-  },
-  rangeNote: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    fontWeight: "500",
-    textAlign: "center",
-    lineHeight: 18,
-  },
-  radarBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
+  notifDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: COLORS.primary,
+    marginBottom: 8,
+  },
+  notifText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#111827",
+    backgroundColor: "#fff",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     borderRadius: 14,
-    paddingVertical: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+    overflow: "hidden",
   },
-  radarBtnDisabled: {
-    backgroundColor: "#D1D5DB",
-  },
-  radarBtnActive: {
-    backgroundColor: "#00E676",
-  },
-  radarBtnText: {
-    fontSize: 15,
+  notifDist: {
     fontWeight: "800",
-    color: COLORS.white,
+    color: COLORS.primary,
   },
 
-  /* confirm popup */
-  outOfRangeOverlay: {
+  /* online badge */
+  onlineBadge: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "center",
+    bottom: 32,
+    alignSelf: "center",
+    flexDirection: "row",
     alignItems: "center",
-    padding: 32,
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.85)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  outOfRangeCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 18,
-    padding: 28,
+  onlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  onlineText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  /* menu */
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  menuDropdown: {
+    position: "absolute",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    paddingVertical: 4,
+    minWidth: 180,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  menuItemText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#111827",
+  },
+
+  /* verify overlay */
+  verifyOverlay: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "#0F2A42",
+    zIndex: 20,
+  },
+  verifyCard: {
+    flex: 1,
+    paddingHorizontal: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  verifyIconRow: {
+    marginBottom: 16,
+  },
+  verifyShield: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#ECFAF1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  verifyTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.4,
+    marginBottom: 8,
+  },
+  verifySub: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "rgba(255,255,255,0.55)",
+    textAlign: "center",
+    marginBottom: 40,
+    lineHeight: 20,
+  },
+
+  /* checks */
+  checksList: {
+    width: "100%",
+    gap: 4,
+    marginBottom: 40,
+  },
+  checkRow: {
+    flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    width: "100%",
-    maxWidth: 320,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
-  outOfRangeTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: COLORS.text,
+  checkIconWrap: {
+    width: 28,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  outOfRangeText: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    fontWeight: "500",
-    textAlign: "center",
-    lineHeight: 19,
+  checkLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.45)",
   },
-  outOfRangeBtn: {
+  checkLabelActive: {
+    color: "#F59E0B",
+    fontWeight: "700",
+  },
+  checkProgressWrap: {
+    width: 60,
+  },
+  checkProgressTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    overflow: "hidden",
+  },
+  checkProgressFill: {
+    height: "100%",
+    width: "60%",
+    borderRadius: 2,
+    backgroundColor: "#F59E0B",
+  },
+
+  /* start button */
+  startBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    marginTop: 8,
+    borderRadius: 18,
+    height: 56,
+    width: "100%",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  outOfRangeBtnText: {
-    color: COLORS.white,
-    fontSize: 14,
+  startBtnText: {
+    fontSize: 17,
     fontWeight: "800",
+    color: "#fff",
+  },
+
+  /* bottom sheet */
+  bottomSheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 0,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 15,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#E5E7EB",
+    alignSelf: "center",
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  rideInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 16,
+  },
+  rideBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  rideDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  rideStatus: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  rideRoute: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111827",
+    flex: 1,
+  },
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    paddingVertical: 12,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 16,
+    paddingHorizontal: 8,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+    gap: 2,
+  },
+  statValueRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 1,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  statUnit: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#9CA3AF",
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#9CA3AF",
+    textTransform: "uppercase",
+    marginTop: 1,
+  },
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: "#E5E7EB",
+  },
+  progressSection: {
+    marginBottom: 4,
+  },
+  progressLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  progressLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#9CA3AF",
+  },
+  progressPct: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: COLORS.primary,
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 3,
+    position: "relative",
+    justifyContent: "center",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  progressThumb: {
+    position: "absolute",
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginLeft: -8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  progressEndpoints: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 6,
+  },
+  progressEndpoint: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#D1D5DB",
   },
 });

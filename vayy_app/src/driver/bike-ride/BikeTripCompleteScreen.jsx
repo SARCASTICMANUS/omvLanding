@@ -153,7 +153,7 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
           <TouchableOpacity
             activeOpacity={0.9}
             style={styles.primaryBtn}
-            onPress={() => navigation.navigate("DriverHome")}
+            onPress={() => navigation.navigate("DriverModeSelect")}
           >
             <Ionicons name="bicycle" size={20} color="#fff" />
             <Text style={styles.primaryBtnText}>  Next Ride</Text>

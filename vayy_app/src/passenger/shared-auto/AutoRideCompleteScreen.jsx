@@ -17,9 +17,25 @@ import {
 
 const { width } = Dimensions.get("window");
 
+const RATING_LABELS = {
+  1: "Poor",
+  2: "Below Average",
+  3: "Average",
+  4: "Good",
+  5: "Excellent",
+};
+
 export function AutoRideCompleteScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [rating, setRating] = useState(0);
+
+  const ratingHint = rating <= 2
+    ? "Sorry about your experience"
+    : rating === 3
+    ? "Thanks for your feedback"
+    : rating === 4
+    ? "Glad you enjoyed the ride"
+    : "Amazing! Thank you";
 
   return (
     <View style={styles.container}>
@@ -91,7 +107,25 @@ export function AutoRideCompleteScreen({ navigation }) {
           <Text style={styles.sectionTitle}>Fare</Text>
           <View style={styles.fareDisplay}>
             <Text style={styles.fareAmount}>₹15</Text>
-            <Text style={styles.fareNote}>Shared auto fare • Paid via cash</Text>
+            <Text style={styles.fareNote}>Shared auto fare</Text>
+            <View style={styles.paymentBadge}>
+              <Ionicons name="cash" size={14} color="#009849" />
+              <Text style={styles.paymentText}>Paid via Cash</Text>
+            </View>
+          </View>
+          <View style={styles.fareBreakdown}>
+            <View style={styles.fareRow}>
+              <Text style={styles.fareRowLabel}>Estimated fare</Text>
+              <Text style={styles.fareRowValue}>₹15</Text>
+            </View>
+            <View style={styles.fareRow}>
+              <Text style={styles.fareRowLabel}>Distance travelled</Text>
+              <Text style={styles.fareRowValue}>3.2 km</Text>
+            </View>
+            <View style={styles.fareRow}>
+              <Text style={styles.fareRowLabel}>Rate applied</Text>
+              <Text style={styles.fareRowValue}>₹5/km</Text>
+            </View>
           </View>
         </View>
 
@@ -100,18 +134,24 @@ export function AutoRideCompleteScreen({ navigation }) {
           <View style={styles.starRow}>
             {[1, 2, 3, 4, 5].map((star) => (
               <TouchableOpacity key={star} onPress={() => setRating(star)} activeOpacity={0.7}>
-                <Ionicons
-                  name={star <= rating ? "star" : "star-outline"}
-                  size={36}
-                  color={star <= rating ? "#FFB800" : "#D1D5DB"}
-                />
+                <View style={styles.starItem}>
+                  <Ionicons
+                    name={star <= rating ? "star" : "star-outline"}
+                    size={36}
+                    color={star <= rating ? "#FFB800" : "#D1D5DB"}
+                  />
+                  <Text style={[styles.starLabel, star <= rating && styles.starLabelActive]}>
+                    {RATING_LABELS[star]}
+                  </Text>
+                </View>
               </TouchableOpacity>
             ))}
           </View>
           {rating > 0 && (
-            <Text style={styles.ratingHint}>
-              {rating <= 2 ? "Sorry about your experience" : rating === 3 ? "Thanks for your feedback" : rating === 4 ? "Glad you enjoyed the ride" : "Amazing! Thank you"}
-            </Text>
+            <Text style={styles.ratingHint}>{ratingHint}</Text>
+          )}
+          {rating === 0 && (
+            <Text style={styles.ratingSkip}>Tap a star to rate, or skip to finish</Text>
           )}
         </View>
 
@@ -130,7 +170,7 @@ export function AutoRideCompleteScreen({ navigation }) {
             style={styles.secondaryBtn}
             onPress={() => navigation.popToTop()}
           >
-            <Text style={styles.secondaryBtnText}>Back to Home</Text>
+            <Text style={styles.secondaryBtnText}>Return Home</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -286,10 +326,66 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginTop: 6,
   },
+  paymentBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#ECFAF1",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 10,
+  },
+  paymentText: {
+    fontSize: 13,
+    color: "#009849",
+    fontWeight: "700",
+  },
+  fareBreakdown: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+    gap: 10,
+  },
+  fareRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  fareRowLabel: {
+    fontSize: 13,
+    color: "#6B7280",
+    fontWeight: "500",
+  },
+  fareRowValue: {
+    fontSize: 13,
+    color: "#111827",
+    fontWeight: "700",
+  },
   starRow: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 8,
+  },
+  starItem: {
+    alignItems: "center",
+    gap: 4,
+  },
+  starLabel: {
+    fontSize: 10,
+    color: "#9CA3AF",
+    fontWeight: "600",
+  },
+  starLabelActive: {
+    color: "#FFB800",
+  },
+  ratingSkip: {
+    textAlign: "center",
+    fontSize: 12,
+    color: "#9CA3AF",
+    fontWeight: "500",
+    marginTop: 12,
   },
   ratingHint: {
     textAlign: "center",

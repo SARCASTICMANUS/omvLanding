@@ -235,7 +235,7 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
         <VayyButton fullWidth label="Call Control Room" onPress={() => {}} variant="outline" />
         <VayyButton fullWidth label="Report Issue" onPress={() => {}} variant="outline" />
 
-        <Text style={styles.wsText}>Driver socket: {wsStatus}</Text>
+        <VayyButton fullWidth label="End Trip" onPress={() => navigation.navigate("DriverModeSelect")} variant="primary" />
       </View>
 
       <View style={styles.zoomButtons}>

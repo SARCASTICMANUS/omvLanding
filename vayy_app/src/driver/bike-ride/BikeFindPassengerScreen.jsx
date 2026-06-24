@@ -3,7 +3,6 @@ import {
   Animated,
   Dimensions,
   Easing,
-  Modal,
   StatusBar,
   StyleSheet,
   Text,
@@ -12,124 +11,95 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import MapView, { Marker } from "react-native-maps";
 import COLORS from "../../shared/constants/colors";
 
 const { width, height } = Dimensions.get("window");
 
-const CHECKS = [
-  { key: "network", label: "Network Connection", icon: "wifi" },
-  { key: "gps", label: "GPS Signal", icon: "navigate" },
-  { key: "location", label: "Location Permission", icon: "location" },
-  { key: "ready", label: "Device Readiness", icon: "checkmark-circle" },
-];
+const INITIAL_REGION = {
+  latitude: 26.8467,
+  longitude: 80.9462,
+  latitudeDelta: 0.05,
+  longitudeDelta: 0.05,
+};
 
-const BUDDIES = [
-  { id: "b1", name: "Ravi Kumar", rating: 4.8, trips: 23, pickup: "Hazratganj", drop: "IT City", distance: "400 m", fare: "₹35", eta: "4 min", avatar: "RK" },
-  { id: "b2", name: "Priya Singh", rating: 4.9, trips: 17, pickup: "Lalbagh", drop: "SGPGI", distance: "280 m", fare: "₹25", eta: "3 min", avatar: "PS" },
-  { id: "b3", name: "Amit Verma", rating: 4.7, trips: 31, pickup: "Gomti Nagar", drop: "Indira Nagar", distance: "550 m", fare: "₹40", eta: "5 min", avatar: "AV" },
+const PASSENGERS = [
+  { id: "p1", name: "Ravi Kumar", rating: 4.8, trips: 23, pickup: "Hazratganj", drop: "IT City", distance: "400 m", fare: "₹35", eta: "4 min", lat: 26.8525, lng: 80.9489 },
+  { id: "p2", name: "Priya Singh", rating: 4.9, trips: 17, pickup: "Lalbagh", drop: "SGPGI", distance: "280 m", fare: "₹25", eta: "3 min", lat: 26.8611, lng: 80.9228 },
+  { id: "p3", name: "Amit Verma", rating: 4.7, trips: 31, pickup: "Gomti Nagar", drop: "Indira Nagar", distance: "550 m", fare: "₹40", eta: "5 min", lat: 26.8513, lng: 80.9860 },
 ];
 
 export default function BikeFindPassengerScreen({ navigation, route: navRoute }) {
   const insets = useSafeAreaInsets();
   const [showVerify, setShowVerify] = useState(true);
-  const [checks, setChecks] = useState(CHECKS.map((c) => ({ ...c, status: "pending" })));
-  const [allPassed, setAllPassed] = useState(false);
-  const [phase, setPhase] = useState("scanning");
-  const [currentBuddy, setCurrentBuddy] = useState(null);
-  const [buddyIndex, setBuddyIndex] = useState(0);
+  const [online, setOnline] = useState(false);
+  const [selectedPassenger, setSelectedPassenger] = useState(null);
+  const [passengerIndex, setPassengerIndex] = useState(0);
+  const [phase, setPhase] = useState("idle");
+  const [bikePos] = useState({ latitude: 26.8467, longitude: 80.9462 });
+
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(height)).current;
-  const scanDot = useRef(new Animated.Value(0)).current;
   const verifySlide = useRef(new Animated.Value(0)).current;
-  const spinAnim = useRef(new Animated.Value(0)).current;
+  const sweepAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!showVerify) return;
     Animated.spring(verifySlide, { toValue: 1, friction: 8, tension: 60, useNativeDriver: true }).start();
   }, [showVerify, verifySlide]);
 
-  useEffect(() => {
-    if (!showVerify) return;
-    const run = async () => {
-      const updated = [...checks];
-      for (let i = 0; i < updated.length; i++) {
-        updated[i] = { ...updated[i], status: "checking" };
-        setChecks([...updated]);
-        await new Promise((r) => setTimeout(r, 700 + Math.random() * 600));
-        updated[i] = { ...updated[i], status: "passed" };
-        setChecks([...updated]);
-        await new Promise((r) => setTimeout(r, 200));
-      }
-      setAllPassed(true);
-    };
-    run();
-  }, [showVerify]);
-
-  useEffect(() => {
-    if (!showVerify) {
-      const pulse = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.35, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        ]),
-      );
-      pulse.start();
-      const spin = Animated.loop(
-        Animated.timing(scanDot, { toValue: 1, duration: 2500, easing: Easing.linear, useNativeDriver: true }),
-      );
-      spin.start();
-      const timer = setTimeout(() => {
-        setCurrentBuddy(BUDDIES[buddyIndex]);
-        setPhase("found");
-        Animated.spring(slideAnim, { toValue: 0, friction: 9, tension: 55, useNativeDriver: true }).start();
-      }, 5000);
-      return () => {
-        pulse.stop();
-        spin.stop();
-        clearTimeout(timer);
-      };
-    }
-  }, [showVerify, buddyIndex, slideAnim, pulseAnim, scanDot]);
-
-  useEffect(() => {
-    if (!allPassed) return;
-    Animated.loop(
-      Animated.timing(spinAnim, { toValue: 1, duration: 2000, easing: Easing.linear, useNativeDriver: true }),
-    ).start();
-  }, [allPassed, spinAnim]);
-
-  const handleStartScanning = () => {
+  const handleStart = () => {
     Animated.timing(verifySlide, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
       setShowVerify(false);
+      setOnline(true);
+      setPhase("scanning");
     });
   };
 
+  useEffect(() => {
+    if (!online) return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.5, duration: 1800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    pulse.start();
+    const sweep = Animated.loop(
+      Animated.timing(sweepAnim, { toValue: 1, duration: 3000, easing: Easing.linear, useNativeDriver: true }),
+    );
+    sweep.start();
+    const timer = setTimeout(() => {
+      setSelectedPassenger(PASSENGERS[passengerIndex]);
+      setPhase("found");
+      Animated.spring(slideAnim, { toValue: 0, friction: 10, tension: 50, useNativeDriver: true }).start();
+    }, 4000);
+    return () => {
+      pulse.stop();
+      sweep.stop();
+      clearTimeout(timer);
+    };
+  }, [online, passengerIndex, pulseAnim, sweepAnim]);
+
   const handleAccept = () => {
-    navigation.navigate("BikeRideToPickup", { buddy: currentBuddy });
+    navigation.navigate("BikeRideToPickup", { buddy: selectedPassenger });
   };
 
   const handleIgnore = () => {
     Animated.timing(slideAnim, { toValue: height, duration: 250, useNativeDriver: true }).start(() => {
-      const next = (buddyIndex + 1) % BUDDIES.length;
-      setBuddyIndex(next);
-      setCurrentBuddy(null);
+      const next = (passengerIndex + 1) % PASSENGERS.length;
+      setPassengerIndex(next);
+      setSelectedPassenger(null);
       setPhase("scanning");
       setTimeout(() => {
-        setCurrentBuddy(BUDDIES[next]);
+        setSelectedPassenger(PASSENGERS[next]);
         setPhase("found");
-        Animated.spring(slideAnim, { toValue: 0, friction: 9, tension: 55, useNativeDriver: true }).start();
+        Animated.spring(slideAnim, { toValue: 0, friction: 10, tension: 50, useNativeDriver: true }).start();
       }, 3000);
     });
   };
 
-  const scanRotate = scanDot.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
-  const spinRotate = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
-
-  const statusIcon = (status) => {
-    if (status === "checking") return null;
-    if (status === "passed") return <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />;
-    return <Ionicons name="ellipse" size={10} color="#D1D5DB" />;
-  };
+  const sweepRotate = sweepAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
 
   const verifyTranslate = verifySlide.interpolate({
     inputRange: [0, 1],
@@ -140,101 +110,156 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
     <View style={styles.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      <View style={styles.radarArea}>
-        <Animated.View style={[styles.pulseRing, { transform: [{ scale: pulseAnim }] }]} />
-        <Animated.View style={[styles.pulseRing, styles.pulseRing2, { transform: [{ scale: pulseAnim }] }]} />
+      {/* Real map background */}
+      <MapView
+        initialRegion={INITIAL_REGION}
+        style={styles.map}
+        scrollEnabled={false}
+        zoomEnabled={false}
+        rotateEnabled={false}
+        pitchEnabled={false}
+      >
+        {/* Passenger markers */}
+        {online && PASSENGERS.map((p) => (
+          <Marker
+            key={p.id}
+            coordinate={{ latitude: p.lat, longitude: p.lng }}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={styles.passengerMarker}>
+              <View style={styles.passengerDot} />
+            </View>
+          </Marker>
+        ))}
+        {/* Bike marker */}
+        <Marker coordinate={bikePos} anchor={{ x: 0.5, y: 0.5 }}>
+          <View style={styles.bikeMarker}>
+            <Ionicons name="bicycle" size={22} color="#fff" />
+          </View>
+        </Marker>
+      </MapView>
 
-        {!showVerify && (
-          <Animated.View style={[styles.scanArc, { transform: [{ rotate: scanRotate }] }]}>
-            <View style={styles.scanCone} />
-          </Animated.View>
-        )}
+      {/* Overlay tint */}
+      <View style={styles.overlayTint} />
 
-        <View style={styles.radarCenter}>
-          <Ionicons name="bicycle" size={28} color="#fff" />
-        </View>
-
-        <View style={[styles.blip, { top: "32%", left: "58%" }]} />
-        <View style={[styles.blip, { top: "52%", left: "28%", opacity: 0.5 }]} />
-        <View style={[styles.blip, { top: "62%", left: "68%", opacity: 0.35 }]} />
-        <View style={[styles.blip, { top: "42%", left: "48%", opacity: 0.6 }]} />
-
-        <View style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back" size={22} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Find Buddy</Text>
-          <View style={{ width: 40 }} />
-        </View>
-
-        {!showVerify && (
-          <Text style={styles.scanningText}>
-            {phase === "scanning" ? "Scanning for nearby buddies..." : "Buddy found!"}
-          </Text>
+      {/* Radar center */}
+      <View style={styles.radarCenter} pointerEvents="none">
+        {online && (
+          <>
+            <Animated.View style={[styles.pulseRing, { transform: [{ scale: pulseAnim }] }]} />
+            <Animated.View style={[styles.pulseRing, styles.pulseRing2, { transform: [{ scale: pulseAnim }] }]} />
+            <Animated.View style={[styles.pulseRing, styles.pulseRing3, { transform: [{ scale: pulseAnim }] }]} />
+            <Animated.View style={[styles.sweepArc, { transform: [{ rotate: sweepRotate }] }]}>
+              <View style={styles.sweepCone} />
+            </Animated.View>
+          </>
         )}
       </View>
 
-      {/* Buddy card bottom sheet */}
+      {/* Status badge */}
+      {online && phase === "scanning" && (
+        <View style={styles.statusBadge}>
+          <View style={styles.statusDotLive} />
+          <Text style={styles.statusText}>Scanning nearby area...</Text>
+        </View>
+      )}
+
+      {online && phase === "found" && (
+        <View style={[styles.statusBadge, styles.statusBadgeFound]}>
+          <Ionicons name="person" size={14} color={COLORS.primary} />
+          <Text style={styles.statusText}>Buddy found!</Text>
+        </View>
+      )}
+
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={22} color="#111827" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Buddy Radar</Text>
+        <TouchableOpacity
+          style={[styles.headerBtn, online && styles.headerBtnActive]}
+          onPress={() => setOnline(!online)}
+        >
+          <Ionicons
+            name={online ? "radio" : "radio-button-off"}
+            size={20}
+            color={online ? "#fff" : "#111827"}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* Offline state */}
+      {!showVerify && !online && (
+        <View style={styles.offlineWrap}>
+          <View style={styles.offlineIconWrap}>
+            <Ionicons name="radio-button-off" size={36} color="rgba(0,0,0,0.15)" />
+          </View>
+          <Text style={styles.offlineTitle}>Radar Offline</Text>
+          <Text style={styles.offlineSub}>Tap the radio icon to start</Text>
+        </View>
+      )}
+
+      {/* Bottom sheet */}
       <Animated.View
         style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16, transform: [{ translateY: slideAnim }] }]}
         pointerEvents={phase === "found" ? "auto" : "none"}
       >
         <View style={styles.handle} />
-        {currentBuddy && (
+        {selectedPassenger && phase === "found" && (
           <>
-            <View style={styles.buddyCard}>
-              <View style={styles.buddyCardHead}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{currentBuddy.avatar}</Text>
-                </View>
-                <View style={styles.buddyMeta}>
-                  <Text style={styles.buddyName}>{currentBuddy.name}</Text>
-                  <View style={styles.ratingRow}>
-                    <Ionicons name="star" size={13} color="#FFB800" />
-                    <Text style={styles.ratingValue}>{currentBuddy.rating}</Text>
-                    <Text style={styles.ratingTrips}>({currentBuddy.trips} trips)</Text>
-                  </View>
-                </View>
-                <View style={styles.fareBadge}>
-                  <Text style={styles.fareValue}>{currentBuddy.fare}</Text>
-                  <Text style={styles.fareLabel}>est.</Text>
+            <View style={styles.sheetHead}>
+              <View style={styles.sheetAvatar}>
+                <Ionicons name="person-circle" size={44} color={COLORS.primary} />
+              </View>
+              <View style={styles.sheetMeta}>
+                <Text style={styles.sheetName}>{selectedPassenger.name}</Text>
+                <View style={styles.sheetRow}>
+                  <Ionicons name="star" size={12} color="#FFB800" />
+                  <Text style={styles.sheetRating}>{selectedPassenger.rating}</Text>
+                  <Text style={styles.sheetDivider}>|</Text>
+                  <Text style={styles.sheetTrips}>{selectedPassenger.trips} trips</Text>
                 </View>
               </View>
+              <View style={styles.sheetFare}>
+                <Text style={styles.sheetFareValue}>{selectedPassenger.fare}</Text>
+                <Text style={styles.sheetFareLabel}>est.</Text>
+              </View>
+            </View>
 
-              <View style={styles.routeRow}>
-                <View style={styles.routeIconCol}>
-                  <View style={styles.routeDotGreen} />
-                  <View style={styles.routeLine} />
-                  <View style={styles.routeDotRed} />
+            <View style={styles.routeCard}>
+              <View style={styles.routeDots}>
+                <View style={styles.routeDotGreen} />
+                <View style={styles.routeLine} />
+                <View style={styles.routeDotRed} />
+              </View>
+              <View style={styles.routeInfo}>
+                <View>
+                  <Text style={styles.routeLabel}>FROM</Text>
+                  <Text style={styles.routeName}>{selectedPassenger.pickup}</Text>
                 </View>
-                <View style={styles.routeDetails}>
-                  <View style={styles.routePoint}>
-                    <Text style={styles.routeLabel}>Pickup</Text>
-                    <Text style={styles.routeName}>{currentBuddy.pickup}</Text>
-                  </View>
-                  <View style={styles.routePoint}>
-                    <Text style={styles.routeLabel}>Drop</Text>
-                    <Text style={styles.routeName}>{currentBuddy.drop}</Text>
-                  </View>
+                <View>
+                  <Text style={styles.routeLabel}>TO</Text>
+                  <Text style={styles.routeName}>{selectedPassenger.drop}</Text>
                 </View>
-                <View style={styles.routeRight}>
-                  <View style={styles.distanceChip}>
-                    <Ionicons name="walk" size={12} color={COLORS.primary} />
-                    <Text style={styles.distanceText}>{currentBuddy.distance}</Text>
-                  </View>
-                  <Text style={styles.etaLabel}>{currentBuddy.eta}</Text>
+              </View>
+              <View style={styles.routeMeta}>
+                <View style={styles.distBadge}>
+                  <Ionicons name="walk" size={12} color={COLORS.primary} />
+                  <Text style={styles.distText}>{selectedPassenger.distance}</Text>
                 </View>
+                <Text style={styles.etaText}>{selectedPassenger.eta}</Text>
               </View>
             </View>
 
             <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.ignoreBtn} onPress={handleIgnore} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.skipBtn} onPress={handleIgnore} activeOpacity={0.7}>
                 <Ionicons name="close" size={18} color="#EF4444" />
-                <Text style={styles.ignoreText}>Ignore</Text>
+                <Text style={styles.skipText}>Skip</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept} activeOpacity={0.85}>
-                <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                <Text style={styles.acceptText}>Accept</Text>
+              <TouchableOpacity style={styles.pickBtn} onPress={handleAccept} activeOpacity={0.85}>
+                <Ionicons name="navigate" size={18} color="#fff" />
+                <Text style={styles.pickText}>Pick Up</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -245,46 +270,30 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
       {showVerify && (
         <Animated.View style={[styles.verifyOverlay, { transform: [{ translateY: verifyTranslate }] }]}>
           <View style={[styles.verifyCard, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 }]}>
-            <View style={styles.verifyIconRow}>
-              <View style={styles.verifyShield}>
-                <Ionicons name="shield-checkmark" size={32} color={COLORS.primary} />
-              </View>
+            <View style={styles.verifyIcon}>
+              <Ionicons name="bicycle" size={36} color={COLORS.primary} />
             </View>
-            <Text style={styles.verifyTitle}>Pre-Flight Check</Text>
-            <Text style={styles.verifySub}>Ensuring everything is ready before we start</Text>
+            <Text style={styles.verifyTitle}>Ready to Ride</Text>
+            <Text style={styles.verifySub}>Enable your radar to find nearby buddies</Text>
 
-            <View style={styles.checksList}>
-              {checks.map((check) => (
-                <View key={check.key} style={styles.checkRow}>
-                  <View style={styles.checkIconWrap}>
-                    {check.status === "checking" ? (
-                      <Animated.View style={{ transform: [{ rotate: spinRotate }] }}>
-                        <Ionicons name="sync" size={18} color="#F59E0B" />
-                      </Animated.View>
-                    ) : (
-                      statusIcon(check.status)
-                    )}
-                  </View>
-                  <Text style={[styles.checkLabel, check.status === "checking" && styles.checkLabelActive]}>
-                    {check.label}
-                  </Text>
-                  {check.status === "checking" && (
-                    <View style={styles.checkProgressWrap}>
-                      <View style={styles.checkProgressTrack}>
-                        <View style={styles.checkProgressFill} />
-                      </View>
-                    </View>
-                  )}
+            <View style={styles.verifyChecks}>
+              {[
+                { key: "network", label: "Network", icon: "wifi" },
+                { key: "gps", label: "GPS Signal", icon: "navigate" },
+                { key: "location", label: "Location", icon: "location" },
+              ].map((check) => (
+                <View key={check.key} style={styles.verifyRow}>
+                  <Ionicons name={check.icon} size={16} color="rgba(255,255,255,0.35)" />
+                  <Text style={styles.verifyLabel}>{check.label}</Text>
+                  <Ionicons name="checkmark-circle" size={18} color={COLORS.primary} />
                 </View>
               ))}
             </View>
 
-            {allPassed && (
-              <TouchableOpacity style={styles.startBtn} onPress={handleStartScanning} activeOpacity={0.85}>
-                <Ionicons name="radio" size={20} color="#fff" />
-                <Text style={styles.startBtnText}>Start Finding Buddy</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity style={styles.startBtn} onPress={handleStart} activeOpacity={0.85}>
+              <Ionicons name="radio" size={20} color="#fff" />
+              <Text style={styles.startBtnText}>Start Radar</Text>
+            </TouchableOpacity>
           </View>
         </Animated.View>
       )}
@@ -295,29 +304,85 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#0F2A42",
   },
 
-  /* radar area */
-  radarArea: {
-    flex: 1,
+  /* map */
+  map: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+  },
+
+  /* markers */
+  passengerMarker: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  passengerDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#00E676",
+    borderWidth: 2,
+    borderColor: "#fff",
+    shadowColor: "#00E676",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  bikeMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+
+  /* overlay tint */
+  overlayTint: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(15,42,66,0.4)",
+  },
+
+  /* radar center */
+  radarCenter: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    marginLeft: -110,
+    marginTop: -110,
+    width: 220,
+    height: 220,
     alignItems: "center",
     justifyContent: "center",
   },
   pulseRing: {
     position: "absolute",
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
     borderWidth: 1.5,
-    borderColor: "rgba(0, 152, 73, 0.2)",
+    borderColor: "rgba(0,230,118,0.15)",
   },
   pulseRing2: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
   },
-  scanArc: {
+  pulseRing3: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderColor: "rgba(0,230,118,0.25)",
+  },
+  sweepArc: {
     position: "absolute",
     width: 180,
     height: 180,
@@ -326,178 +391,212 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     overflow: "hidden",
   },
-  scanCone: {
+  sweepCone: {
     width: 90,
     height: 90,
-    backgroundColor: "rgba(0, 152, 73, 0.05)",
+    backgroundColor: "rgba(0,230,118,0.04)",
     borderTopLeftRadius: 90,
     borderTopRightRadius: 90,
-  },
-  radarCenter: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  blip: {
-    position: "absolute",
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#00E676",
-    shadowColor: "#00E676",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
-    elevation: 4,
+    borderTopWidth: 2,
+    borderTopColor: "rgba(0,230,118,0.3)",
+    borderLeftWidth: 2,
+    borderLeftColor: "rgba(0,230,118,0.3)",
+    borderRightWidth: 2,
+    borderRightColor: "rgba(0,230,118,0.3)",
   },
 
-  /* map header */
-  mapHeader: {
+  /* status badge */
+  statusBadge: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
+    top: "42%",
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
+    zIndex: 5,
+  },
+  statusBadgeFound: {
+    backgroundColor: "#ECFAF1",
+  },
+  statusDotLive: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  /* header */
+  header: {
+    position: "absolute",
+    top: 0, left: 0, right: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingBottom: 8,
-    zIndex: 10,
+    zIndex: 20,
   },
-  backBtn: {
+  headerBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(255,255,255,0.9)",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  headerBtnActive: {
+    backgroundColor: COLORS.primary,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
     color: "#fff",
     letterSpacing: -0.3,
   },
-  scanningText: {
+
+  /* offline */
+  offlineWrap: {
     position: "absolute",
-    bottom: 40,
-    fontSize: 14,
-    fontWeight: "600",
-    color: "rgba(255,255,255,0.55)",
-    letterSpacing: 0.3,
+    top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,42,66,0.95)",
+    zIndex: 10,
+  },
+  offlineIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  offlineTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#fff",
+    marginBottom: 6,
+  },
+  offlineSub: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "rgba(255,255,255,0.4)",
   },
 
   /* bottom sheet */
   bottomSheet: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
+    left: 0, right: 0, bottom: 0,
     backgroundColor: "#fff",
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: 20,
     paddingTop: 0,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: -6 },
+    shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.1,
     shadowRadius: 24,
-    elevation: 15,
+    elevation: 20,
+    zIndex: 30,
   },
   handle: {
-    width: 40,
+    width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#D1D5DB",
     alignSelf: "center",
     marginTop: 12,
-    marginBottom: 20,
+    marginBottom: 16,
   },
-
-  /* buddy card */
-  buddyCard: {
-    backgroundColor: "#fff",
-    marginBottom: 4,
-  },
-  buddyCardHead: {
+  sheetHead: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     marginBottom: 16,
   },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: COLORS.primary,
+  sheetAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: {
-    color: "#fff",
-    fontSize: 17,
-    fontWeight: "900",
-  },
-  buddyMeta: {
+  sheetMeta: {
     flex: 1,
   },
-  buddyName: {
-    fontSize: 17,
+  sheetName: {
+    fontSize: 18,
     fontWeight: "800",
     color: "#111827",
   },
-  ratingRow: {
+  sheetRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     marginTop: 3,
   },
-  ratingValue: {
+  sheetRating: {
     fontSize: 13,
     fontWeight: "700",
     color: "#374151",
   },
-  ratingTrips: {
+  sheetDivider: {
+    fontSize: 12,
+    color: "#D1D5DB",
+  },
+  sheetTrips: {
     fontSize: 12,
     fontWeight: "500",
     color: "#9CA3AF",
   },
-  fareBadge: {
+  sheetFare: {
     backgroundColor: "#ECFAF1",
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 8,
     alignItems: "center",
   },
-  fareValue: {
-    fontSize: 18,
+  sheetFareValue: {
+    fontSize: 19,
     fontWeight: "900",
     color: COLORS.primary,
   },
-  fareLabel: {
+  sheetFareLabel: {
     fontSize: 10,
     fontWeight: "600",
     color: COLORS.primary,
     marginTop: -1,
   },
 
-  /* route */
-  routeRow: {
+  /* route card */
+  routeCard: {
     flexDirection: "row",
     gap: 10,
     backgroundColor: "#F9FAFB",
     borderRadius: 16,
     padding: 14,
   },
-  routeIconCol: {
+  routeDots: {
     alignItems: "center",
     width: 12,
     paddingTop: 4,
@@ -520,12 +619,11 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: "#EF4444",
   },
-  routeDetails: {
+  routeInfo: {
     flex: 1,
     justifyContent: "space-between",
     gap: 10,
   },
-  routePoint: {},
   routeLabel: {
     fontSize: 10,
     fontWeight: "600",
@@ -539,12 +637,12 @@ const styles = StyleSheet.create({
     color: "#111827",
     marginTop: 1,
   },
-  routeRight: {
+  routeMeta: {
     alignItems: "flex-end",
     justifyContent: "center",
     gap: 6,
   },
-  distanceChip: {
+  distBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
@@ -553,12 +651,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  distanceText: {
+  distText: {
     fontSize: 12,
     fontWeight: "700",
     color: COLORS.primary,
   },
-  etaLabel: {
+  etaText: {
     fontSize: 12,
     fontWeight: "600",
     color: "#6B7280",
@@ -569,9 +667,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  ignoreBtn: {
+  skipBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -583,12 +681,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#FECACA",
   },
-  ignoreText: {
+  skipText: {
     fontSize: 15,
     fontWeight: "700",
     color: "#EF4444",
   },
-  acceptBtn: {
+  pickBtn: {
     flex: 1.5,
     flexDirection: "row",
     alignItems: "center",
@@ -603,7 +701,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 5,
   },
-  acceptText: {
+  pickText: {
     fontSize: 16,
     fontWeight: "800",
     color: "#fff",
@@ -612,12 +710,9 @@ const styles = StyleSheet.create({
   /* verify overlay */
   verifyOverlay: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: "#0F2A42",
-    zIndex: 20,
+    zIndex: 40,
   },
   verifyCard: {
     flex: 1,
@@ -625,80 +720,50 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  verifyIconRow: {
-    marginBottom: 16,
-  },
-  verifyShield: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "#ECFAF1",
+  verifyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(255,255,255,0.06)",
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 20,
   },
   verifyTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "800",
     color: "#fff",
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
     marginBottom: 8,
   },
   verifySub: {
     fontSize: 14,
     fontWeight: "500",
-    color: "rgba(255,255,255,0.55)",
+    color: "rgba(255,255,255,0.45)",
     textAlign: "center",
-    marginBottom: 40,
+    marginBottom: 36,
     lineHeight: 20,
   },
-
-  /* checks */
-  checksList: {
+  verifyChecks: {
     width: "100%",
-    gap: 4,
-    marginBottom: 40,
+    gap: 8,
+    marginBottom: 36,
   },
-  checkRow: {
+  verifyRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(255,255,255,0.05)",
   },
-  checkIconWrap: {
-    width: 28,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  checkLabel: {
+  verifyLabel: {
     flex: 1,
     fontSize: 15,
     fontWeight: "600",
-    color: "rgba(255,255,255,0.45)",
+    color: "rgba(255,255,255,0.5)",
   },
-  checkLabelActive: {
-    color: "#F59E0B",
-    fontWeight: "700",
-  },
-  checkProgressWrap: {
-    width: 60,
-  },
-  checkProgressTrack: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    overflow: "hidden",
-  },
-  checkProgressFill: {
-    height: "100%",
-    width: "60%",
-    borderRadius: 2,
-    backgroundColor: "#F59E0B",
-  },
-
-  /* start button */
   startBtn: {
     flexDirection: "row",
     alignItems: "center",

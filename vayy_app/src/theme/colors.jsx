@@ -2,7 +2,7 @@ export const colors = {
   primary: "#1D9E75",
   primaryDark: "#085041",
   primaryLight: "#9FE1CB",
-  bikeAccent: "#534AB7",
+  bikeAccent: "#009849",
   bikeLight: "#CEBBF6",
   autoAccent: "#BA7517",
   autoLight: "#FAC775",

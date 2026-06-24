@@ -13,6 +13,7 @@ import { spacing } from "../../theme/spacing";
 export default function PassengerActionsScreen({ navigation }) {
   // Moved Bike Search to the TOP for easier access
   const actions = [
+    { title: "Splash Onboarding", screen: "SplashCarousel" },
     { title: "Bike Search State", screen: "BikeSearching" },
     { title: "Bike Map Pre-Ride", screen: "BikeMapPreRide" },
     { title: "Rider Popup (Accepted)", screen: "RiderPopup" },

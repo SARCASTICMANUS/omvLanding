@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,72 +8,104 @@ import {
   StatusBar,
   Platform,
 } from "react-native";
+import MapView from "react-native-maps";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Ionicons,
   MaterialIcons,
   Feather,
 } from "@expo/vector-icons";
-import { ConfirmPopup } from "../bike-ride/ConfirmPopup";
 
 const { width } = Dimensions.get("window");
 const STOP_DISTANCE = 200;
-const WITHIN_RANGE = STOP_DISTANCE <= 500;
+const THRESHOLD = 500;
 
 export function AutoPreRideScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [showConfirm, setShowConfirm] = useState(false);
   const [showOutOfRange, setShowOutOfRange] = useState(false);
-  const [withinRange] = useState(WITHIN_RANGE);
+  const [distanceToStop] = useState(STOP_DISTANCE);
+  const withinRange = distanceToStop <= THRESHOLD;
+  const mapRef = useRef(null);
+
+  useEffect(() => {
+    if (withinRange) {
+      // Auto-enable when within range
+    }
+  }, [withinRange]);
+
+  const zoomIn = () => {
+    mapRef.current?.animateCamera({ zoom: 16 });
+  };
+
+  const zoomOut = () => {
+    mapRef.current?.animateCamera({ zoom: 12 });
+  };
+
+  const handleRaiseHand = () => {
+    if (distanceToStop <= THRESHOLD) {
+      setShowConfirm(true);
+    } else {
+      setShowOutOfRange(true);
+    }
+  };
+
+  const handleConfirmRaise = () => {
+    setShowConfirm(false);
+    navigation.replace('AutoDiscovery');
+  };
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
-
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.headerLeft}>
-          {Platform.OS === 'ios' && (
-            <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-              <Ionicons name="chevron-back" size={24} color="#111827" />
-            </TouchableOpacity>
-          )}
-          <Text style={styles.headerTitle}>Auto pickup</Text>
-        </View>
-        <TouchableOpacity style={styles.iconBtn}>
-          <MaterialIcons name="more-vert" size={24} color="#111827" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.distanceCard}>
-        <View style={styles.flagWrapper}>
-          <Ionicons name="location" size={24} color="#009849" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardLabel}>Nearest stop</Text>
-          <Text style={styles.cardDistance}>
-            <Text style={styles.greenText}>{STOP_DISTANCE} m</Text> away
-          </Text>
-          <View style={styles.walkRow}>
-            <Ionicons name="walk" size={14} color="#6B7280" />
-            <Text style={styles.walkText}>~3 min walk</Text>
-          </View>
-        </View>
-        <View style={[styles.statusBadge, withinRange ? styles.statusBadgeActive : styles.statusBadgeInactive]}>
-          <View style={[styles.statusDot, withinRange ? styles.statusDotActive : styles.statusDotInactive]} />
-          <Text style={[styles.statusLabel, withinRange ? styles.statusLabelActive : styles.statusLabelInactive]}>
-            {withinRange ? "In range" : `${STOP_DISTANCE - 500}m away`}
-          </Text>
-        </View>
-      </View>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <View style={styles.mapArea}>
-        <View style={styles.mapBg}>
-          <View style={styles.gridLineH} />
-          <View style={[styles.gridLineH, { top: "40%" }]} />
-          <View style={[styles.gridLineH, { top: "70%" }]} />
-          <View style={styles.gridLineV} />
-          <View style={[styles.gridLineV, { left: "40%" }]} />
-          <View style={[styles.gridLineV, { left: "70%" }]} />
+        <MapView
+          style={styles.mapBg}
+          ref={mapRef}
+          initialRegion={{
+            latitude: 26.8467,
+            longitude: 80.9462,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }}
+          scrollEnabled={true}
+          zoomEnabled={true}
+          zoomControlEnabled={true}
+        />
+
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={styles.headerLeft}>
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
+                <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+            <Text style={styles.headerTitle}>Hand Raise</Text>
+          </View>
+        </View>
+
+        <View style={styles.distanceCard}>
+          <View style={styles.flagWrapper}>
+            <Ionicons name="location" size={24} color="#009849" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardLabel}>Nearest stop</Text>
+            <Text style={styles.cardDistance}>
+              <Text style={styles.greenText}>{distanceToStop} m</Text> away
+            </Text>
+            <View style={styles.walkRow}>
+              <Ionicons name="walk" size={14} color="#6B7280" />
+              <Text style={styles.walkText}>~3 min walk</Text>
+            </View>
+          </View>
+          <View style={[styles.proximityRing, withinRange && styles.proximityRingActive]}>
+            <Text style={[styles.proximityText, withinRange && styles.proximityTextActive]}>
+              {withinRange ? "✓" : `${distanceToStop - THRESHOLD}m`}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.poiLabel}>
@@ -108,11 +140,17 @@ export function AutoPreRideScreen({ navigation }) {
         {!withinRange && (
           <View style={styles.walkChip}>
             <Ionicons name="walk" size={16} color="#111827" />
-            <Text style={styles.walkChipText}>{STOP_DISTANCE}m walk to stop</Text>
+            <Text style={styles.walkChipText}>{distanceToStop}m walk to stop</Text>
           </View>
         )}
 
         <View style={styles.floatingContainer}>
+          <TouchableOpacity style={styles.floatBtn} onPress={zoomIn}>
+            <Text style={styles.zoomText}>+</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.floatBtn} onPress={zoomOut}>
+            <Text style={styles.zoomText}>−</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.floatBtn}>
             <MaterialIcons name="my-location" size={24} color="#111827" />
           </TouchableOpacity>
@@ -122,8 +160,20 @@ export function AutoPreRideScreen({ navigation }) {
         </View>
       </View>
 
-      <View style={styles.bottomSheet}>
+      <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.handle} />
+
+        <View style={styles.instructionCard}>
+          <Text style={styles.instructionTitle}>Before you raise your hand</Text>
+          <View style={styles.instructionStep}>
+            <View style={styles.stepDot}><Text style={styles.stepNum}>1</Text></View>
+            <Text style={styles.stepText}>Walk to <Text style={styles.stepBold}>Hazratganj Metro Gate 2</Text></Text>
+          </View>
+          <View style={styles.instructionStep}>
+            <View style={styles.stepDot}><Text style={styles.stepNum}>2</Text></View>
+            <Text style={styles.stepText}>Raise your hand to signal approaching autos</Text>
+          </View>
+        </View>
 
         <View style={styles.availabilityRow}>
           <View style={styles.availItem}>
@@ -145,44 +195,72 @@ export function AutoPreRideScreen({ navigation }) {
         <TouchableOpacity
           activeOpacity={0.9}
           style={[styles.raiseBtn, !withinRange && styles.raiseBtnDisabled]}
-          onPress={() => {
-            if (withinRange) {
-              setShowConfirm(true);
-            } else {
-              setShowOutOfRange(true);
-            }
-          }}
+          onPress={handleRaiseHand}
         >
           <Text style={[styles.raiseText, !withinRange && styles.raiseTextDisabled]}>
-            ✋  {withinRange ? "Raise Hand at Stop" : `Walk ${STOP_DISTANCE}m to raise hand`}
+            ✋  {withinRange ? "Raise Hand" : `${distanceToStop}m from stop`}
           </Text>
         </TouchableOpacity>
+
+        {!withinRange && (
+          <Text style={styles.proximityHint}>
+            You must be within 500m of the stop to notify nearby autos
+          </Text>
+        )}
       </View>
 
-      <ConfirmPopup
-        visible={showConfirm}
-        title="Raise Hand at Stop?"
-        message="Are you at Hazratganj Metro Gate 2? Nearby autos will be notified."
-        confirmLabel="Yes, Raise Hand"
-        icon="hand-left-outline"
-        onConfirm={() => {
-          setShowConfirm(false);
-          navigation.navigate('AutoSearching');
-        }}
-        onCancel={() => setShowConfirm(false)}
-      />
+      {/* Raise Hand Confirmation Modal */}
+      {showConfirm && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalIconWrap}>
+              <Ionicons name="hand-left-outline" size={40} color="#009849" />
+            </View>
+            <Text style={styles.modalTitle}>Raise Hand?</Text>
+            <Text style={styles.modalMessage}>
+              Nearby auto drivers will be notified that you are waiting at the stop.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalBtnSecondary}
+                onPress={() => setShowConfirm(false)}
+              >
+                <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalBtnPrimary}
+                onPress={handleConfirmRaise}
+              >
+                <Text style={styles.modalBtnPrimaryText}>Raise Hand</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
 
-      <ConfirmPopup
-        visible={showOutOfRange}
-        title="Too Far From Stop"
-        message={`You are ${STOP_DISTANCE}m away from Hazratganj Metro Gate 2. Walk to the stop (within 500m) to raise your hand for an auto.`}
-        confirmLabel="Show Walking Route"
-        icon="walk-outline"
-        onConfirm={() => {
-          setShowOutOfRange(false);
-        }}
-        onCancel={() => setShowOutOfRange(false)}
-      />
+      {/* Out of Range Modal */}
+      {showOutOfRange && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={[styles.modalIconWrap, { backgroundColor: "#FEF2F2" }]}>
+              <Ionicons name="walk-outline" size={40} color="#EF4444" />
+            </View>
+            <Text style={styles.modalTitle}>Move Closer To Stop</Text>
+            <Text style={styles.modalMessage}>
+              You are currently {distanceToStop}m away.{'\n'}
+              You must move {distanceToStop - THRESHOLD}m closer before notifying nearby autos.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtnPrimary, { backgroundColor: "#009849" }]}
+                onPress={() => setShowOutOfRange(false)}
+              >
+                <Text style={styles.modalBtnPrimaryText}>OK</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -190,26 +268,30 @@ export function AutoPreRideScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: "relative",
     backgroundColor: "#F8FAF9",
   },
   header: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 24,
     paddingBottom: 12,
+    backgroundColor: "rgba(0,152,73,0.6)",
+    overflow: "hidden",
   },
   iconBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "#FFFFFF",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "transparent",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
   },
   headerLeft: {
     flexDirection: "row",
@@ -219,13 +301,15 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#111827",
+    color: "#FFFFFF",
     letterSpacing: -0.5,
   },
   distanceCard: {
-    marginHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 20,
+    position: "absolute",
+    top: 140,
+    left: 20,
+    right: 20,
+    zIndex: 10,
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
     padding: 16,
@@ -306,27 +390,11 @@ const styles = StyleSheet.create({
     color: "#EF4444",
   },
   mapArea: {
-    flex: 1,
-    position: "relative",
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "#F9FAFB",
   },
   mapBg: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#F9FAFB",
-  },
-  gridLineH: {
-    position: "absolute",
-    width: "100%",
-    height: 1,
-    backgroundColor: "#E5E7EB",
-    top: "20%",
-  },
-  gridLineV: {
-    position: "absolute",
-    width: 1,
-    height: "100%",
-    backgroundColor: "#E5E7EB",
-    left: "20%",
   },
   poiLabel: {
     position: "absolute",
@@ -342,7 +410,7 @@ const styles = StyleSheet.create({
   },
   autoLabel: {
     position: "absolute",
-    top: 100,
+    top: 135,
     right: 110,
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
@@ -371,7 +439,7 @@ const styles = StyleSheet.create({
   },
   autoMarkerOuter: {
     position: "absolute",
-    top: 95,
+    top: 130,
     right: 45,
     width: 60,
     height: 60,
@@ -438,7 +506,7 @@ const styles = StyleSheet.create({
   },
   liveAutosChip: {
     position: "absolute",
-    top: 20,
+    top: 240,
     left: 20,
     flexDirection: "row",
     alignItems: "center",
@@ -482,6 +550,10 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   bottomSheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
@@ -492,6 +564,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 20,
     elevation: 15,
+  },
+  zoomText: {
+    fontSize: 22,
+    fontWeight: "600",
+    color: "#111827",
+    lineHeight: 24,
   },
   handle: {
     width: 40,
@@ -529,7 +607,7 @@ const styles = StyleSheet.create({
   },
   walkChip: {
     position: "absolute",
-    top: 60,
+    top: 300,
     left: 20,
     flexDirection: "row",
     alignItems: "center",
@@ -573,5 +651,147 @@ const styles = StyleSheet.create({
   raiseTextDisabled: {
     color: "rgba(255,255,255,0.6)",
     fontSize: 15,
+  },
+  proximityRing: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#FEF2F2",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#FCA5A5",
+  },
+  proximityRingActive: {
+    backgroundColor: "#ECFAF1",
+    borderColor: "#009849",
+  },
+  proximityText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#EF4444",
+  },
+  proximityTextActive: {
+    color: "#009849",
+  },
+  instructionCard: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  instructionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 12,
+  },
+  instructionStep: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  stepDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#009849",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  stepNum: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  stepText: {
+    fontSize: 13,
+    color: "#374151",
+    fontWeight: "500",
+    flex: 1,
+  },
+  stepBold: {
+    fontWeight: "800",
+    color: "#111827",
+  },
+  proximityHint: {
+    fontSize: 12,
+    color: "#EF4444",
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 8,
+  },
+  modalOverlay: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 100,
+    paddingHorizontal: 24,
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 24,
+    width: "100%",
+    maxWidth: 340,
+    alignItems: "center",
+  },
+  modalIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#ECFAF1",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  modalBtnSecondary: {
+    flex: 1,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBtnSecondaryText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  modalBtnPrimary: {
+    flex: 1,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "#009849",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBtnPrimaryText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
 });

@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
+  Dimensions,
+  Easing,
   FlatList,
-  ImageBackground,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,12 +17,15 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
-import RADIUS from "../../shared/constants/radius";
 import SHADOW from "../../shared/constants/shadow";
 import SPACING from "../../shared/constants/spacing";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const heroImage = require("../../../assets/trip.png");
+const { width } = Dimensions.get("window");
+
+// Removed hero bike animation images array
 
 function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90 }) {
   const [query, setQuery] = useState(value?.name || value?.display_name || "");
@@ -27,16 +33,15 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
   const [loading, setLoading] = useState(false);
   const [hasSelection, setHasSelection] = useState(Boolean(value));
   const [dropdownHeight, setDropdownHeight] = useState(0);
+  const isPickup = label === "Start Point";
 
   useEffect(() => {
     if (hasSelection) return;
-
     if (!query || query.length < 3) {
       setResults([]);
       setDropdownHeight(0);
       return;
     }
-
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setLoading(true);
@@ -55,17 +60,12 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
         setLoading(false);
       }
     }, 500);
-
-    return () => {
-      controller.abort();
-      clearTimeout(timer);
-    };
+    return () => { controller.abort(); clearTimeout(timer); };
   }, [hasSelection, query]);
 
   const handleSelect = (item) => {
     const next = {
-      lat: Number(item.lat),
-      lon: Number(item.lon),
+      lat: Number(item.lat), lon: Number(item.lon),
       name: item.name || item.display_name?.split(",")?.[0],
       display_name: item.display_name,
     };
@@ -80,31 +80,32 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
   const handleChangeText = (text) => {
     setQuery(text);
     setHasSelection(false);
-    if (text.length < 3) {
-      setResults([]);
-      setDropdownHeight(0);
-    }
+    if (text.length < 3) { setResults([]); setDropdownHeight(0); }
   };
 
   const showResults = results.length > 0;
 
   return (
-    <View style={[styles.locationField, showResults && { marginBottom: dropdownHeight + 20, zIndex: 9999 }]}>
-      <View style={styles.labelRow}>
-        <View style={styles.pinIcon} />
+    <View style={[styles.fieldWrap, showResults && { marginBottom: dropdownHeight + 20, zIndex: 9999 }]}>
+      <View style={styles.fieldHead}>
+        <View style={[styles.fieldDot, { backgroundColor: isPickup ? COLORS.primary : "#EF4444" }]} />
         <Text style={styles.fieldLabel}>{label}</Text>
       </View>
-      <View style={styles.searchInputWrap}>
-        <Text style={styles.searchIcon}>o</Text>
+      <View style={styles.fieldInput}>
+        <Ionicons name="search" size={16} color="#9CA3AF" style={{ marginRight: 8 }} />
         <TextInput
           autoCapitalize="none"
           onChangeText={handleChangeText}
           placeholder={placeholder}
-          placeholderTextColor="#9AA8BE"
-          style={styles.searchInput}
+          placeholderTextColor="#9CA3AF"
+          style={styles.fieldText}
           value={query}
         />
-        <Text style={styles.locationIcon}>+</Text>
+        {query.length > 0 && !hasSelection && (
+          <TouchableOpacity onPress={() => { setQuery(""); setResults([]); }}>
+            <Ionicons name="close-circle" size={16} color="#D1D5DB" />
+          </TouchableOpacity>
+        )}
       </View>
       {showResults ? (
         <View onLayout={(e) => setDropdownHeight(e.nativeEvent.layout.height)} style={[styles.dropdown, { top: dropdownLift }]}>
@@ -114,19 +115,18 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
             keyExtractor={(item) => String(item.place_id)}
             renderItem={({ item }) => (
               <Pressable onPress={() => handleSelect(item)} style={styles.resultRow}>
-                <Text numberOfLines={1} style={styles.resultTitle}>
-                  {item.name || item.display_name?.split(",")?.[0]}
-                </Text>
-                <Text numberOfLines={2} style={styles.resultSubtitle}>
-                  {item.display_name}
-                </Text>
+                <Ionicons name="location-outline" size={16} color="#9CA3AF" style={{ marginRight: 10 }} />
+                <View style={{ flex: 1 }}>
+                  <Text numberOfLines={1} style={styles.resultTitle}>
+                    {item.name || item.display_name?.split(",")?.[0]}
+                  </Text>
+                  <Text numberOfLines={2} style={styles.resultSub}>{item.display_name}</Text>
+                </View>
               </Pressable>
             )}
           />
         </View>
-      ) : loading ? (
-        <Text style={styles.searchingText}>Searching...</Text>
-      ) : null}
+      ) : loading ? <Text style={styles.searching}>Searching...</Text> : null}
     </View>
   );
 }
@@ -135,14 +135,103 @@ export default function DriverBikeHomeScreen({ navigation }) {
   const [pickup, setPickup] = useState(null);
   const [destination, setDestination] = useState(null);
   const [online, setOnline] = useState(false);
+  const [greeting, setGreeting] = useState("");
+  const [subLine, setSubLine] = useState("");
+  const [showName, setShowName] = useState(false);
+  const cursorRef = useRef(new Animated.Value(1)).current;
 
   const canProceed = useMemo(
     () => Boolean(pickup?.lat && pickup?.lon && destination?.lat && destination?.lon),
     [destination, pickup],
   );
 
+  const [driverName] = useState("Ramu");
+  const [recentSearches, setRecentSearches] = useState([]);
+
+  const loadRecentSearches = async () => {
+    try {
+      const stored = await AsyncStorage.getItem("driver_recent_searches_bike");
+      if (stored) setRecentSearches(JSON.parse(stored));
+    } catch {}
+  };
+
+  const saveRecentSearch = async (pick, dest) => {
+    try {
+      const entry = { pickup: pick, destination: dest };
+      const updated = [entry, ...recentSearches.filter(
+        (r) => r.pickup?.name !== pick?.name || r.destination?.name !== dest?.name,
+      )].slice(0, 5);
+      setRecentSearches(updated);
+      await AsyncStorage.setItem("driver_recent_searches_bike", JSON.stringify(updated));
+    } catch {}
+  };
+
+  const applyRecent = (item) => {
+    if (item.pickup && item.destination) {
+      setPickup(item.pickup);
+      setDestination(item.destination);
+    }
+  };
+
+  useEffect(() => {
+    loadRecentSearches();
+  }, []);
+
+  useEffect(() => {
+    const fullGreeting = "Namaste,";
+    const fullSub = "Aaj aap kahan jaana chahte hain?";
+    let t = 0;
+    let s = 0;
+    let phase = "greeting";
+
+    const cursorAnim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(cursorRef, { toValue: 0, duration: 400, useNativeDriver: true }),
+        Animated.timing(cursorRef, { toValue: 1, duration: 400, useNativeDriver: true }),
+      ]),
+    );
+    cursorAnim.start();
+
+    const tick = () => {
+      if (phase === "greeting") {
+        if (t < fullGreeting.length) {
+          setGreeting(fullGreeting.slice(0, t + 1));
+          t++;
+          setTimeout(tick, 60);
+        } else {
+          phase = "namaste_pause";
+          setTimeout(tick, 400);
+        }
+      } else if (phase === "namaste_pause") {
+        setShowName(true);
+        phase = "sub_pause";
+        setTimeout(tick, 500);
+      } else if (phase === "sub_pause") {
+        phase = "sub";
+        setTimeout(tick, 30);
+      } else if (phase === "sub") {
+        if (s < fullSub.length) {
+          setSubLine(fullSub.slice(0, s + 1));
+          s++;
+          setTimeout(tick, 40);
+        } else {
+          cursorAnim.stop();
+          cursorRef.setValue(0);
+        }
+      }
+    };
+    tick();
+
+    return () => {
+      cursorAnim.stop();
+    };
+  }, []);
+
+  // Removed bike animation effect; static hero images will be displayed.
+
   const handleNext = () => {
     if (!canProceed) return;
+    saveRecentSearch(pickup, destination);
     navigation.navigate("DriverRoutes", { pickup, destination });
   };
 
@@ -152,50 +241,63 @@ export default function DriverBikeHomeScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-      <StatusBar backgroundColor="#F7F8F8" style="dark" />
+    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+      <StatusBar backgroundColor="#fff" style="dark" />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboard}
+        style={styles.flex}
       >
-        <ScrollView
-          bounces={false}
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-        >
-          <ImageBackground
-            imageStyle={styles.heroImage}
-            resizeMode="cover"
-            source={heroImage}
-            style={styles.hero}
-          >
-            <View style={styles.heroOverlay} />
-            <View style={styles.heroCopy}>
-              <Text style={styles.heroTitle}>Start Your</Text>
-              <Text style={styles.heroTitleGreen}>Route</Text>
-              <Text style={styles.heroSubtitle}>
-                Enter your start and end locations{"\n"}
-                to find the best route to drive{"\n"}
-                and earn on every trip.
-              </Text>
-            </View>
-          </ImageBackground>
+        <ScrollView bounces={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
-          <View style={styles.searchPanel}>
+  {/* ─── Hero ─── */}
+  <View style={styles.hero}>
+    <View style={styles.heroOverlay} />
+    <View style={styles.road}>
+      {Array.from({ length: 14 }).map((_, i) => (
+        <View key={i} style={[styles.roadDash, { left: i * (width / 14) + 8 }]} />
+      ))}
+      <View style={styles.roadCharacters}>
+        {/* <Image source={require('../../../assets/vayyPassenger2.png')} style={styles.roadCharacter} /> */}
+        {/* <Image source={require('../../../assets/vayyofficeWomen3.png')} style={styles.roadCharacter} /> */}
+        <Image source={require('../../../assets/vayyGirl.png')} style={styles.roadCharacter} />
+        <Image source={require('../../../assets/vayyBoy.png')} style={styles.roadCharacter} />
+        <Image source={require('../../../assets/VayyOfficeUncle.png')} style={styles.roadCharacter} />
+      </View>
+    </View>
+    <View style={styles.topContainer}>
+        <View style={styles.textContainer}>
+          <View style={styles.greetingRow}>
+            <Text style={styles.namasteIcon}>🙏</Text>
+          </View>
+          <View style={styles.greetingRow}>
+            <Text style={styles.heroTitle}>{greeting}</Text>
+            {greeting.length < 8 && <Animated.View style={[styles.typeCursor, { opacity: cursorRef }]} />}
+          </View>
+          {showName && <Text style={styles.heroAccent}>{driverName}</Text>}
+          <View style={styles.subRow}>
+            {subLine ? <Text style={styles.heroSub}>{subLine}</Text> : null}
+            {subLine.length > 0 && subLine.length < 32 && <Animated.View style={[styles.typeCursor, { height: 20 }, { opacity: cursorRef }]} />}
+          </View>
+        </View>
+        </View>
+      </View>
+
+          {/* ─── Search Panel ─── */}
+          <View style={styles.panel}>
             <LocationSearch
-              key={`pickup-${pickup?.display_name || pickup?.name || "empty"}`}
+              key={`p-${pickup?.display_name || pickup?.name || "e"}`}
               label="Start Point"
               onSelect={setPickup}
               placeholder="Search starting location"
               value={pickup}
             />
 
-            <TouchableOpacity activeOpacity={0.8} onPress={handleSwap} style={styles.swapButton}>
-              <Text style={styles.swapText}>S</Text>
+            <TouchableOpacity style={styles.swapBtn} onPress={handleSwap} activeOpacity={0.8}>
+              <Ionicons name="swap-vertical" size={18} color="#374151" />
             </TouchableOpacity>
 
             <LocationSearch
-              key={`destination-${destination?.display_name || destination?.name || "empty"}`}
+              key={`d-${destination?.display_name || destination?.name || "e"}`}
               dropdownLift={90}
               label="Destination"
               onSelect={setDestination}
@@ -204,34 +306,42 @@ export default function DriverBikeHomeScreen({ navigation }) {
             />
 
             <TouchableOpacity
-              activeOpacity={0.86}
+              style={[styles.primaryBtn, !canProceed && styles.primaryBtnDisabled]}
+              activeOpacity={0.85}
               disabled={!canProceed}
               onPress={handleNext}
-              style={[styles.searchButton, !canProceed && styles.searchDisabled]}
             >
-              <Text style={styles.searchButtonIcon}>o</Text>
-              <Text style={styles.searchButtonText}>Find Best Route</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.bottomSection}>
-            <TouchableOpacity
-              style={[styles.onlineRow, online && styles.onlineRowActive]}
-              onPress={() => setOnline(!online)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.onlineLeft}>
-                <View style={[styles.onlineDot, online && styles.onlineDotActive]} />
-                <Text style={[styles.onlineLabel, online && styles.onlineLabelActive]}>
-                  {online ? "You're Online — Accepting rides" : "Go Online"}
-                </Text>
-              </View>
-              <View style={styles.onlineBadge}>
-                <Text style={styles.onlineBadgeText}>{online ? "ONLINE" : "OFFLINE"}</Text>
-              </View>
+              <Ionicons name="map-outline" size={20} color="#fff" />
+              <Text style={styles.primaryBtnText}>Find Best Route</Text>
             </TouchableOpacity>
 
+            {recentSearches.length > 0 && (
+              <View style={styles.recentSection}>
+                <Text style={styles.recentHeading}>RECENT SEARCHES</Text>
+                {recentSearches.map((item, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    activeOpacity={0.82}
+                    onPress={() => applyRecent(item)}
+                    style={styles.recentRow}
+                  >
+                    <View style={styles.clockCircle}>
+                      <Ionicons name="time-outline" size={14} color="#9CA3AF" />
+                    </View>
+                    <View style={styles.recentCopy}>
+                      <Text numberOfLines={1} style={styles.recentFrom}>
+                        {item.pickup?.name || item.pickup?.display_name || "Unknown"}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.recentTo}>
+                        To: {item.destination?.name || item.destination?.display_name || "Unknown"}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -239,139 +349,284 @@ export default function DriverBikeHomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F7F8F8" },
-  keyboard: { flex: 1 },
-  content: { backgroundColor: "#F7F8F8", paddingBottom: 24, flexGrow: 1 },
+  safe: { flex: 1, backgroundColor: "#fff" },
+  flex: { flex: 1 },
+  scroll: { flexGrow: 1 },
 
-  /* ── Hero ── */
-  hero: { backgroundColor: "#F7F8F8", height: "35%", overflow: "hidden" },
-  heroImage: { width: "100%", height: "100%" },
-  heroOverlay: {
-    backgroundColor: "rgba(247, 248, 248, 0.68)",
+  /* ─── Hero ─── */
+  hero: {
+    height: 280,
+    backgroundColor: "#F7F8F8",
+    position: "relative",
+    overflow: "hidden",
+  },
+  runningBike: {
+    position: "absolute",
     bottom: 0,
-    left: 0,
+    top:120,
+    width: width * 0.55,
+    height: "70%",
+    zIndex: 2,
+  },
+  road: {
     position: "absolute",
-    top: 0,
-    width: "54%",
-  },
-  heroCopy: { left: 16, position: "absolute", top: 32, zIndex: 4 },
-  heroTitle: { color: "#03111F", fontSize: 28, fontWeight: "900", lineHeight: 31 },
-  heroTitleGreen: { color: COLORS.primary, fontSize: 28, fontWeight: "900", lineHeight: 31 },
-  heroSubtitle: { color: "#0F2A42", fontSize: 11.5, fontWeight: "500", lineHeight: 20, marginTop: 12 },
-
-  /* ── Search Panel ── */
-  searchPanel: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 22,
-    zIndex: 5,
-  },
-  locationField: { marginBottom: 20, zIndex: 10 },
-  labelRow: { alignItems: "center", flexDirection: "row", marginBottom: 10 },
-  pinIcon: {
-    backgroundColor: COLORS.primary,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    height: 13,
-    marginRight: 10,
-    transform: [{ rotate: "45deg" }],
-    width: 13,
-  },
-  fieldLabel: { color: "#061320", fontSize: 13.5, fontWeight: "900" },
-  searchInputWrap: {
-    alignItems: "center",
-    borderColor: "#D8E1EA",
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: "row",
-    minHeight: 54,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  searchIcon: { color: "#8A99AE", fontSize: 14, marginRight: 8 },
-  locationIcon: { color: "#7F90A8", fontSize: 15, marginLeft: 6 },
-  searchInput: { color: "#102033", flex: 1, fontSize: 12.5, minHeight: 40, paddingVertical: 0 },
-  dropdown: {
-    backgroundColor: COLORS.white,
-    borderColor: "#D8E1EA",
-    borderRadius: 8,
-    borderWidth: 1,
+    bottom: 6,
+    // top:280,
     left: 0,
-    maxHeight: 190,
-    position: "absolute",
     right: 0,
-    ...SHADOW.sm,
-    zIndex: 9999,
-    elevation: 20,
+    height: 48,
+    backgroundColor: "#2D2D2D",
+    zIndex: 1,
   },
-  resultRow: { borderBottomColor: COLORS.border, borderBottomWidth: 1, padding: SPACING.md },
-  resultTitle: { color: COLORS.text, fontSize: 13, fontWeight: "800" },
-  resultSubtitle: { color: COLORS.textMuted, fontSize: 11, marginTop: 2 },
-  searchingText: { color: COLORS.textMuted, fontSize: 11, marginTop: SPACING.xs },
-
-  swapButton: {
-    alignItems: "center",
-    alignSelf: "center",
-    backgroundColor: COLORS.white,
-    borderColor: "#E6EDF2",
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    height: 28,
-    justifyContent: "center",
-    marginBottom: 15,
-    marginTop: -3,
-    width: 28,
-    ...SHADOW.sm,
+  roadDash: {
+    position: "absolute",
+    top: "50%",
+    width: 20,
+    height: 2.5,
+    backgroundColor: "#FCD34D",
+    marginTop: -1.25,
+    borderRadius: 1,
   },
-  swapText: { color: "#344255", fontSize: 17, fontWeight: "900" },
-
-  searchButton: {
-    alignItems: "center",
-    backgroundColor: COLORS.primary,
-    borderRadius: 9,
+  roadCharacters: {
+    position: "absolute",
+    // top:500,
+    bottom: 38,
+    right: 0,
+    // position:"relative",
     flexDirection: "row",
-    height: 46,
-    justifyContent: "center",
-    marginTop: 4,
-    ...SHADOW.sm,
+    justifyContent: "flex-end",
+    alignItems: "flex-end",
+    // gap: 0,
+    zIndex: 3,
   },
-  searchDisabled: { opacity: 0.72 },
-  searchButtonIcon: { color: COLORS.white, fontSize: 19, fontWeight: "900", marginRight: 10 },
-  searchButtonText: { color: COLORS.white, fontSize: 14, fontWeight: "900" },
+  roadCharacter: {
+    right:30,
+    width: 55,
+    height: 160,
+    // backgroundColor:"red",
+    // borderRightColor:"green",
+    resizeMode: "cover",
+    // boxSizing: "none",
+  },
+  heroOverlay: {
+    position: "absolute",
+    top: 0, left: 0, bottom: 0,
+    width: "58%",
+    backgroundColor: "rgba(247,248,248,0.72)",
+  },
+  heroText: {
+    position: "absolute",
+    top: 20,
+    left: 20,
+    zIndex: 4,
+    maxWidth: "75%",
+  },
+  greetingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  namasteIcon: {
+    fontSize: 28,
+    marginBottom: 2,
+  },
+  typeCursor: {
+    width: 2,
+    height: 28,
+    backgroundColor: COLORS.primary,
+    marginLeft: 2,
+  },
+  subRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  heroTitle: {
+    fontSize: 30,
+    fontWeight: "900",
+    color: "#03111F",
+    lineHeight: 34,
+  },
+  heroAccent: {
+    fontSize: 30,
+    fontWeight: "900",
+    color: COLORS.primary,
+    lineHeight: 34,
+  },
+  heroSub: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#4B5563",
+    lineHeight: 26,
+    marginTop: 16,
+  },
+  dotRow: {
+    position: "absolute",
+    bottom: 16,
+    left: 20,
+    flexDirection: "row",
+    gap: 6,
+    zIndex: 4,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#D1D5DB",
+  },
+  dotActive: {
+    width: 20,
+    backgroundColor: COLORS.primary,
+    borderRadius: 3,
+  },
+  topContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    top:30,
+    paddingHorizontal: 20,
+    // marginBottom: 10,
+    // height: 120,
+  },
+  textContainer: {
+    flex: 1,
+    maxWidth: "50%",
+  },
+  topImage: {
+    width: 50,
+    height: 50,
+    resizeMode: "contain",
+  },
 
-  /* ── Bottom Section ── */
-  bottomSection: {
-    backgroundColor: COLORS.white,
+  /* ─── Panel ─── */
+  panel: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 58,
-    gap: 16,
+    paddingBottom: 24,
+    marginTop: -20,
+    zIndex: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 12,
   },
-  onlineRow: {
+  fieldWrap: { marginBottom: 16, zIndex: 10 },
+  fieldHead: { flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 8 },
+  fieldDot: { width: 10, height: 10, borderRadius: 5 },
+  fieldLabel: { fontSize: 13, fontWeight: "800", color: "#111827" },
+  fieldInput: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
     borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    minHeight: 50,
+    paddingHorizontal: 14,
   },
-  onlineRowActive: { backgroundColor: COLORS.success + "20" },
-  onlineLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  onlineDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.textLight },
-  onlineDotActive: { backgroundColor: COLORS.primary },
-  onlineLabel: { fontSize: 14, fontWeight: "700", color: COLORS.textMuted },
-  onlineLabelActive: { color: COLORS.text },
-  onlineBadge: {
-    backgroundColor: COLORS.textLight + "30",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  fieldText: { flex: 1, fontSize: 13, fontWeight: "500", color: "#111827", minHeight: 40, paddingVertical: 0 },
+  dropdown: {
+    position: "absolute",
+    left: 0, right: 0,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+    borderRadius: 14,
+    maxHeight: 190,
+    ...SHADOW.sm,
+    elevation: 20,
+    zIndex: 9999,
   },
-  onlineBadgeText: { fontSize: 10, fontWeight: "900", color: COLORS.textMuted, letterSpacing: 0.5 },
+  resultRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  resultTitle: { fontSize: 13, fontWeight: "700", color: "#111827" },
+  resultSub: { fontSize: 11, fontWeight: "500", color: "#9CA3AF", marginTop: 2 },
+  searching: { fontSize: 11, fontWeight: "500", color: "#9CA3AF", marginTop: 6 },
+
+  swapBtn: {
+    alignSelf: "center",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+    marginTop: -6,
+    ...SHADOW.sm,
+  },
+
+  primaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    marginTop: 6,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  primaryBtnDisabled: { opacity: 0.45, shadowOpacity: 0, elevation: 0 },
+  primaryBtnText: { fontSize: 16, fontWeight: "800", color: "#fff" },
+
+  /* recent searches */
+  recentSection: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  recentHeading: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#9CA3AF",
+    letterSpacing: 0.8,
+    marginBottom: 12,
+  },
+  recentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F9FAFB",
+  },
+  clockCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recentCopy: {
+    flex: 1,
+  },
+  recentFrom: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  recentTo: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#6B7280",
+    marginTop: 1,
+  },
 });

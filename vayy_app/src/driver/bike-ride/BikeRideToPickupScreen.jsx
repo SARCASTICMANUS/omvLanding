@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
+import MapView from "react-native-maps";
 
 const { width } = Dimensions.get("window");
 
@@ -21,7 +22,7 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
   const [distance, setDistance] = useState(1.2);
   const [eta, setEta] = useState("4 min");
   const [showArrivedModal, setShowArrivedModal] = useState(false);
-  const isInRange = distance <= 0.03;
+  const isInRange = distance <= 1;
   const arrivePulse = useRef(new Animated.Value(1)).current;
   const distanceAnim = useRef(new Animated.Value(1.2)).current;
   const dot1 = useRef(new Animated.Value(0)).current;
@@ -89,14 +90,15 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
     <View style={styles.root}>
       {/* Map area */}
       <View style={styles.mapArea}>
-        <View style={styles.mapBg}>
-          <View style={[styles.gridLine, { top: "25%" }]} />
-          <View style={[styles.gridLine, { top: "50%" }]} />
-          <View style={[styles.gridLine, { top: "75%" }]} />
-          <View style={[styles.gridLineV, { left: "25%" }]} />
-          <View style={[styles.gridLineV, { left: "50%" }]} />
-          <View style={[styles.gridLineV, { left: "75%" }]} />
-        </View>
+        <MapView
+          style={styles.mapBg}
+          initialRegion={{
+            latitude: 26.8467,
+            longitude: 80.9462,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }}
+        />
 
         <View style={styles.driverOnMap}>
           <View style={styles.driverDotOuter}>
@@ -156,9 +158,9 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
                 {
                   width: `${(distance / 1.2 * 100)}%`,
                   backgroundColor:
-                    distance <= 0.03 ? COLORS.primary :
-                    distance <= 0.3 ? "#22C55E" :
-                    distance <= 0.6 ? "#F59E0B" : "#EF4444",
+                    distance <= 1 ? COLORS.primary :
+                    distance <= 3 ? "#22C55E" :
+                    distance <= 5 ? "#F59E0B" : "#EF4444",
                 },
               ]}
             />

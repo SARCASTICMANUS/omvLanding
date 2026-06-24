@@ -1,8 +1,8 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import MapView from "react-native-maps";
 import AppFrame from "../../components/AppFrame";
 import BadgeChip from "../../components/BadgeChip";
-import MapPlaceholder from "../../components/MapPlaceholder";
 import Logo from "../../shared/components/common/Logo";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
@@ -13,11 +13,21 @@ export default function PassengerHomeScreen({ navigation, mode = "auto" }) {
   return (
     <AppFrame showBack={false}>
       <View style={styles.home}>
+        <MapView
+          style={styles.mapBg}
+          initialRegion={{
+            latitude: 26.8467,
+            longitude: 80.9462,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }}
+          scrollEnabled={false}
+          zoomEnabled={false}
+        />
         <View style={styles.homeTop}>
           <Logo />
           <Text style={styles.greeting}>Good morning, Arjun</Text>
         </View>
-        <MapPlaceholder accent={accent} vehicle={isBike ? "🏍️" : "🛺"} />
         <View style={styles.bottomSheet}>
           <View style={styles.tabs}>
             <TouchableOpacity style={[styles.tab, !isBike && { borderBottomColor: colors.primary }]} onPress={() => navigation.navigate("SharedAutoHome")}>
@@ -44,13 +54,20 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: spacing.md,
     gap: spacing.md,
+    position: "relative",
   },
   homeTop: {
     gap: spacing.sm,
+    zIndex: 2,
   },
   greeting: {
     color: colors.textSecondary,
     fontSize: 15,
+  },
+  mapBg: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 18,
+    overflow: "hidden",
   },
   bottomSheet: {
     backgroundColor: colors.surface,

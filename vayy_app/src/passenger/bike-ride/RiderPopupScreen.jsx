@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   StatusBar,
   Platform,
 } from "react-native";
+import MapView from "react-native-maps";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Ionicons,
@@ -24,6 +26,15 @@ export function RiderPopupScreen({ navigation }) {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const labels = ["1.2 km", "800 m", "400 m", "Arrived"];
   const etas = ["5 min", "3 min", "2 min", "0 min"];
+  const mapRef = useRef(null);
+
+  const zoomIn = () => {
+    mapRef.current?.animateCamera({ zoom: 16 });
+  };
+
+  const zoomOut = () => {
+    mapRef.current?.animateCamera({ zoom: 12 });
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -44,37 +55,43 @@ export function RiderPopupScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
-
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.headerLeft}>
-          {Platform.OS === 'ios' && (
-            <TouchableOpacity
-              style={styles.iconBtn}
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="chevron-back" size={24} color="#111827" />
-            </TouchableOpacity>
-          )}
-          <Text style={styles.headerTitle}>Ride Accepted!</Text>
-        </View>
-
-        <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowCancelConfirm(true)}>
-          <Text style={styles.cancelText}>Cancel</Text>
-          <Ionicons name="close-circle-outline" size={24} color="#EF4444" />
-        </TouchableOpacity>
-      </View>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Map Area */}
       <View style={styles.mapArea}>
-        <View style={styles.mapBg}>
-          <View style={styles.gridLineH} />
-          <View style={[styles.gridLineH, { top: "40%" }]} />
-          <View style={[styles.gridLineH, { top: "70%" }]} />
-          <View style={styles.gridLineV} />
-          <View style={[styles.gridLineV, { left: "40%" }]} />
-          <View style={[styles.gridLineV, { left: "70%" }]} />
+        <MapView
+          style={styles.mapBg}
+          ref={mapRef}
+          initialRegion={{
+            latitude: 26.8467,
+            longitude: 80.9462,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }}
+          scrollEnabled={true}
+          zoomEnabled={true}
+          zoomControlEnabled={true}
+        />
+
+        {/* Header */}
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={styles.headerLeft}>
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() => navigation.goBack()}
+              >
+                <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+            <Text style={styles.headerTitle}>Ride Accepted!</Text>
+          </View>
+
+          <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowCancelConfirm(true)}>
+            <Text style={styles.cancelText}>Cancel</Text>
+            <Ionicons name="close-circle-outline" size={24} color="#EF4444" />
+          </TouchableOpacity>
         </View>
 
         {/* User Location Marker */}
@@ -99,14 +116,20 @@ export function RiderPopupScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Recenter Button */}
+        {/* Floating Buttons */}
+        <TouchableOpacity style={styles.recenterBtn} onPress={zoomIn}>
+          <Text style={styles.zoomText}>+</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.recenterBtn} onPress={zoomOut}>
+          <Text style={styles.zoomText}>−</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.recenterBtn}>
           <MaterialIcons name="my-location" size={24} color="#111827" />
         </TouchableOpacity>
       </View>
 
-      {/* Bottom Sheet Notification */}
-      <View style={styles.bottomSheet}>
+      {/* Bottom Sheet */}
+      <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.handle} />
 
         {/* Status Notification */}
@@ -190,14 +213,22 @@ export function RiderPopupScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: "relative",
     backgroundColor: "#F8FAF9",
   },
   header: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 24,
     paddingBottom: 12,
+    backgroundColor: "rgba(0,152,73,0.6)",
+    overflow: "hidden",
   },
   headerLeft: {
     flexDirection: "row",
@@ -207,7 +238,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#111827",
+    color: "#FFFFFF",
     letterSpacing: -0.5,
   },
   iconBtn: {
@@ -239,26 +270,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   mapArea: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "#F9FAFB",
-    position: 'relative',
   },
   mapBg: {
     ...StyleSheet.absoluteFillObject,
-  },
-  gridLineH: {
-    position: "absolute",
-    width: "100%",
-    height: 1,
-    backgroundColor: "#E5E7EB",
-    top: "20%",
-  },
-  gridLineV: {
-    position: "absolute",
-    width: 1,
-    height: "100%",
-    backgroundColor: "#E5E7EB",
-    left: "20%",
   },
   userMarkerOuter: {
     position: 'absolute',
@@ -360,6 +376,10 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   bottomSheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
@@ -526,5 +546,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#4B5563',
     fontWeight: '700',
+  },
+  zoomText: {
+    fontSize: 22,
+    fontWeight: "600",
+    color: "#111827",
+    lineHeight: 24,
   },
 });

@@ -181,6 +181,7 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
   const [loading, setLoading] = useState(true);
   const [isDummy, setIsDummy] = useState(false);
   const [expandedRouteId, setExpandedRouteId] = useState(null);
+  const mode = routeProp?.params?.mode || "bike";
 
   const fetchRoutes = async () => {
     try {
@@ -215,7 +216,11 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
   }, [expandedRouteId, normalizedRoutes]);
 
   const onSelectRoute = (selectedRoute) => {
-    navigation.navigate("FindPassenger", { route: selectedRoute });
+    if (mode === "auto") {
+      navigation.navigate("AutoFindPassenger", { route: selectedRoute });
+    } else {
+      navigation.navigate("FindPassenger", { route: selectedRoute });
+    }
   };
 
   const renderItem = ({ item, index }) => (

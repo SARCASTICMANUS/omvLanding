@@ -9,6 +9,8 @@ import {
   Animated,
   Easing,
 } from "react-native";
+import MapView from "react-native-maps";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Ionicons,
@@ -28,6 +30,15 @@ export function BikeSearchingScreen({ navigation }) {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [searchStatus, setSearchStatus] = useState("searching");
   const timerRef = useRef(null);
+  const mapRef = useRef(null);
+
+  const zoomIn = () => {
+    mapRef.current?.animateCamera({ zoom: 16 });
+  };
+
+  const zoomOut = () => {
+    mapRef.current?.animateCamera({ zoom: 12 });
+  };
 
   const startSearch = useCallback(() => {
     setShowNoRide(false);
@@ -45,7 +56,7 @@ export function BikeSearchingScreen({ navigation }) {
     timerRef.current = setTimeout(() => {
       setSearchStatus("found");
       setTimeout(() => {
-        navigation.navigate('RiderPopup');
+        navigation.replace('RiderArriving');
       }, 600);
     }, 4000);
   }
@@ -77,34 +88,40 @@ export function BikeSearchingScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
-
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity 
-            style={styles.iconBtn} 
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="chevron-back" size={24} color="#111827" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Finding Rider...</Text>
-        </View>
-
-        <TouchableOpacity style={styles.iconBtn}>
-          <MaterialIcons name="more-vert" size={24} color="#111827" />
-        </TouchableOpacity>
-      </View>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Map Area with Searching Animation */}
       <View style={styles.mapArea}>
-        <View style={styles.mapBg}>
-          <View style={styles.gridLineH} />
-          <View style={[styles.gridLineH, { top: "40%" }]} />
-          <View style={[styles.gridLineH, { top: "70%" }]} />
-          <View style={styles.gridLineV} />
-          <View style={[styles.gridLineV, { left: "40%" }]} />
-          <View style={[styles.gridLineV, { left: "70%" }]} />
+        <MapView
+          style={styles.mapBg}
+          ref={mapRef}
+          initialRegion={{
+            latitude: 26.8467,
+            longitude: 80.9462,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+          }}
+          scrollEnabled={true}
+          zoomEnabled={true}
+          zoomControlEnabled={true}
+        />
+
+        {/* Header */}
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={styles.headerLeft}>
+            <TouchableOpacity 
+              style={styles.iconBtn} 
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Finding Rider...</Text>
+          </View>
+
+          <TouchableOpacity style={styles.iconBtn}>
+            <MaterialIcons name="more-vert" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
 
         {/* Searching Pulse Rings */}
@@ -123,14 +140,20 @@ export function BikeSearchingScreen({ navigation }) {
             </View>
         </View>
 
-        {/* Floating Button */}
+        {/* Floating Buttons */}
+        <TouchableOpacity style={styles.recenterBtn} onPress={zoomIn}>
+          <Text style={styles.zoomText}>+</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.recenterBtn} onPress={zoomOut}>
+          <Text style={styles.zoomText}>−</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.recenterBtn}>
           <MaterialIcons name="my-location" size={24} color="#111827" />
         </TouchableOpacity>
       </View>
 
       {/* Bottom Sheet */}
-      <View style={styles.bottomSheet}>
+      <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.handle} />
 
         <View style={styles.availabilityRow}>
@@ -160,7 +183,7 @@ export function BikeSearchingScreen({ navigation }) {
           <TouchableOpacity
             activeOpacity={0.9}
             style={styles.foundBtn}
-            onPress={() => navigation.navigate('RiderPopup')}
+            onPress={() => navigation.replace('RiderArriving')}
           >
             <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
             <Text style={styles.foundBtnText}>  Rider Found! Tap to view</Text>
@@ -209,14 +232,22 @@ export function BikeSearchingScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: "relative",
     backgroundColor: "#F8FAF9",
   },
   header: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 24,
     paddingBottom: 12,
+    backgroundColor: "rgba(0,152,73,0.6)",
+    overflow: "hidden",
   },
   headerLeft: {
     flexDirection: "row",
@@ -226,7 +257,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#111827",
+    color: "#FFFFFF",
     letterSpacing: -0.5,
   },
   iconBtn: {
@@ -242,28 +273,13 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   mapArea: {
-    flex: 1,
-    position: "relative",
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "#F9FAFB",
     justifyContent: 'center',
     alignItems: 'center',
   },
   mapBg: {
     ...StyleSheet.absoluteFillObject,
-  },
-  gridLineH: {
-    position: "absolute",
-    width: "100%",
-    height: 1,
-    backgroundColor: "#E5E7EB",
-    top: "20%",
-  },
-  gridLineV: {
-    position: "absolute",
-    width: 1,
-    height: "100%",
-    backgroundColor: "#E5E7EB",
-    left: "20%",
   },
   pulseContainer: {
     justifyContent: 'center',
@@ -308,6 +324,10 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   bottomSheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
@@ -409,5 +429,11 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontSize: 14,
     fontWeight: '700',
+  },
+  zoomText: {
+    fontSize: 22,
+    fontWeight: "600",
+    color: "#111827",
+    lineHeight: 24,
   },
 });

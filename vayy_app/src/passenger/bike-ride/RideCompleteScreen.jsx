@@ -128,6 +128,16 @@ export function RideCompleteScreen({ navigation }) {
         </View>
 
         <View style={styles.card}>
+          <View style={styles.paymentBadgeRow}>
+            <View style={styles.paymentBadge}>
+              <Ionicons name="wallet" size={16} color="#009849" />
+              <Text style={styles.paymentBadgeText}>Paid via Cash</Text>
+            </View>
+            <Text style={styles.paymentAmount}>₹65</Text>
+          </View>
+        </View>
+
+        <View style={styles.card}>
           <Text style={styles.sectionTitle}>Rate Your Ride</Text>
           <View style={styles.starRow}>
             {[1, 2, 3, 4, 5].map((star) => (
@@ -146,7 +156,7 @@ export function RideCompleteScreen({ navigation }) {
           </View>
           {rating > 0 && (
             <Text style={styles.ratingHint}>
-              {rating <= 2 ? "Sorry about your experience" : rating === 3 ? "Thanks for your feedback" : rating === 4 ? "Glad you enjoyed the ride" : "Amazing! Thank you"}
+              {rating === 1 ? "Poor" : rating === 2 ? "Below Average" : rating === 3 ? "Average" : rating === 4 ? "Good" : "Excellent"}
             </Text>
           )}
         </View>
@@ -399,6 +409,32 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "800",
     color: "#009849",
+  },
+  paymentBadgeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  paymentBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F0FAF2",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#D1FAE5",
+  },
+  paymentBadgeText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#009849",
+  },
+  paymentAmount: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#111827",
   },
   starRow: {
     flexDirection: "row",

@@ -1,4 +1,5 @@
-import React from "react";
+import * as Location from "expo-location";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -18,14 +19,13 @@ import Svg, {
 } from "react-native-svg";
 
 // Assets
-const AUTO_IMG = require("../../../assets/auto.png");
+const AUTO_IMG = require("../../../assets/vayyAuto.png");
 const BIKE_IMG = require("../../../assets/bike.png");
 const TRIP_IMG = require("../../../assets/trip.png");
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const C = {
   green:        "#1E8A3C",   // primary VAYY green
-  greenLight:   "#E9F5EE",   // card tint for active
   greenDark:    "#166B2E",
   greenDot:     "#3DB862",   // live dot
   bg:           "#EEEEEE",   // overall page bg (light grey)
@@ -36,7 +36,7 @@ const C = {
   text2:        "#555555",
   text3:        "#999999",
   border:       "#DDDDDD",
-  borderActive: "#1E8A3C",
+
   cardShadow:   "#00000014",
 };
 
@@ -127,9 +127,9 @@ const IconBolt = ({ size = 13, color = "#F5A623" }) => (
 function BottomTabBar({ navigation }) {
   const tabs = [
     { label: "Home",     Icon: IconHome,    active: true,  screen: null },
-    { label: "Routes",   Icon: IconRoutes,  active: false, screen: "RoutesScreen" },
-    { label: "Live Map", Icon: IconMap,     active: false, screen: "LiveMapScreen" },
-    { label: "Alerts",   Icon: IconAlert,   active: false, screen: "AlertsScreen" },
+    { label: "Routes",   Icon: IconRoutes,  active: false, screen: "PassengerRoutes" },
+    { label: "Live Map", Icon: IconMap,     active: false, screen: "PassengerTripPlanner" },
+    { label: "Alerts",   Icon: IconAlert,   active: false, screen: "PassengerAlerts" },
     { label: "Profile",  Icon: IconProfile, active: false, screen: "ProfileScreen" },
   ];
 
@@ -164,7 +164,7 @@ function BottomTabBar({ navigation }) {
 function ServiceCard({ title, subtitle, badge, BadgeIcon, onPress, active, vehicleImg }) {
   return (
     <TouchableOpacity
-      style={[styles.serviceCard, active && styles.serviceCardActive]}
+      style={styles.serviceCard}
       onPress={onPress}
       activeOpacity={0.82}
     >
@@ -194,15 +194,33 @@ function ServiceCard({ title, subtitle, badge, BadgeIcon, onPress, active, vehic
 export default function PassengerHomeScreen({ navigation }) {
   const dispatch = useDispatch();
 
+  const [currentLoc, setCurrentLoc] = useState("Gomti Nagar, Lucknow");
+
   // ── Handlers (original logic preserved) ──
   const handleAutoSearch = () => {
     dispatch(setVehicleMode("AUTO"));
     navigation.navigate("PassengerTripPlanner");
   };
 
+  const handleBrowseRoutes = () => {
+    navigation.navigate("PassengerRoutes");
+  };
+
   const handleBikeBook = () => {
     dispatch(setVehicleMode("BIKE"));
     navigation.navigate("PassengerTripPlanner", { mode: "bike" });
+  };
+
+  const handleGetLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      const loc = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = loc.coords;
+      const latStr = latitude.toFixed(4);
+      const lonStr = longitude.toFixed(4);
+      setCurrentLoc(`${latStr}, ${lonStr}`);
+    } catch {}
   };
 
   return (
@@ -217,27 +235,15 @@ export default function PassengerHomeScreen({ navigation }) {
 
         {/* ════ HERO SECTION ════ */}
         <View style={styles.hero}>
-          {/* Hero background image */}
           <Image source={TRIP_IMG} style={styles.heroBgImg} resizeMode="cover" />
 
-          {/* Left: greeting + heading */}
           <View style={styles.heroText}>
-            <Text style={styles.greeting}>Good afternoon 👋</Text>
-            <Text style={styles.heading}>
-              {"Where are you\n"}
-              <Text style={styles.headingGreen}>going</Text>
-              {" today?"}
-            </Text>
+            <View style={styles.greetingRow}>
+              <Image source={require("../../../assets/vayyNamaste.png")} style={styles.namasteIcon} />
+              <Text style={styles.heroTitle}>Namaste,</Text>
+            </View>
+            <Text style={styles.heroAccent}>Arjun</Text>
           </View>
-
-          {/* Right: profile avatar (top) */}
-          {/* <TouchableOpacity
-            style={styles.avatarBtn}
-            onPress={() => navigation.navigate("ProfileScreen")}
-            activeOpacity={0.8}
-          >
-            <IconPerson size={22} color={C.green} />
-          </TouchableOpacity> */}
         </View>
 
         {/* ════ LOCATION + SEARCH CARD ════ */}
@@ -249,10 +255,10 @@ export default function PassengerHomeScreen({ navigation }) {
               <IconPin size={28} color={C.green} />
               <View style={styles.locTexts}>
                 <Text style={styles.locLabel}>Current location</Text>
-                <Text style={styles.locValue}>Gomti Nagar, Lucknow</Text>
+                <Text style={styles.locValue}>{currentLoc}</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.gpsBtn} activeOpacity={0.75}>
+            <TouchableOpacity style={styles.gpsBtn} onPress={handleGetLocation} activeOpacity={0.75}>
               <IconGPS size={18} color={C.text2} />
             </TouchableOpacity>
           </View>
@@ -264,14 +270,14 @@ export default function PassengerHomeScreen({ navigation }) {
           <Text style={styles.promptTitle}>Find shared autos on your route</Text>
           <Text style={styles.promptSub}>Search live routes with available autos</Text>
 
-          {/* Search Routes button */}
+          {/* Browse Routes button */}
           <TouchableOpacity
             style={styles.searchBtn}
-            onPress={handleAutoSearch}
+            onPress={handleBrowseRoutes}
             activeOpacity={0.87}
           >
             <IconSearch size={19} color={C.white} />
-            <Text style={styles.searchBtnText}>Search Routes</Text>
+            <Text style={styles.searchBtnText}>Browse Routes</Text>
           </TouchableOpacity>
 
         </View>
@@ -354,22 +360,28 @@ const styles = StyleSheet.create({
     paddingTop: 1, // Adjusted for status bar area
     zIndex: 2,
   },
-  greeting: {
-    fontSize: 14,
-    color: C.black, // Changed to white for visibility on cover image
-    fontWeight: "400",
-    marginBottom: 4,
+  greetingRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
-  heading: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: C.black, // Changed to white for visibility on cover image
-    lineHeight: 36,
+  namasteIcon: {
+    width: 36,
+    height: 36,
+    marginRight: 6,
   },
-  headingGreen: {
-    color: C.greenDot,
-    fontWeight: "800",
+  heroTitle: {
+    fontSize: 30,
+    fontWeight: "900",
+    color: C.black,
+    lineHeight: 34,
   },
+  heroAccent: {
+    fontSize: 30,
+    fontWeight: "900",
+    color: C.green,
+    lineHeight: 34,
+  },
+
   // avatarBtn: {
   //   width: 44,
   //   height: 44,
@@ -493,10 +505,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  serviceCardActive: {
-    borderColor: C.borderActive,
-    backgroundColor: C.greenLight,
-  },
+
   scMainRow: {
     flexDirection: "row",
     justifyContent: "space-between",

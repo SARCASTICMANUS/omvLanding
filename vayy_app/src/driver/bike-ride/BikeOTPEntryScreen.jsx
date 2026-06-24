@@ -1,10 +1,12 @@
 import React, { useRef, useState } from "react";
 import {
   Animated,
+  Keyboard,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,6 +18,7 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
   const buddy = route.params?.buddy;
   const [otp, setOtp] = useState(["", "", "", ""]);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [otpError, setOtpError] = useState("");
   const inputs = useRef([]);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0)).current;
@@ -39,6 +42,7 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
   const handleVerify = () => {
     const code = otp.join("");
     if (code.length < 4) {
+      setOtpError("");
       Animated.sequence([
         Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
         Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
@@ -48,6 +52,18 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
       ]).start();
       return;
     }
+    if (code === "0000") {
+      setOtpError("Invalid code. Please try again.");
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 8, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -8, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+      ]).start();
+      return;
+    }
+    setOtpError("");
     setShowSuccess(true);
     Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 80, useNativeDriver: true }).start();
     setTimeout(() => {
@@ -56,6 +72,7 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
   };
 
   return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
@@ -96,6 +113,8 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
           ))}
         </Animated.View>
 
+        {otpError ? <Text style={styles.errorText}>{otpError}</Text> : null}
+
         <TouchableOpacity
           style={[styles.verifyBtn, otp.join("").length < 4 && styles.verifyBtnDisabled]}
           onPress={handleVerify}
@@ -116,6 +135,7 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
         </Animated.View>
       )}
     </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -255,6 +275,13 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "800",
     color: "#fff",
+  },
+  errorText: {
+    color: "#EF4444",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: 16,
   },
 
   /* success */

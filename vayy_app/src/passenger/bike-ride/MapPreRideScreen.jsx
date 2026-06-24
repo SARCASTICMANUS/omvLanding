@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   StatusBar,
   Platform,
 } from "react-native";
+import MapView from "react-native-maps";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Ionicons,
@@ -22,58 +24,72 @@ const { width } = Dimensions.get("window");
 export function BikeMapPreRideScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [showConfirm, setShowConfirm] = useState(false);
+  const mapRef = useRef(null);
+
+  const zoomIn = () => {
+    mapRef.current?.animateCamera({ zoom: 16 });
+  };
+
+  const zoomOut = () => {
+    mapRef.current?.animateCamera({ zoom: 12 });
+  };
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
-
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.headerLeft}>
-          {Platform.OS === 'ios' && (
-            <TouchableOpacity
-              style={styles.iconBtn}
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="chevron-back" size={24} color="#111827" />
-            </TouchableOpacity>
-          )}
-          <Text style={styles.headerTitle}>Bike pickup</Text>
-        </View>
-
-        <TouchableOpacity style={styles.iconBtn}>
-          <MaterialIcons name="more-vert" size={24} color="#111827" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Top Distance Card */}
-      <View style={styles.distanceCard}>
-        <View style={styles.flagWrapper}>
-          <Ionicons name="flag" size={24} color="#009849" />
-        </View>
-
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardLabel}>Nearest stop</Text>
-          <Text style={styles.cardDistance}>
-            <Text style={styles.greenText}>200 m</Text> away
-          </Text>
-        </View>
-        <View style={styles.etaBadge}>
-          <Text style={styles.etaBadgeValue}>~2 min</Text>
-          <Text style={styles.etaBadgeLabel}>wait</Text>
-        </View>
-      </View>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Map Area */}
       <View style={styles.mapArea}>
-        {/* Simplified Map Background with subtle grid lines */}
-        <View style={styles.mapBg}>
-          <View style={styles.gridLineH} />
-          <View style={[styles.gridLineH, { top: "40%" }]} />
-          <View style={[styles.gridLineH, { top: "70%" }]} />
-          <View style={styles.gridLineV} />
-          <View style={[styles.gridLineV, { left: "40%" }]} />
-          <View style={[styles.gridLineV, { left: "70%" }]} />
+        <MapView
+          style={styles.mapBg}
+          ref={mapRef}
+          initialRegion={{
+            latitude: 26.8467,
+            longitude: 80.9462,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }}
+          scrollEnabled={true}
+          zoomEnabled={true}
+          zoomControlEnabled={true}
+        />
+
+        {/* Header */}
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={styles.headerLeft}>
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() => navigation.goBack()}
+              >
+                <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+            <Text style={styles.headerTitle}>Bike pickup</Text>
+          </View>
+
+          <TouchableOpacity style={styles.iconBtn}>
+            <MaterialIcons name="more-vert" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Top Distance Card */}
+        <View style={styles.distanceCard}>
+          <View style={styles.flagWrapper}>
+            <Ionicons name="flag" size={24} color="#009849" />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardLabel}>Nearest stop</Text>
+            <Text style={styles.cardDistance}>
+              <Text style={styles.greenText}>200 m</Text> away
+            </Text>
+          </View>
+          <View style={styles.etaBadge}>
+            <Text style={styles.etaBadgeValue}>~2 min</Text>
+            <Text style={styles.etaBadgeLabel}>wait</Text>
+          </View>
         </View>
 
         {/* Charbagh Label */}
@@ -119,6 +135,12 @@ export function BikeMapPreRideScreen({ navigation }) {
 
         {/* Floating Buttons */}
         <View style={styles.floatingContainer}>
+          <TouchableOpacity style={styles.floatBtn} onPress={zoomIn}>
+            <Text style={styles.zoomText}>+</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.floatBtn} onPress={zoomOut}>
+            <Text style={styles.zoomText}>−</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.floatBtn}>
             <MaterialIcons name="my-location" size={24} color="#111827" />
           </TouchableOpacity>
@@ -130,7 +152,7 @@ export function BikeMapPreRideScreen({ navigation }) {
       </View>
 
       {/* Bottom Sheet */}
-      <View style={styles.bottomSheet}>
+      <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.handle} />
 
         <View style={styles.statsRow}>
@@ -187,14 +209,22 @@ export function BikeMapPreRideScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: "relative",
     backgroundColor: "#F8FAF9",
   },
   header: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 24,
     paddingBottom: 12,
+    backgroundColor: "rgba(0,152,73,0.6)",
+    overflow: "hidden",
   },
   iconBtn: {
     width: 52,
@@ -216,13 +246,15 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#111827",
+    color: "#FFFFFF",
     letterSpacing: -0.5,
   },
   distanceCard: {
-    marginHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 20,
+    position: "absolute",
+    top: 100,
+    left: 20,
+    right: 20,
+    zIndex: 10,
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
     padding: 16,
@@ -274,27 +306,11 @@ const styles = StyleSheet.create({
     color: "#6B7280",
   },
   mapArea: {
-    flex: 1,
-    position: "relative",
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "#F9FAFB",
   },
   mapBg: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#F9FAFB",
-  },
-  gridLineH: {
-    position: "absolute",
-    width: "100%",
-    height: 1,
-    backgroundColor: "#E5E7EB",
-    top: "20%",
-  },
-  gridLineV: {
-    position: "absolute",
-    width: 1,
-    height: "100%",
-    backgroundColor: "#E5E7EB",
-    left: "20%",
   },
   poiLabel: {
     position: "absolute",
@@ -415,7 +431,7 @@ const styles = StyleSheet.create({
   },
   liveBikesChip: {
     position: "absolute",
-    top: 20,
+    top: 195,
     left: 20,
     flexDirection: "row",
     alignItems: "center",
@@ -459,6 +475,10 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   bottomSheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
@@ -533,5 +553,11 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "800",
+  },
+  zoomText: {
+    fontSize: 22,
+    fontWeight: "600",
+    color: "#111827",
+    lineHeight: 24,
   },
 });

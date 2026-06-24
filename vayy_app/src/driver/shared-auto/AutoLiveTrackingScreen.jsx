@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import AppFrame from "../../components/AppFrame";
-import MapPlaceholder from "../../components/MapPlaceholder";
+import MapView from "react-native-maps";
 import StatBar from "../../components/StatBar";
 import PrimaryButton from "../../shared/components/common/VayyButton";
 import { colors } from "../../theme/colors";
@@ -21,7 +21,15 @@ export default function AutoLiveTrackingScreen({ navigation, mode = "auto" }) {
   return (
     <AppFrame navigation={navigation} title="Trip active" accent={accent}>
       <View style={styles.mapPage}>
-        <MapPlaceholder accent={accent} vehicle={isBike ? "🏍️" : "🛺"} routeLine />
+        <MapView
+          style={StyleSheet.absoluteFillObject}
+          initialRegion={{
+            latitude: 26.8467,
+            longitude: 80.9462,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }}
+        />
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${currentTrip.routeProgress * 100}%`, backgroundColor: accent }]} />
         </View>

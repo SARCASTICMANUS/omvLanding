@@ -1,7 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
+import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -132,6 +133,41 @@ export default function PassengerLiveTracking({ navigation, route }) {
     ? Math.ceil(busData.eta[0].duration_seconds / 60)
     : "--";
 
+  const handleShareTrip = async () => {
+    try {
+      await Share.share({ message: `Track my trip on VAYY! Trip ID: ${tripId || "N/A"}` });
+    } catch {}
+  };
+
+  const handleSOS = () => {
+    Alert.alert(
+      "SOS Emergency",
+      "Emergency assistance has been notified. Stay calm, help is on the way.",
+      [{ text: "OK", style: "default" }],
+    );
+  };
+
+  const handleCallDriver = () => {
+    const phone = tripData?.driver_phone;
+    if (phone) {
+      Linking.openURL(`tel:${phone}`);
+    } else {
+      Alert.alert("Call Driver", "Driver contact number is not available yet.");
+    }
+  };
+
+  const handleReportIssue = () => {
+    Alert.alert(
+      "Report Issue",
+      "Please contact support at support@vayy.app or call +91-XXXXX-XXXXX.",
+      [{ text: "OK" }],
+    );
+  };
+
+  const handleOnBoard = () => {
+    Alert.alert("Boarding Confirmed", "You are now on board! Enjoy your ride.");
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.centerScreen}>
@@ -185,7 +221,7 @@ export default function PassengerLiveTracking({ navigation, route }) {
       <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
         <View style={styles.topRow}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backText}>{"<"}</Text>
+            <Ionicons name="chevron-back" size={24} color={COLORS.text} />
           </TouchableOpacity>
           <View style={styles.statusPill}>
             <View style={[styles.statusDot, wsStatus !== "connected" && styles.statusDotOff]} />
@@ -227,14 +263,19 @@ export default function PassengerLiveTracking({ navigation, route }) {
         </View>
 
         <View style={styles.actions}>
-          {["Share Trip", "SOS", "Call Driver", "Report Issue"].map((label) => (
-            <TouchableOpacity key={label} style={styles.actionButton}>
+          {[
+            { label: "Share Trip", onPress: handleShareTrip },
+            { label: "SOS", onPress: handleSOS },
+            { label: "Call Driver", onPress: handleCallDriver },
+            { label: "Report Issue", onPress: handleReportIssue },
+          ].map(({ label, onPress }) => (
+            <TouchableOpacity key={label} style={styles.actionButton} onPress={onPress}>
               <Text style={styles.actionText}>{label}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <VayyButton fullWidth label="I'm on Board" onPress={() => {}} size="lg" />
+        <VayyButton fullWidth label="I'm on Board" onPress={handleOnBoard} size="lg" />
       </View>
     </View>
   );
@@ -291,11 +332,6 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: "center",
     width: 44,
-  },
-  backText: {
-    color: COLORS.text,
-    fontSize: 34,
-    lineHeight: 36,
   },
   statusPill: {
     alignItems: "center",

@@ -6,6 +6,7 @@ import { createStackNavigator } from "@react-navigation/stack";
 import COLORS from "../shared/constants/colors";
 import AllBusesPage from "../routes/screens/AllBusesPage";
 import IntroPage from "../passenger/screens/IntroPage";
+import MyRoutesScreen from "../passenger/screens/MyRoutesScreen";
 import PassengerRouteList from "../routes/screens/PassengerRouteList";
 import PassengerLiveTracking from "../tracking/screens/PassengerLiveTracking";
 import PassengerStopsTimeline from "../routes/screens/PassengerStopsTimeline";
@@ -15,20 +16,23 @@ import PassengerAlertsScreen from "../handshake/screens/PassengerAlertsScreen";
 import PassengerActionsScreen from "../passenger/screens/PassengerActionsScreen";
 import JourneyHistoryScreen from "../passenger/screens/JourneyHistoryScreen";
 import DestinationSearchScreen from "../passenger/screens/DestinationSearchScreen";
+import SplashCarouselScreen from "../passenger/splash/SplashCarouselScreen";
 const DeveloperNavigator = lazy(() => import("../screens/Developer/DeveloperNavigator"));
 import { Home, Map, Navigation, Bell, User, Settings } from "lucide-react-native";
 
 // Bike Flow Screens
 import { BikeMapPreRideScreen } from "../passenger/bike-ride/MapPreRideScreen";
-import { BikeMapPostAcceptScreen } from "../passenger/bike-ride/MapPostAcceptScreen";
 import { RiderPopupScreen } from "../passenger/bike-ride/RiderPopupScreen";
 import { RideStatsScreen } from "../passenger/bike-ride/RideStatsScreen";
 import { BikeSearchingScreen } from "../passenger/bike-ride/BikeSearchingScreen";
 import { RideCompleteScreen } from "../passenger/bike-ride/RideCompleteScreen";
+import { RiderArrivingScreen } from "../passenger/bike-ride/RiderArrivingScreen";
 
 // Auto Flow Screens
 import { AutoPreRideScreen } from "../passenger/shared-auto/AutoPreRideScreen";
 import { AutoSearchingScreen } from "../passenger/shared-auto/AutoSearchingScreen";
+import { AutoDiscoveryScreen } from "../passenger/shared-auto/AutoDiscoveryScreen";
+import { AutoRideActiveScreen } from "../passenger/shared-auto/AutoRideActiveScreen";
 import { AutoRideCompleteScreen } from "../passenger/shared-auto/AutoRideCompleteScreen";
 
 const Tab = createBottomTabNavigator();
@@ -37,7 +41,7 @@ const Stack = createStackNavigator();
 function PassengerTabs() {
   return (
     <Tab.Navigator
-      initialRouteName="PassengerTripPlanner"
+      initialRouteName="PassengerHome"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: COLORS.primary,
@@ -65,13 +69,8 @@ function PassengerTabs() {
       />
       <Tab.Screen
         name="PassengerRoutes"
-        component={AllBusesPage}
+        component={MyRoutesScreen}
         options={{ title: "Routes", tabBarIcon: ({ color, size }) => <Map size={size} color={color} /> }}
-      />
-      <Tab.Screen
-        name="PassengerTripPlanner"
-        component={PassengerTripPlanner}
-        options={{ title: "Live Map", tabBarIcon: ({ color, size }) => <Navigation size={size} color={color} /> }}
       />
       <Tab.Screen
         name="PassengerAlerts"
@@ -102,18 +101,24 @@ export default function PassengerNavigator() {
       <Stack.Screen name="PassengerLiveTracking" component={PassengerLiveTracking} />
       <Stack.Screen name="JourneyHistoryScreen" component={JourneyHistoryScreen} />
       <Stack.Screen name="DestinationSearchScreen" component={DestinationSearchScreen} />
+      <Stack.Screen name="SplashCarousel" component={SplashCarouselScreen} />
       
+      {/* Trip Planner */}
+      <Stack.Screen name="PassengerTripPlanner" component={PassengerTripPlanner} />
+
       {/* Bike Flow */}
       <Stack.Screen name="BikeMapPreRide" component={BikeMapPreRideScreen} />
-      <Stack.Screen name="BikeMapPostAccept" component={BikeMapPostAcceptScreen} />
       <Stack.Screen name="RiderPopup" component={RiderPopupScreen} />
       <Stack.Screen name="RideStats" component={RideStatsScreen} />
       <Stack.Screen name="BikeSearching" component={BikeSearchingScreen} />
       <Stack.Screen name="RideComplete" component={RideCompleteScreen} />
+      <Stack.Screen name="RiderArriving" component={RiderArrivingScreen} />
 
       {/* Auto Flow */}
       <Stack.Screen name="AutoPreRide" component={AutoPreRideScreen} />
       <Stack.Screen name="AutoSearching" component={AutoSearchingScreen} />
+      <Stack.Screen name="AutoDiscovery" component={AutoDiscoveryScreen} />
+      <Stack.Screen name="AutoRideActive" component={AutoRideActiveScreen} />
       <Stack.Screen name="AutoRideComplete" component={AutoRideCompleteScreen} />
     </Stack.Navigator>
   );

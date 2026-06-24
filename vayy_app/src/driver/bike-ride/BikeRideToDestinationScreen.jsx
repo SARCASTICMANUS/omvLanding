@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
+import MapView from "react-native-maps";
 
 const { width } = Dimensions.get("window");
 
@@ -70,14 +71,15 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
     <View style={styles.root}>
       {/* Map area */}
       <View style={styles.mapArea}>
-        <View style={styles.mapBg}>
-          <View style={[styles.gridLine, { top: "25%" }]} />
-          <View style={[styles.gridLine, { top: "50%" }]} />
-          <View style={[styles.gridLine, { top: "75%" }]} />
-          <View style={[styles.gridLineV, { left: "25%" }]} />
-          <View style={[styles.gridLineV, { left: "50%" }]} />
-          <View style={[styles.gridLineV, { left: "75%" }]} />
-        </View>
+        <MapView
+          style={styles.mapBg}
+          initialRegion={{
+            latitude: 26.8467,
+            longitude: 80.9462,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }}
+        />
 
         <View style={styles.driverOnMap}>
           <View style={styles.driverPulseOuter} />

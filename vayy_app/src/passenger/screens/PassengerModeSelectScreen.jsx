@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View, Image } from "react-native";
 import AppFrame from "../../components/AppFrame";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
@@ -12,12 +12,12 @@ export default function PassengerModeSelectScreen({ navigation }) {
         <Text style={styles.hero}>How are you travelling?</Text>
         <View style={styles.cardStack}>
           <TouchableOpacity style={styles.roleCard} onPress={() => navigation.navigate("SharedAutoHome")}>
-            <Text style={styles.roleIcon}>🛺</Text>
+            <Image source={require('../../../assets/vayySideAuto-small.png')} style={styles.roleIcon} />
             <Text style={styles.roleTitle}>Shared Auto</Text>
             <Text style={styles.roleMeta}>Stop based boarding and live autos</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.roleCard} onPress={() => navigation.navigate("BikeRideHome")}>
-            <Text style={styles.roleIcon}>🏍️</Text>
+            <Image source={require('../../../assets/vayyPulsureBike-small.png')} style={styles.roleIcon} />
             <Text style={styles.roleTitle}>Bike Ride</Text>
             <Text style={styles.roleMeta}>Quick bike buddy pickup flow</Text>
           </TouchableOpacity>
@@ -52,7 +52,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   roleIcon: {
-    fontSize: 30,
+    width: 50,
+    height: 50,
+    resizeMode: "contain",
+    alignSelf: "center",
+    marginBottom: spacing.xs,
   },
   roleTitle: {
     color: colors.textPrimary,

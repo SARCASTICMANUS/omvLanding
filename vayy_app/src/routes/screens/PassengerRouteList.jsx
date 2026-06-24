@@ -2,7 +2,7 @@
 // Matches reference UI exactly — auto-rickshaw route list.
 // All original logic (sort, coords, handlers, state) 100% preserved.
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Platform,
@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
 /* ─────────────────────────────────────────────
    ORIGINAL HELPERS — UNTOUCHED
@@ -69,37 +70,9 @@ function StopDotLine({ pickupLabel, dropLabel, walkText }) {
 }
 
 /* ─────────────────────────────────────────────
-   AUTO RICKSHAW ILLUSTRATION (pure RN View)
+   SINGLE ROUTE CARD  (driver-style)
 ───────────────────────────────────────────── */
-function AutoIllustration() {
-  return (
-    <View style={s.autoWrap}>
-      {/* Roof */}
-      <View style={s.autoRoof} />
-      {/* Body */}
-      <View style={s.autoBody}>
-        {/* Black passenger area */}
-        <View style={s.autoPassArea} />
-        {/* Yellow stripe */}
-        <View style={s.autoStripe} />
-        {/* Windshield */}
-        <View style={s.autoWindshield} />
-      </View>
-      {/* Wheels */}
-      <View style={s.wheelRow}>
-        <View style={s.wheel} />
-        <View style={[s.wheel, { marginLeft: "auto" }]} />
-      </View>
-      {/* Headlight */}
-      <View style={s.headlight} />
-    </View>
-  );
-}
-
-/* ─────────────────────────────────────────────
-   SINGLE ROUTE CARD
-───────────────────────────────────────────── */
-function RouteCard({ trip, pickup, destination, isBest, index, onPress, onViewStops }) {
+function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggleExpand, expanded }) {
   const eta      = formatEtaMinutes(trip?.eta_seconds);
   const fromLbl  = shortPlace(pickup,      trip?.pickup_name      || "Campus Gate");
   const toLbl    = shortPlace(destination, trip?.destination_name || "City Metro");
@@ -109,63 +82,98 @@ function RouteCard({ trip, pickup, destination, isBest, index, onPress, onViewSt
   const walkMin  = trip?.walk_minutes || (index + 1) * 2;
   const fare     = trip?.fare || trip?.price || (78 + index * 14);
   const payment  = trip?.payment_method || "Cash";
+  const dist     = formatDistanceText(trip);
+  const dur      = formatDurationText(trip);
+  const stops    = trip?.stops || [];
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.93}
-      onPress={() => onPress?.(trip)}
-      style={[s.card, isBest && s.cardBest]}
-    >
-      {/* BEST MATCH badge */}
+    <View style={[s.card, isBest && s.cardBest]}>
       {isBest && (
         <View style={s.bestBadge}>
           <Text style={s.bestBadgeText}>BEST MATCH</Text>
         </View>
       )}
 
-      {/* Main row: auto + stops + ETA+price */}
-      <View style={s.mainRow}>
-        {/* Auto illustration */}
-        <AutoIllustration />
-
-        {/* Stop dot line — center */}
-        <View style={{ flex: 1 }}>
-          <StopDotLine
-            dropLabel={toLbl}
-            pickupLabel={fromLbl}
-            walkText={`${walkMin} min walk`}
-          />
-        </View>
-
-        {/* ETA + Fare — right */}
-        <View style={s.rightCol}>
-          <View style={[s.etaBox, isBest && s.etaBoxBest]}>
-            <Text style={[s.etaNum, isBest && s.etaNumBest]}>{eta}</Text>
-            <Text style={[s.etaMin, isBest && s.etaMinBest]}>min</Text>
-            <Text style={s.etaLabel}>ETA</Text>
+      <TouchableOpacity activeOpacity={0.93} onPress={() => onPress?.(trip)}>
+        <View style={s.mainRow}>
+          <View style={s.routeNumWrap}>
+            <View style={s.routeNumBadge}>
+              <Text style={s.routeNumText}>{index + 1}</Text>
+            </View>
+            <View style={s.routeNumLine} />
           </View>
-          <Text style={s.fare}>₹{fare}</Text>
-          <Text style={s.payment}>{payment}</Text>
+
+          <View style={{ flex: 1 }}>
+            <Text style={s.routeTitle}>{fromLbl} → {toLbl}</Text>
+            <StopDotLine
+              dropLabel={toLbl}
+              pickupLabel={fromLbl}
+              walkText={`${walkMin} min walk`}
+            />
+          </View>
+
+          <View style={s.rightCol}>
+            <View style={[s.statsBox, isBest && s.statsBoxBest]}>
+              <Ionicons name="cash" size={16} color={isBest ? "#009849" : "#374151"} />
+              <Text style={[s.statsNum, isBest && s.statsNumBest]}>₹{fare}</Text>
+              <Text style={s.statsLabel}>{payment}</Text>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+
+      <View style={s.cardBottom}>
+        <View style={s.metricsRow}>
+          <View style={s.metric}>
+            <Ionicons name="star" size={13} color="#6B7280" />
+            <Text style={s.metricText}>{rating} ({reviews})</Text>
+          </View>
+          <Text style={s.metricSep}>|</Text>
+          <View style={s.metric}>
+            <Ionicons name="speedometer" size={13} color="#6B7280" />
+            <Text style={s.metricText}>{dist}</Text>
+          </View>
+          <Text style={s.metricSep}>|</Text>
+          <View style={s.metric}>
+            <Ionicons name="time-outline" size={13} color="#6B7280" />
+            <Text style={s.metricText}>{dur}</Text>
+          </View>
+        </View>
+
+        <View style={s.actionRow}>
+          <TouchableOpacity
+            style={s.viewStopsBtn}
+            onPress={() => onToggleExpand(trip?.id || trip?.trip_id || index)}
+          >
+            <Text style={s.viewStopsText}>
+              {expanded ? "Hide" : "Stops"}  ›
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.selectBtn}
+            onPress={() => onPress?.(trip)}
+          >
+            <Text style={s.selectBtnText}>Continue</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Bottom row: rating + view stops */}
-      <View style={s.cardBottom}>
-        <View style={s.ratingRow}>
-          <Text style={s.star}>★</Text>
-          <Text style={s.ratingNum}>{rating}</Text>
-          <Text style={s.ratingCount}> ({reviews})</Text>
-          <Text style={s.bullet}> • </Text>
-          <Text style={s.fuel}>{fuelType}</Text>
+      {expanded && stops.length > 0 && (
+        <View style={s.stopsPanel}>
+          {stops.map((stop, si) => (
+            <View key={si} style={s.stopRow}>
+              <View style={s.stopSeq}>
+                <Text style={s.stopSeqText}>{si + 1}</Text>
+              </View>
+              <View style={s.stopDetail}>
+                <Text style={s.stopName}>{stop.name}</Text>
+                <Text style={s.stopStatus}>{stop.status || "Upcoming"}</Text>
+              </View>
+            </View>
+          ))}
         </View>
-        <TouchableOpacity
-          onPress={() => onViewStops?.(trip)}
-          style={s.viewStopsBtn}
-        >
-          <Text style={s.viewStopsText}>View stops  ›</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+      )}
+    </View>
   );
 }
 
@@ -182,10 +190,11 @@ export default function PassengerRouteList({ navigation, route }) {
   } = route?.params || {};
 
   const isBike = mode === "bike";
-  const accent = isBike ? "#534AB7" : "#009849";
+  const accent = "#009849";
   const pickup = initialPickup;
   const destination = initialDestination;
   const [showAllBuses, setShowAllBuses] = useState(false);
+  const [expandedRouteId, setExpandedRouteId] = useState(null);
 
   /* Original sort — untouched */
   const allTrips = useMemo(() => {
@@ -202,9 +211,16 @@ export default function PassengerRouteList({ navigation, route }) {
   const bestTrip         = allTrips[0] || null;
 
   /* Original handlers — untouched */
-  const handleContinue = () => {
-    if (!bestTrip) return;
-    navigation.navigate("PassengerStopsTimeline", { trip: bestTrip, pickup, destination });
+  const handleContinue = (tripOverride = null) => {
+    const trip = tripOverride || bestTrip;
+    if (!trip) return;
+    if (mode === "auto") {
+      navigation.navigate("AutoPreRide", { trip, pickup, destination, mode });
+    } else if (mode === "bike") {
+      navigation.navigate("BikeMapPreRide", { trip, pickup, destination, mode });
+    } else {
+      navigation.navigate("PassengerStopsTimeline", { trip, pickup, destination, mode });
+    }
   };
   const handleViewAllBuses = () => {
     setShowAllBuses(true);
@@ -215,18 +231,33 @@ export default function PassengerRouteList({ navigation, route }) {
     });
   };
   const handleViewStops = (trip) => {
-    navigation.navigate("PassengerStopsTimeline", { trip, pickup, destination });
+    if (mode === "auto") {
+      navigation.navigate("AutoPreRide", { trip, pickup, destination, mode });
+    } else if (mode === "bike") {
+      navigation.navigate("BikeMapPreRide", { trip, pickup, destination, mode });
+    } else {
+      navigation.navigate("PassengerStopsTimeline", { trip, pickup, destination, mode });
+    }
   };
   const routeCount = allTrips.length;
+  const hasRedirectedAuto = useRef(false);
+
+  useEffect(() => {
+    if (mode === "auto" && !loading && routeCount > 0 && !hasRedirectedAuto.current) {
+      hasRedirectedAuto.current = true;
+      handleContinue();
+    }
+  }, [mode, loading, routeCount]);
 
   /* FlatList renderItem */
   const renderItem = ({ item, index }) => (
     <RouteCard
       destination={destination}
+      expanded={String(expandedRouteId) === String(item?.id || item?.trip_id || index)}
       index={index}
       isBest={index === 0}
       onPress={handleContinue}
-      onViewStops={handleViewStops}
+      onToggleExpand={(id) => setExpandedRouteId((cur) => (String(cur) === String(id) ? null : id))}
       pickup={pickup}
       trip={item}
     />
@@ -234,6 +265,13 @@ export default function PassengerRouteList({ navigation, route }) {
 
   return (
     <SafeAreaView edges={["top"]} style={s.safe}>
+
+      {mode === "auto" ? (
+        <View style={s.autoRedirect}>
+          <Text style={s.autoRedirectText}>Finding autos on your route...</Text>
+        </View>
+      ) : (
+        <>
 
       {/* ── HEADER ── */}
       <View style={s.header}>
@@ -258,17 +296,14 @@ export default function PassengerRouteList({ navigation, route }) {
         keyExtractor={(item, i) => String(item?.id || item?.trip_id || i)}
         ListHeaderComponent={() => (
           <>
-            {/* Route count */}
             {!loading && routeCount > 0 && (
               <Text style={s.countText}>{routeCount} routes available</Text>
             )}
-            {/* Loading */}
             {loading && (
               <View style={s.stateCard}>
                 <Text style={s.stateText}>Finding best autos...</Text>
               </View>
             )}
-            {/* Empty */}
             {!loading && routeCount === 0 && (
               <View style={s.stateCard}>
                 <Text style={s.stateText}>No routes found for this journey.</Text>
@@ -289,17 +324,24 @@ export default function PassengerRouteList({ navigation, route }) {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* ── STICKY CONTINUE ── */}
-      <View style={s.stickyBar}>
-        <TouchableOpacity
-          disabled={!bestTrip || loading}
-          onPress={handleContinue}
-          style={[s.continueBtn, (!bestTrip || loading) && s.continueBtnOff]}
-        >
-          <Text style={s.continueTxt}>Continue</Text>
-          <Text style={s.continueArrow}> →</Text>
-        </TouchableOpacity>
-      </View>
+      {/* ── MATCHING BANNER ── */}
+      {bestTrip && !loading && routeCount > 0 && (
+        <View style={s.matchingBanner}>
+          <View style={s.matchingBannerContent}>
+            <Text style={s.matchingIcon}>🔍</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.matchingTitle}>Auto found on your route</Text>
+              <Text style={s.matchingSub}>Select a route or wait for best match</Text>
+            </View>
+            <View style={s.matchingBarSmall}>
+              <View style={s.matchingBarFill} />
+            </View>
+          </View>
+        </View>
+      )}
+
+        </>
+      )}
 
     </SafeAreaView>
   );
@@ -322,7 +364,7 @@ const s = StyleSheet.create({
 
   /* layout */
   safe:        { backgroundColor: "#F4F6F4", flex: 1 },
-  listContent: { paddingBottom: 110, paddingHorizontal: 16, paddingTop: 4 },
+  listContent: { paddingBottom: 140, paddingHorizontal: 16, paddingTop: 4 },
 
   /* header */
   header: {
@@ -393,36 +435,62 @@ const s = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
+  routeNumWrap: {
+    alignItems: "center",
+    gap: 4,
+    width: 32,
+  },
+  routeNumBadge: {
+    alignItems: "center",
+    backgroundColor: "#009849",
+    borderRadius: 999,
+    height: 28,
+    justifyContent: "center",
+    width: 28,
+  },
+  routeNumText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  routeNumLine: {
+    backgroundColor: "#d1d5db",
+    flex: 1,
+    width: 2,
+  },
+  routeTitle: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
   rightCol: {
     alignItems: "center",
     gap: 3,
     minWidth: 68,
   },
 
-  /* ETA box */
-  etaBox: {
+  /* stats box (replaces ETA box) */
+  statsBox: {
     alignItems: "center",
     backgroundColor: "#f3f4f6",
     borderRadius: 12,
+    gap: 2,
     paddingHorizontal: 10,
     paddingVertical: 8,
     width: 68,
   },
-  etaBoxBest: {
+  statsBoxBest: {
     backgroundColor: "#f0fdf4",
     borderColor: "#bbf7d0",
     borderWidth: 1,
   },
-  etaNum:      { color: "#374151", fontSize: 26, fontWeight: "900", lineHeight: 28 },
-  etaNumBest:  { color: "#009849" },
-  etaMin:      { color: "#374151", fontSize: 12, fontWeight: "700" },
-  etaMinBest:  { color: "#009849" },
-  etaLabel:    { color: "#9ca3af", fontSize: 10, fontWeight: "600", marginTop: 1 },
-  fare:        { color: "#111827", fontSize: 18, fontWeight: "900", marginTop: 4 },
-  payment:     { color: "#9ca3af", fontSize: 11, fontWeight: "500" },
+  statsNum: { color: "#374151", fontSize: 18, fontWeight: "900", lineHeight: 20 },
+  statsNumBest: { color: "#009849" },
+  statsLabel: { color: "#9CA3AF", fontSize: 10, fontWeight: "600" },
 
   /* stop dot line */
-  dotWrap: { gap: 0 },
+  dotWrap: { gap: 0, marginTop: 2 },
   dotRow:  { alignItems: "center", flexDirection: "row", gap: 10 },
   dotGreen: {
     borderColor: "#009849",
@@ -438,7 +506,7 @@ const s = StyleSheet.create({
     height: 14,
     width: 14,
   },
-  stopName: { color: "#111827", fontSize: 14, fontWeight: "800" },
+  stopName: { color: "#111827", fontSize: 13, fontWeight: "800" },
   stopSub:  { color: "#9ca3af", fontSize: 11, fontWeight: "500", marginTop: 1 },
   connectorWrap: { alignItems: "center", height: 18, justifyContent: "center", paddingLeft: 6 },
   connectorLine: {
@@ -450,98 +518,79 @@ const s = StyleSheet.create({
 
   /* card bottom */
   cardBottom: {
-    alignItems: "center",
     borderColor: "#f0f0f0",
     borderTopWidth: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
     marginTop: 12,
     paddingTop: 12,
   },
-  ratingRow: { alignItems: "center", flexDirection: "row" },
-  star:       { color: "#009849", fontSize: 14 },
-  ratingNum:  { color: "#111827", fontSize: 13, fontWeight: "800" },
-  ratingCount:{ color: "#9ca3af", fontSize: 12 },
-  bullet:     { color: "#d1d5db", fontSize: 12 },
-  fuel:       { color: "#6b7280", fontSize: 12, fontWeight: "600" },
+  metricsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  metric: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  metricText: {
+    color: "#6B7280",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  metricSep: {
+    color: "#d1d5db",
+    fontSize: 14,
+  },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   viewStopsBtn: {
     borderColor: "#e5e7eb",
     borderRadius: 10,
     borderWidth: 1.5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   viewStopsText: { color: "#009849", fontSize: 13, fontWeight: "700" },
+  selectBtn: {
+    flex: 1,
+    backgroundColor: "#009849",
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  selectBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "800",
+  },
 
-  /* auto illustration */
-  autoWrap:       { height: 68, position: "relative", width: 80 },
-  autoRoof: {
-    backgroundColor: "#1a1a1a",
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
-    height: 12,
-    left: "20%",
-    position: "absolute",
-    right: "5%",
-    top: 0,
+  /* stops panel */
+  stopsPanel: {
+    backgroundColor: "#f9fafb",
+    borderColor: "#e5e7eb",
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 8,
+    marginTop: 12,
+    padding: 12,
   },
-  autoBody: {
-    backgroundColor: "#166534",
-    borderRadius: 6,
-    bottom: 20,
-    left: 0,
-    overflow: "hidden",
-    position: "absolute",
-    right: 0,
-    top: 10,
-  },
-  autoPassArea: {
-    backgroundColor: "#1a1a1a",
-    bottom: 0,
-    position: "absolute",
-    right: 0,
-    top: "20%",
-    width: "42%",
-  },
-  autoStripe: {
-    backgroundColor: "#fbbf24",
-    bottom: "15%",
-    height: 4,
-    left: 0,
-    position: "absolute",
-    right: "42%",
-  },
-  autoWindshield: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 3,
-    height: "40%",
-    left: "5%",
-    position: "absolute",
-    top: "5%",
-    width: "22%",
-  },
-  wheelRow: {
-    bottom: 4,
-    flexDirection: "row",
-    left: 8,
-    position: "absolute",
-    right: 8,
-  },
-  wheel: {
-    backgroundColor: "#1a1a1a",
+  stopRow: { alignItems: "center", flexDirection: "row", gap: 12 },
+  stopSeq: {
+    alignItems: "center",
+    backgroundColor: "#009849",
     borderRadius: 999,
-    height: 14,
-    width: 14,
+    height: 24,
+    justifyContent: "center",
+    width: 24,
   },
-  headlight: {
-    backgroundColor: "#fef3c7",
-    borderRadius: 3,
-    height: 6,
-    left: 4,
-    position: "absolute",
-    top: 28,
-    width: 6,
-  },
+  stopSeqText: { color: "#fff", fontSize: 11, fontWeight: "900" },
+  stopDetail: { flex: 1 },
+  stopStatus: { color: "#9CA3AF", fontSize: 11 },
 
   /* footer / all button */
   allBtn: {
@@ -599,4 +648,59 @@ const s = StyleSheet.create({
   },
   continueTxt:   { color: "#fff", fontSize: 17, fontWeight: "900" },
   continueArrow: { color: "#fff", fontSize: 20, fontWeight: "900" },
+
+  /* matching banner */
+  matchingBanner: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === "ios" ? 34 : 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 15,
+    zIndex: 100,
+  },
+  matchingBannerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  matchingIcon: { fontSize: 24 },
+  matchingTitle: { fontSize: 14, fontWeight: "800", color: "#111827" },
+  matchingSub: { fontSize: 12, color: "#6B7280", fontWeight: "500", marginTop: 1 },
+  matchingBarSmall: {
+    width: 4,
+    height: 32,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 2,
+    overflow: "hidden",
+    alignSelf: "center",
+  },
+  matchingBarFill: {
+    width: "100%",
+    height: "60%",
+    backgroundColor: "#009849",
+    borderRadius: 2,
+  },
+
+  /* auto redirect */
+  autoRedirect: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  autoRedirectText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6B7280",
+    textAlign: "center",
+  },
 });

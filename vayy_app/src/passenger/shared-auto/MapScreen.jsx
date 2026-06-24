@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
+import MapView from "react-native-maps";
 import AppFrame from "../../../components/AppFrame";
-import MapPlaceholder from "../../../components/MapPlaceholder";
 import RaiseHandButton from "../../../components/RaiseHandButton";
 import StatBar from "../../../components/StatBar";
 import { colors } from "../../../theme/colors";
@@ -11,7 +11,17 @@ export function SharedAutoMapScreen({ navigation }) {
   return (
     <AppFrame navigation={navigation} title="Hazratganj → Charbagh" accent={colors.primary}>
       <View style={styles.mapPage}>
-        <MapPlaceholder accent={colors.primary} vehicle="🛺" />
+        <MapView
+          style={styles.mapBg}
+          initialRegion={{
+            latitude: 26.8467,
+            longitude: 80.9462,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }}
+          scrollEnabled={false}
+          zoomEnabled={false}
+        />
         <View style={styles.mapPill}><Text style={styles.mapPillText}>Route R1 · Civil Lines next</Text></View>
         <View style={styles.mapBottom}>
           <RaiseHandButton accent={colors.primary} />
@@ -32,7 +42,10 @@ export function SharedAutoMapScreen({ navigation }) {
 const styles = StyleSheet.create({
   mapPage: {
     flex: 1,
-    padding: spacing.md,
+    position: "relative",
+  },
+  mapBg: {
+    ...StyleSheet.absoluteFillObject,
   },
   mapPill: {
     position: "absolute",

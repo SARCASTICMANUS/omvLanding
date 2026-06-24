@@ -13,6 +13,7 @@ import { rideBuddy } from "../../data/passengers";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
+import MapView from "react-native-maps";
 import PrimaryButton from "../../shared/components/common/PrimaryButton";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -24,22 +25,23 @@ const ACCENT = "#1D9E75";
 function MapPlaceholder() {
   return (
     <View style={styles.mapContainer}>
+      <MapView
+        style={StyleSheet.absoluteFillObject}
+        initialRegion={{
+          latitude: 26.8467,
+          longitude: 80.9462,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        }}
+        scrollEnabled={false}
+        zoomEnabled={false}
+      />
       {/* VAYY Header overlay — Icons removed */}
       <View style={styles.mapHeader}>
         <View style={styles.mapHeaderLogo}>
           <Text style={styles.mapLogoText}>VAYY</Text>
           <Text style={styles.mapLogoSub}>URBAN MOBILITY</Text>
         </View>
-      </View>
-
-      {/* Map background grid */}
-      <View style={styles.mapGrid} pointerEvents="none">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <View key={`h${i}`} style={[styles.mapGridLine, styles.mapGridLineH, { top: `${i * 20}%` }]} />
-        ))}
-        {Array.from({ length: 6 }).map((_, i) => (
-          <View key={`v${i}`} style={[styles.mapGridLine, styles.mapGridLineV, { left: `${i * 20}%` }]} />
-        ))}
       </View>
 
       {/* Route line: vertical path with stop dots */}
