@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { STORAGE_KEYS } from "../../constants";
 import Svg, { Path, Circle, Rect, Line, Text as SvgText } from "react-native-svg";
 import COLORS from "../../shared/constants/colors";
 
@@ -147,7 +148,7 @@ export default function SplashCarouselScreen({ navigation }) {
 
   const handleDone = async () => {
     try {
-      await AsyncStorage.setItem("@vayy_onboarding_done", "true");
+      await AsyncStorage.setItem(STORAGE_KEYS.onboardingDone, "true");
     } catch {}
     try {
       navigation.replace("AuthNavigator");
@@ -158,7 +159,7 @@ export default function SplashCarouselScreen({ navigation }) {
 
   const handleSkip = async () => {
     try {
-      await AsyncStorage.setItem("@vayy_onboarding_done", "true");
+      await AsyncStorage.setItem(STORAGE_KEYS.onboardingDone, "true");
     } catch {}
     try {
       navigation.replace("AuthNavigator");

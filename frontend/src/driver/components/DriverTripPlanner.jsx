@@ -13,9 +13,10 @@ import {
 } from "lucide-react";
 import { LocationSearch } from "../../components/map";
 import api from "../../lib/api";
+import { API_PATHS } from "../../constants/apiPaths";
 import splashScreen1 from "../../assets/SplashScreen1.png";
 import { hasValidCoords } from "./driverFlowUtils";
-import api from "../../lib/api";
+// import api from "../../lib/api";
 
 const brandGreen = "#009849";
 
@@ -111,7 +112,7 @@ export default function DriverTripPlanner({
 
   useEffect(() => {
     // Fetch recent searches - using passenger endpoint as a known working path
-    api.get("/api/passenger/recent-searches/")
+    api.get(API_PATHS.auth.recentSearches)
       .then(res => {
         setRecentSearches(Array.isArray(res.data) ? res.data : []);
       })

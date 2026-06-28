@@ -27,7 +27,8 @@
     },
     "plugins": [
       "expo-location",
-      "expo-notifications"
+      "expo-notifications",
+      "@maplibre/maplibre-react-native"
     ],
     "extra": {
       "apiUrl": ""

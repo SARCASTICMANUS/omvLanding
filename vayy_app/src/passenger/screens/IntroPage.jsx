@@ -5,12 +5,12 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   ScrollView,
   Image,
 } from "react-native";
-import { useDispatch } from "react-redux";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useDispatch, useSelector } from "react-redux";
 import { setVehicleMode } from "../../store/slices/vehicleModeSlice";
 import Svg, {
   Path,
@@ -124,41 +124,41 @@ const IconBolt = ({ size = 13, color = "#F5A623" }) => (
 );
 
 // ─── Bottom Tab Bar ───────────────────────────────────────────────────────────
-function BottomTabBar({ navigation }) {
-  const tabs = [
-    { label: "Home",     Icon: IconHome,    active: true,  screen: null },
-    { label: "Routes",   Icon: IconRoutes,  active: false, screen: "PassengerRoutes" },
-    { label: "Live Map", Icon: IconMap,     active: false, screen: "PassengerTripPlanner" },
-    { label: "Alerts",   Icon: IconAlert,   active: false, screen: "PassengerAlerts" },
-    { label: "Profile",  Icon: IconProfile, active: false, screen: "ProfileScreen" },
-  ];
+// function BottomTabBar({ navigation }) {
+//   const tabs = [
+//     { label: "Home",     Icon: IconHome,    active: true,  screen: null },
+//     { label: "Routes",   Icon: IconRoutes,  active: false, screen: "PassengerRoutes" },
+//     { label: "Live Map", Icon: IconMap,     active: false, screen: "PassengerTripPlanner" },
+//     { label: "Alerts",   Icon: IconAlert,   active: false, screen: "PassengerAlerts" },
+//     { label: "Profile",  Icon: IconProfile, active: false, screen: "ProfileScreen" },
+//   ];
 
-  return (
-    <View style={styles.tabBar}>
-      {tabs.map((tab) => {
-        return (
-          <TouchableOpacity
-            key={tab.label}
-            style={styles.tabItem}
-            onPress={() => tab.screen && navigation.navigate(tab.screen)}
-            activeOpacity={0.7}
-          >
-            {tab.active ? (
-              <View style={styles.tabActiveIconWrap}>
-                <tab.Icon size={22} color={C.green} />
-              </View>
-            ) : (
-              <tab.Icon size={22} color={C.text3} />
-            )}
-            <Text style={[styles.tabLabel, tab.active && styles.tabLabelActive]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-}
+//   return (
+//     <View style={styles.tabBar}>
+//       {tabs.map((tab) => {
+//         return (
+//           <TouchableOpacity
+//             key={tab.label}
+//             style={styles.tabItem}
+//             onPress={() => tab.screen && navigation.navigate(tab.screen)}
+//             activeOpacity={0.7}
+//           >
+//             {tab.active ? (
+//               <View style={styles.tabActiveIconWrap}>
+//                 <tab.Icon size={22} color={C.green} />
+//               </View>
+//             ) : (
+//               <tab.Icon size={22} color={C.text3} />
+//             )}
+//             <Text style={[styles.tabLabel, tab.active && styles.tabLabelActive]}>
+//               {tab.label}
+//             </Text>
+//           </TouchableOpacity>
+//         );
+//       })}
+//     </View>
+//   );
+// }
 
 // ─── Service Card ─────────────────────────────────────────────────────────────
 function ServiceCard({ title, subtitle, badge, BadgeIcon, onPress, active, vehicleImg }) {
@@ -193,8 +193,10 @@ function ServiceCard({ title, subtitle, badge, BadgeIcon, onPress, active, vehic
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function PassengerHomeScreen({ navigation }) {
   const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
+  const displayName = user?.full_name || user?.name || user?.first_name || "there";
 
-  const [currentLoc, setCurrentLoc] = useState("Gomti Nagar, Lucknow");
+  const [currentLoc, setCurrentLoc] = useState(user?.city || "Current location");
 
   // ── Handlers (original logic preserved) ──
   const handleAutoSearch = () => {
@@ -242,7 +244,7 @@ export default function PassengerHomeScreen({ navigation }) {
               <Image source={require("../../../assets/vayyNamaste.png")} style={styles.namasteIcon} />
               <Text style={styles.heroTitle}>Namaste,</Text>
             </View>
-            <Text style={styles.heroAccent}>Arjun</Text>
+            <Text style={styles.heroAccent}>{displayName}</Text>
           </View>
         </View>
 
@@ -316,7 +318,7 @@ export default function PassengerHomeScreen({ navigation }) {
       </ScrollView>
 
       {/* ════ BOTTOM TAB BAR ════ */}
-      <BottomTabBar navigation={navigation} />
+      {/* <BottomTabBar navigation={navigation} /> */}
     </SafeAreaView>
   );
 }

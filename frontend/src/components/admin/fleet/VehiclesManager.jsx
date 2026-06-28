@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Bus, Plus, Trash2, Edit, X, Save, Loader2 } from "lucide-react";
 import api from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 
 const VehiclesManager = ({ cityId }) => {
   const [vehicles, setVehicles] = useState([]);
@@ -28,9 +29,9 @@ const VehiclesManager = ({ cityId }) => {
     setLoading(true);
     try {
       const [vRes, rRes, dRes] = await Promise.all([
-        api.get(`/api/vehicles/?city=${cityId}`),
-        api.get(`/api/admin/routes/?city=${cityId}`),
-        api.get(`/api/users/?city=${cityId}&role=driver`),
+        api.get(`${API_PATHS.operations.vehicles}?city=${cityId}`),
+        api.get(`${API_PATHS.admin.routes}?city=${cityId}`),
+        api.get(`${API_PATHS.admin.users}?city=${cityId}&role=driver`),
       ]);
       setVehicles(Array.isArray(vRes.data) ? vRes.data : vRes.data.results || []);
       setRoutes(Array.isArray(rRes.data) ? rRes.data : rRes.data.results || []);
@@ -68,9 +69,9 @@ const VehiclesManager = ({ cityId }) => {
     const payload = { ...formData, city: cityId };
     try {
       if (currentVehicle) {
-        await api.put(`/api/vehicles/${currentVehicle.id}/`, payload);
+        await api.put(API_PATHS.operations.vehicleDetail(currentVehicle.id), payload);
       } else {
-        await api.post("/api/vehicles/", payload);
+        await api.post(API_PATHS.operations.vehicles, payload);
       }
       setIsModalOpen(false);
       fetchData();
@@ -83,7 +84,7 @@ const VehiclesManager = ({ cityId }) => {
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this vehicle?")) {
       try {
-        await api.delete(`/api/vehicles/${id}/`);
+        await api.delete(API_PATHS.operations.vehicleDetail(id));
         fetchData();
       } catch (error) {
         console.error("Error deleting vehicle:", error);

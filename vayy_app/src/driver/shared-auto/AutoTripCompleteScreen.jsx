@@ -17,7 +17,19 @@ const { width } = Dimensions.get("window");
 
 export default function AutoTripCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const buddy = route.params?.buddy;
+  const buddy = route.params?.buddy || {};
+  const tripData = route.params?.tripData || {};
+
+  const distanceNum = Number(buddy.distance) || Number(tripData.distance) || 0;
+  const durationNum = Number(buddy.duration) || Number(tripData.duration) || 0;
+  const fare = Number(buddy.fare) || Number(tripData.fare) || 0;
+  const baseFare = Math.round(fare * 0.35);
+  const distanceFare = Math.round(distanceNum * 5);
+  const timeFare = Math.round(durationNum * 2);
+  const rating = buddy.rating || tripData.rating || 0;
+
+  const now = new Date();
+  const timeStr = `${now.toLocaleDateString("en-IN", { weekday: "short" })}, ${now.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`;
 
   return (
     <View style={styles.container}>
@@ -56,7 +68,7 @@ export default function AutoTripCompleteScreen({ navigation, route }) {
             </View>
             <View style={styles.ratingBadge}>
               <Ionicons name="star" size={14} color="#FFB800" />
-              <Text style={styles.ratingText}>4.9</Text>
+              <Text style={styles.ratingText}>{rating || "—"}</Text>
             </View>
           </View>
         </View>
@@ -90,17 +102,17 @@ export default function AutoTripCompleteScreen({ navigation, route }) {
           <View style={styles.tripMeta}>
             <View style={styles.metaItem}>
               <Ionicons name="navigate" size={16} color="#6B7280" />
-              <Text style={styles.metaText}>3.8 km</Text>
+              <Text style={styles.metaText}>{buddy.distance ? `${buddy.distance}` : "—"}</Text>
             </View>
             <View style={styles.metaDot} />
             <View style={styles.metaItem}>
               <Ionicons name="time-outline" size={16} color="#6B7280" />
-              <Text style={styles.metaText}>14 min</Text>
+              <Text style={styles.metaText}>{buddy.duration ? `${buddy.duration}` : "—"}</Text>
             </View>
             <View style={styles.metaDot} />
             <View style={styles.metaItem}>
               <Ionicons name="calendar-outline" size={16} color="#6B7280" />
-              <Text style={styles.metaText}>Today, 4:20 PM</Text>
+              <Text style={styles.metaText}>{timeStr}</Text>
             </View>
           </View>
         </View>
@@ -111,20 +123,20 @@ export default function AutoTripCompleteScreen({ navigation, route }) {
 
           <View style={styles.fareRow}>
             <Text style={styles.fareLabel}>Base Fare</Text>
-            <Text style={styles.fareValue}>₹20</Text>
+            <Text style={styles.fareValue}>₹{baseFare || "—"}</Text>
           </View>
           <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Distance (3.8 km × ₹5/km)</Text>
-            <Text style={styles.fareValue}>₹19</Text>
+            <Text style={styles.fareLabel}>Distance ({distanceNum ? `${distanceNum} km × ₹5/km` : "—"})</Text>
+            <Text style={styles.fareValue}>₹{distanceFare || "—"}</Text>
           </View>
           <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Time (14 min × ₹2/min)</Text>
-            <Text style={styles.fareValue}>₹28</Text>
+            <Text style={styles.fareLabel}>Time ({durationNum ? `${durationNum} min × ₹2/min` : "—"})</Text>
+            <Text style={styles.fareValue}>₹{timeFare || "—"}</Text>
           </View>
           <View style={styles.fareDivider} />
           <View style={styles.fareRow}>
             <Text style={styles.totalLabel}>Total Earned</Text>
-            <Text style={styles.totalValue}>₹67</Text>
+            <Text style={styles.totalValue}>₹{fare || "—"}</Text>
           </View>
         </View>
 
@@ -141,7 +153,7 @@ export default function AutoTripCompleteScreen({ navigation, route }) {
               />
             ))}
           </View>
-          <Text style={styles.feedbackText}>"Smooth ride! Very comfortable auto. Will book again."</Text>
+          <Text style={styles.feedbackText}>"{buddy.feedback || "Thanks for riding!"}"</Text>
           <View style={styles.feedbackAuthor}>
             <Ionicons name="chatbubble-ellipses" size={14} color={COLORS.primary} />
             <Text style={styles.feedbackAuthorText}>— {buddy?.name || "Passenger"}</Text>

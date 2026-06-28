@@ -1,25 +1,25 @@
 import React from "react";
-import { FlatList, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import SPACING from "../../shared/constants/spacing";
 import StopRow from "./StopRow";
 
-export default function StopsTimeline({ stops = [], activeIndex = 0 }) {
+export default function StopsTimeline({ stops = [], activeIndex = 0, dark = false }) {
   return (
-    <FlatList
-      ItemSeparatorComponent={() => <View style={styles.separator} />}
-      data={stops}
-      keyExtractor={(item, index) => String(item?.id || item?.stop_id || index)}
-      renderItem={({ item, index }) => (
-        <StopRow
-          index={index}
-          isActive={index === activeIndex}
-          stop={item}
-          totalStops={stops.length}
-        />
-      )}
-      scrollEnabled={false}
-    />
+    <View>
+      {stops.map((stop, index) => (
+        <View key={stop?.id || stop?.stop_id || index}>
+          {index > 0 && <View style={styles.separator} />}
+          <StopRow
+            dark={dark}
+            index={index}
+            isActive={index === activeIndex}
+            stop={stop}
+            totalStops={stops.length}
+          />
+        </View>
+      ))}
+    </View>
   );
 }
 

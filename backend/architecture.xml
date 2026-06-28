@@ -1,0 +1,87 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Vayy LLD Architecture">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- MOBILE -->
+        <mxCell id="mobile" value="Mobile App (vayy_app)\n- Ride Booking\n- Location Updates\n- Notifications" style="rounded=1;fillColor=#dae8fc;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="200" height="100" as="geometry"/>
+        </mxCell>
+
+        <!-- API -->
+        <mxCell id="api" value="API Gateway / Controllers\n- AuthController\n- RideController\n- LocationController" style="rounded=1;fillColor=#d5e8d4;" vertex="1" parent="1">
+          <mxGeometry x="280" y="300" width="240" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- SERVICES -->
+        <mxCell id="service" value="Service Layer\n- AuthService\n- RideService\n- AutoService\n- BikeService" style="rounded=1;fillColor=#fff2cc;" vertex="1" parent="1">
+          <mxGeometry x="560" y="300" width="240" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- REPOSITORIES -->
+        <mxCell id="repo" value="Repository Layer\n- UserRepo\n- RideRepo\n- AutoRepo\n- BikeRepo\n- LocationRepo" style="rounded=1;fillColor=#f8cecc;" vertex="1" parent="1">
+          <mxGeometry x="840" y="300" width="260" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- DATABASE -->
+        <mxCell id="db" value="Database\nTables:\n- Users\n- Rides\n- Autos\n- Bikes\n- Locations" style="shape=cylinder;fillColor=#e1d5e7;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="300" width="220" height="140" as="geometry"/>
+        </mxCell>
+
+        <!-- RABBITMQ EXCHANGE -->
+        <mxCell id="exchange" value="RabbitMQ Topic Exchange\nrouting keys:\n- auto.location\n- bike.location\n- ride.request" style="ellipse;fillColor=#ffe6cc;" vertex="1" parent="1">
+          <mxGeometry x="550" y="80" width="260" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- QUEUES -->
+        <mxCell id="autoQ" value="Queue: Auto Location" style="rounded=1;fillColor=#d5e8d4;" vertex="1" parent="1">
+          <mxGeometry x="300" y="80" width="200" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="bikeQ" value="Queue: Bike Location" style="rounded=1;fillColor=#d5e8d4;" vertex="1" parent="1">
+          <mxGeometry x="850" y="80" width="200" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rideQ" value="Queue: Ride Requests" style="rounded=1;fillColor=#d5e8d4;" vertex="1" parent="1">
+          <mxGeometry x="550" y="200" width="220" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- CONSUMERS -->
+        <mxCell id="autoConsumer" value="Auto Consumer\n(AutoService)" style="rounded=1;fillColor=#f8cecc;" vertex="1" parent="1">
+          <mxGeometry x="300" y="180" width="200" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="bikeConsumer" value="Bike Consumer\n(BikeService)" style="rounded=1;fillColor=#f8cecc;" vertex="1" parent="1">
+          <mxGeometry x="850" y="180" width="200" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rideConsumer" value="Ride Consumer\n(RideService)" style="rounded=1;fillColor=#f8cecc;" vertex="1" parent="1">
+          <mxGeometry x="550" y="300" width="220" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- EDGES -->
+        <mxCell id="e1" edge="1" source="mobile" target="api" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" edge="1" source="api" target="service" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" edge="1" source="service" target="repo" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" edge="1" source="repo" target="db" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e5" edge="1" source="service" target="exchange" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e6" edge="1" source="exchange" target="autoQ" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" edge="1" source="exchange" target="bikeQ" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" edge="1" source="exchange" target="rideQ" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e9" edge="1" source="autoQ" target="autoConsumer" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" edge="1" source="bikeQ" target="bikeConsumer" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e11" edge="1" source="rideQ" target="rideConsumer" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e12" edge="1" source="autoConsumer" target="repo" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e13" edge="1" source="bikeConsumer" target="repo" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e14" edge="1" source="rideConsumer" target="repo" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

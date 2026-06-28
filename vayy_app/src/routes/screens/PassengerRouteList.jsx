@@ -1,8 +1,4 @@
-// VAYY | src/routes/screens/PassengerRouteList.jsx
-// Matches reference UI exactly — auto-rickshaw route list.
-// All original logic (sort, coords, handlers, state) 100% preserved.
-
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   FlatList,
   Platform,
@@ -73,12 +69,12 @@ function StopDotLine({ pickupLabel, dropLabel, walkText }) {
    SINGLE ROUTE CARD  (driver-style)
 ───────────────────────────────────────────── */
 function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggleExpand, expanded }) {
-  const eta      = formatEtaMinutes(trip?.eta_seconds);
+  // const eta      = formatEtaMinutes(trip?.eta_seconds);
   const fromLbl  = shortPlace(pickup,      trip?.pickup_name      || "Campus Gate");
   const toLbl    = shortPlace(destination, trip?.destination_name || "City Metro");
   const rating   = trip?.rating  || trip?.score        || (4.8 - index * 0.2).toFixed(1);
   const reviews  = trip?.reviews || trip?.review_count || Math.max(90, 320 - index * 70);
-  const fuelType = trip?.fuel_type || trip?.vehicle_type || "CNG";
+  // const fuelType = trip?.fuel_type || trip?.vehicle_type || "CNG";
   const walkMin  = trip?.walk_minutes || (index + 1) * 2;
   const fare     = trip?.fare || trip?.price || (78 + index * 14);
   const payment  = trip?.payment_method || "Cash";
@@ -135,7 +131,7 @@ function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggle
           </View>
           <Text style={s.metricSep}>|</Text>
           <View style={s.metric}>
-            <Ionicons name="time-outline" size={13} color="#6B7280" />
+            <Ionicons name="time-outline" size={13} color="#4a5261" />
             <Text style={s.metricText}>{dur}</Text>
           </View>
         </View>
@@ -146,7 +142,7 @@ function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggle
             onPress={() => onToggleExpand(trip?.id || trip?.trip_id || index)}
           >
             <Text style={s.viewStopsText}>
-              {expanded ? "Hide" : "Stops"}  ›
+              {expanded ?  " Hide " : "Stops ›"}  
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -177,9 +173,7 @@ function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggle
   );
 }
 
-/* ─────────────────────────────────────────────
-   MAIN EXPORT
-───────────────────────────────────────────── */
+/* MAIN EXPORT */
 export default function PassengerRouteList({ navigation, route }) {
   const {
     trips = [],
@@ -193,7 +187,6 @@ export default function PassengerRouteList({ navigation, route }) {
   const accent = "#009849";
   const pickup = initialPickup;
   const destination = initialDestination;
-  const [showAllBuses, setShowAllBuses] = useState(false);
   const [expandedRouteId, setExpandedRouteId] = useState(null);
 
   /* Original sort — untouched */
@@ -208,46 +201,20 @@ export default function PassengerRouteList({ navigation, route }) {
     });
   }, [trips]);
 
-  const bestTrip         = allTrips[0] || null;
+  const bestTrip = allTrips[0] || null;
 
-  /* Original handlers — untouched */
+  /* Handlers */
   const handleContinue = (tripOverride = null) => {
     const trip = tripOverride || bestTrip;
+    console.log("trip :",trip)
     if (!trip) return;
     if (mode === "auto") {
       navigation.navigate("AutoPreRide", { trip, pickup, destination, mode });
     } else if (mode === "bike") {
       navigation.navigate("BikeMapPreRide", { trip, pickup, destination, mode });
-    } else {
-      navigation.navigate("PassengerStopsTimeline", { trip, pickup, destination, mode });
-    }
-  };
-  const handleViewAllBuses = () => {
-    setShowAllBuses(true);
-    navigation.navigate("AllBusesPage", {
-      pickupName: shortPlace(pickup, ""),
-      destName:   shortPlace(destination, ""),
-      mode,
-    });
-  };
-  const handleViewStops = (trip) => {
-    if (mode === "auto") {
-      navigation.navigate("AutoPreRide", { trip, pickup, destination, mode });
-    } else if (mode === "bike") {
-      navigation.navigate("BikeMapPreRide", { trip, pickup, destination, mode });
-    } else {
-      navigation.navigate("PassengerStopsTimeline", { trip, pickup, destination, mode });
     }
   };
   const routeCount = allTrips.length;
-  const hasRedirectedAuto = useRef(false);
-
-  useEffect(() => {
-    if (mode === "auto" && !loading && routeCount > 0 && !hasRedirectedAuto.current) {
-      hasRedirectedAuto.current = true;
-      handleContinue();
-    }
-  }, [mode, loading, routeCount]);
 
   /* FlatList renderItem */
   const renderItem = ({ item, index }) => (
@@ -265,13 +232,6 @@ export default function PassengerRouteList({ navigation, route }) {
 
   return (
     <SafeAreaView edges={["top"]} style={s.safe}>
-
-      {mode === "auto" ? (
-        <View style={s.autoRedirect}>
-          <Text style={s.autoRedirectText}>Finding autos on your route...</Text>
-        </View>
-      ) : (
-        <>
 
       {/* ── HEADER ── */}
       <View style={s.header}>
@@ -301,7 +261,7 @@ export default function PassengerRouteList({ navigation, route }) {
             )}
             {loading && (
               <View style={s.stateCard}>
-                <Text style={s.stateText}>Finding best autos...</Text>
+                <Text style={s.stateText}>{isBike ? "Finding best bikes..." : "Finding best autos..."}</Text>
               </View>
             )}
             {!loading && routeCount === 0 && (
@@ -311,15 +271,6 @@ export default function PassengerRouteList({ navigation, route }) {
             )}
           </>
         )}
-        ListFooterComponent={() =>
-          routeCount > 1 ? (
-            <TouchableOpacity onPress={handleViewAllBuses} style={s.allBtn}>
-              <Text style={s.allBtnText}>
-                {showAllBuses ? "Showing all" : "View all autos"}
-              </Text>
-            </TouchableOpacity>
-          ) : null
-        }
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
       />
@@ -330,7 +281,7 @@ export default function PassengerRouteList({ navigation, route }) {
           <View style={s.matchingBannerContent}>
             <Text style={s.matchingIcon}>🔍</Text>
             <View style={{ flex: 1 }}>
-              <Text style={s.matchingTitle}>Auto found on your route</Text>
+              <Text style={s.matchingTitle}>{isBike ? "Bike found" : "Auto found"} on your route</Text>
               <Text style={s.matchingSub}>Select a route or wait for best match</Text>
             </View>
             <View style={s.matchingBarSmall}>
@@ -338,9 +289,6 @@ export default function PassengerRouteList({ navigation, route }) {
             </View>
           </View>
         </View>
-      )}
-
-        </>
       )}
 
     </SafeAreaView>
@@ -690,17 +638,4 @@ const s = StyleSheet.create({
     borderRadius: 2,
   },
 
-  /* auto redirect */
-  autoRedirect: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 32,
-  },
-  autoRedirectText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#6B7280",
-    textAlign: "center",
-  },
 });

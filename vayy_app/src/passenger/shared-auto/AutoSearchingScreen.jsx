@@ -9,56 +9,125 @@ import {
   Animated,
   Easing,
   Platform,
+  ActivityIndicator,
 } from "react-native";
-import MapView from "react-native-maps";
+import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useDispatch, useSelector } from "react-redux";
 import {
   Ionicons,
   MaterialIcons,
 } from "@expo/vector-icons";
 import { ConfirmPopup } from "../bike-ride/ConfirmPopup";
 import { NoRideFoundPopup } from "../bike-ride/NoRideFoundPopup";
+import { requestDispatch, setDispatchStatus } from "../../store/slices/dispatchSlice";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import { WS } from "../../constants";
+import { cancelBoardingRequest, getNearbyVehicles } from "../services/passengerService";
 
-const { width } = Dimensions.get("window");
+// const { width } = Dimensions.get("window");
 
-export function AutoSearchingScreen({ navigation }) {
+export function AutoSearchingScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const dispatch = useDispatch();
+  const { activeDispatch, status: dispatchStatus } = useSelector((state) => state.dispatch);
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(1)).current;
   const [showNoRide, setShowNoRide] = useState(false);
   const [showBoardConfirm, setShowBoardConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [searchStatus, setSearchStatus] = useState("searching");
+  const [handRaised, setHandRaised] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
+  const [nearbyCount, setNearbyCount] = useState(null);
   const timerRef = useRef(null);
   const mapRef = useRef(null);
+  const cameraRef = useRef(null);
+  const didFitRef = useRef(false);
 
-  const zoomIn = () => {
-    mapRef.current?.animateCamera({ zoom: 16 });
-  };
+  const { route_id, pickup_stop_id, trip, pickup, destination, boardingRequestId } = route?.params || {};
+  const dispatchId = activeDispatch?.id || activeDispatch?.dispatch_id;
 
-  const zoomOut = () => {
-    mapRef.current?.animateCamera({ zoom: 12 });
-  };
+  const pickupStop = trip?.pickup_stop || {};
+  const pickupName = pickupStop?.name || pickup?.name || pickup?.display_name || "the stop";
+
+  const pickupLat = typeof pickupStop?.lat === "number" ? pickupStop.lat : typeof pickupStop?.latitude === "number" ? pickupStop.latitude : null;
+  const pickupLon = typeof pickupStop?.lon === "number" ? pickupStop.lon : typeof pickupStop?.longitude === "number" ? pickupStop.longitude : null;
+
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
+
+  useEffect(() => {
+    if (didFitRef.current) return;
+    const tryFit = (attempt) => {
+      if (didFitRef.current) return;
+      if (!cameraRef.current) {
+        if (attempt < 10) setTimeout(() => tryFit(attempt + 1), 200);
+        return;
+      }
+      didFitRef.current = true;
+      if (pickupLat != null && pickupLon != null) {
+        cameraRef.current.setStop({ center: [pickupLon, pickupLat], zoom: 15, duration: 500 });
+      } else {
+        cameraRef.current.setStop({ center: [80.9462, 26.8467], zoom: 13, duration: 500 });
+      }
+    };
+    tryFit(0);
+  }, [pickupLat, pickupLon]);
+
+  const handleWsMessage = useCallback((data) => {
+    if (data.type === "dispatch_accepted") {
+      dispatch(setDispatchStatus("accepted"));
+    } else if (data.type === "dispatch_rejected") {
+      dispatch(setDispatchStatus("failed"));
+    }
+  }, [dispatch]);
+
+  useWebSocket(dispatchId ? WS.dispatch(dispatchId) : null, {
+    enabled: !!dispatchId && dispatchStatus === "requested",
+    onMessage: handleWsMessage,
+  });
 
   const startSearch = useCallback(() => {
     setShowNoRide(false);
     setSearchStatus("searching");
-    timerRef.current = setTimeout(() => {
-      setShowNoRide(true);
-      setSearchStatus("failed");
-    }, 4000);
-  }, []);
+
+    if (route_id && pickup_stop_id) {
+      dispatch(requestDispatch({ route_id, pickup_stop_id, mode: "auto" }));
+    } else {
+      timerRef.current = setTimeout(() => {
+        setShowNoRide(true);
+        setSearchStatus("failed");
+      }, 4000);
+    }
+  }, [route_id, pickup_stop_id, dispatch]);
 
   function handleTryAgain() {
     setShowNoRide(false);
     setSearchStatus("searching");
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
+
+    if (route_id && pickup_stop_id) {
+      dispatch(requestDispatch({ route_id, pickup_stop_id, mode: "auto" }));
+    } else {
+      timerRef.current = setTimeout(() => {
+        setSearchStatus("found");
+        setShowBoardConfirm(true);
+      }, 4000);
+    }
+  }
+
+  useEffect(() => {
+    if (dispatchStatus === "requested" || dispatchStatus === "accepted") {
       setSearchStatus("found");
       setShowBoardConfirm(true);
-    }, 4000);
-  }
+    }
+    if (dispatchStatus === "failed") {
+      setShowNoRide(true);
+      setSearchStatus("failed");
+    }
+  }, [dispatchStatus]);
 
   useEffect(() => {
     Animated.loop(
@@ -85,24 +154,60 @@ export function AutoSearchingScreen({ navigation }) {
     };
   }, [startSearch, scaleAnim, opacityAnim]);
 
+  // Fetch nearby vehicles count once on mount
+  useEffect(() => {
+    if (pickupLat == null || pickupLon == null) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const vehicles = await getNearbyVehicles(pickupLat, pickupLon, "auto", 2000);
+        if (!cancelled) setNearbyCount(vehicles.length);
+      } catch {
+        if (!cancelled) setNearbyCount(0);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [pickupLat, pickupLon]);
+
+  const handleLowerHand = useCallback(async () => {
+    if (!boardingRequestId || cancelling) return;
+    setCancelling(true);
+    try {
+      await cancelBoardingRequest(boardingRequestId);
+      setHandRaised(false);
+      navigation.goBack();
+    } catch (error) {
+      console.error("Failed to cancel boarding request:", error);
+      setHandRaised(false);
+      navigation.goBack();
+    }
+  }, [boardingRequestId, cancelling, navigation]);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <View style={styles.mapArea}>
-        <MapView
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
-          initialRegion={{
-            latitude: 26.8467,
-            longitude: 80.9462,
-            latitudeDelta: 0.02,
-            longitudeDelta: 0.02,
-          }}
+          cameraRef={cameraRef}
           scrollEnabled={true}
           zoomEnabled={true}
-          zoomControlEnabled={true}
-        />
+          initialViewState={
+            pickupLat != null && pickupLon != null
+              ? { center: [pickupLon, pickupLat], zoom: 15 }
+              : { center: [80.9462, 26.8467], zoom: 13 }
+          }
+        >
+          {pickupLat != null && pickupLon != null && (
+            <ViewAnnotation key={`pickup`} lngLat={[pickupLon, pickupLat]} anchor="center">
+              <View style={styles.userDot}>
+                <Ionicons name="person" size={20} color="#FFFFFF" />
+              </View>
+            </ViewAnnotation>
+          )}
+        </VayyMap>
 
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
@@ -126,7 +231,7 @@ export function AutoSearchingScreen({ navigation }) {
               },
             ]}
           />
-          <View style={styles.userDot}>
+          <View style={styles.userDotPulse}>
             <Ionicons name="person" size={20} color="#FFFFFF" />
           </View>
         </View>
@@ -148,12 +253,18 @@ export function AutoSearchingScreen({ navigation }) {
         <View style={styles.availabilityRow}>
           <View style={styles.availItem}>
             <Ionicons name="car" size={18} color="#009849" />
-            <Text style={styles.availText}><Text style={styles.availBold}>3</Text> autos nearby</Text>
+            <Text style={styles.availText}>
+              <Text style={styles.availBold}>{nearbyCount != null ? nearbyCount : "—"}</Text> autos nearby
+            </Text>
           </View>
           <View style={styles.availDivider} />
           <View style={styles.availItem}>
             <Ionicons name="time-outline" size={18} color="#009849" />
-            <Text style={styles.availText}><Text style={styles.availBold}>~4 min</Text> avg. wait</Text>
+            <Text style={styles.availText}>
+              <Text style={styles.availBold}>
+                {nearbyCount != null ? `~${Math.max(1, Math.round(15 / Math.max(nearbyCount, 1)))} min` : "—"}
+              </Text> avg. wait
+            </Text>
           </View>
         </View>
 
@@ -177,9 +288,25 @@ export function AutoSearchingScreen({ navigation }) {
             <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
             <Text style={styles.foundBtnText}>  Auto Found! Tap to board</Text>
           </TouchableOpacity>
+        ) : handRaised ? (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.lowerHandBtn}
+            onPress={handleLowerHand}
+            disabled={cancelling}
+          >
+            {cancelling ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Ionicons name="hand-left" size={22} color="#FFFFFF" />
+            )}
+            <Text style={styles.lowerHandText}>
+              {cancelling ? "Lowering..." : "  Lower Hand"}
+            </Text>
+          </TouchableOpacity>
         ) : (
           <TouchableOpacity activeOpacity={1} style={styles.raisedBtn} disabled>
-            <Text style={styles.raisedText}>✋  Hand Raised</Text>
+            <Text style={styles.raisedText}>✋  Hand Lowered</Text>
           </TouchableOpacity>
         )}
 
@@ -197,12 +324,12 @@ export function AutoSearchingScreen({ navigation }) {
       <ConfirmPopup
         visible={showBoardConfirm}
         title="Boarded the Auto?"
-        message="Confirm if you've boarded the auto at Hazratganj Metro Gate 2. Your ride will start."
+        message={`Confirm if you've boarded the auto at ${pickupName}. Your ride will start.`}
         confirmLabel="Yes, I'm on board"
         icon="checkmark-circle-outline"
         onConfirm={() => {
           setShowBoardConfirm(false);
-          navigation.navigate('AutoRideComplete');
+          navigation.navigate('AutoRideComplete', { trip, pickup, destination, boardingRequestId });
         }}
         onCancel={() => setShowBoardConfirm(false)}
       />
@@ -210,13 +337,13 @@ export function AutoSearchingScreen({ navigation }) {
       <ConfirmPopup
         visible={showCancelConfirm}
         title="Cancel Request?"
-        message="Your hand raise request will be cancelled."
+        message="Your hand raise request will be cancelled and the driver will be notified."
         confirmLabel="Yes, Cancel"
         confirmColor="#EF4444"
         icon="close-circle-outline"
         onConfirm={() => {
           setShowCancelConfirm(false);
-          navigation.goBack();
+          handleLowerHand();
         }}
         onCancel={() => setShowCancelConfirm(false)}
       />
@@ -290,6 +417,20 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 152, 73, 0.1)",
   },
   userDot: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#009849",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
+    borderWidth: 4,
+    borderColor: "#FFFFFF",
+  },
+  userDotPulse: {
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -395,6 +536,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   raisedText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  lowerHandBtn: {
+    height: 60,
+    borderRadius: 20,
+    backgroundColor: "#F59E0B",
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#F59E0B",
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  lowerHandText: {
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "800",

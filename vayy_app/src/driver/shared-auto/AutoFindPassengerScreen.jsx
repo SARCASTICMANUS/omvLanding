@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
-import MapView from "react-native-maps";
+import VayyMap from "../../shared/components/VayyMap";
 
 const { width, height } = Dimensions.get("window");
 
@@ -171,7 +171,7 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
 
       {/* Map area */}
       <View style={styles.mapArea}>
-        <MapView
+        <VayyMap
           style={styles.mapBg}
           initialRegion={{
             latitude: 26.8467,

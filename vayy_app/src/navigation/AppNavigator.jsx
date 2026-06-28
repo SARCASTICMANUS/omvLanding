@@ -9,11 +9,9 @@ import AuthNavigator from "./AuthNavigator";
 import DriverNavigator from "./DriverNavigator";
 import PassengerNavigator from "./PassengerNavigator";
 import SplashCarouselScreen from "../passenger/splash/SplashCarouselScreen";
+import { DRIVER_ROLES, STORAGE_KEYS } from "../constants";
 
 const Stack = createStackNavigator();
-
-const passengerRoles = ["passenger", "student"];
-const driverRoles = ["driver"];
 
 export default function AppNavigator() {
   const dispatch = useDispatch();
@@ -22,7 +20,7 @@ export default function AppNavigator() {
 
   useEffect(() => {
     dispatch(restoreAuthFromStorage());
-    AsyncStorage.getItem("@vayy_onboarding_done").then((val) => {
+    AsyncStorage.getItem(STORAGE_KEYS.onboardingDone).then((val) => {
       setOnboardingDone(val === "true");
     });
   }, [dispatch]);
@@ -30,28 +28,27 @@ export default function AppNavigator() {
   if (onboardingDone === null) return null;
 
   const role = user?.role;
-  const isDriver = driverRoles.includes(role);
+  const isDriver = DRIVER_ROLES.includes(role);
 
   let initialRoute;
-  if (!onboardingDone) {
+  if (isAuthenticated) {
+    initialRoute = isDriver ? "DriverNavigator" : "PassengerNavigator";
+  } else if (!onboardingDone) {
     initialRoute = "SplashCarousel";
-  } else if (!isAuthenticated) {
-    initialRoute = "AuthNavigator";
-  } else if (isDriver) {
-    initialRoute = "DriverNavigator";
   } else {
-    initialRoute = "PassengerNavigator";
+    initialRoute = "AuthNavigator";
   }
 
   const tag = onboardingDone ? "onboarded" : "new";
   const authTag = isAuthenticated ? (isDriver ? "driver" : "passenger") : "guest";
 
+  const navKey = `${tag}_${authTag}`;
+
   return (
-    <NavigationContainer>
+    <NavigationContainer key={navKey}>
       <Stack.Navigator
-        key={`${tag}_${authTag}`}
-        screenOptions={{ headerShown: false }}
         initialRouteName={initialRoute}
+        screenOptions={{ headerShown: false }}
       >
         <Stack.Screen name="SplashCarousel" component={SplashCarouselScreen} />
         <Stack.Screen name="AuthNavigator" component={AuthNavigator} />

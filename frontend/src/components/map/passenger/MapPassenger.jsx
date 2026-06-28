@@ -5,6 +5,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import api, { getWsUrl } from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 import { Navigation, Clock, Bus, RefreshCw, MapPin, Hand, Search, ArrowRight } from "lucide-react";
 import Header from "../../layout/Header";
 import LocationSearch from "../LocationSearch";
@@ -293,15 +294,21 @@ const MapPassenger = () => {
     try {
       setLoading(true);
       // Use the public passenger dashboard — returns nearby active trips, no assignment required
-      const res = await api.get("/api/passenger/dashboard/");
+      const res = await api.get(API_PATHS.operations.trips);
       // Populate initial buses from REST so map is populated even before WS connects
+      const tripData = res.data;
+      const tripsList = Array.isArray(tripData) ? tripData
+        : Array.isArray(tripData?.results) ? tripData.results
+        : Array.isArray(tripData?.active_trips) ? tripData.active_trips
+        : Array.isArray(tripData?.data) ? tripData.data
+        : [];
       const initialBuses = {};
-      (res.data.active_trips || []).forEach((trip) => {
-        initialBuses[trip.trip_id] = {
+      tripsList.forEach((trip) => {
+        initialBuses[trip.id || trip.trip_id] = {
           pos: null, // position comes from WS
-          bus_number: trip.bus_number,
-          route_name: trip.route_name,
-          route_id: trip.trip_id,
+          bus_number: trip.bus_number || trip.vehicle_number,
+          route_name: trip.route_name || trip.route?.name,
+          route_id: trip.id || trip.trip_id,
           next_stop_eta: [],
           stops: trip.stops, // Include stops for distance calculation
         };
@@ -409,11 +416,17 @@ const MapPassenger = () => {
     if (!pickup || !destination) return;
     setIsSearching(true);
     try {
-      const res = await api.post("/api/passenger/filtered-trips/", {
-        pickup: { lat: pickup.lat, lon: pickup.lon },
-        destination: { lat: destination.lat, lon: destination.lon },
+      const res = await api.get(API_PATHS.transport.routeSearchByLocation, {
+        params: {
+          origin_lat: pickup.lat,
+          origin_lng: pickup.lon,
+          dest_lat: destination.lat,
+          dest_lng: destination.lon,
+        },
       });
-      setFilteredTrips(res.data);
+      const raw = res.data;
+      const trips = Array.isArray(raw) ? raw : (raw?.data || raw?.results || []);
+      setFilteredTrips(trips);
     } catch (err) {
       console.error("Failed to filter trips", err);
     } finally {
@@ -429,7 +442,7 @@ const MapPassenger = () => {
 
     try {
       const res = await api.get(
-        `/api/passenger/nearby-stops/?lat=${location.lat}&lon=${location.lon}&radius_m=3000`,
+        `${API_PATHS.transport.nearbyStops}?lat=${location.lat}&lng=${location.lon}&radius=3000`,
       );
       const stops = Array.isArray(res.data) ? res.data : [];
       const anchor = myPos || location;

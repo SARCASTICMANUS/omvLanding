@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { User as UserIcon, Plus, Trash2, Edit, X, Save, Loader2, Search, MapPin } from "lucide-react";
 import api from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 
 const PassengersManager = ({ cityId }) => {
     const [passengers, setPassengers] = useState([]);
@@ -26,7 +27,7 @@ const PassengersManager = ({ cityId }) => {
         }
         setLoading(true);
         try {
-            const res = await api.get(`/api/users/?city=${cityId}&role=passenger`);
+            const res = await api.get(`${API_PATHS.admin.users}?city=${cityId}&role=passenger`);
             const data = Array.isArray(res.data) ? res.data : res.data.results || [];
             setPassengers(data);
         } catch (error) {
@@ -66,12 +67,12 @@ const PassengersManager = ({ cityId }) => {
         e.preventDefault();
         try {
             if (currentPassenger) {
-                await api.patch(`/api/users/${currentPassenger.id}/`, {
+                await api.patch(API_PATHS.admin.userDetail(currentPassenger.id), {
                     first_name: formData.first_name,
                     last_name: formData.last_name,
                 });
             } else {
-                await api.post("/api/auth/register/", {
+                await api.post(API_PATHS.auth.register, {
                     email: formData.email,
                     password: "ChangeMe123!",
                     role: "passenger",
@@ -92,7 +93,7 @@ const PassengersManager = ({ cityId }) => {
     const handleDelete = async (id) => {
         if (window.confirm("Are you sure? This removes the passenger account.")) {
             try {
-                await api.delete(`/api/users/${id}/`);
+                await api.delete(API_PATHS.admin.userDetail(id));
                 fetchData();
             } catch (error) {
                 console.error("Error deleting passenger:", error);

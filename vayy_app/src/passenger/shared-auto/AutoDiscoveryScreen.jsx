@@ -8,7 +8,7 @@ import {
   Platform,
   Animated,
 } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,6 +24,7 @@ const MOCK_AUTOS = [
 export function AutoDiscoveryScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
+  const cameraRef = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const [approachingAutos] = useState(MOCK_AUTOS);
   const [nearestDist, setNearestDist] = useState(MOCK_AUTOS[0].distance);
@@ -58,13 +59,8 @@ export function AutoDiscoveryScreen({ navigation }) {
     return () => clearInterval(interval);
   }, []);
 
-  const zoomIn = () => {
-    mapRef.current?.animateCamera({ zoom: 16 });
-  };
-
-  const zoomOut = () => {
-    mapRef.current?.animateCamera({ zoom: 12 });
-  };
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
 
   const handleBoardConfirm = () => {
     setShowBoardConfirm(false);
@@ -81,9 +77,10 @@ export function AutoDiscoveryScreen({ navigation }) {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <View style={styles.mapArea}>
-        <MapView
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
+          cameraRef={cameraRef}
           initialRegion={{
             latitude: 26.8467,
             longitude: 80.9462,
@@ -92,16 +89,14 @@ export function AutoDiscoveryScreen({ navigation }) {
           }}
           scrollEnabled={true}
           zoomEnabled={true}
-          zoomControlEnabled={true}
         >
           {approachingAutos.map((auto, i) => {
             const isNearest = i === 0;
             return (
-              <Marker
+              <ViewAnnotation
                 key={auto.autoId}
-                coordinate={{ latitude: auto.lat, longitude: auto.lng }}
-                title={auto.vehicleNumber}
-                description={isNearest ? `${nearestDist}m away • Nearest` : `${auto.distance}m away`}
+                id={`auto-${auto.autoId}`}
+                lngLat={[auto.lng, auto.lat]}
               >
                 <Animated.View
                   style={[
@@ -119,10 +114,10 @@ export function AutoDiscoveryScreen({ navigation }) {
                 >
                   <Text style={{ fontSize: isNearest ? 20 : 16 }}>🛺</Text>
                 </Animated.View>
-              </Marker>
+              </ViewAnnotation>
             );
           })}
-        </MapView>
+        </VayyMap>
 
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />

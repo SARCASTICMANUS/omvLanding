@@ -27,7 +27,7 @@ export default function DriverTripReview({ navigation, route: navRoute }) {
 
     setStarting(true);
     try {
-      const response = await api.post("/api/driver/start-trip/", {
+      const response = await api.post("/api/operations/trips/start/", {
         route_id: String(route.id || route.route_id),
       });
       navigation.navigate("DriverLiveTracking", { route, activeTrip: response.data });

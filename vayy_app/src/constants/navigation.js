@@ -1,0 +1,58 @@
+export const SCREEN = {
+  SplashCarousel: "SplashCarousel",
+  AuthNavigator: "AuthNavigator",
+  DriverNavigator: "DriverNavigator",
+  PassengerNavigator: "PassengerNavigator",
+
+  LoginPage: "LoginPage",
+  RegisterPage: "RegisterPage",
+  OtpVerification: "OtpVerification",
+  PasswordReset: "PasswordReset",
+
+  PassengerHome: "PassengerHome",
+  PassengerTripPlanner: "PassengerTripPlanner",
+  PassengerRouteList: "PassengerRouteList",
+  PassengerLiveTracking: "PassengerLiveTracking",
+  PassengerRoutes: "PassengerRoutes",
+  DestinationSearch: "DestinationSearch",
+
+  BikeMapPreRide: "BikeMapPreRide",
+  BikeRideHome: "BikeRideHome",
+  BikeRideToPickup: "BikeRideToPickup",
+  BikeRideToDestination: "BikeRideToDestination",
+  BikeSearching: "BikeSearching",
+  BikeOTPEntry: "BikeOTPEntry",
+  BikeTracking: "BikeTracking",
+  BikeTripComplete: "BikeTripComplete",
+  RiderArriving: "RiderArriving",
+  RiderPopup: "RiderPopup",
+  RideStats: "RideStats",
+  RideComplete: "RideComplete",
+
+  AutoPreRide: "AutoPreRide",
+  AutoDiscovery: "AutoDiscovery",
+  AutoSearching: "AutoSearching",
+  AutoRideToPickup: "AutoRideToPickup",
+  AutoRideToDestination: "AutoRideToDestination",
+  AutoRideActive: "AutoRideActive",
+  AutoRideComplete: "AutoRideComplete",
+  AutoTripComplete: "AutoTripComplete",
+  AutoFindPassenger: "AutoFindPassenger",
+  AutoAheadAlert: "AutoAheadAlert",
+  AutoBoardedPopup: "AutoBoardedPopup",
+  AutoLiveTracking: "AutoLiveTracking",
+  SharedAutoMap: "SharedAutoMap",
+
+  DriverHome: "DriverHome",
+  DriverModeSelect: "DriverModeSelect",
+  DriverBikeHome: "DriverBikeHome",
+  DriverAutoHome: "DriverAutoHome",
+  DriverRoutes: "DriverRoutes",
+  DriverTripReview: "DriverTripReview",
+  DriverLiveTracking: "DriverLiveTracking",
+
+  EditProfile: "EditProfile",
+  TripEndSummary: "TripEndSummary",
+};
+
+export default SCREEN;

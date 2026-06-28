@@ -10,7 +10,7 @@ import {
   Modal,
   Linking,
 } from "react-native";
-import MapView from "react-native-maps";
+import VayyMap from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -25,18 +25,22 @@ import { ConfirmPopup } from "./ConfirmPopup";
 const { width } = Dimensions.get("window");
 const DESTINATION_THRESHOLD = 100;
 
-export function RideStatsScreen({ navigation }) {
+export function RideStatsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const [speed, setSpeed] = useState(24);
   const [remainingDistance, setRemainingDistance] = useState(800);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const destination = route?.params?.destination || "Charbagh Metro Gate 2";
+  const eta = route?.params?.eta || "4";
+  const distanceLeft = route?.params?.distance || "800";
   const [endRideCase, setEndRideCase] = useState("arrived");
   const [showShareModal, setShowShareModal] = useState(false);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const mapRef = useRef(null);
+  const cameraRef = useRef(null);
 
-  const zoomIn = () => mapRef.current?.animateCamera({ zoom: 16 });
-  const zoomOut = () => mapRef.current?.animateCamera({ zoom: 12 });
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -77,9 +81,10 @@ export function RideStatsScreen({ navigation }) {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <View style={styles.mapArea}>
-        <MapView
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
+          cameraRef={cameraRef}
           initialRegion={{
             latitude: 26.8467,
             longitude: 80.9462,
@@ -117,7 +122,7 @@ export function RideStatsScreen({ navigation }) {
 
         <View style={styles.poiLabel}>
           <Ionicons name="train-outline" size={14} color="#60A5FA" />
-          <Text style={styles.poiText}>Charbagh</Text>
+          <Text style={styles.poiText}>{destination}</Text>
         </View>
 
         <View style={styles.destLabel}>
@@ -135,8 +140,8 @@ export function RideStatsScreen({ navigation }) {
         </View>
 
         <View style={styles.distanceCallout}>
-          <Text style={styles.distanceCalloutValue}>{destinationLabel}</Text>
-          <Text style={styles.distanceCalloutLabel}>to destination</Text>
+          <Text style={styles.distanceCalloutValue}>{distanceLeft} m</Text>
+          <Text style={styles.distanceCalloutLabel}>away</Text>
           <View style={styles.calloutArrow} />
         </View>
 
@@ -170,7 +175,7 @@ export function RideStatsScreen({ navigation }) {
             <Ionicons name="location" size={24} color="#009849" />
             <Text style={styles.statLabel}>Pickup Stop</Text>
             <Text style={styles.statMainBold}>
-              Charbagh Metro{"\n"}Gate 2
+            {destination}
             </Text>
           </View>
 
@@ -179,7 +184,7 @@ export function RideStatsScreen({ navigation }) {
           <View style={styles.statCol}>
             <Ionicons name="time-outline" size={24} color="#009849" />
             <Text style={styles.statLabel}>ETA</Text>
-            <Text style={styles.statValueGreen}>{etaMinutes} <Text style={styles.smallUnit}>min</Text></Text>
+            <Text style={styles.statValueGreen}>{eta} <Text style={styles.smallUnit}>min</Text></Text>
           </View>
 
           <View style={styles.statDivider} />
@@ -187,7 +192,7 @@ export function RideStatsScreen({ navigation }) {
           <View style={styles.statCol}>
             <Ionicons name="share-social-outline" size={24} color="#009849" />
             <Text style={styles.statLabel}>Distance</Text>
-            <Text style={styles.statValueGreen}>{destinationLabel}</Text>
+            <Text style={styles.statValueGreen}>{distanceLeft} <Text style={styles.smallUnit}>m</Text></Text>
           </View>
 
           <View style={styles.statDivider} />
@@ -202,7 +207,7 @@ export function RideStatsScreen({ navigation }) {
         <View style={styles.remainingRow}>
           <Ionicons name="location" size={16} color="#009849" />
           <Text style={styles.remainingLabel}>Arriving at destination in</Text>
-          <Text style={styles.remainingValue}>{etaMinutes} min</Text>
+          <Text style={styles.remainingValue}>{eta} min</Text>
         </View>
 
         <TouchableOpacity

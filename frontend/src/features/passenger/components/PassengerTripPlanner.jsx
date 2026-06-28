@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { LocationSearch } from "../../../components/map";
 import api from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 import splashScreen1 from "../../../assets/SplashScreen1.png";
 
 const brandGreen = "#079f4f";
@@ -110,7 +111,7 @@ export default function PassengerTripPlanner({
 
   useEffect(() => {
     // Fetch recent searches
-    api.get("/api/passenger/recent-searches/")
+    api.get(API_PATHS.auth.recentSearches)
       .then(res => {
         setRecentSearches(Array.isArray(res.data) ? res.data : []);
       })
@@ -172,7 +173,7 @@ export default function PassengerTripPlanner({
               placeholder="Search pickup location "
               onSelect={setPickup}
               
-              icon={MapPin}r
+              icon={MapPin}
             />
 
             <div className="relative my-[24px]  flex items-center justify-center">
@@ -198,7 +199,7 @@ export default function PassengerTripPlanner({
               type="button"
               onClick={handleNext}
               disabled={!canProceed || loading}
-              className="mt-[30px] flex h-[64px] sm:h-[56px] w-full items-center justify-center gap-4 rounded-[14px] bg-[#079f4f] text-[18px] sm:text-[16px] font-bold text-white transition hover:bg-[#068a44] shadow-lg shadow-[#079f4f]/20 disabled:opacity-50"
+              className="mt-[30px] flex h-[64px] sm:h-[56px] w-full items-center justify-center gap-4 rounded-[14px] bg-[#079f4f] text-[18px] sm:text-[16px] font-bold text-white transition-all duration-300 hover:bg-[#068a44] shadow-lg shadow-[#079f4f]/20 disabled:opacity-50 disabled:pointer-events-none"
             >
               <Search size={22} strokeWidth={2.5} />
               {loading ? "Searching..." : "Search Vayy Rides"}

@@ -7,6 +7,7 @@ import BikeSearchingScreen from "../driver/bike-ride/BikeSearchingScreen";
 import FromToScreen from "../shared/screens/FromToScreen";
 import DriverLoginScreen from "../driver/screens/DriverLoginScreen";
 import BikeOTPHandshakeScreen from "../driver/bike-ride/BikeOTPHandshakeScreen";
+import BikeTrackingScreen from "../driver/bike-ride/BikeTrackingScreen";
 import AutoLiveTrackingScreen from "../driver/shared-auto/AutoLiveTrackingScreen";
 import DriverTripHistoryScreen from "../driver/screens/DriverTripHistoryScreen";
 
@@ -25,6 +26,7 @@ export default function BikeDriverNavigator() {
       <Stack.Screen name="FindRideBuddy" component={BikeSearchingScreen} />
       <Stack.Screen name="BuddyRequestPopup" component={BikeBookingScreen} />
       <Stack.Screen name="OTPHandshake" component={BikeOTPHandshakeScreen} />
+      <Stack.Screen name="BikeTracking" component={BikeTrackingScreen} />
       <Stack.Screen name="BikeRideActive">
         {(props) => <AutoLiveTrackingScreen {...props} mode="bike" />}
       </Stack.Screen>

@@ -1,24 +1,20 @@
-import React, { lazy, Suspense } from "react";
-import { Text, View, ActivityIndicator } from "react-native";
+import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 
 import COLORS from "../shared/constants/colors";
-import AllBusesPage from "../routes/screens/AllBusesPage";
 import IntroPage from "../passenger/screens/IntroPage";
 import MyRoutesScreen from "../passenger/screens/MyRoutesScreen";
 import PassengerRouteList from "../routes/screens/PassengerRouteList";
 import PassengerLiveTracking from "../tracking/screens/PassengerLiveTracking";
-import PassengerStopsTimeline from "../routes/screens/PassengerStopsTimeline";
 import PassengerTripPlanner from "../passenger/screens/PassengerTripPlanner";
 import ProfileScreen from "../shared/screens/ProfileScreen";
+import EditProfileScreen from "../shared/screens/EditProfileScreen";
 import PassengerAlertsScreen from "../handshake/screens/PassengerAlertsScreen";
 import PassengerActionsScreen from "../passenger/screens/PassengerActionsScreen";
 import JourneyHistoryScreen from "../passenger/screens/JourneyHistoryScreen";
 import DestinationSearchScreen from "../passenger/screens/DestinationSearchScreen";
-import SplashCarouselScreen from "../passenger/splash/SplashCarouselScreen";
-const DeveloperNavigator = lazy(() => import("../screens/Developer/DeveloperNavigator"));
-import { Home, Map, Navigation, Bell, User, Settings } from "lucide-react-native";
+import { Home, Map, Navigation, Bell, User } from "lucide-react-native";
 
 // Bike Flow Screens
 import { BikeMapPreRideScreen } from "../passenger/bike-ride/MapPreRideScreen";
@@ -34,6 +30,7 @@ import { AutoSearchingScreen } from "../passenger/shared-auto/AutoSearchingScree
 import { AutoDiscoveryScreen } from "../passenger/shared-auto/AutoDiscoveryScreen";
 import { AutoRideActiveScreen } from "../passenger/shared-auto/AutoRideActiveScreen";
 import { AutoRideCompleteScreen } from "../passenger/shared-auto/AutoRideCompleteScreen";
+import { SharedAutoMapScreen } from "../passenger/shared-auto/MapScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -96,16 +93,12 @@ export default function PassengerNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="PassengerTabs" component={PassengerTabs} />
       <Stack.Screen name="PassengerRouteList" component={PassengerRouteList} />
-      <Stack.Screen name="AllBusesPage" component={AllBusesPage} />
-      <Stack.Screen name="PassengerStopsTimeline" component={PassengerStopsTimeline} />
       <Stack.Screen name="PassengerLiveTracking" component={PassengerLiveTracking} />
       <Stack.Screen name="JourneyHistoryScreen" component={JourneyHistoryScreen} />
       <Stack.Screen name="DestinationSearchScreen" component={DestinationSearchScreen} />
-      <Stack.Screen name="SplashCarousel" component={SplashCarouselScreen} />
-      
-      {/* Trip Planner */}
       <Stack.Screen name="PassengerTripPlanner" component={PassengerTripPlanner} />
-
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+      
       {/* Bike Flow */}
       <Stack.Screen name="BikeMapPreRide" component={BikeMapPreRideScreen} />
       <Stack.Screen name="RiderPopup" component={RiderPopupScreen} />
@@ -120,6 +113,7 @@ export default function PassengerNavigator() {
       <Stack.Screen name="AutoDiscovery" component={AutoDiscoveryScreen} />
       <Stack.Screen name="AutoRideActive" component={AutoRideActiveScreen} />
       <Stack.Screen name="AutoRideComplete" component={AutoRideCompleteScreen} />
+      <Stack.Screen name="SharedAutoMap" component={SharedAutoMapScreen} />
     </Stack.Navigator>
   );
 }

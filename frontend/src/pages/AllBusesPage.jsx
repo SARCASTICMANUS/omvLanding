@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import MobileBackButton from "../components/Layout/MobileBackButton";
 import api from "../lib/api";
+import { API_PATHS } from "../constants/apiPaths";
 import { APP_ROUTES } from "../constants/routes";
 
 /* ─────────────────────────────────────────────
@@ -213,11 +214,12 @@ export default function AllBusesPage() {
   const fetchTrips = async () => {
     try {
       setLoading(true);
-      const response = await api.get("/api/passenger/dashboard/");
+      const response = await api.get(API_PATHS.operations.trips);
       const data = response.data;
       let allTrips = [];
       if      (Array.isArray(data.active_trips)) allTrips = data.active_trips;
       else if (Array.isArray(data.results))      allTrips = data.results;
+      else if (Array.isArray(data.data))         allTrips = data.data;
       else if (Array.isArray(data))              allTrips = data;
       setTrips(allTrips);
     } catch (error) {

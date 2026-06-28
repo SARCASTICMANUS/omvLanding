@@ -8,7 +8,7 @@ import { typography } from "../../theme/typography";
 import Logo from "../../shared/components/common/Logo";
 import PrimaryButton from "../../shared/components/common/PrimaryButton";
 
-export function DriverLoginScreen({ navigation, mode = "auto" }) {
+export default function DriverLoginScreen({ navigation, mode = "auto" }) {
   const isBike = mode === "bike";
   const accent = isBike ? colors.bikeAccent : colors.autoAccent;
   return (

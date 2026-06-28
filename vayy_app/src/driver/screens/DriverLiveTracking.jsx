@@ -1,18 +1,20 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
+import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import BusIconBadge from "../../shared/components/common/BusIconBadge";
 import LiveDot from "../../shared/components/common/LiveDot";
 import VayyButton from "../../shared/components/common/VayyButton";
-import api, { getWsUrl } from "../../shared/lib/api";
+import api from "../../shared/lib/api";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import { WS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
 import SHADOW from "../../shared/constants/shadow";
 import SPACING from "../../shared/constants/spacing";
+import ZoomControls from "../../shared/components/common/ZoomControls";
 import { buildRouteSummary } from "../utils/driverFlowUtils";
 
 const toCoord = (point) => {
@@ -31,7 +33,11 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
   const [passengers, setPassengers] = useState({});
   const [wsStatus, setWsStatus] = useState("connecting");
   const [isDriving, setIsDriving] = useState(true);
-  const ws = useRef(null);
+  const mapRef = useRef(null);
+  const sendRef = useRef(null);
+  const markers = useRef({});
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
 
   const summary = useMemo(() => buildRouteSummary(route || {}), [route]);
   const tripId = activeTrip?.trip_id || activeTrip?.id;
@@ -61,15 +67,12 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
           setCurrentSpeed(Math.max(0, Math.round((location.coords.speed || 0) * 3.6)));
 
           // Send to backend via WebSocket if connected
-          if (ws.current?.readyState === WebSocket.OPEN) {
-            ws.current.send(
-              JSON.stringify({
-                type: "location_update",
-                trip_id: tripId,
-                lat: newPos.lat,
-                lon: newPos.lon,
-              }),
-            );
+          if (sendRef.current) {
+            sendRef.current("location_update", {
+              trip_id: tripId,
+              lat: newPos.lat,
+              lon: newPos.lon,
+            });
           }
         },
       );
@@ -89,7 +92,7 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
 
     const poll = async () => {
       try {
-        const res = await api.get(`/api/trips/next-stops/${tripId}/`);
+        const res = await api.get(`/api/operations/trips/${tripId}/next-stops/`);
         const data = Array.isArray(res.data) ? res.data : res.data?.results || res.data?.stops || [];
         setNextStops(data);
       } catch {
@@ -103,54 +106,43 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
     return () => clearInterval(timer);
   }, [tripId]);
 
+  const vehicleId = activeTrip?.vehicle_id || activeTrip?.bus_id || tripId;
+
+  const handleWsMessage = useCallback((data) => {
+    if (data.type === "student_update" || data.type === "passenger_update") {
+      setPassengers((prev) => ({
+        ...prev,
+        [data.user_id]: {
+          user_id: data.user_id,
+          lat: data.lat,
+          lon: data.lon,
+          hand_raised: data.hand_raised,
+        },
+      }));
+    }
+
+    if (data.type === "passenger_stopped") {
+      setPassengers((prev) => {
+        const next = { ...prev };
+        delete next[data.user_id];
+        return next;
+      });
+    }
+  }, []);
+
+  const { send, connectionState } = useWebSocket(
+    vehicleId ? WS.trackingVehicle(vehicleId) : null,
+    {
+      enabled: !!vehicleId,
+      onMessage: handleWsMessage,
+    },
+  );
+
+  sendRef.current = send;
+
   useEffect(() => {
-    if (!tripId || !cityId) return undefined;
-
-    let mounted = true;
-
-    const connect = async () => {
-      const token =
-        (await AsyncStorage.getItem("token")) ||
-        (await AsyncStorage.getItem("access_token"));
-      const url = getWsUrl(`/ws/public/${cityId}/driver/${tripId}/?token=${token || ""}`);
-
-      if (!mounted) return;
-
-      ws.current = new WebSocket(url);
-      ws.current.onopen = () => setWsStatus("connected");
-      ws.current.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        if (data.type === "student_update" || data.type === "passenger_update") {
-          setPassengers((prev) => ({
-            ...prev,
-            [data.user_id]: {
-              user_id: data.user_id,
-              lat: data.lat,
-              lon: data.lon,
-              hand_raised: data.hand_raised,
-            },
-          }));
-        }
-
-        if (data.type === "passenger_stopped") {
-          setPassengers((prev) => {
-            const next = { ...prev };
-            delete next[data.user_id];
-            return next;
-          });
-        }
-      };
-      ws.current.onclose = () => setWsStatus("disconnected");
-    };
-
-    connect();
-
-    return () => {
-      mounted = false;
-      ws.current?.close();
-    };
-  }, [cityId, tripId]);
+    setWsStatus(connectionState);
+  }, [connectionState]);
 
   if (!route || !activeTrip) {
     return (
@@ -170,27 +162,57 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
 
   return (
     <View style={styles.root}>
-      <MapView
+      <VayyMap
+        ref={mapRef}
         initialRegion={{ ...initial, latitudeDelta: 0.08, longitudeDelta: 0.08 }}
         style={styles.map}
       >
         {routeCoords.length > 1 ? (
-          <Polyline coordinates={routeCoords} strokeColor={COLORS.primary} strokeWidth={5} />
+          <GeoJSONSource
+            id="route-line"
+            data={{
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: routeCoords.map((c) => [c.longitude, c.latitude]),
+              },
+            }}
+          >
+            <Layer
+              id="route-line-layer"
+              type="line"
+              paint={{
+                "line-color": COLORS.primary,
+                "line-width": 5,
+                "line-cap": "round",
+                "line-join": "round",
+              }}
+            />
+          </GeoJSONSource>
         ) : null}
         {busCoord ? (
-          <Marker coordinate={busCoord}>
+          <ViewAnnotation id="bus-marker" lngLat={[busCoord.longitude, busCoord.latitude]} anchor="center">
             <View style={styles.busMarker}>
               <LiveDot size={13} />
               <BusIconBadge size={38} />
             </View>
-          </Marker>
+          </ViewAnnotation>
         ) : null}
         {passengerList.map((passenger) => {
           const coord = toCoord(passenger);
           if (!coord) return null;
-          return <Marker key={passenger.user_id} coordinate={coord} pinColor={COLORS.warning} />;
+          return (
+            <ViewAnnotation
+              key={passenger.user_id}
+              id={`passenger-${passenger.user_id}`}
+              lngLat={[coord.longitude, coord.latitude]}
+              anchor="center"
+            >
+              <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.warning, borderWidth: 2, borderColor: "#fff" }} />
+            </ViewAnnotation>
+          );
         })}
-      </MapView>
+      </VayyMap>
 
       <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
         <View style={styles.headerCard}>
@@ -208,11 +230,11 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
 
       <View style={styles.panel}>
         <Text style={styles.panelLabel}>Next Stop</Text>
-        <Text style={styles.nextStop}>{nextStop?.name || nextStop?.stop_name || "Next stop"}</Text>
-        <Text style={styles.distance}>2.1 km away</Text>
+        <Text style={styles.nextStop}>{nextStop?.name || nextStop?.stop_name || "—"}</Text>
+        <Text style={styles.distance}>{nextStop?.distance || "—"}</Text>
 
         <View style={styles.etaRow}>
-          <Text style={styles.etaNumber}>6</Text>
+          <Text style={styles.etaNumber}>{nextStop?.eta || nextStop?.eta_minutes || "—"}</Text>
           <Text style={styles.etaUnit}>min</Text>
         </View>
 
@@ -226,7 +248,7 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
             <Text style={styles.statLabel}>Speed</Text>
           </View>
           <View>
-            <Text style={styles.statValue}>Low</Text>
+            <Text style={styles.statValue}>{nextStop?.traffic || "—"}</Text>
             <Text style={styles.statLabel}>Traffic</Text>
           </View>
         </View>
@@ -238,17 +260,7 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
         <VayyButton fullWidth label="End Trip" onPress={() => navigation.navigate("DriverModeSelect")} variant="primary" />
       </View>
 
-      <View style={styles.zoomButtons}>
-        <TouchableOpacity style={styles.zoomButton}>
-          <Text style={styles.zoomText}>+</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.zoomButton}>
-          <Text style={styles.zoomText}>-</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.zoomButton}>
-          <Text style={styles.zoomText}>o</Text>
-        </TouchableOpacity>
-      </View>
+      <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
     </View>
   );
 }

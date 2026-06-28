@@ -1,10 +1,12 @@
 import React from "react";
+import { flushSync } from "react-dom";
 import { useDispatch, useSelector } from "react-redux";
 import PassengerTripPlanner from "./PassengerTripPlanner";
 import PassengerRouteList from "./PassengerRouteList";
 import PassengerStopsTimeline from "./PassengerStopsTimeline";
 import PassengerLiveTracking from "./PassengerLiveTracking";
 import api from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 import {
   setJourneyStep,
   setJourneyPoints,
@@ -48,6 +50,7 @@ export default function PassengerFlow({ onBackToDashboard }) {
     if (Array.isArray(data.trips)) return data.trips;
     if (Array.isArray(data.results)) return data.results;
     if (Array.isArray(data.routes)) return data.routes;
+    if (Array.isArray(data.data)) return data.data;
 
     return [];
   };
@@ -59,16 +62,12 @@ export default function PassengerFlow({ onBackToDashboard }) {
     }
 
     try {
-      const response = await api.post("/api/passenger/filtered-trips/", {
-        pickup: { 
-          lat: from.lat, 
-          lon: from.lon,
-          name: from.name || from.display_name
-        },
-        destination: { 
-          lat: to.lat, 
-          lon: to.lon,
-          name: to.name || to.display_name
+      const response = await api.get(API_PATHS.transport.routeSearchByLocation, {
+        params: {
+          origin_lat: from.lat,
+          origin_lng: from.lon,
+          dest_lat: to.lat,
+          dest_lng: to.lon,
         },
       });
       return normalizeTrips(response.data);
@@ -80,7 +79,7 @@ export default function PassengerFlow({ onBackToDashboard }) {
 
   const fetchAllTrips = async () => {
     try {
-      const response = await api.get("/api/passenger/dashboard/");
+      const response = await api.get(API_PATHS.operations.trips);
       return normalizeTrips(response.data);
     } catch (error) {
       console.error("Failed to fetch all trips", error);
@@ -91,8 +90,11 @@ export default function PassengerFlow({ onBackToDashboard }) {
   const handlePlannerNext = async ({ from, to }) => {
     dispatch(setJourneyPoints({ pickup: from, destination: to }));
 
-    try {
+    flushSync(() => {
       dispatch(setJourneyLoading(true));
+    });
+
+    try {
       const trips = await fetchFilteredTrips(from, to);
       dispatch(setFilteredTrips(trips));
       dispatch(setJourneyStep(STEPS.ROUTE_LIST));

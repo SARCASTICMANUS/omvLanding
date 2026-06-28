@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
+import { API_PATHS } from '../constants/apiPaths';
 
 export default function RoutesPage() {
   const [routes, setRoutes] = useState([]);
@@ -9,7 +10,7 @@ export default function RoutesPage() {
 
   useEffect(() => {
     // Fetch cities
-    api.get('/api/cities/')
+    api.get(API_PATHS.cities.list)
       .then(res => {
         console.log("Cities fetched:", res.data);
         setCities(Array.isArray(res.data) ? res.data : []);
@@ -19,7 +20,7 @@ export default function RoutesPage() {
 
   useEffect(() => {
     // Fetch routes, optionally filtered by city
-    const url = selectedCity ? `/api/routes/?city=${selectedCity}` : '/api/routes/';
+    const url = selectedCity ? `${API_PATHS.transport.routes}?city=${selectedCity}` : API_PATHS.transport.routes;
     api.get(url)
       .then(res => {
         console.log("Routes fetched:", res.data);

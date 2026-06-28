@@ -15,11 +15,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
-import { googleLogin, loginUser, restoreAuth } from "../authSlice";
+import { loginUser } from "../authSlice";
 import { Lock, Mail, Eye, EyeOff, User, LogIn, ChevronRight, Navigation } from "lucide-react-native";
 
 import COLORS from "../../shared/constants/colors";
 import SPACING from "../../shared/constants/spacing";
+import { ROLE } from "../../constants";
 
 const { height } = Dimensions.get("window");
 
@@ -34,17 +35,10 @@ const LoginPage = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  const [role, setRole] = useState("driver");
+  const [role, setRole] = useState(ROLE.DRIVER);
 
   const handleSignIn = () => {
-    // dispatch(loginUser({ email, password }));
-    // navigation.navigate("PassengerTripPlanner");
-    
-    // Bypass login by setting auth state directly
-    dispatch(restoreAuth({
-      user: { id: 1, role, name: 'Demo User' },
-      token: 'demo-token'
-    }));
+    dispatch(loginUser({ email, password, role }));
   };
 
   const toggleShowPassword = () => {
@@ -52,7 +46,7 @@ const LoginPage = ({ navigation }) => {
   };
 
   const handleGoogleSignIn = () => {
-    dispatch(googleLogin(""));
+    // Google login not implemented on backend
   };
 
   const handleMicrosoftSignIn = () => {

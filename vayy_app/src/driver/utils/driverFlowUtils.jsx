@@ -193,6 +193,8 @@ export const buildRouteSummary = (route) => {
       (endStop ? fallbackArrivalLabel(endStop, Math.max(stops.length - 1, 0)) : "--"),
     startCoord: getCoord(startStop),
     endCoord: getCoord(endStop),
+    fare: route?.fare || route?.estimated_fare || Math.round(getDistanceMeters(route) * 0.01) || null,
+    viaLabel: route?.viaLabel || route?.via || (stops.length > 2 ? stops[1]?.name : null),
   };
 };
 

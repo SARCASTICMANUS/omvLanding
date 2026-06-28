@@ -1,7 +1,7 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
 import { APP_ROUTES } from "../constants/routes";
-import { PASSENGER_ROLES, USER_ROLES } from "../constants/roles";
+import { PASSENGER_ROLES, DRIVER_ROLES, USER_ROLES } from "../constants/roles";
 import AppLayout from "../layouts/AppLayout";
 import AdminPanel from "../pages/AdminPanel";
 import DriverLivePage from "../pages/DriverLivePage";
@@ -50,7 +50,7 @@ export const appRouteConfig = [
   {
     path: APP_ROUTES.driverLive,
     element: (
-      <ProtectedRoute allowedRoles={[USER_ROLES.driver]}>
+      <ProtectedRoute allowedRoles={DRIVER_ROLES}>
         <AppLayout>
           <DriverLivePage />
         </AppLayout>
@@ -90,7 +90,7 @@ export const appRouteConfig = [
   {
     path: APP_ROUTES.driverProfileUpdate,
     element: (
-      <ProtectedRoute allowedRoles={[USER_ROLES.driver]}>
+      <ProtectedRoute allowedRoles={DRIVER_ROLES}>
         <AppLayout>
           <DriverProfileUpdate />
         </AppLayout>
@@ -110,7 +110,7 @@ export const appRouteConfig = [
   {
     path: APP_ROUTES.profile,
     element: (
-      <ProtectedRoute allowedRoles={[...PASSENGER_ROLES, USER_ROLES.driver]}>
+      <ProtectedRoute allowedRoles={[...PASSENGER_ROLES, ...DRIVER_ROLES]}>
         <AppLayout>
           <ProfilePage />
         </AppLayout>

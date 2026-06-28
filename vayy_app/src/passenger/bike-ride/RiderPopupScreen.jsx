@@ -8,7 +8,7 @@ import {
   StatusBar,
   Platform,
 } from "react-native";
-import MapView from "react-native-maps";
+import VayyMap from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -20,30 +20,33 @@ import { ConfirmPopup } from "./ConfirmPopup";
 
 const { width } = Dimensions.get("window");
 
-export function RiderPopupScreen({ navigation }) {
+export function RiderPopupScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const labels = ["1.2 km", "800 m", "400 m", "Arrived"];
-  const etas = ["5 min", "3 min", "2 min", "0 min"];
-  const mapRef = useRef(null);
-
-  const zoomIn = () => {
-    mapRef.current?.animateCamera({ zoom: 16 });
-  };
-
-  const zoomOut = () => {
-    mapRef.current?.animateCamera({ zoom: 12 });
-  };
+  const driverName = route?.params?.driverName || "Priya Sharma";
+  const vehicle = route?.params?.vehicle || "Royal Enfield Classic • UP 32 AZ 1234";
+  const otpDigits = route?.params?.otp ? String(route.params.otp).split("") : ["2","7","4","1"];
+  const labels = route?.params?.distanceLabels || ["1.2 km", "800 m", "400 m", "Arrived"];
+  const etas = route?.params?.etaLabels || ["5 min", "3 min", "2 min", "0 min"];
 
   useEffect(() => {
     const timer = setInterval(() => {
       setStep((v) => {
         if (v === labels.length - 1) {
           clearInterval(timer);
-          // Simulate OTP verification and auto-redirect to active ride stats
           setTimeout(() => {
-            navigation.navigate('RideStats');
+            const tripData = route?.params?.tripData || {};
+            navigation.navigate('RideStats', {
+              driverName,
+              vehicle,
+              dispatchId: route?.params?.dispatchId,
+              destination: route?.params?.destination,
+              eta: route?.params?.eta || "3",
+              distance: route?.params?.distance || "800",
+              fare: route?.params?.fare,
+              tripData,
+            });
           }, 2000);
           return v;
         }
@@ -53,15 +56,21 @@ export function RiderPopupScreen({ navigation }) {
     return () => clearInterval(timer);
   }, [navigation]);
 
+  const mapRef = useRef(null);
+  const cameraRef = useRef(null);
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Map Area */}
       <View style={styles.mapArea}>
-        <MapView
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
+          cameraRef={cameraRef}
           initialRegion={{
             latitude: 26.8467,
             longitude: 80.9462,
@@ -149,7 +158,7 @@ export function RiderPopupScreen({ navigation }) {
         {/* Driver Row */}
         <View style={styles.driverRow}>
           <View style={styles.avatar}>
-             <Text style={styles.avatarInitial}>P</Text>
+              <Text style={styles.avatarInitial}>{driverName.charAt(0)}</Text>
              <View style={styles.badge}>
                 <Ionicons name="star" size={10} color="#FFB800" />
                 <Text style={styles.ratingText}>4.9</Text>
@@ -157,10 +166,10 @@ export function RiderPopupScreen({ navigation }) {
           </View>
           <View style={styles.driverDetails}>
              <View style={styles.nameRow}>
-                <Text style={styles.driverName}>Priya Sharma</Text>
+                 <Text style={styles.driverName}>{driverName}</Text>
                 <MaterialIcons name="verified" size={16} color="#009849" />
              </View>
-             <Text style={styles.vehicleInfo}>Royal Enfield Classic • UP 32 AZ 1234</Text>
+              <Text style={styles.vehicleInfo}>{vehicle}</Text>
           </View>
           <TouchableOpacity style={styles.callBtn}>
              <Ionicons name="call" size={22} color="#009849" />
@@ -176,8 +185,8 @@ export function RiderPopupScreen({ navigation }) {
               <Text style={styles.otpSub}>Share with driver to start ride</Text>
            </View>
            <View style={styles.otpRow}>
-              {['2','7','4','1'].map((d, i) => (
-                 <View key={i} style={styles.otpBox}>
+               {otpDigits.map((d, i) => (
+                  <View key={i} style={styles.otpBox}>
                     <Text style={styles.otpDigit}>{d}</Text>
                  </View>
               ))}

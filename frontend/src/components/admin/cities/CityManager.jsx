@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import api from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 import { Plus, Edit2, Trash2, MapPin, School, Save, X } from "lucide-react";
 
 const CityManager = () => {
@@ -16,7 +17,7 @@ const CityManager = () => {
   const fetchCities = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/api/cities/");
+      const res = await api.get(API_PATHS.cities.list);
       const data = Array.isArray(res.data) ? res.data : res.data.results || [];
       setCities(data);
     } catch (e) {
@@ -31,9 +32,9 @@ const CityManager = () => {
     setLoading(true);
     try {
       if (editingCity) {
-        await api.put(`/api/cities/${editingCity.id}/`, formData);
+        await api.put(API_PATHS.cities.detail(editingCity.id), formData);
       } else {
-        await api.post("/api/cities/", formData);
+        await api.post(API_PATHS.cities.list, formData);
       }
       setShowModal(false);
       setEditingCity(null);
@@ -51,7 +52,7 @@ const CityManager = () => {
     if (!window.confirm("Are you sure you want to delete this city?"))
       return;
     try {
-      await api.delete(`/api/cities/${id}/`);
+      await api.delete(API_PATHS.cities.detail(id));
       fetchCities();
     } catch (e) {
       console.error("Failed to delete city", e);

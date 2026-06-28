@@ -1,6 +1,7 @@
 import React, { useCallback, useState, useEffect } from "react";
 /* eslint-disable react-hooks/set-state-in-effect */
 import api from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 import {
   Clock,
   Plus,
@@ -30,7 +31,7 @@ const TripScheduleManager = ({ cityId }) => {
 
   const fetchRoutes = useCallback(async () => {
     try {
-      const res = await api.get(`/api/admin/routes/${cityId ? `?city=${cityId}` : ""}`);
+      const res = await api.get(`${API_PATHS.admin.routes}${cityId ? `?city=${cityId}` : ""}`);
       const data = Array.isArray(res.data) ? res.data : res.data.results || [];
       setRoutes(data);
     } catch (e) {
@@ -40,7 +41,7 @@ const TripScheduleManager = ({ cityId }) => {
 
   const fetchSchedules = useCallback(async (routeId) => {
     try {
-      const res = await api.get(`/api/trip-schedules/?route=${routeId}`);
+      const res = await api.get(`${API_PATHS.transport.schedules}?route=${routeId}`);
       const data = Array.isArray(res.data) ? res.data : res.data.results || [];
       setSchedules(data);
     } catch (e) {
@@ -50,7 +51,7 @@ const TripScheduleManager = ({ cityId }) => {
 
   const fetchStopTimes = useCallback(async (scheduleId) => {
     try {
-      const res = await api.get(`/api/stop-times/?trip_schedule=${scheduleId}`);
+      const res = await api.get(`${API_PATHS.transport.stopTimes}?trip_schedule=${scheduleId}`);
       const data = Array.isArray(res.data) ? res.data : res.data.results || [];
       // Sort by sequence
       const sorted = [...data].sort((a, b) => a.stop_sequence - b.stop_sequence);
@@ -84,7 +85,7 @@ const TripScheduleManager = ({ cityId }) => {
   const handleAddSchedule = async () => {
     if (!selectedRoute || !newSchedule.label) return;
     try {
-      const res = await api.post("/api/trip-schedules/", {
+      const res = await api.post(API_PATHS.admin.tripSchedules, {
         ...newSchedule,
         route: selectedRoute.id
       });
@@ -103,7 +104,7 @@ const TripScheduleManager = ({ cityId }) => {
     // Basic implementation: just create entries, user can edit times later
     for (let i = 0; i < stops.length; i++) {
       try {
-        await api.post("/api/stop-times/", {
+        await api.post(API_PATHS.admin.stopTimes, {
           trip_schedule: schedule.id,
           stop: stops[i].id,
           arrival_time: schedule.scheduled_start_time, // Placeholder
@@ -119,7 +120,7 @@ const TripScheduleManager = ({ cityId }) => {
   const handleDeleteSchedule = async (id) => {
     if (!window.confirm("Are you sure? This will delete all associated stop times.")) return;
     try {
-      await api.delete(`/api/trip-schedules/${id}/`);
+      await api.delete(API_PATHS.transport.scheduleDetail(id));
       setSchedules(schedules.filter(s => s.id !== id));
       if (selectedSchedule?.id === id) setSelectedSchedule(null);
     } catch (e) {
@@ -129,7 +130,7 @@ const TripScheduleManager = ({ cityId }) => {
 
   const handleUpdateStopTime = async (stopTimeId, data) => {
     try {
-      const res = await api.patch(`/api/stop-times/${stopTimeId}/`, data);
+      const res = await api.patch(API_PATHS.transport.stopTimeDetail(stopTimeId), data);
       setStopTimes(stopTimes.map(st => st.id === stopTimeId ? res.data : st));
     } catch (e) {
       console.error("Failed to update stop time", e);
@@ -138,7 +139,7 @@ const TripScheduleManager = ({ cityId }) => {
 
   const handleUpdateSchedule = async (data) => {
     try {
-      const res = await api.patch(`/api/trip-schedules/${selectedSchedule.id}/`, data);
+      const res = await api.patch(API_PATHS.transport.scheduleDetail(selectedSchedule.id), data);
       setSchedules(schedules.map(s => s.id === selectedSchedule.id ? res.data : s));
       setSelectedSchedule(res.data);
     } catch (e) {

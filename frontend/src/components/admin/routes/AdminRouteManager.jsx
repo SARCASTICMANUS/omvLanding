@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import api from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 import {
   Trash2,
   Save,
@@ -83,7 +84,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
     }
 
     try {
-      const res = await api.post("/api/admin/routes/preview/", {
+      const res = await api.post(API_PATHS.admin.routePreview, {
         start: {
           lat: currentPoints.start.lat,
           lon: currentPoints.start.lon,
@@ -376,7 +377,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
 
   const fetchCities = async () => {
     try {
-      const res = await api.get("/api/cities/");
+      const res = await api.get(API_PATHS.cities.list);
       const data = Array.isArray(res.data) ? res.data : res.data.results || [];
       setCities(data);
       if (!selectedCity && data.length > 0) setSelectedCity(data[0].id);
@@ -388,7 +389,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
   const fetchRoutes = async () => {
     try {
       const res = await api.get(
-        `/api/admin/routes/?city=${selectedCity}`,
+        `${API_PATHS.admin.routes}?city=${selectedCity}`,
       );
       const data = Array.isArray(res.data) ? res.data : res.data.results || [];
       setRoutes(data);
@@ -431,13 +432,15 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
 
   const reverseGeocode = async (latlng, callback) => {
     try {
-      const res = await api.get(`/api/reverse-search/?lat=${latlng.lat}&lon=${latlng.lon || latlng.lng}`);
-      if (res.data && res.data.display_name) {
-        callback(res.data.display_name);
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lon || latlng.lng}`
+      );
+      const data = await res.json();
+      if (data && data.display_name) {
+        callback(data.display_name);
       }
     } catch (e) {
       console.warn("Reverse geocode failed, skipping name update:", e);
-      // Silently fail: keep the existing name or use a default
     }
   };
 
@@ -487,7 +490,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
     ];
 
     try {
-      await api.post("/api/admin/routes/", {
+      await api.post(API_PATHS.admin.routes, {
         city: selectedCity,
         name: names.route || "New Route",
         start_name: names.start,
@@ -534,7 +537,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
     if (route.path) payload.path = route.path;
     if (route.total_distance) payload.total_distance = route.total_distance;
 
-    await api.post("/api/admin/routes/", payload);
+    await api.post(API_PATHS.admin.routes, payload);
   };
 
   const parseImportFile = async (file) => {

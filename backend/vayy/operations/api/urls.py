@@ -1,0 +1,154 @@
+from django.urls import path
+
+from operations.api.views import (
+    VehicleListAPIView,
+    VehicleDetailAPIView,
+    DriverVehicleAPIView,
+    VehicleStateAPIView,
+    ActiveTripListAPIView,
+    ActiveTripDetailAPIView,
+    DriverActiveTripAPIView,
+    StartTripAPIView,
+    # CompleteTripAPIView,
+    TripNextStopsAPIView,
+    TripBoardingRequestListAPIView,
+    BoardingRequestListAPIView,
+    BoardingRequestDetailAPIView,
+    BoardingRequestBoardedAPIView,
+    DispatchRequestAPIView,
+    DispatchAssignAPIView,
+    DispatchDetailAPIView,
+    DispatchCancelAPIView,
+    DispatchAcceptAPIView,
+    DispatchRejectAPIView,
+    DispatchArrivedAPIView,
+    DispatchStartAPIView,
+    DispatchCompleteAPIView,
+    DriverInitiateRideAPIView,
+    PassengerAcceptRideAPIView,
+    PassengerRejectRideAPIView,
+)
+
+urlpatterns = [
+    path(
+        "vehicles/",
+        VehicleListAPIView.as_view(),
+        name="vehicle-list",
+    ),
+    path(
+        "vehicles/me/",
+        DriverVehicleAPIView.as_view(),
+        name="driver-vehicle",
+    ),
+
+    path(
+        "vehicles/<uuid:vehicle_id>/",
+        VehicleDetailAPIView.as_view(),
+        name="vehicle-detail",
+    ),
+    path(
+        "vehicles/<uuid:vehicle_id>/state/",
+        VehicleStateAPIView.as_view(),
+        name="vehicle-state",
+    ),
+
+    path(
+        "trips/",
+        ActiveTripListAPIView.as_view(),
+        name="trip-list",
+    ),
+    path(
+        "trips/start/",
+        StartTripAPIView.as_view(),
+        name="trip-start",
+    ),
+    path(
+        "trips/me/active/",
+        DriverActiveTripAPIView.as_view(),
+        name="driver-active-trip",
+    ),
+
+    path(
+        "trips/<uuid:trip_id>/",
+        ActiveTripDetailAPIView.as_view(),
+        name="trip-detail",
+    ),
+    # path(
+    #     "trips/<uuid:trip_id>/complete/",
+    #     CompleteTripAPIView.as_view(),
+    #     name="trip-complete",
+    # ),
+    path(
+        "trips/<uuid:trip_id>/next-stops/",
+        TripNextStopsAPIView.as_view(),
+        name="trip-next-stops",
+    ),
+    path(
+        "trips/<uuid:trip_id>/boarding-requests/",
+        TripBoardingRequestListAPIView.as_view(),
+        name="trip-boarding-requests",
+    ),
+
+    path(
+        "boarding-requests/",
+        BoardingRequestListAPIView.as_view(),
+        name="boarding-request-list",
+    ),
+    path(
+        "boarding-requests/<uuid:request_id>/",
+        BoardingRequestDetailAPIView.as_view(),
+        name="boarding-request-detail",
+    ),
+    path(
+        "boarding-requests/<uuid:request_id>/boarded/",
+        BoardingRequestBoardedAPIView.as_view(),
+        name="boarding-request-boarded",
+    ),
+
+    # Dispatch Endpoints
+    path(
+        "dispatch/request/",
+        DispatchRequestAPIView.as_view(),
+        name="dispatch-request",
+    ),
+    path(
+        "dispatch/assign/",
+        DispatchAssignAPIView.as_view(),
+        name="dispatch-assign",
+    ),
+    path(
+        "dispatch/<uuid:trip_id>/",
+        DispatchDetailAPIView.as_view(),
+        name="dispatch-detail",
+    ),
+    path(
+        "dispatch/<uuid:trip_id>/accept/",
+        DispatchAcceptAPIView.as_view(),
+        name="dispatch-accept",
+    ),
+    path(
+        "dispatch/<uuid:trip_id>/reject/",
+        DispatchRejectAPIView.as_view(),
+        name="dispatch-reject",
+    ),
+    path(
+        "dispatch/<uuid:trip_id>/arrived/",
+        DispatchArrivedAPIView.as_view(),
+        name="dispatch-arrived",
+    ),
+    path(
+        "dispatch/<uuid:trip_id>/start/",
+        DispatchStartAPIView.as_view(),
+        name="dispatch-start",
+    ),
+    path(
+        "dispatch/<uuid:trip_id>/complete/",
+        DispatchCompleteAPIView.as_view(),
+        name="dispatch-complete",
+    ),
+    path(
+        "dispatch/<uuid:trip_id>/cancel/",
+        DispatchCancelAPIView.as_view(),
+        name="dispatch-cancel",
+    ),
+]

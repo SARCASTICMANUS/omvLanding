@@ -13,7 +13,7 @@ import { rideBuddy } from "../../data/passengers";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
-import MapView from "react-native-maps";
+import VayyMap from "../../shared/components/VayyMap";
 import PrimaryButton from "../../shared/components/common/PrimaryButton";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -25,7 +25,7 @@ const ACCENT = "#1D9E75";
 function MapPlaceholder() {
   return (
     <View style={styles.mapContainer}>
-      <MapView
+      <VayyMap
         style={StyleSheet.absoluteFillObject}
         initialRegion={{
           latitude: 26.8467,
@@ -204,7 +204,7 @@ function AcceptButton({ onPress }) {
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export function BuddyRequestPopupScreen({ navigation }) {
+export default function BuddyRequestPopupScreen({ navigation }) {
   return (
     <AppFrame
       navigation={navigation}

@@ -19,11 +19,14 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import api from "../../shared/lib/api";
+import { saveRecentSearch, searchRoutesByLocation } from "../services/passengerService";
 
 import COLORS from "../../shared/constants/colors";
+import { NOMINATIM_SEARCH, USER_AGENT, AUTH, STORAGE_KEYS } from "../../constants";
 import RADIUS from "../../shared/constants/radius";
 import SHADOW from "../../shared/constants/shadow";
 import SPACING from "../../shared/constants/spacing";
+import { useSelector } from "react-redux";
 
 const { width } = Dimensions.get("window");
 
@@ -35,20 +38,7 @@ const heroImages = [
   require("../../../assets/vayySportBike.png"),
 ];
 
-const DUMMY_RECENT = [
-  {
-    pickup: { name: "Gomti Nagar", lat: 26.8467, lon: 80.9462, display_name: "Gomti Nagar, Lucknow, Uttar Pradesh" },
-    destination: { name: "Charbagh", lat: 26.8318, lon: 80.9194, display_name: "Charbagh, Lucknow, Uttar Pradesh" },
-  },
-  {
-    pickup: { name: "Hazratganj", lat: 26.8572, lon: 80.9435, display_name: "Hazratganj, Lucknow, Uttar Pradesh" },
-    destination: { name: "Alambagh", lat: 26.7877, lon: 80.8926, display_name: "Alambagh, Lucknow, Uttar Pradesh" },
-  },
-  {
-    pickup: { name: "Indira Nagar", lat: 26.8965, lon: 80.9758, display_name: "Indira Nagar, Lucknow, Uttar Pradesh" },
-    destination: { name: "Lalbagh", lat: 26.8621, lon: 80.8946, display_name: "Lalbagh, Lucknow, Uttar Pradesh" },
-  },
-];
+const DUMMY_RECENT = [];
 
 function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90 }) {
   const [query, setQuery] = useState(value?.name || value?.display_name || "");
@@ -73,11 +63,9 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
       setLoading(true);
 
       try {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-          query,
-        )}&format=json&limit=5`;
+        const url = NOMINATIM_SEARCH(query);
         const response = await fetch(url, {
-          headers: { "User-Agent": "vayy-autos/1.0" },
+          headers: { "User-Agent": USER_AGENT },
           signal: controller.signal,
         });
         const data = await response.json();
@@ -157,6 +145,7 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
             data={results}
             keyboardShouldPersistTaps="handled"
             keyExtractor={(item) => String(item.place_id)}
+            scrollEnabled={false}
             renderItem={({ item }) => (
               <Pressable onPress={() => handleSelect(item)} style={styles.resultRow}>
                 <Text numberOfLines={1} style={styles.resultTitle}>
@@ -202,6 +191,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
   const [destination, setDestination] = useState(null);
   const [recentSearches, setRecentSearches] = useState([]);
   const [fetchingRecent, setFetchingRecent] = useState(false);
+  const [searching, setSearching] = useState(false);
   const loading = route?.params?.loading || false;
   const mode = route?.params?.mode || "auto";
   const isBike = mode === "bike";
@@ -212,7 +202,8 @@ export default function PassengerTripPlanner({ navigation, route }) {
   const cursorRef = useRef(new Animated.Value(1)).current;
   const bikeX = useRef(new Animated.Value(0)).current;
   const bikeOpacity = useRef(new Animated.Value(1)).current;
-  const passengerName = "Arjun";
+  const { user } = useSelector((state) => state.auth);
+  const passengerName = user?.full_name || user?.name || user?.first_name || "there";
 
   useEffect(() => {
     const fullGreeting = "Namaste,";
@@ -301,8 +292,9 @@ export default function PassengerTripPlanner({ navigation, route }) {
   const fetchRecentSearches = async () => {
     try {
       setFetchingRecent(true);
-      const response = await api.get("/api/passenger/recent-searches/");
-      setRecentSearches(Array.isArray(response.data) ? response.data : DUMMY_RECENT);
+      const response = await api.get("/api/accounts/recent-searches/");
+      const data = response.data?.data || response.data;
+      setRecentSearches(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to fetch recent searches:", error);
       setRecentSearches(DUMMY_RECENT);
@@ -321,56 +313,31 @@ export default function PassengerTripPlanner({ navigation, route }) {
     );
   }, [destination, pickup]);
 
-  const handleNext = () => {
-    if (!canProceed || loading) {
+  const handleNext = async () => {
+    if (!canProceed || loading || searching) {
       return;
     }
 
-    const pickupName = pickup?.name || pickup?.display_name?.split(",")?.[0] || "Current Location";
-    const destName = destination?.name || destination?.display_name?.split(",")?.[0] || "Destination";
+    setSearching(true);
 
-    const dummyTrips = [
-      {
-        id: 1, trip_id: "dummy-1",
-        eta_seconds: 300, pickup_name: pickupName, destination_name: destName,
-        rating: 4.8, review_count: 234, fuel_type: "CNG", walk_minutes: 2,
-        fare: 78, payment_method: "Cash", distance_text: "4.5 km", duration_text: "15 min", distance_km: 4.5,
-        stops: [
-          { name: pickupName, status: "boarding" },
-          { name: "Hazratganj", status: "upcoming" },
-          { name: "Civil Lines", status: "upcoming" },
-          { name: destName, status: "dropoff" },
-        ],
-      },
-      {
-        id: 2, trip_id: "dummy-2",
-        eta_seconds: 420, pickup_name: pickupName, destination_name: destName,
-        rating: 4.6, review_count: 187, fuel_type: "CNG", walk_minutes: 4,
-        fare: 65, payment_method: "UPI", distance_text: "5.2 km", duration_text: "20 min", distance_km: 5.2,
-        stops: [
-          { name: pickupName, status: "boarding" },
-          { name: "Sahkar Nagar", status: "upcoming" },
-          { name: "Lalbagh", status: "upcoming" },
-          { name: "Aminabad", status: "upcoming" },
-          { name: destName, status: "dropoff" },
-        ],
-      },
-      {
-        id: 3, trip_id: "dummy-3",
-        eta_seconds: 540, pickup_name: pickupName, destination_name: destName,
-        rating: 4.9, review_count: 312, fuel_type: "Electric", walk_minutes: 1,
-        fare: 92, payment_method: "Cash", distance_text: "6.0 km", duration_text: "25 min", distance_km: 6.0,
-        stops: [
-          { name: pickupName, status: "boarding" },
-          { name: "River Road", status: "upcoming" },
-          { name: "Museum", status: "upcoming" },
-          { name: destName, status: "dropoff" },
-        ],
-        is_route_only: false, trip_available: true,
-      },
-    ];
+    saveRecentSearch({
+      pickup_name: pickup?.name || pickup?.display_name || "",
+      pickup_lat: pickup.lat,
+      pickup_lon: pickup.lon,
+      destination_name: destination?.name || destination?.display_name || "",
+      destination_lat: destination.lat,
+      destination_lon: destination.lon,
+    });
 
-    navigation.navigate("PassengerRouteList", { trips: dummyTrips, pickup, destination, mode });
+    const trips = await searchRoutesByLocation(
+      pickup.lat,
+      pickup.lon,
+      destination.lat,
+      destination.lon,
+    );
+
+    setSearching(false);
+    navigation.navigate("PassengerRouteList", { pickup, destination, mode, trips, loading: false });
   };
 
   const handleSwap = () => {
@@ -396,6 +363,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
           bounces={false}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled={true}
         >
           {isBike ? (
             <View style={styles.bikeHero}>
@@ -481,18 +449,18 @@ export default function PassengerTripPlanner({ navigation, route }) {
             />
 
             <TouchableOpacity
-              activeOpacity={0.86}
-              disabled={!canProceed || loading}
+              activeOpacity={0.1}
+              disabled={!canProceed || loading || searching}
               onPress={handleNext}
               style={[
                 styles.searchButton,
                 isBike && { backgroundColor: COLORS.primary },
-                (!canProceed || loading) && styles.searchDisabled,
+                (!canProceed || loading || searching) && styles.searchDisabled,
               ]}
             >
               <Text style={styles.searchButtonIcon}>o</Text>
               <Text style={styles.searchButtonText}>
-                {loading ? "Searching..." : isBike ? "Search Bike Rides" : "Search Vayy Rides"}
+                {searching || loading ? "Searching..." : isBike ? "Search Bike Rides" : "Search Vayy Rides"}
               </Text>
             </TouchableOpacity>
 
@@ -775,7 +743,8 @@ const styles = StyleSheet.create({
     ...SHADOW.sm,
   },
   searchDisabled: {
-    opacity: 0.72,
+    backgroundColor: "#C4CDD6",
+    opacity: 0.7,
   },
   searchButtonIcon: {
     color: COLORS.white,

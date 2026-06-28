@@ -16,6 +16,7 @@ import {
   Info
 } from "lucide-react";
 import api, { getWsUrl } from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 import notificationService from "../../../services/notificationService";
 import { getWalkingRoute } from "../../../maps/utils/routing";
 import MobileBackButton from "../../../components/Layout/MobileBackButton";
@@ -76,7 +77,7 @@ const PassengerLiveTracking = ({ tripId, onBack }) => {
         return;
       }
       try {
-        const res = await api.get(`/api/passenger/trips/${tripId}/`);
+        const res = await api.get(API_PATHS.operations.tripDetail(tripId));
         setTripIdData(res.data);
       } catch (err) {
         console.error("Trip init failed", err);

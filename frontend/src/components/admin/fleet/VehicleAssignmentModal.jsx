@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Search, UserPlus, Trash2, Loader2, UserCheck } from "lucide-react";
 import api from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 
 const VehicleAssignmentModal = ({ vehicle, universityId, onClose }) => {
     const [assignments, setAssignments] = useState([]);
@@ -17,8 +18,8 @@ const VehicleAssignmentModal = ({ vehicle, universityId, onClose }) => {
         setLoading(true);
         try {
             const [assignRes, studentRes] = await Promise.all([
-                api.get(`/api/assignments/?vehicle=${vehicle.id}`),
-                api.get(`/api/users/?university=${universityId}&role=student`)
+                api.get(`${API_PATHS.operations.vehicles}?vehicle=${vehicle.id}`),
+                api.get(`${API_PATHS.admin.users}?role=student`)
             ]);
             setAssignments(assignRes.data);
             setAllStudents(studentRes.data);
@@ -32,7 +33,7 @@ const VehicleAssignmentModal = ({ vehicle, universityId, onClose }) => {
     const handleAssign = async (studentId) => {
         setSubmitting(true);
         try {
-            await api.post("/api/assignments/", {
+            await api.post(API_PATHS.operations.vehicles, {
                 student: studentId,
                 vehicle: vehicle.id
             });
@@ -48,7 +49,7 @@ const VehicleAssignmentModal = ({ vehicle, universityId, onClose }) => {
     const handleUnassign = async (assignmentId) => {
         setSubmitting(true);
         try {
-            await api.delete(`/api/assignments/${assignmentId}/`);
+            await api.delete(API_PATHS.operations.vehicleDetail(assignmentId));
             await fetchData();
         } catch (error) {
             console.error("Error unassigning student:", error);

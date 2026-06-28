@@ -1,16 +1,17 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   StyleSheet,
   Text,
   View,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Platform,
   StatusBar,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
-import { logout } from "../../auth/authSlice";
+import { logoutUser } from "../../auth/authSlice";
+import { fetchProfile } from "../../store/slices/profileSlice";
 
 import COLORS from "../constants/colors";
 import RADIUS from "../constants/radius";
@@ -19,16 +20,33 @@ import SHADOW from "../constants/shadow";
 import VayyButton from "../components/common/VayyButton";
 import VayyCard from "../components/common/VayyCard";
 import BusIconBadge from "../components/common/BusIconBadge";
+import { DRIVER_ROLES } from "../../constants";
 
 export default function ProfileScreen({ navigation }) {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  const { data: profile, loading } = useSelector((state) => state.profile);
 
-  const handleLogout = () => {
-    dispatch(logout());
+  useEffect(() => {
+    dispatch(fetchProfile());
+  }, [dispatch]);
+
+    const handleLogout = () => {
+    dispatch(logoutUser());
   };
 
-  const isDriver = user?.role === "driver";
+  const handleEditProfile = () => {
+    navigation.navigate("EditProfile");
+  };
+
+  const isDriver = DRIVER_ROLES.includes(user?.role);
+  const displayName = profile?.display_name || user?.full_name || user?.name || "User Name";
+  const phoneNumber = profile?.phone_number || "--";
+  const licenseNumber = profile?.license_number;
+  const vehicleNumber = profile?.vehicle_number || "--";
+  const vehicleType = profile?.vehicle_type;
+  const rating = profile?.rating;
+  const totalTrips = profile?.total_trips || 0;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -43,13 +61,19 @@ export default function ProfileScreen({ navigation }) {
               <BusIconBadge size={60} />
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.userName}>{user?.full_name || user?.name || "User Name"}</Text>
+              <Text style={styles.userName}>{displayName}</Text>
               <Text style={styles.userEmail}>{user?.email || "user@example.com"}</Text>
               <View style={[styles.roleBadge, isDriver ? styles.driverBadge : styles.passengerBadge]}>
                 <Text style={[styles.roleText, isDriver ? styles.driverText : styles.passengerText]}>
                   {user?.role?.toUpperCase() || "PASSENGER"}
                 </Text>
               </View>
+              {isDriver && rating && (
+                <View style={styles.ratingRow}>
+                  <Text style={styles.ratingStar}>★</Text>
+                  <Text style={styles.ratingTextValue}>{rating.toFixed(1)}</Text>
+                </View>
+              )}
             </View>
           </View>
         </VayyCard>
@@ -59,7 +83,7 @@ export default function ProfileScreen({ navigation }) {
           <VayyCard style={styles.detailsCard}>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Full Name</Text>
-              <Text style={styles.detailValue}>{user?.full_name || user?.name || "--"}</Text>
+              <Text style={styles.detailValue}>{displayName}</Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.detailRow}>
@@ -68,19 +92,45 @@ export default function ProfileScreen({ navigation }) {
             </View>
             <View style={styles.divider} />
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>City</Text>
-              <Text style={styles.detailValue}>{user?.city || "--"}</Text>
+              <Text style={styles.detailLabel}>Phone</Text>
+              <Text style={styles.detailValue}>{phoneNumber}</Text>
             </View>
-            {isDriver && (
+            {isDriver && licenseNumber && (
               <>
                 <View style={styles.divider} />
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Employee ID</Text>
-                  <Text style={styles.detailValue}>{user?.employee_id || "VAYY-782"}</Text>
+                  <Text style={styles.detailLabel}>License</Text>
+                  <Text style={styles.detailValue}>{licenseNumber}</Text>
                 </View>
               </>
             )}
+            {isDriver && vehicleNumber ? (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Vehicle</Text>
+                  <Text style={styles.detailValue}>{vehicleNumber}</Text>
+                </View>
+              </>
+            ) : user?.city ? (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>City</Text>
+                  <Text style={styles.detailValue}>{user.city}</Text>
+                </View>
+              </>
+            ) : null}
           </VayyCard>
+          <View style={styles.editProfileWrapper}>
+            <VayyButton
+              label="Edit Profile"
+              onPress={handleEditProfile}
+              variant="outline"
+              fullWidth
+              size="md"
+            />
+          </View>
         </View>
 
         {isDriver && (
@@ -89,18 +139,18 @@ export default function ProfileScreen({ navigation }) {
             <VayyCard style={styles.earningsCard}>
               <View style={styles.earningsRow}>
                 <View style={styles.earningsStat}>
-                  <Text style={styles.earningsLabel}>Today</Text>
-                  <Text style={styles.earningsValue}>₹0</Text>
+                  <Text style={styles.earningsLabel}>Rating</Text>
+                  <Text style={styles.earningsValue}>{rating ? rating.toFixed(1) : "—"}</Text>
                 </View>
                 <View style={styles.earningsDivider} />
                 <View style={styles.earningsStat}>
                   <Text style={styles.earningsLabel}>Trips</Text>
-                  <Text style={styles.earningsValue}>0</Text>
+                  <Text style={styles.earningsValue}>{totalTrips}</Text>
                 </View>
                 <View style={styles.earningsDivider} />
                 <View style={styles.earningsStat}>
-                  <Text style={styles.earningsLabel}>Online</Text>
-                  <Text style={styles.earningsValue}>0h</Text>
+                  <Text style={styles.earningsLabel}>Vehicle</Text>
+                  <Text style={styles.earningsValue}>{vehicleType ? vehicleType.toUpperCase() : "—"}</Text>
                 </View>
               </View>
             </VayyCard>
@@ -268,6 +318,9 @@ const styles = StyleSheet.create({
   },
 
   /* earnings */
+  editProfileWrapper: {
+    marginTop: SPACING.md,
+  },
   earningsCard: {
     padding: SPACING.lg,
   },
@@ -296,5 +349,20 @@ const styles = StyleSheet.create({
     width: 1,
     height: 36,
     backgroundColor: COLORS.border,
+  },
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+  },
+  ratingStar: {
+    fontSize: 14,
+    color: "#F59E0B",
+  },
+  ratingTextValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
   },
 });

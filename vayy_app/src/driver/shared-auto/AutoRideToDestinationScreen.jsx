@@ -11,8 +11,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
-import MapView from "react-native-maps";
+import VayyMap from "../../shared/components/VayyMap";
 import AutoCancelRideModal from "./AutoCancelRideModal";
+import ZoomControls from "../../shared/components/common/ZoomControls";
 
 const { width } = Dimensions.get("window");
 
@@ -23,6 +24,9 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
   const [eta, setEta] = useState("12 min");
   const [elapsed, setElapsed] = useState(0);
   const [showCancel, setShowCancel] = useState(false);
+  const mapRef = useRef(null);
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
   const startTime = useRef(Date.now());
   const dotAnim = useRef(new Animated.Value(0)).current;
 
@@ -77,7 +81,8 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
   return (
     <View style={styles.root}>
       <View style={styles.mapArea}>
-        <MapView
+        <VayyMap
+          ref={mapRef}
           style={styles.mapBg}
           initialRegion={{
             latitude: 26.8467,
@@ -86,6 +91,7 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
             longitudeDelta: 0.05,
           }}
         />
+        <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
         <View style={styles.driverOnMap}>
           <View style={styles.driverPulseOuter} />

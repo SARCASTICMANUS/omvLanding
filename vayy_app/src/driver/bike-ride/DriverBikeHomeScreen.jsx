@@ -5,6 +5,7 @@ import {
   Easing,
   FlatList,
   Image,
+  ImageBackground,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -22,10 +23,14 @@ import COLORS from "../../shared/constants/colors";
 import SHADOW from "../../shared/constants/shadow";
 import SPACING from "../../shared/constants/spacing";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { NOMINATIM_SEARCH, USER_AGENT, STORAGE_KEYS } from "../../constants";
+import { useSelector } from "react-redux";
 
 const { width } = Dimensions.get("window");
 
-// Removed hero bike animation images array
+const heroImages = [
+  require("../../../assets/vayyBike.png"),
+];
 
 function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90 }) {
   const [query, setQuery] = useState(value?.name || value?.display_name || "");
@@ -46,9 +51,9 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`;
+        const url = NOMINATIM_SEARCH(query);
         const response = await fetch(url, {
-          headers: { "User-Agent": "vayy-driver/1.0" },
+          headers: { "User-Agent": USER_AGENT },
           signal: controller.signal,
         });
         const data = await response.json();
@@ -113,6 +118,7 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
             data={results}
             keyboardShouldPersistTaps="handled"
             keyExtractor={(item) => String(item.place_id)}
+            scrollEnabled={false}
             renderItem={({ item }) => (
               <Pressable onPress={() => handleSelect(item)} style={styles.resultRow}>
                 <Ionicons name="location-outline" size={16} color="#9CA3AF" style={{ marginRight: 10 }} />
@@ -145,12 +151,13 @@ export default function DriverBikeHomeScreen({ navigation }) {
     [destination, pickup],
   );
 
-  const [driverName] = useState("Ramu");
+  const { user } = useSelector((state) => state.auth);
+  const driverName = user?.full_name || user?.name || user?.first_name || "Driver";
   const [recentSearches, setRecentSearches] = useState([]);
 
   const loadRecentSearches = async () => {
     try {
-      const stored = await AsyncStorage.getItem("driver_recent_searches_bike");
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.driverRecentSearchesBike);
       if (stored) setRecentSearches(JSON.parse(stored));
     } catch {}
   };
@@ -162,7 +169,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
         (r) => r.pickup?.name !== pick?.name || r.destination?.name !== dest?.name,
       )].slice(0, 5);
       setRecentSearches(updated);
-      await AsyncStorage.setItem("driver_recent_searches_bike", JSON.stringify(updated));
+      await AsyncStorage.setItem(STORAGE_KEYS.driverRecentSearchesBike, JSON.stringify(updated));
     } catch {}
   };
 
@@ -247,40 +254,29 @@ export default function DriverBikeHomeScreen({ navigation }) {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.flex}
       >
-        <ScrollView bounces={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-
-  {/* ─── Hero ─── */}
-  <View style={styles.hero}>
-    <View style={styles.heroOverlay} />
-    <View style={styles.road}>
-      {Array.from({ length: 14 }).map((_, i) => (
-        <View key={i} style={[styles.roadDash, { left: i * (width / 14) + 8 }]} />
-      ))}
-      <View style={styles.roadCharacters}>
-        {/* <Image source={require('../../../assets/vayyPassenger2.png')} style={styles.roadCharacter} /> */}
-        {/* <Image source={require('../../../assets/vayyofficeWomen3.png')} style={styles.roadCharacter} /> */}
-        <Image source={require('../../../assets/vayyGirl.png')} style={styles.roadCharacter} />
-        <Image source={require('../../../assets/vayyBoy.png')} style={styles.roadCharacter} />
-        <Image source={require('../../../assets/VayyOfficeUncle.png')} style={styles.roadCharacter} />
-      </View>
-    </View>
-    <View style={styles.topContainer}>
-        <View style={styles.textContainer}>
-          <View style={styles.greetingRow}>
-            <Text style={styles.namasteIcon}>🙏</Text>
-          </View>
-          <View style={styles.greetingRow}>
-            <Text style={styles.heroTitle}>{greeting}</Text>
-            {greeting.length < 8 && <Animated.View style={[styles.typeCursor, { opacity: cursorRef }]} />}
-          </View>
-          {showName && <Text style={styles.heroAccent}>{driverName}</Text>}
-          <View style={styles.subRow}>
-            {subLine ? <Text style={styles.heroSub}>{subLine}</Text> : null}
-            {subLine.length > 0 && subLine.length < 32 && <Animated.View style={[styles.typeCursor, { height: 20 }, { opacity: cursorRef }]} />}
-          </View>
-        </View>
-        </View>
-      </View>
+        <ScrollView
+          bounces={false}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled={true}
+        >
+          <ImageBackground
+            imageStyle={styles.heroImage}
+            resizeMode="cover"
+            source={heroImages[0]}
+            style={styles.hero}
+          >
+            <View style={styles.heroOverlay} />
+            <View style={styles.heroCopy}>
+              <Text style={styles.heroTitle}>Start Your</Text>
+              <Text style={styles.heroTitleGreen}>Route</Text>
+              <Text style={styles.heroSubtitle}>
+                Enter your start and end locations{"\n"}
+                to find the best route to drive{"\n"}
+                and earn on every trip.
+              </Text>
+            </View>
+          </ImageBackground>
 
           {/* ─── Search Panel ─── */}
           <View style={styles.panel}>

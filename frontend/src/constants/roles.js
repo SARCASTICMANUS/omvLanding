@@ -1,19 +1,16 @@
 export const USER_ROLES = {
   driver: "driver",
+  bikedriver: "bikedriver",
+  autodriver: "autodriver",
   passenger: "passenger",
-  student: "student",
   admin: "admin",
-  cityAdmin: "city_admin",
-  universityAdmin: "university_admin",
-  superAdmin: "super_admin",
 };
 
 export const ADMIN_ROLES = [
   USER_ROLES.admin,
-  USER_ROLES.cityAdmin,
-  USER_ROLES.universityAdmin,
-  USER_ROLES.superAdmin,
 ];
 
-export const PASSENGER_ROLES = [USER_ROLES.passenger, USER_ROLES.student];
+export const PASSENGER_ROLES = [USER_ROLES.passenger];
+
+export const DRIVER_ROLES = [USER_ROLES.driver, USER_ROLES.bikedriver, USER_ROLES.autodriver];
 

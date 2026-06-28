@@ -1,19 +1,21 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Alert, Linking, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
+import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import BusIconBadge from "../../shared/components/common/BusIconBadge";
 import LiveDot from "../../shared/components/common/LiveDot";
 import VayyButton from "../../shared/components/common/VayyButton";
-import api, { getWsUrl } from "../../shared/lib/api";
+import api from "../../shared/lib/api";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import { WS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
 import SHADOW from "../../shared/constants/shadow";
 import SPACING from "../../shared/constants/spacing";
+import ZoomControls from "../../shared/components/common/ZoomControls";
 
 const toMapCoord = (point) => {
   if (!point) return null;
@@ -33,8 +35,31 @@ export default function PassengerLiveTracking({ navigation, route }) {
   const [wsStatus, setWsStatus] = useState("connecting");
   const [myPos, setMyPos] = useState(null);
 
-  const ws = useRef(null);
+  const mapRef = useRef(null);
   const markers = useRef({});
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
+
+  const handleWsMessage = useCallback((data) => {
+    if (data.type === "city_vehicle_update" || data.type === "vehicle_update") {
+      setBusData({
+        pos: [data.lat, data.lng || data.lon],
+        eta: data.next_stop_eta || [],
+      });
+    }
+  }, []);
+
+  const { connectionState } = useWebSocket(
+    tripId && tripId !== "undefined" ? WS.trackingTrip(tripId) : null,
+    {
+      enabled: !loading && !!tripId && tripId !== "undefined",
+      onMessage: handleWsMessage,
+    },
+  );
+
+  useEffect(() => {
+    setWsStatus(connectionState);
+  }, [connectionState]);
 
   useEffect(() => {
     const init = async () => {
@@ -44,7 +69,7 @@ export default function PassengerLiveTracking({ navigation, route }) {
       }
 
       try {
-        const res = await api.get(`/api/passenger/trips/${tripId}/`);
+        const res = await api.get(`/api/operations/trips/${tripId}/`);
         setTripIdData(res.data);
       } catch {
         setTripIdData(null);
@@ -71,42 +96,7 @@ export default function PassengerLiveTracking({ navigation, route }) {
     initLocation();
   }, []);
 
-  useEffect(() => {
-    if (loading || !tripId || tripId === "undefined") return undefined;
 
-    let isMounted = true;
-
-    const connect = async () => {
-      const token =
-        (await AsyncStorage.getItem("token")) ||
-        (await AsyncStorage.getItem("access_token"));
-      const wsUrl = getWsUrl(`/ws/public/global/passenger/${tripId}/?token=${token || ""}`);
-
-      if (!isMounted) return;
-
-      ws.current = new WebSocket(wsUrl);
-
-      ws.current.onopen = () => setWsStatus("connected");
-      ws.current.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        if (data.type === "city_vehicle_update" || data.type === "vehicle_update") {
-          setBusData({
-            pos: [data.lat, data.lon],
-            eta: data.next_stop_eta || [],
-          });
-        }
-      };
-      ws.current.onclose = () => setWsStatus("disconnected");
-    };
-
-    connect();
-
-    return () => {
-      isMounted = false;
-      ws.current?.close();
-    };
-  }, [loading, tripId]);
 
   useEffect(() => {
     markers.current = {
@@ -189,7 +179,8 @@ export default function PassengerLiveTracking({ navigation, route }) {
 
   return (
     <View style={styles.root}>
-      <MapView
+      <VayyMap
+        ref={mapRef}
         initialRegion={{
           ...initial,
           latitudeDelta: 0.08,
@@ -198,25 +189,51 @@ export default function PassengerLiveTracking({ navigation, route }) {
         style={styles.map}
       >
         {routeCoords.length > 1 ? (
-          <Polyline coordinates={routeCoords} strokeColor={COLORS.primary} strokeWidth={4} />
+          <GeoJSONSource
+            id="route-line"
+            data={{
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: routeCoords.map((c) => [c.longitude, c.latitude]),
+              },
+            }}
+          >
+            <Layer
+              id="route-line-layer"
+              type="line"
+              paint={{
+                "line-color": COLORS.primary,
+                "line-width": 4,
+                "line-cap": "round",
+                "line-join": "round",
+              }}
+            />
+          </GeoJSONSource>
         ) : null}
 
         {busCoord ? (
-          <Marker coordinate={busCoord}>
+          <ViewAnnotation id="bus-marker" lngLat={[busCoord.longitude, busCoord.latitude]} anchor="center">
             <View style={styles.busMarker}>
               <BusIconBadge size={34} />
             </View>
-          </Marker>
+          </ViewAnnotation>
         ) : null}
 
         {myCoord ? (
-          <Marker coordinate={myCoord}>
+          <ViewAnnotation id="my-marker" lngLat={[myCoord.longitude, myCoord.latitude]} anchor="center">
             <View style={styles.userMarker} />
-          </Marker>
+          </ViewAnnotation>
         ) : null}
 
-        {destinationCoord ? <Marker coordinate={destinationCoord} pinColor={COLORS.error} /> : null}
-      </MapView>
+        {destinationCoord ? (
+          <ViewAnnotation id="dest-marker" lngLat={[destinationCoord.longitude, destinationCoord.latitude]} anchor="center">
+            <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.error, borderWidth: 2, borderColor: "#fff" }} />
+          </ViewAnnotation>
+        ) : null}
+      </VayyMap>
+
+      <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
       <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
         <View style={styles.topRow}>

@@ -1,0 +1,31 @@
+apps/
+
+accounts/
+    models/
+    services/
+    selectors/
+    tasks/
+
+transport/
+    models/
+    services/
+    selectors/
+    tasks/
+
+operations/
+    models/
+    services/
+    selectors/
+    tasks/
+
+tracking/
+    models/
+    consumers/
+    publishers/
+    services/
+
+communication/
+    services/
+    tasks/
+
+common/

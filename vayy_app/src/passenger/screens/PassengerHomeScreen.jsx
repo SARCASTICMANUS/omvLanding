@@ -1,23 +1,29 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import MapView from "react-native-maps";
+import { useDispatch, useSelector } from "react-redux";
+import VayyMap from "../../shared/components/VayyMap";
 import AppFrame from "../../components/AppFrame";
 import BadgeChip from "../../components/BadgeChip";
 import Logo from "../../shared/components/common/Logo";
+import { setVehicleMode } from "../../store/slices/vehicleModeSlice";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 
 export default function PassengerHomeScreen({ navigation, mode = "auto" }) {
+  const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
   const isBike = mode === "bike";
   const accent = isBike ? colors.bikeAccent : colors.primary;
+  const displayName = user?.full_name || user?.name || user?.first_name || "there";
+  const quickLocations = user?.quickLocations || [];
   return (
     <AppFrame showBack={false}>
       <View style={styles.home}>
-        <MapView
+        <VayyMap
           style={styles.mapBg}
           initialRegion={{
-            latitude: 26.8467,
-            longitude: 80.9462,
+            latitude: user?.latitude || 26.8467,
+            longitude: user?.longitude || 80.9462,
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}
@@ -26,22 +32,25 @@ export default function PassengerHomeScreen({ navigation, mode = "auto" }) {
         />
         <View style={styles.homeTop}>
           <Logo />
-          <Text style={styles.greeting}>Good morning, Arjun</Text>
+          <Text style={styles.greeting}>Good morning, {displayName}</Text>
         </View>
         <View style={styles.bottomSheet}>
           <View style={styles.tabs}>
-            <TouchableOpacity style={[styles.tab, !isBike && { borderBottomColor: colors.primary }]} onPress={() => navigation.navigate("SharedAutoHome")}>
+            <TouchableOpacity style={[styles.tab, !isBike && { borderBottomColor: colors.primary }]} onPress={() => { dispatch(setVehicleMode("AUTO")); navigation.navigate("PassengerTripPlanner"); }}>
               <Text style={[styles.tabText, !isBike && { color: colors.primary }]}>Shared Auto</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.tab, isBike && { borderBottomColor: colors.bikeAccent }]} onPress={() => navigation.navigate("BikeRideHome")}>
+            <TouchableOpacity style={[styles.tab, isBike && { borderBottomColor: colors.bikeAccent }]} onPress={() => { dispatch(setVehicleMode("BIKE")); navigation.navigate("PassengerTripPlanner", { mode: "bike" }); }}>
               <Text style={[styles.tabText, isBike && { color: colors.bikeAccent }]}>Bike Ride</Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.searchBar} onPress={() => navigation.navigate(isBike ? "BikeFromTo" : "SharedAutoFromTo")}>
+          <TouchableOpacity style={styles.searchBar} onPress={() => navigation.navigate("PassengerTripPlanner", isBike ? { mode: "bike" } : undefined)}>
             <Text style={styles.searchText}>Where do you want to go?</Text>
           </TouchableOpacity>
           <View style={styles.chips}>
-            {["Home", "Office", "Railway Station"].map((label) => <BadgeChip key={label} label={label} accent={accent} />)}
+            {quickLocations.length > 0
+              ? quickLocations.map((label) => <BadgeChip key={label} label={label} accent={accent} />)
+              : ["Home", "Office", "Railway Station"].map((label) => <BadgeChip key={label} label={label} accent={accent} />)
+            }
           </View>
         </View>
       </View>

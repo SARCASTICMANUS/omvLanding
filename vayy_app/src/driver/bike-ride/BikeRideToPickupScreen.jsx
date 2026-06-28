@@ -12,13 +12,15 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
-import MapView from "react-native-maps";
+import VayyMap from "../../shared/components/VayyMap";
+import ZoomControls from "../../shared/components/common/ZoomControls";
 
 const { width } = Dimensions.get("window");
 
 export default function BikeRideToPickupScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const buddy = route.params?.buddy;
+  const mapRef = useRef(null);
   const [distance, setDistance] = useState(1.2);
   const [eta, setEta] = useState("4 min");
   const [showArrivedModal, setShowArrivedModal] = useState(false);
@@ -79,6 +81,9 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
     return () => animations.forEach((a) => a.stop());
   }, [dot1, dot2, dot3]);
 
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
+
   const handleArrived = () => setShowArrivedModal(true);
 
   const confirmArrival = () => {
@@ -90,7 +95,8 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
     <View style={styles.root}>
       {/* Map area */}
       <View style={styles.mapArea}>
-        <MapView
+        <VayyMap
+          ref={mapRef}
           style={styles.mapBg}
           initialRegion={{
             latitude: 26.8467,
@@ -126,6 +132,8 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
           <View style={{ width: 40 }} />
         </View>
       </View>
+
+      <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
       {/* Bottom sheet */}
       <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16 }]}>

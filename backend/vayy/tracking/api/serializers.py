@@ -1,0 +1,136 @@
+from rest_framework import serializers
+
+from tracking.models import HybridLog
+from operations.models import (
+    ActiveTrip,
+    Vehicle,
+)
+
+
+class LocationSerializer(serializers.Serializer):
+    lat = serializers.FloatField()
+    lng = serializers.FloatField()
+
+    def validate_lat(self, value):
+        if value < -90 or value > 90:
+            raise serializers.ValidationError(
+                "Latitude must be between -90 and 90."
+            )
+        return value
+
+    def validate_lng(self, value):
+        if value < -180 or value > 180:
+            raise serializers.ValidationError(
+                "Longitude must be between -180 and 180."
+            )
+        return value
+
+
+class HybridLogSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = HybridLog
+        fields = "__all__"
+
+
+class TelemetryIngestSerializer(serializers.Serializer):
+    vehicle_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+    )
+    trip_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+    )
+    lat = serializers.FloatField()
+    lng = serializers.FloatField()
+    speed = serializers.FloatField(
+        required=False,
+        default=0,
+    )
+    heading = serializers.FloatField(
+        required=False,
+        default=0,
+    )
+    cell_towers = serializers.ListField(
+        required=False,
+        default=list,
+    )
+    wifi_aps = serializers.ListField(
+        required=False,
+        default=list,
+    )
+
+    def validate_lat(self, value):
+        if value < -90 or value > 90:
+            raise serializers.ValidationError(
+                "Latitude must be between -90 and 90."
+            )
+        return value
+
+    def validate_lng(self, value):
+        if value < -180 or value > 180:
+            raise serializers.ValidationError(
+                "Longitude must be between -180 and 180."
+            )
+        return value
+
+    def validate_heading(self, value):
+        if value < 0 or value > 360:
+            raise serializers.ValidationError(
+                "Heading must be between 0 and 360."
+            )
+        return value
+
+    def validate(self, attrs):
+        vehicle = None
+        trip = None
+
+        vehicle_id = attrs.get("vehicle_id")
+        if vehicle_id:
+            vehicle = (
+                Vehicle.objects
+                .filter(id=vehicle_id)
+                .first()
+            )
+            if not vehicle:
+                raise serializers.ValidationError(
+                    {
+                        "vehicle_id": (
+                            "Vehicle not found."
+                        )
+                    }
+                )
+
+        trip_id = attrs.get("trip_id")
+        if trip_id:
+            trip = (
+                ActiveTrip.objects
+                .select_related("vehicle")
+                .filter(id=trip_id)
+                .first()
+            )
+            if not trip:
+                raise serializers.ValidationError(
+                    {
+                        "trip_id": (
+                            "Trip not found."
+                        )
+                    }
+                )
+            if vehicle and trip.vehicle_id != vehicle.id:
+                raise serializers.ValidationError(
+                    {
+                        "vehicle_id": (
+                            "Vehicle does not match "
+                            "the trip vehicle."
+                        )
+                    }
+                )
+            if not vehicle:
+                vehicle = trip.vehicle
+
+        attrs["vehicle"] = vehicle
+        attrs["trip"] = trip
+
+        return attrs

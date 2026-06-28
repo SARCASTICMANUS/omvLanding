@@ -1,18 +1,28 @@
 import React, { useState, useEffect } from "react";
 import { AlertCircle, X, Loader, Footprints } from "lucide-react";
-import api from "../../lib/api";
+import axios from "axios";
+
+const OSRM_HOST = "http://localhost:5000";
 
 const ProximityAlertModal = ({ alert, onClose }) => {
   const [walkingEta, setWalkingEta] = useState(null);
 
   useEffect(() => {
-    if (alert) {
-      // Fetch walking ETA using OSRM
-      api.post("/api/passenger/walking-eta/", {
-        lat: alert.lat,
-        lon: alert.lon,
-        // ... include user location if available
-      }).then(res => setWalkingEta(res.data.eta_minutes));
+    if (alert && alert.lat && alert.lon) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const userLat = pos.coords.latitude;
+          const userLon = pos.coords.longitude;
+          const url = `${OSRM_HOST}/route/v1/foot/${userLon},${userLat};${alert.lon},${alert.lat}?overview=false`;
+          axios.get(url).then((res) => {
+            if (res.data.code === "Ok" && res.data.routes.length > 0) {
+              const durationMin = Math.ceil(res.data.routes[0].duration / 60);
+              setWalkingEta(durationMin);
+            }
+          }).catch(() => setWalkingEta(null));
+        },
+        () => setWalkingEta(null),
+      );
     }
   }, [alert]);
 

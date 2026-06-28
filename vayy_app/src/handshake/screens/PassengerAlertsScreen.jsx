@@ -4,10 +4,10 @@ import {
   Text,
   FlatList,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import VayyCard from "../../shared/components/common/VayyCard";
 import COLORS from "../../shared/constants/colors";

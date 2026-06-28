@@ -14,6 +14,8 @@ import {
   Ionicons,
   MaterialIcons,
 } from "@expo/vector-icons";
+import { useDispatch, useSelector } from "react-redux";
+import { submitRating } from "../../store/slices/rideSlice";
 
 const { width } = Dimensions.get("window");
 
@@ -25,9 +27,21 @@ const RATING_LABELS = {
   5: "Excellent",
 };
 
-export function AutoRideCompleteScreen({ navigation }) {
+export function AutoRideCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const dispatch = useDispatch();
   const [rating, setRating] = useState(0);
+  const { ratingLoading } = useSelector((state) => state.ride);
+  const tripId = route?.params?.tripId;
+  const boardedAt = route?.params?.boardedAt || "";
+  const droppedAt = route?.params?.droppedAt || "";
+  const distance = route?.params?.distance || "";
+  const duration = route?.params?.duration || "";
+  const fare = route?.params?.fare || 0;
+  const paymentMethod = route?.params?.paymentMethod || "Cash";
+
+  const now = new Date();
+  const timeStr = `${now.toLocaleDateString("en-IN", { weekday: "short" })}, ${now.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`;
 
   const ratingHint = rating <= 2
     ? "Sorry about your experience"
@@ -69,7 +83,7 @@ export function AutoRideCompleteScreen({ navigation }) {
             </View>
             <View style={styles.tripInfo}>
               <Text style={styles.tripLabel}>Boarded at</Text>
-              <Text style={styles.tripValue}>Hazratganj Metro Gate 2</Text>
+              <Text style={styles.tripValue}>{boardedAt}</Text>
             </View>
           </View>
 
@@ -81,24 +95,24 @@ export function AutoRideCompleteScreen({ navigation }) {
             </View>
             <View style={styles.tripInfo}>
               <Text style={styles.tripLabel}>Dropped at</Text>
-              <Text style={styles.tripValue}>Charbagh Metro Gate 2</Text>
+              <Text style={styles.tripValue}>{droppedAt}</Text>
             </View>
           </View>
 
           <View style={styles.tripMeta}>
             <View style={styles.metaItem}>
               <MaterialIcons name="straighten" size={18} color="#6B7280" />
-              <Text style={styles.metaText}>3.2 km</Text>
+              <Text style={styles.metaText}>{distance}</Text>
             </View>
             <View style={styles.metaDot} />
             <View style={styles.metaItem}>
               <Ionicons name="time-outline" size={18} color="#6B7280" />
-              <Text style={styles.metaText}>15 min</Text>
+              <Text style={styles.metaText}>{duration}</Text>
             </View>
             <View style={styles.metaDot} />
             <View style={styles.metaItem}>
               <Ionicons name="calendar-outline" size={18} color="#6B7280" />
-              <Text style={styles.metaText}>Today, 5:10 PM</Text>
+              <Text style={styles.metaText}>{timeStr}</Text>
             </View>
           </View>
         </View>
@@ -106,25 +120,21 @@ export function AutoRideCompleteScreen({ navigation }) {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Fare</Text>
           <View style={styles.fareDisplay}>
-            <Text style={styles.fareAmount}>₹15</Text>
+            <Text style={styles.fareAmount}>₹{fare || "—"}</Text>
             <Text style={styles.fareNote}>Shared auto fare</Text>
             <View style={styles.paymentBadge}>
               <Ionicons name="cash" size={14} color="#009849" />
-              <Text style={styles.paymentText}>Paid via Cash</Text>
+              <Text style={styles.paymentText}>Paid via {paymentMethod}</Text>
             </View>
           </View>
           <View style={styles.fareBreakdown}>
             <View style={styles.fareRow}>
               <Text style={styles.fareRowLabel}>Estimated fare</Text>
-              <Text style={styles.fareRowValue}>₹15</Text>
+              <Text style={styles.fareRowValue}>₹{fare || "—"}</Text>
             </View>
             <View style={styles.fareRow}>
               <Text style={styles.fareRowLabel}>Distance travelled</Text>
-              <Text style={styles.fareRowValue}>3.2 km</Text>
-            </View>
-            <View style={styles.fareRow}>
-              <Text style={styles.fareRowLabel}>Rate applied</Text>
-              <Text style={styles.fareRowValue}>₹5/km</Text>
+              <Text style={styles.fareRowValue}>{distance || "—"}</Text>
             </View>
           </View>
         </View>
@@ -158,8 +168,14 @@ export function AutoRideCompleteScreen({ navigation }) {
         <View style={styles.actions}>
           <TouchableOpacity
             activeOpacity={0.9}
-            style={styles.primaryBtn}
-            onPress={() => navigation.navigate('AutoPreRide')}
+            style={[styles.primaryBtn, ratingLoading && { opacity: 0.6 }]}
+            disabled={ratingLoading}
+            onPress={async () => {
+              if (rating > 0 && tripId) {
+                await dispatch(submitRating({ trip: tripId, rating }));
+              }
+              navigation.navigate('AutoPreRide');
+            }}
           >
             <Ionicons name="car-outline" size={20} color="#FFFFFF" />
             <Text style={styles.primaryBtnText}>  Book Another Auto</Text>
@@ -168,7 +184,12 @@ export function AutoRideCompleteScreen({ navigation }) {
           <TouchableOpacity
             activeOpacity={0.7}
             style={styles.secondaryBtn}
-            onPress={() => navigation.popToTop()}
+            onPress={async () => {
+              if (rating > 0 && tripId) {
+                await dispatch(submitRating({ trip: tripId, rating }));
+              }
+              navigation.popToTop();
+            }}
           >
             <Text style={styles.secondaryBtnText}>Return Home</Text>
           </TouchableOpacity>

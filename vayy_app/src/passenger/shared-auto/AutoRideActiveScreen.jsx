@@ -8,7 +8,7 @@ import {
   StatusBar,
   Platform,
 } from "react-native";
-import MapView from "react-native-maps";
+import VayyMap from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -18,6 +18,7 @@ const { width } = Dimensions.get("window");
 export function AutoRideActiveScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
+  const cameraRef = useRef(null);
   const [remainingDistance] = useState(2400);
   const [remainingEta] = useState(12);
   const [speed] = useState(24);
@@ -25,13 +26,8 @@ export function AutoRideActiveScreen({ navigation }) {
   const [showEarlyEnd, setShowEarlyEnd] = useState(false);
   const atDestination = remainingDistance <= 100;
 
-  const zoomIn = () => {
-    mapRef.current?.animateCamera({ zoom: 16 });
-  };
-
-  const zoomOut = () => {
-    mapRef.current?.animateCamera({ zoom: 12 });
-  };
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
 
   const handleEndRide = () => {
     if (remainingDistance <= 100) {
@@ -58,9 +54,10 @@ export function AutoRideActiveScreen({ navigation }) {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <View style={styles.mapArea}>
-        <MapView
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
+          cameraRef={cameraRef}
           initialRegion={{
             latitude: 26.8467,
             longitude: 80.9462,

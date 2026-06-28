@@ -10,10 +10,10 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
-  SafeAreaView,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import api from "../../shared/lib/api";
+import { AUTH } from "../../constants";
 
 import COLORS from "../../shared/constants/colors";
 import SPACING from "../../shared/constants/spacing";
@@ -36,7 +36,7 @@ const PasswordResetPage = ({ navigation }) => {
       setLoading(true);
       setError(null);
       // Assuming endpoint exists based on backend conventions
-      await api.post("/api/auth/password/reset/", { email: email.trim().toLowerCase() });
+      await api.post(AUTH.forgotPassword, { email: email.trim().toLowerCase() });
       setSuccess(true);
     } catch (err) {
       setError(err.response?.data?.detail || "Could not send reset link. Please check your email.");

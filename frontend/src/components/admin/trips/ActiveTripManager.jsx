@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import api from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 import {
   Activity,
   MapPin,
@@ -27,7 +28,7 @@ const ActiveTripManager = ({ cityId }) => {
   const fetchActiveTrips = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/api/active-trips/`);
+      const res = await api.get(API_PATHS.operations.trips);
       const data = Array.isArray(res.data) ? res.data : res.data.results || [];
       setActiveTrips(data);
     } catch (e) {

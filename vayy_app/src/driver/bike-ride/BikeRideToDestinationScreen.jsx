@@ -11,13 +11,15 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
-import MapView from "react-native-maps";
+import VayyMap from "../../shared/components/VayyMap";
+import ZoomControls from "../../shared/components/common/ZoomControls";
 
 const { width } = Dimensions.get("window");
 
 export default function BikeRideToDestinationScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const buddy = route.params?.buddy;
+  const mapRef = useRef(null);
   const [distance, setDistance] = useState(3.8);
   const [eta, setEta] = useState("12 min");
   const [elapsed, setElapsed] = useState(0);
@@ -63,6 +65,9 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
 
   const progress = Math.max(0, Math.min(1, (3.8 - distance) / 3.8));
 
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
+
   const handleEndRide = () => {
     navigation.navigate("BikeTripComplete", { buddy });
   };
@@ -71,7 +76,8 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
     <View style={styles.root}>
       {/* Map area */}
       <View style={styles.mapArea}>
-        <MapView
+        <VayyMap
+          ref={mapRef}
           style={styles.mapBg}
           initialRegion={{
             latitude: 26.8467,
@@ -109,6 +115,8 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
           <View style={{ width: 40 }} />
         </View>
       </View>
+
+      <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
       {/* Bottom sheet */}
       <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16 }]}>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import api from "../../lib/api";
+import axios from "axios";
 import { Search, RefreshCw } from "lucide-react";
 
 // Debounce hook to prevent API spam
@@ -53,13 +53,29 @@ const LocationSearch = ({
       let ignore = false;
       setIsLoading(true);
 
-      // Using the global search API
-      api
-        .get(`/api/global-search/?q=${encodeURIComponent(debouncedQuery)}`)
+      // Using Nominatim (OpenStreetMap) for geocoding autocomplete
+      axios
+        .get(`https://nominatim.openstreetmap.org/search`, {
+          params: {
+            q: debouncedQuery,
+            format: "json",
+            limit: 5,
+            addressdetails: 1,
+          },
+          headers: {
+            "Accept-Language": "en",
+            "User-Agent": "VayyTransit/1.0 (https://vayy.app)",
+          },
+        })
         .then((res) => {
           setIsLoading(false);
           if (ignore || debouncedQuery === selectedQueryRef.current) return;
-          const nextResults = Array.isArray(res.data) ? res.data : [];
+          const rawResults = Array.isArray(res.data) ? res.data : [];
+          const nextResults = rawResults.map((item) => ({
+            display_name: item.display_name,
+            lat: parseFloat(item.lat),
+            lon: parseFloat(item.lon),
+          }));
           setResults(nextResults);
           setIsOpen(nextResults.length > 0);
         })

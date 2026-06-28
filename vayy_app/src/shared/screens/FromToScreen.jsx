@@ -3,13 +3,12 @@ import { Animated, StyleSheet, Text, TextInput, TouchableOpacity, View } from "r
 import AppFrame from "../../components/AppFrame";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
-import { typography } from "../../theme/typography";
 import Logo from "../components/common/Logo";
 import PrimaryButton from "../components/common/PrimaryButton";
 
-const recentLocations = ["Charbagh Railway Station", "IT City Gate 3", "Aliganj Bus Stop"];
-
-export function FromToScreen({ navigation, accent = colors.primary, nextRoute = "SharedAutoRouteList", title = "Plan your route" }) {
+export default function FromToScreen({ navigation, route, accent = colors.primary, nextRoute = "SharedAutoRouteList", title = "Plan your route" }) {
+  const pickup = route?.params?.pickup || "";
+  const recentLocations = route?.params?.recentLocations || [];
   const rotate = useRef(new Animated.Value(0)).current;
   const onSwap = () => {
     Animated.timing(rotate, { toValue: 1, duration: 300, useNativeDriver: true }).start(() => rotate.setValue(0));
@@ -20,7 +19,7 @@ export function FromToScreen({ navigation, accent = colors.primary, nextRoute = 
     <AppFrame navigation={navigation} title={title} accent={accent}>
       <View style={styles.page}>
         <View style={styles.inputPanel}>
-          <TextInput style={styles.input} value="Hazratganj Metro Gate 2" placeholderTextColor={colors.textMuted} />
+          <TextInput style={styles.input} value={pickup} placeholderTextColor={colors.textMuted} editable={false} />
           <Animated.View style={[styles.swap, { transform: [{ rotate: spin }] }]}>
             <TouchableOpacity onPress={onSwap}>
               <Text style={styles.swapText}>⇅</Text>
@@ -29,12 +28,14 @@ export function FromToScreen({ navigation, accent = colors.primary, nextRoute = 
           <TextInput style={styles.input} placeholder="Where to?" placeholderTextColor={colors.textMuted} />
         </View>
         <Text style={styles.sectionTitle}>Recent locations</Text>
-        {recentLocations.map((item) => (
+        {recentLocations.length > 0 ? recentLocations.map((item) => (
           <View key={item} style={styles.locationRow}>
             <Text style={styles.locationIcon}>◷</Text>
             <Text style={styles.locationText}>{item}</Text>
           </View>
-        ))}
+        )) : (
+          <Text style={styles.locationText}>No recent locations</Text>
+        )}
         <View style={styles.footer}>
           <PrimaryButton label="Search Routes" accent={accent} onPress={() => navigation.navigate(nextRoute)} />
         </View>

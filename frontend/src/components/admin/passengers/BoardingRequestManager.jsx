@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import api from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 import {
   Ticket,
   User,
@@ -26,7 +27,7 @@ const BoardingRequestManager = ({ cityId }) => {
   const fetchRequests = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/api/boarding-requests/");
+      const res = await api.get(API_PATHS.operations.boardingRequests);
       const data = Array.isArray(res.data) ? res.data : res.data.results || [];
       setRequests(data);
     } catch (e) {
@@ -38,7 +39,7 @@ const BoardingRequestManager = ({ cityId }) => {
 
   const handleUpdateStatus = async (id, status) => {
     try {
-      await api.post(`/api/boarding-requests/${id}/update_status/`, { status });
+      await api.post(API_PATHS.operations.boardingRequestBoarded(id), { status });
       setRequests(requests.map(r => r.id === id ? { ...r, status } : r));
     } catch (e) {
       console.error("Failed to update status", e);

@@ -7,11 +7,13 @@ import COLORS from "../shared/constants/colors";
 import DriverModeSelectScreen from "../driver/screens/DriverModeSelectScreen";
 import DriverBikeHomeScreen from "../driver/bike-ride/DriverBikeHomeScreen";
 import DriverRouteList from "../driver/screens/DriverRouteList";
+import DriverFindPassengersScreen from "../driver/screens/DriverFindPassengersScreen";
 import DriverLiveTracking from "../driver/screens/DriverLiveTracking";
 import DriverTripReview from "../driver/screens/DriverTripReview";
 import DriverActionsScreen from "../driver/bike-ride/DriverActionsScreen";
 import DriverTripHistoryScreen from "../driver/screens/DriverTripHistoryScreen";
 import ProfileScreen from "../shared/screens/ProfileScreen";
+import EditProfileScreen from "../shared/screens/EditProfileScreen";
 import BikeFindPassengerScreen from "../driver/bike-ride/BikeFindPassengerScreen";
 
 // Auto Flow Screens
@@ -29,12 +31,15 @@ import AutoLiveTrackingScreen from "../driver/shared-auto/AutoLiveTrackingScreen
 
 // Bike Flow Screens
 import { BikeSearchingScreen } from "../passenger/bike-ride/BikeSearchingScreen";
-import { BuddyRequestPopupScreen } from "../driver/bike-ride/BikeBookingScreen";
+import BuddyRequestPopupScreen from "../driver/bike-ride/BikeBookingScreen";
 import BikeOTPEntryScreen from "../driver/bike-ride/BikeOTPEntryScreen";
+import BikeOTPHandshakeScreen from "../driver/bike-ride/BikeOTPHandshakeScreen";
+import VehicleSelectionScreen from "../driver/screens/VehicleSelectionScreen";
 import BikeRideToPickupScreen from "../driver/bike-ride/BikeRideToPickupScreen";
 import BikeRideToDestinationScreen from "../driver/bike-ride/BikeRideToDestinationScreen";
 import BikeTripCompleteScreen from "../driver/bike-ride/BikeTripCompleteScreen";
 import BikeTrackingScreen from "../driver/bike-ride/BikeTrackingScreen";
+import TripEndSummary from "../routes/screens/TripEndSummary";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -79,17 +84,22 @@ export default function DriverNavigator() {
       <Stack.Screen name="DriverTripReview" component={DriverTripReview} />
       <Stack.Screen name="DriverLiveTracking" component={DriverLiveTracking} />
       <Stack.Screen name="DriverTripHistoryScreen" component={DriverTripHistoryScreen} />
+      <Stack.Screen name="VehicleSelectionScreen" component={VehicleSelectionScreen} />
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="FindPassenger" component={BikeFindPassengerScreen} />
+      <Stack.Screen name="DriverFindPassengers" component={DriverFindPassengersScreen} />
       <Stack.Screen name="AheadAlert" component={AutoAheadAlertScreen} />
       <Stack.Screen name="BoardedPopup" component={AutoBoardedPopupScreen} />
       <Stack.Screen name="AutoRideActive" component={AutoLiveTrackingScreen} />
       <Stack.Screen name="BikeSearching" component={BikeSearchingScreen} />
       <Stack.Screen name="BuddyRequestPopup" component={BuddyRequestPopupScreen} />
       <Stack.Screen name="BikeOTPEntry" component={BikeOTPEntryScreen} />
+      <Stack.Screen name="OTPHandshake" component={BikeOTPHandshakeScreen} />
       <Stack.Screen name="BikeRideToPickup" component={BikeRideToPickupScreen} />
       <Stack.Screen name="BikeRideToDestination" component={BikeRideToDestinationScreen} />
       <Stack.Screen name="BikeTripComplete" component={BikeTripCompleteScreen} />
       <Stack.Screen name="BikeTracking" component={BikeTrackingScreen} />
+      <Stack.Screen name="TripEndSummary" component={TripEndSummary} />
       <Stack.Screen name="DriverAutoHome" component={DriverAutoHomeScreen} />
       <Stack.Screen name="AutoFindPassenger" component={AutoFindPassengerScreen} />
       <Stack.Screen name="AutoRideToPickup" component={AutoRideToPickupScreen} />

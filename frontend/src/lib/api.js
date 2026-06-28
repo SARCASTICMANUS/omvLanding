@@ -3,6 +3,7 @@
 import axios from "axios";
 import { store } from "../app/store";
 import { logout, refreshTokenSuccess } from "../features/auth/authSlice";
+import { API_PATHS } from "../constants/apiPaths";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
@@ -34,7 +35,7 @@ api.interceptors.response.use(
       if (refreshToken) {
         try {
           const res = await axios.post(
-            (import.meta.env.VITE_API_URL || "http://localhost:8000") + "/api/auth/refresh/",
+            (import.meta.env.VITE_API_URL || "http://localhost:8000") + API_PATHS.auth.refresh,
             { refresh: refreshToken }
           );
           

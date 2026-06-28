@@ -1,11 +1,31 @@
-import React from "react";
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, StatusBar } from "react-native";
+import React, { useEffect } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, ActivityIndicator } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useDispatch, useSelector } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
+import { fetchRideHistory } from "../../store/slices/rideSlice";
 
 export default function DriverTripHistoryScreen({ navigation, route }) {
+  const dispatch = useDispatch();
   const { mode = "bike" } = route?.params || {};
   const accent = mode === "auto" ? "#BA7517" : "#009849";
+  const { history, historyLoading } = useSelector((state) => state.ride);
+  const lastTrip = history?.[0];
+
+  useEffect(() => {
+    dispatch(fetchRideHistory({ status: "completed", page: 1 }));
+  }, [dispatch]);
+
+  if (historyLoading) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <View style={[styles.container, { justifyContent: "center" }]}>
+          <ActivityIndicator size="large" color={accent} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.root}>
@@ -15,21 +35,23 @@ export default function DriverTripHistoryScreen({ navigation, route }) {
           <Ionicons name="checkmark-circle" size={64} color={accent} />
         </View>
         <Text style={styles.title}>Trip Complete</Text>
-        <Text style={styles.subtitle}>You've reached your destination safely</Text>
+        <Text style={styles.subtitle}>
+          {lastTrip?.route_name || "You've reached your destination safely"}
+        </Text>
 
         <View style={styles.statsCard}>
           <View style={styles.stat}>
-            <Text style={styles.statValue}>₹85</Text>
+            <Text style={styles.statValue}>{lastTrip?.fare ? `₹${lastTrip.fare}` : lastTrip?.earnings ? `₹${lastTrip.earnings}` : "--"}</Text>
             <Text style={styles.statLabel}>Earnings</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
-            <Text style={styles.statValue}>4.2 km</Text>
+            <Text style={styles.statValue}>{lastTrip?.distance ? (typeof lastTrip.distance === "number" ? `${lastTrip.distance.toFixed(1)} km` : lastTrip.distance) : lastTrip?.distance_km ? `${lastTrip.distance_km} km` : "--"}</Text>
             <Text style={styles.statLabel}>Distance</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
-            <Text style={styles.statValue}>12 min</Text>
+            <Text style={styles.statValue}>{lastTrip?.duration ? `${lastTrip.duration} min` : lastTrip?.duration_minutes ? `${lastTrip.duration_minutes} min` : "--"}</Text>
             <Text style={styles.statLabel}>Duration</Text>
           </View>
         </View>

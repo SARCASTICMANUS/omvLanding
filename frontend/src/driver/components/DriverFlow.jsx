@@ -71,7 +71,7 @@ export default function DriverFlow() {
   }, [activeTrip?.id, dispatch]);
 
   const fetchDriverRoutes = async (from = null, to = null) => {
-    let url = "/api/driver/routes/";
+    let url = API_PATHS.driver.routes;
     if (from && to) {
       const params = new URLSearchParams({
         source_lat: from.lat,
@@ -89,7 +89,7 @@ export default function DriverFlow() {
       return normalizeDriverRoutes(response.data).map(buildRouteSummary);
     } catch (error) {
       console.warn("Driver route search failed, falling back to full list", error);
-      const response = await api.get("/api/routes/");
+      const response = await api.get(API_PATHS.transport.routes);
       return normalizeDriverRoutes(response.data).map(buildRouteSummary);
     }
   };
@@ -129,7 +129,14 @@ export default function DriverFlow() {
     dispatch(setSearchQuery({ source: from, destination: to }));
 
     // Save to recent searches - using passenger endpoint as a known working path
-    api.post("/api/passenger/recent-searches/", { pickup: from, destination: to })
+    api.post(API_PATHS.auth.recentSearches, {
+      pickup_name: from?.name || from?.display_name || "",
+      pickup_lat: from?.lat || 0,
+      pickup_lon: from?.lon || 0,
+      destination_name: to?.name || to?.display_name || "",
+      destination_lat: to?.lat || 0,
+      destination_lon: to?.lon || 0,
+    })
       .catch(err => console.error("Failed to save recent search", err));
 
     try {

@@ -34,6 +34,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 // --- Assets/Icons ---
 import api from "../../lib/api";
+import { API_PATHS } from "../../constants/apiPaths";
 import DriverManifest from "./DriverManifest";
 import DriverRouteList from "./DriverRouteList";
 import DriverStopsTimeline from "./DriverStopsTimeline";
@@ -203,7 +204,7 @@ export default function MapDriver({
 
       if (liveTripData?.trip_id && !String(liveTripData.trip_id).startsWith("preview-") && index % 6 === 0) {
         api
-          .post("/api/telemetry/ingest/", {
+          .post(API_PATHS.tracking.ingest, {
             type: "gps",
             trip_id: liveTripData.trip_id,
             lat: path[index][1],
@@ -509,7 +510,7 @@ export default function MapDriver({
 
   // Load Routes on Mount
   useEffect(() => {
-    api.get("/api/driver/routes/")
+    api.get(API_PATHS.transport.driverRoutes)
       .then((res) => setAvailableRoutes(res.data))
       .catch((err) => console.error("Failed to load routes", err));
   }, []);
@@ -528,7 +529,7 @@ export default function MapDriver({
 
     const pollTrip = async () => {
       try {
-        const res = await api.get(`/api/driver/trip-status/${tripData.trip_id}/`);
+        const res = await api.get(API_PATHS.operations.tripNextStops(tripData.trip_id));
         if (res.data.next_stops) {
           setNextStops(res.data.next_stops);
         }
@@ -559,7 +560,7 @@ export default function MapDriver({
     try {
       let routeDetails = selectedRoute;
       if (!routeDetails.stops || !routeDetails.path_coords) {
-        const routeRes = await api.get(`/api/routes/${selectedRoute.city ? `?city=${selectedRoute.city}` : ""}`);
+        const routeRes = await api.get(`${API_PATHS.transport.routes}${selectedRoute.city ? `?city=${selectedRoute.city}` : ""}`);
         const routes = Array.isArray(routeRes.data) ? routeRes.data : routeRes.data?.results || [];
         routeDetails = routes.find((route) => String(route.id) === String(selectedRouteId)) || selectedRoute;
       }
@@ -577,7 +578,7 @@ export default function MapDriver({
       const start = { lat: firstPoint[1], lon: firstPoint[0] };
       const end = { lat: lastPoint[1], lon: lastPoint[0] };
 
-      const res = await api.post("/api/admin/routes/preview/", { 
+      const res = await api.post(API_PATHS.transport.routePreview, { 
           start, 
           end,
           stops: orderedStops
@@ -627,7 +628,7 @@ export default function MapDriver({
     if (!selectedRouteId || !routePath) return;
     try {
       // Actually start the trip now
-      const res = await api.post("/api/driver/start-trip/", { route_id: selectedRouteId });
+      const res = await api.post(API_PATHS.operations.tripStart, { route_id: selectedRouteId });
       const liveTripData = {
         ...tripData,
         ...res.data,
@@ -651,7 +652,7 @@ export default function MapDriver({
     if (ws.current) ws.current.close();
 
     if (activeTripId && !String(activeTripId).startsWith("preview-")) {
-      api.post(`/api/trips/end/${activeTripId}/`).catch((err) => {
+      api.post(API_PATHS.operations.dispatchComplete(activeTripId)).catch((err) => {
         console.warn("Failed to end trip on server", err);
       });
     }

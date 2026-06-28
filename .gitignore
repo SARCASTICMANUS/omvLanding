@@ -14,14 +14,20 @@ vayy.zip
 # --- Backend (Django) ---
 backend/__pycache__/
 __pycache__/
-backend/*.py[cod]
-backend/*$py.class
+backend/vayy/*.py[cod]
+backend/vayy/*$py.class
 backend/venv/
-backend/env/
+backend/vayy/env/
 backend/.env
+backend/vayy/.env
+backend/**/.env
 backend/db.sqlite3
-backend/media/
-backend/static_root/
+backend/vayy/media/
+backend/vayy/static_root/
+backend/vayy/staticfiles/
+**/migrations/*
+!**/migrations/__init__.py
+
 
 # --- OSRM Data ---
 # Excludes all .pbf files and processed OSRM routing files
@@ -36,6 +42,12 @@ backend/osrm-data2/*
 backend/osrm-data2/*.pbf
 backend/osrm-data2/*.osrm*
 backend/osrm-data2/*.lua
+
+backend/vayy/osrm
+backend/vayy/osrm/*
+backend/vayy/osrm/*.pbf
+backend/vayy/osrm/*.osrm*
+backend/vayy/osrm/*.lua
 
 # Django migrations
 backend/**/migrations/*.py
@@ -62,3 +74,9 @@ vayy_app/.env
 vayy_app/npm-debug.log*
 vayy_app/yarn-debug.log*
 vayy_app/yarn-error.log*
+vayy_app/android/
+
+admin/dist
+admin/dist/
+admin/node_modules
+admin/node_modules/

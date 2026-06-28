@@ -8,6 +8,7 @@ import {
   StatusBar,
   ScrollView,
   Platform,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -15,12 +16,29 @@ import {
   MaterialIcons,
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
+import { useDispatch, useSelector } from "react-redux";
+import { submitRating } from "../../store/slices/rideSlice";
 
 const { width } = Dimensions.get("window");
 
-export function RideCompleteScreen({ navigation }) {
+export function RideCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const dispatch = useDispatch();
   const [rating, setRating] = useState(0);
+  const { ratingLoading } = useSelector((state) => state.ride);
+  const tripId = route?.params?.tripId;
+  const riderName = route?.params?.riderName || "Driver";
+  const vehicleText = route?.params?.vehicleText || "";
+  const pickup = route?.params?.pickup || "";
+  const dropoff = route?.params?.dropoff || "";
+  const distance = route?.params?.distance || "";
+  const duration = route?.params?.duration || "";
+  const fare = route?.params?.fare || 0;
+  const driverRating = route?.params?.driverRating || 0;
+  const paymentMethod = route?.params?.paymentMethod || "Cash";
+
+  const now = new Date();
+  const timeStr = `${now.toLocaleDateString("en-IN", { weekday: "short" })}, ${now.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`;
 
   return (
     <View style={styles.container}>
@@ -48,16 +66,16 @@ export function RideCompleteScreen({ navigation }) {
         <View style={styles.card}>
           <View style={styles.driverRow}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarInitial}>P</Text>
+              <Text style={styles.avatarInitial}>{riderName.charAt(0)}</Text>
               <View style={styles.onlineDot} />
             </View>
             <View style={styles.driverInfo}>
-              <Text style={styles.driverName}>Priya Sharma</Text>
-              <Text style={styles.vehicleText}>Royal Enfield Classic</Text>
+              <Text style={styles.driverName}>{riderName}</Text>
+              <Text style={styles.vehicleText}>{vehicleText}</Text>
             </View>
             <View style={styles.ratingBadge}>
               <Ionicons name="star" size={14} color="#FFB800" />
-              <Text style={styles.ratingText}>4.9</Text>
+              <Text style={styles.ratingText}>{driverRating || "—"}</Text>
             </View>
           </View>
         </View>
@@ -71,7 +89,7 @@ export function RideCompleteScreen({ navigation }) {
             </View>
             <View style={styles.tripInfo}>
               <Text style={styles.tripLabel}>Pickup</Text>
-              <Text style={styles.tripValue}>Hazratganj Metro Gate 2</Text>
+              <Text style={styles.tripValue}>{pickup}</Text>
             </View>
           </View>
 
@@ -83,24 +101,24 @@ export function RideCompleteScreen({ navigation }) {
             </View>
             <View style={styles.tripInfo}>
               <Text style={styles.tripLabel}>Dropoff</Text>
-              <Text style={styles.tripValue}>Charbagh Metro Gate 2</Text>
+              <Text style={styles.tripValue}>{dropoff}</Text>
             </View>
           </View>
 
           <View style={styles.tripMeta}>
             <View style={styles.metaItem}>
               <MaterialIcons name="straighten" size={18} color="#6B7280" />
-              <Text style={styles.metaText}>3.2 km</Text>
+              <Text style={styles.metaText}>{distance}</Text>
             </View>
             <View style={styles.metaDot} />
             <View style={styles.metaItem}>
               <Ionicons name="time-outline" size={18} color="#6B7280" />
-              <Text style={styles.metaText}>12 min</Text>
+              <Text style={styles.metaText}>{duration}</Text>
             </View>
             <View style={styles.metaDot} />
             <View style={styles.metaItem}>
               <Ionicons name="calendar-outline" size={18} color="#6B7280" />
-              <Text style={styles.metaText}>Today, 4:20 PM</Text>
+              <Text style={styles.metaText}>{timeStr}</Text>
             </View>
           </View>
         </View>
@@ -109,21 +127,8 @@ export function RideCompleteScreen({ navigation }) {
           <Text style={styles.sectionTitle}>Fare Breakdown</Text>
 
           <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Base Fare</Text>
-            <Text style={styles.fareValue}>₹25</Text>
-          </View>
-          <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Distance (3.2 km × ₹5/km)</Text>
-            <Text style={styles.fareValue}>₹16</Text>
-          </View>
-          <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Time (12 min × ₹2/min)</Text>
-            <Text style={styles.fareValue}>₹24</Text>
-          </View>
-          <View style={styles.fareDivider} />
-          <View style={styles.fareRow}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>₹65</Text>
+            <Text style={styles.fareLabel}>Fare</Text>
+            <Text style={styles.fareValue}>₹{fare}</Text>
           </View>
         </View>
 
@@ -131,9 +136,9 @@ export function RideCompleteScreen({ navigation }) {
           <View style={styles.paymentBadgeRow}>
             <View style={styles.paymentBadge}>
               <Ionicons name="wallet" size={16} color="#009849" />
-              <Text style={styles.paymentBadgeText}>Paid via Cash</Text>
+              <Text style={styles.paymentBadgeText}>Paid via {paymentMethod}</Text>
             </View>
-            <Text style={styles.paymentAmount}>₹65</Text>
+            <Text style={styles.paymentAmount}>₹{fare}</Text>
           </View>
         </View>
 
@@ -164,8 +169,14 @@ export function RideCompleteScreen({ navigation }) {
         <View style={styles.actions}>
           <TouchableOpacity
             activeOpacity={0.9}
-            style={styles.primaryBtn}
-            onPress={() => navigation.navigate('BikeMapPreRide')}
+            style={[styles.primaryBtn, ratingLoading && { opacity: 0.6 }]}
+            disabled={ratingLoading}
+            onPress={async () => {
+              if (rating > 0 && tripId) {
+                await dispatch(submitRating({ trip: tripId, rating }));
+              }
+              navigation.navigate('BikeMapPreRide');
+            }}
           >
             <Ionicons name="bicycle-outline" size={20} color="#FFFFFF" />
             <Text style={styles.primaryBtnText}>  Book Another Ride</Text>
@@ -174,7 +185,12 @@ export function RideCompleteScreen({ navigation }) {
           <TouchableOpacity
             activeOpacity={0.7}
             style={styles.secondaryBtn}
-            onPress={() => navigation.popToTop()}
+            onPress={async () => {
+              if (rating > 0 && tripId) {
+                await dispatch(submitRating({ trip: tripId, rating }));
+              }
+              navigation.popToTop();
+            }}
           >
             <Text style={styles.secondaryBtnText}>Back to Home</Text>
           </TouchableOpacity>

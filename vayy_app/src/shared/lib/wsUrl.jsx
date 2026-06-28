@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { DEFAULT_API_URL } from "../../constants";
 
 const trimTrailingSlash = (value) => value.replace(/\/+$/, "");
 
@@ -10,7 +11,7 @@ export const getWsUrl = (path) => {
     const extraUrl = Constants.expoConfig?.extra?.apiUrl;
     if (extraUrl && extraUrl.trim().length > 0) return extraUrl;
 
-    return "http://localhost:8000";
+    return DEFAULT_API_URL;
   };
 
   const baseUrl = trimTrailingSlash(getBaseUrl());

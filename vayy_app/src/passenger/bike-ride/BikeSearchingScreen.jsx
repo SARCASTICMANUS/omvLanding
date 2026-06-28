@@ -9,9 +9,10 @@ import {
   Animated,
   Easing,
 } from "react-native";
-import MapView from "react-native-maps";
+import VayyMap from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useDispatch, useSelector } from "react-redux";
 import {
   Ionicons,
   MaterialIcons,
@@ -19,47 +20,84 @@ import {
 
 import { NoRideFoundPopup } from "./NoRideFoundPopup";
 import { ConfirmPopup } from "./ConfirmPopup";
+import { requestDispatch, cancelDispatch, setDispatchStatus } from "../../store/slices/dispatchSlice";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import { WS } from "../../constants";
 
 const { width } = Dimensions.get("window");
 
-export function BikeSearchingScreen({ navigation }) {
+export function BikeSearchingScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const dispatch = useDispatch();
+  const { activeDispatch, status: dispatchStatus } = useSelector((state) => state.dispatch);
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(1)).current;
   const [showNoRide, setShowNoRide] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [searchStatus, setSearchStatus] = useState("searching");
   const timerRef = useRef(null);
+  const { route_id, pickup_stop_id } = route?.params || {};
+  const dispatchId = activeDispatch?.id || activeDispatch?.dispatch_id;
   const mapRef = useRef(null);
+  const cameraRef = useRef(null);
 
-  const zoomIn = () => {
-    mapRef.current?.animateCamera({ zoom: 16 });
-  };
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
 
-  const zoomOut = () => {
-    mapRef.current?.animateCamera({ zoom: 12 });
-  };
+  const handleWsMessage = useCallback((data) => {
+    if (data.type === "dispatch_accepted") {
+      dispatch(setDispatchStatus("accepted"));
+    } else if (data.type === "dispatch_rejected") {
+      dispatch(setDispatchStatus("failed"));
+    }
+  }, [dispatch]);
+
+  useWebSocket(dispatchId ? WS.dispatch(dispatchId) : null, {
+    enabled: !!dispatchId && dispatchStatus === "requested",
+    onMessage: handleWsMessage,
+  });
 
   const startSearch = useCallback(() => {
     setShowNoRide(false);
     setSearchStatus("searching");
-    timerRef.current = setTimeout(() => {
-      setShowNoRide(true);
-      setSearchStatus("failed");
-    }, 4000);
-  }, []);
+
+    if (route_id && pickup_stop_id) {
+      dispatch(requestDispatch({ route_id, pickup_stop_id, mode: "bike" }));
+    } else {
+      timerRef.current = setTimeout(() => {
+        setShowNoRide(true);
+        setSearchStatus("failed");
+      }, 4000);
+    }
+  }, [route_id, pickup_stop_id, dispatch]);
 
   function handleTryAgain() {
     setShowNoRide(false);
     setSearchStatus("searching");
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      setSearchStatus("found");
-      setTimeout(() => {
-        navigation.replace('RiderArriving');
-      }, 600);
-    }, 4000);
+
+    if (route_id && pickup_stop_id) {
+      dispatch(requestDispatch({ route_id, pickup_stop_id, mode: "bike" }));
+    } else {
+      timerRef.current = setTimeout(() => {
+        setSearchStatus("found");
+        setTimeout(() => {
+          navigation.navigate('RiderPopup');
+        }, 600);
+      }, 4000);
+    }
   }
+
+  useEffect(() => {
+    if (dispatchStatus === "requested" || dispatchStatus === "accepted") {
+      setSearchStatus("found");
+      setTimeout(() => navigation.navigate('RiderPopup'), 600);
+    }
+    if (dispatchStatus === "failed") {
+      setShowNoRide(true);
+      setSearchStatus("failed");
+    }
+  }, [dispatchStatus, navigation]);
 
   useEffect(() => {
     Animated.loop(
@@ -86,15 +124,21 @@ export function BikeSearchingScreen({ navigation }) {
     };
   }, [startSearch, scaleAnim, opacityAnim]);
 
+  const handleCancelRequest = () => {
+    setShowCancelConfirm(false);
+    navigation.goBack();
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Map Area with Searching Animation */}
       <View style={styles.mapArea}>
-        <MapView
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
+          cameraRef={cameraRef}
           initialRegion={{
             latitude: 26.8467,
             longitude: 80.9462,

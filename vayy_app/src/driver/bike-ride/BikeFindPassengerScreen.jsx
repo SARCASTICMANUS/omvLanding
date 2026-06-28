@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Animated,
   Dimensions,
@@ -11,8 +11,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import MapView, { Marker } from "react-native-maps";
+import { useDispatch, useSelector } from "react-redux";
+import { acceptDispatch, rejectDispatch, setDispatchStatus } from "../../store/slices/dispatchSlice";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import { WS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
+import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
+import ZoomControls from "../../shared/components/common/ZoomControls";
 
 const { width, height } = Dimensions.get("window");
 
@@ -29,15 +34,59 @@ const PASSENGERS = [
   { id: "p3", name: "Amit Verma", rating: 4.7, trips: 31, pickup: "Gomti Nagar", drop: "Indira Nagar", distance: "550 m", fare: "₹40", eta: "5 min", lat: 26.8513, lng: 80.9860 },
 ];
 
+const CHECKS = [
+  { key: "network", label: "Network", icon: "wifi" },
+  { key: "gps", label: "GPS Signal", icon: "navigate" },
+  { key: "location", label: "Location", icon: "location" },
+  { key: "device", label: "Device Status", icon: "phone-portrait" },
+];
+
 export default function BikeFindPassengerScreen({ navigation, route: navRoute }) {
   const insets = useSafeAreaInsets();
+  const dispatch = useDispatch();
+  const dispatchId = navRoute?.params?.dispatchId;
+  const { user } = useSelector((state) => state.auth);
+  const userId = user?.id;
   const [showVerify, setShowVerify] = useState(true);
+  const [checks, setChecks] = useState(CHECKS.map((c) => ({ ...c, status: "pending" })));
+  const [allPassed, setAllPassed] = useState(false);
+  const [phase, setPhase] = useState("scanning");
   const [online, setOnline] = useState(false);
-  const [selectedPassenger, setSelectedPassenger] = useState(null);
+  const [currentBuddy, setCurrentBuddy] = useState(null);
   const [passengerIndex, setPassengerIndex] = useState(0);
-  const [phase, setPhase] = useState("idle");
-  const [bikePos] = useState({ latitude: 26.8467, longitude: 80.9462 });
+  const [selectedPassenger, setSelectedPassenger] = useState(null);
+  const [bikePos, setBikePos] = useState({
+    latitude: INITIAL_REGION.latitude,
+    longitude: INITIAL_REGION.longitude,
+  });
+  const mapRef = useRef(null);
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
 
+  const handleWsMessage = useCallback((data) => {
+    if (data.type === "new_dispatch_request" && data.dispatch) {
+      const req = data.dispatch;
+      const realBuddy = {
+        id: req.id || "ws_req",
+        name: req.passenger_name || req.user_name || "Passenger",
+        rating: req.passenger_rating || 4.5,
+        trips: req.passenger_trips || 0,
+        pickup: req.pickup_name || req.pickup || "Unknown",
+        drop: req.drop_name || req.drop || "Unknown",
+        distance: req.distance ? `${req.distance}` : "500 m",
+        fare: req.fare ? `₹${req.fare}` : "₹30",
+        eta: req.eta ? `${req.eta} min` : "3 min",
+        avatar: (req.passenger_name || "P").split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase() || "P",
+      };
+      setCurrentBuddy(realBuddy);
+      setPhase("found");
+    }
+  }, []);
+
+  useWebSocket(userId ? WS.notifications(userId) : null, {
+    enabled: !showVerify && !!userId,
+    onMessage: handleWsMessage,
+  });
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(height)).current;
   const verifySlide = useRef(new Animated.Value(0)).current;
@@ -82,10 +131,16 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   }, [online, passengerIndex, pulseAnim, sweepAnim]);
 
   const handleAccept = () => {
-    navigation.navigate("BikeRideToPickup", { buddy: selectedPassenger });
+    if (dispatchId) {
+      dispatch(acceptDispatch(dispatchId));
+    }
+    navigation.navigate("BikeRideToPickup", { buddy: currentBuddy, dispatchId });
   };
 
   const handleIgnore = () => {
+    if (dispatchId) {
+      dispatch(rejectDispatch(dispatchId));
+    }
     Animated.timing(slideAnim, { toValue: height, duration: 250, useNativeDriver: true }).start(() => {
       const next = (passengerIndex + 1) % PASSENGERS.length;
       setPassengerIndex(next);
@@ -111,33 +166,38 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Real map background */}
-      <MapView
+      <VayyMap
+        ref={mapRef}
         initialRegion={INITIAL_REGION}
         style={styles.map}
         scrollEnabled={false}
         zoomEnabled={false}
-        rotateEnabled={false}
-        pitchEnabled={false}
       >
         {/* Passenger markers */}
         {online && PASSENGERS.map((p) => (
-          <Marker
+          <ViewAnnotation
             key={p.id}
-            coordinate={{ latitude: p.lat, longitude: p.lng }}
-            anchor={{ x: 0.5, y: 0.5 }}
+            id={`passenger-${p.id}`}
+            lngLat={[p.lng, p.lat]}
           >
             <View style={styles.passengerMarker}>
               <View style={styles.passengerDot} />
             </View>
-          </Marker>
+          </ViewAnnotation>
         ))}
-        {/* Bike marker */}
-        <Marker coordinate={bikePos} anchor={{ x: 0.5, y: 0.5 }}>
-          <View style={styles.bikeMarker}>
-            <Ionicons name="bicycle" size={22} color="#fff" />
-          </View>
-        </Marker>
-      </MapView>
+        {bikePos && (
+          <ViewAnnotation
+            id="bike"
+            lngLat={[bikePos.longitude, bikePos.latitude]}
+          >
+            <View style={styles.bikeMarker}>
+              <Ionicons name="bicycle" size={22} color="#fff" />
+            </View>
+          </ViewAnnotation>
+        )}
+      </VayyMap>
+
+      <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
       {/* Overlay tint */}
       <View style={styles.overlayTint} />

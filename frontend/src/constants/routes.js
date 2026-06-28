@@ -20,10 +20,8 @@ export const APP_ROUTES = {
 
 export const ROLE_ROUTES = {
   driver: APP_ROUTES.driverLive,
+  bikedriver: APP_ROUTES.driverLive,
+  autodriver: APP_ROUTES.driverLive,
   admin: APP_ROUTES.admin,
-  city_admin: APP_ROUTES.admin,
-  university_admin: APP_ROUTES.admin,
-  super_admin: APP_ROUTES.admin,
   passenger: APP_ROUTES.passengerLive,
-  student: APP_ROUTES.passengerLive,
 };

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import api from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 import { Plus, X, Search, Building, Trash2 } from "lucide-react";
 
 const AdminUsersManager = () => {
@@ -25,7 +26,7 @@ const AdminUsersManager = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await api.get("/api/users/");
+            const res = await api.get(API_PATHS.admin.users);
             const data = Array.isArray(res.data) ? res.data : res.data.results || [];
             setUsers(data);
         } catch (error) {
@@ -37,7 +38,7 @@ const AdminUsersManager = () => {
 
     const fetchCities = async () => {
         try {
-            const res = await api.get("/api/cities/");
+            const res = await api.get(API_PATHS.cities.list);
             const data = Array.isArray(res.data) ? res.data : res.data.results || [];
             setCities(data);
         } catch (error) {
@@ -48,7 +49,7 @@ const AdminUsersManager = () => {
     const handleCreateUser = async (e) => {
         e.preventDefault();
         try {
-            await api.post("/api/auth/register/", {
+            await api.post(API_PATHS.auth.register, {
                 ...formData,
                 password: "ChangeMe123!",
             });
@@ -63,7 +64,7 @@ const AdminUsersManager = () => {
     const handleDeleteUser = async (id) => {
         if (window.confirm("Delete this user?")) {
             try {
-                await api.delete(`/api/users/${id}/`);
+                await api.delete(API_PATHS.admin.userDetail(id));
                 fetchData();
             } catch {
                 alert("Error deleting user.");

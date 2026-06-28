@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
@@ -12,81 +13,34 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
 import SPACING from "../../shared/constants/spacing";
+import api from "../../shared/lib/api";
 
-const MOCK_COMPLETED_ROUTES = [
-  {
-    id: "1",
-    pickup: "Gomti Nagar, Lucknow",
-    destination: "Hazratganj, Lucknow",
-    date: "22 Jun 2026",
-    fare: "₹78",
-    vehicleType: "Auto",
-    status: "Completed",
-    routeName: "Route 12",
-    distance: "4.5 km",
-    duration: "15 min",
-  },
-  {
-    id: "2",
-    pickup: "Indira Nagar, Lucknow",
-    destination: "Charbagh, Lucknow",
-    date: "20 Jun 2026",
-    fare: "₹65",
-    vehicleType: "Auto",
-    status: "Completed",
-    routeName: "Route 7",
-    distance: "6.2 km",
-    duration: "22 min",
-  },
-  {
-    id: "3",
-    pickup: "Gomti Nagar, Lucknow",
-    destination: "Aliganj, Lucknow",
-    date: "18 Jun 2026",
-    fare: "₹25",
-    vehicleType: "Bike",
-    status: "Completed",
-    routeName: "Direct Ride",
-    distance: "3.1 km",
-    duration: "8 min",
-  },
-  {
-    id: "4",
-    pickup: "Hazratganj, Lucknow",
-    destination: "Gomti Nagar, Lucknow",
-    date: "15 Jun 2026",
-    fare: "₹85",
-    vehicleType: "Auto",
-    status: "Completed",
-    routeName: "Route 12",
-    distance: "4.5 km",
-    duration: "18 min",
-  },
-  {
-    id: "5",
-    pickup: "Charbagh, Lucknow",
-    destination: "Gomti Nagar Crossing",
-    date: "12 Jun 2026",
-    fare: "₹35",
-    vehicleType: "Bike",
-    status: "Completed",
-    routeName: "Direct Ride",
-    distance: "4.0 km",
-    duration: "10 min",
-  },
-  {
-    id: "6",
-    pickup: "Aliganj, Lucknow",
-    destination: "Indira Nagar, Lucknow",
-    date: "10 Jun 2026",
-    fare: "₹55",
-    vehicleType: "Auto",
-    status: "Completed",
-    routeName: "Route 5",
-    distance: "5.0 km",
-    duration: "20 min",
-  },
-];
+function formatTrip(trip) {
+  const pickup = trip.pickup_location || trip.origin || trip.boarded_at || "--";
+  const destination = trip.dropoff_location || trip.destination || trip.dropped_at || "--";
+  const date = trip.completed_at || trip.date || trip.created_at || "";
+  const formattedDate = date ? new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "--";
+  const fare = trip.fare || trip.total_fare || trip.amount || null;
+  const vehicleType = trip.vehicle_type || trip.mode || "Auto";
+  const distance = trip.distance || trip.distance_km || null;
+  const distanceText = distance ? (typeof distance === "number" ? `${distance.toFixed(1)} km` : distance) : "--";
+  const duration = trip.duration || trip.duration_minutes || null;
+  const durationText = duration ? (typeof duration === "number" ? `${duration} min` : duration) : "--";
+  const routeName = trip.route_name || trip.route?.name || "Direct Ride";
+
+  return {
+    id: String(trip.id || trip.trip_id || Math.random()),
+    pickup,
+    destination,
+    date: formattedDate,
+    fare: fare ? `₹${fare}` : "--",
+    vehicleType,
+    status: trip.status || "Completed",
+    routeName,
+    distance: distanceText,
+    duration: durationText,
+  };
+}
 
 function RouteCard({ item }) {
   const isAuto = item.vehicleType === "Auto";
@@ -142,7 +96,24 @@ function RouteCard({ item }) {
 }
 
 export default function MyRoutesScreen({ navigation }) {
-  const [routes] = useState(MOCK_COMPLETED_ROUTES);
+  const [routes, setRoutes] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const response = await api.get("/api/ride/history/");
+        const data = response.data?.data || response.data;
+        const items = Array.isArray(data) ? data : data?.results || [];
+        setRoutes(items.map(formatTrip));
+      } catch (error) {
+        console.error("Failed to fetch ride history:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchHistory();
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -151,21 +122,27 @@ export default function MyRoutesScreen({ navigation }) {
         <Text style={styles.subtitle}>Your completed journeys</Text>
       </View>
 
-      <FlatList
-        contentContainerStyle={styles.listContent}
-        data={routes}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No completed routes yet</Text>
-            <Text style={styles.emptyText}>
-              Your completed rides will appear here once you take a trip.
-            </Text>
-          </View>
-        }
-        renderItem={({ item }) => <RouteCard item={item} />}
-      />
+      {loading ? (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      ) : (
+        <FlatList
+          contentContainerStyle={styles.listContent}
+          data={routes}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No completed routes yet</Text>
+              <Text style={styles.emptyText}>
+                Your completed rides will appear here once you take a trip.
+              </Text>
+            </View>
+          }
+          renderItem={({ item }) => <RouteCard item={item} />}
+        />
+      )}
     </SafeAreaView>
   );
 }

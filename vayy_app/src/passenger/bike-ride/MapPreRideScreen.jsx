@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   StatusBar,
   Platform,
 } from "react-native";
-import MapView from "react-native-maps";
+import VayyMap from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -21,18 +21,71 @@ import { ConfirmPopup } from "./ConfirmPopup";
 
 const { width } = Dimensions.get("window");
 
-export function BikeMapPreRideScreen({ navigation }) {
+export function BikeMapPreRideScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const [showConfirm, setShowConfirm] = useState(false);
   const mapRef = useRef(null);
+  const cameraRef = useRef(null);
+  const didFitRef = useRef(false);
 
-  const zoomIn = () => {
-    mapRef.current?.animateCamera({ zoom: 16 });
-  };
+  const trip = route?.params?.trip || {};
+  const pickup = route?.params?.pickup;
+  const pickupName = pickup?.name || pickup?.display_name || trip?.pickup_stop?.name || "Pickup";
+  const dropoff = route?.params?.destination;
+  const dropoffName = dropoff?.name || dropoff?.display_name || trip?.dropoff_stop?.name || "Dropoff";
+  const stopDistance = route?.params?.stopDistance || 200;
+  const eta = route?.params?.eta || "2";
+  const routeId = route?.params?.route_id || trip?.id;
+  const pickupStopId = route?.params?.pickup_stop_id || trip?.pickup_stop?.id;
 
-  const zoomOut = () => {
-    mapRef.current?.animateCamera({ zoom: 12 });
-  };
+  const pickupStop = trip?.pickup_stop || {};
+  const dropoffStop = trip?.dropoff_stop || {};
+
+  const pickupLat = typeof pickupStop?.lat === "number" ? pickupStop.lat : null;
+  const pickupLon = typeof pickupStop?.lon === "number" ? pickupStop.lon : null;
+  const dropoffLat = typeof dropoffStop?.lat === "number" ? dropoffStop.lat : null;
+  const dropoffLon = typeof dropoffStop?.lon === "number" ? dropoffStop.lon : null;
+
+  const initialCenter = pickupLat != null && pickupLon != null
+    ? [pickupLon, pickupLat]
+    : [80.9462, 26.8467];
+
+  useEffect(() => {
+    if (didFitRef.current) return;
+    if (!cameraRef.current) return;
+
+    const tryFit = (attempt) => {
+      if (attempt > 15) return;
+      if (!cameraRef.current) {
+        setTimeout(() => tryFit(attempt + 1), 200);
+        return;
+      }
+      didFitRef.current = true;
+
+      if (pickupLat != null && pickupLon != null) {
+        const pad = 0.005;
+        if (dropoffLat != null && dropoffLon != null) {
+          const west = Math.min(pickupLon, dropoffLon) - pad;
+          const south = Math.min(pickupLat, dropoffLat) - pad;
+          const east = Math.max(pickupLon, dropoffLon) + pad;
+          const north = Math.max(pickupLat, dropoffLat) + pad;
+          cameraRef.current.fitBounds(
+            [west, south, east, north],
+            { top: insets.top + 80, right: 50, bottom: 250, left: 50 },
+            500,
+          );
+        } else {
+          cameraRef.current.setStop({ center: [pickupLon, pickupLat], zoom: 15, duration: 500 });
+        }
+      } else {
+        cameraRef.current.setStop({ center: [80.9462, 26.8467], zoom: 13, duration: 500 });
+      }
+    };
+    setTimeout(() => tryFit(0), 100);
+  }, [pickupLat, pickupLon, dropoffLat, dropoffLon, insets.top]);
+
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
 
   return (
     <View style={styles.container}>
@@ -40,18 +93,16 @@ export function BikeMapPreRideScreen({ navigation }) {
 
       {/* Map Area */}
       <View style={styles.mapArea}>
-        <MapView
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
-          initialRegion={{
-            latitude: 26.8467,
-            longitude: 80.9462,
-            latitudeDelta: 0.05,
-            longitudeDelta: 0.05,
+          cameraRef={cameraRef}
+          initialViewState={{
+            center: initialCenter,
+            zoom: 14,
           }}
           scrollEnabled={true}
           zoomEnabled={true}
-          zoomControlEnabled={true}
         />
 
         {/* Header */}
@@ -66,7 +117,7 @@ export function BikeMapPreRideScreen({ navigation }) {
                 <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             )}
-            <Text style={styles.headerTitle}>Bike pickup</Text>
+            <Text style={styles.headerTitle}>{route?.params?.title || "Bike pickup"}</Text>
           </View>
 
           <TouchableOpacity style={styles.iconBtn}>
@@ -83,11 +134,11 @@ export function BikeMapPreRideScreen({ navigation }) {
           <View style={{ flex: 1 }}>
             <Text style={styles.cardLabel}>Nearest stop</Text>
             <Text style={styles.cardDistance}>
-              <Text style={styles.greenText}>200 m</Text> away
+              <Text style={styles.greenText}>{stopDistance} m</Text> away
             </Text>
           </View>
           <View style={styles.etaBadge}>
-            <Text style={styles.etaBadgeValue}>~2 min</Text>
+            <Text style={styles.etaBadgeValue}>~{eta} min</Text>
             <Text style={styles.etaBadgeLabel}>wait</Text>
           </View>
         </View>
@@ -95,13 +146,13 @@ export function BikeMapPreRideScreen({ navigation }) {
         {/* Charbagh Label */}
         <View style={styles.poiLabel}>
           <Ionicons name="train-outline" size={14} color="#60A5FA" />
-          <Text style={styles.poiText}>Charbagh</Text>
+          <Text style={styles.poiText}>{dropoff}</Text>
         </View>
 
         {/* Stop Label with Arrow */}
         <View style={styles.stopLabel}>
           <Text style={styles.stopLabelText}>
-            Hazratganj{"\n"}Metro Gate 2
+            {pickupName.replace(" ", "\n")}
           </Text>
           <View style={styles.labelArrow} />
         </View>
@@ -130,7 +181,7 @@ export function BikeMapPreRideScreen({ navigation }) {
         <View style={styles.liveBikesChip}>
           <View style={styles.liveDot} />
           <Ionicons name="bicycle" size={16} color="#009849" />
-          <Text style={styles.liveBikesText}>3 bikes on route</Text>
+          <Text style={styles.liveBikesText}>{route?.params?.bikesOnRoute || "3"} bikes on route</Text>
         </View>
 
         {/* Floating Buttons */}
@@ -160,7 +211,7 @@ export function BikeMapPreRideScreen({ navigation }) {
             <Ionicons name="location" size={24} color="#009849" />
             <Text style={styles.statLabel}>Nearest stop</Text>
             <Text style={styles.statMainBold}>
-              Hazratganj{"\n"}Metro Gate 2
+              {pickupName.replace(" ", "\n")}
             </Text>
           </View>
 
@@ -169,7 +220,7 @@ export function BikeMapPreRideScreen({ navigation }) {
           <View style={styles.statCol}>
             <Ionicons name="walk" size={24} color="#009849" />
             <Text style={styles.statLabel}>Distance</Text>
-            <Text style={styles.statValueGreen}>200 <Text style={styles.smallUnit}>m</Text></Text>
+            <Text style={styles.statValueGreen}>{stopDistance} <Text style={styles.smallUnit}>m</Text></Text>
           </View>
 
           <View style={styles.statDivider} />
@@ -177,7 +228,7 @@ export function BikeMapPreRideScreen({ navigation }) {
           <View style={styles.statCol}>
             <Ionicons name="time-outline" size={24} color="#009849" />
             <Text style={styles.statLabel}>ETA</Text>
-            <Text style={styles.statValueGreen}>2 <Text style={styles.smallUnit}>min</Text></Text>
+            <Text style={styles.statValueGreen}>{eta} <Text style={styles.smallUnit}>min</Text></Text>
           </View>
         </View>
 
@@ -193,12 +244,15 @@ export function BikeMapPreRideScreen({ navigation }) {
       <ConfirmPopup
         visible={showConfirm}
         title="Raise Hand at Stop?"
-        message="Are you at Hazratganj Metro Gate 2? Nearby riders will be notified."
+        message={`Are you at ${pickupName}? Nearby riders will be notified.`}
         confirmLabel="Yes, Raise Hand"
         icon="hand-left-outline"
         onConfirm={() => {
           setShowConfirm(false);
-          navigation.navigate('BikeSearching');
+          navigation.navigate('BikeSearching', {
+            route_id: route?.params?.route_id,
+            pickup_stop_id: route?.params?.pickup_stop_id,
+          });
         }}
         onCancel={() => setShowConfirm(false)}
       />

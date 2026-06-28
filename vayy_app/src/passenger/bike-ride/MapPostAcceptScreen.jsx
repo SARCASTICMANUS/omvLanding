@@ -8,7 +8,7 @@ import {
   StatusBar,
   Image,
 } from "react-native";
-import MapView from "react-native-maps";
+import VayyMap from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -21,21 +21,15 @@ import { ConfirmPopup } from "./ConfirmPopup";
 
 const { width } = Dimensions.get("window");
 
-export function BikeMapPostAcceptScreen({ navigation }) {
+export function BikeMapPostAcceptScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const labels = ["1.2 km", "800 m", "400 m"];
-  const etas = ["5 min", "3 min", "2 min"];
-  const mapRef = useRef(null);
-
-  const zoomIn = () => {
-    mapRef.current?.animateCamera({ zoom: 16 });
-  };
-
-  const zoomOut = () => {
-    mapRef.current?.animateCamera({ zoom: 12 });
-  };
+  const driverName = route?.params?.driverName || "Priya Sharma";
+  const vehicle = route?.params?.vehicle || "Royal Enfield Classic • UP 32 AZ 1234";
+  const otpDigits = route?.params?.otp ? String(route.params.otp).split("") : ["2","7","4","1"];
+  const labels = route?.params?.distanceLabels || ["1.2 km", "800 m", "400 m"];
+  const etas = route?.params?.etaLabels || ["5 min", "3 min", "2 min"];
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -44,15 +38,21 @@ export function BikeMapPostAcceptScreen({ navigation }) {
     return () => clearInterval(timer);
   }, []);
 
+  const mapRef = useRef(null);
+  const cameraRef = useRef(null);
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Map Area */}
       <View style={styles.mapArea}>
-        <MapView
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
+          cameraRef={cameraRef}
           initialRegion={{
             latitude: 26.8467,
             longitude: 80.9462,
@@ -129,7 +129,7 @@ export function BikeMapPostAcceptScreen({ navigation }) {
         <View style={styles.driverRow}>
           <View style={styles.avatarContainer}>
              <View style={styles.avatar}>
-                <Text style={styles.avatarInitial}>P</Text>
+                <Text style={styles.avatarInitial}>{driverName.charAt(0)}</Text>
              </View>
              <View style={styles.ratingBadge}>
                 <Ionicons name="star" size={10} color="#FFB800" />
@@ -139,12 +139,12 @@ export function BikeMapPostAcceptScreen({ navigation }) {
           
           <View style={styles.driverInfo}>
             <View style={styles.nameRow}>
-               <Text style={styles.driverName}>Priya Sharma</Text>
+                <Text style={styles.driverName}>{driverName}</Text>
                <View style={styles.verifiedBadge}>
                  <MaterialIcons name="verified" size={16} color="#009849" />
                </View>
             </View>
-            <Text style={styles.vehicleText}>Royal Enfield Classic • UP 32 AZ 1234</Text>
+            <Text style={styles.vehicleText}>{vehicle}</Text>
           </View>
 
           <TouchableOpacity style={styles.callBtn}>
@@ -161,7 +161,7 @@ export function BikeMapPostAcceptScreen({ navigation }) {
                 <Text style={styles.otpSubtitle}>Share this with driver to start ride</Text>
             </View>
             <View style={styles.otpRow}>
-                {['2','7','4','1'].map((digit, i) => (
+                {otpDigits.map((digit, i) => (
                     <View key={i} style={styles.otpBox}>
                         <Text style={styles.otpDigit}>{digit}</Text>
                     </View>

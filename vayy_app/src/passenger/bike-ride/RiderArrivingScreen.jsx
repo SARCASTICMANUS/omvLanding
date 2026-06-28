@@ -12,7 +12,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
-import MapView from "react-native-maps";
+import VayyMap from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -27,6 +27,7 @@ const { width } = Dimensions.get("window");
 export function RiderArrivingScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
+  const cameraRef = useRef(null);
   const [step, setStep] = useState(0);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showArrivedModal, setShowArrivedModal] = useState(false);
@@ -42,8 +43,8 @@ export function RiderArrivingScreen({ navigation }) {
   const currentEta = etaSteps[step];
   const hasArrived = currentDistance === 0;
 
-  const zoomIn = () => mapRef.current?.animateCamera({ zoom: 16 });
-  const zoomOut = () => mapRef.current?.animateCamera({ zoom: 12 });
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -113,9 +114,10 @@ export function RiderArrivingScreen({ navigation }) {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: screenOpacity }]}>
-        <MapView
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
+          cameraRef={cameraRef}
           initialRegion={{
             latitude: 26.8467,
             longitude: 80.9462,

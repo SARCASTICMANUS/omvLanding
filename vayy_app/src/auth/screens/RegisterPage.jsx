@@ -19,6 +19,13 @@ import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
 import SPACING from "../../shared/constants/spacing";
 import { registerUser } from "../authSlice";
+import { ROLE } from "../../constants";
+
+const ROLE_OPTIONS = [
+  { value: ROLE.PASSENGER, label: "Passenger" },
+  { value: ROLE.BIKE_DRIVER, label: "Bike Driver" },
+  { value: ROLE.AUTO_DRIVER, label: "Auto Driver" },
+];
 
 const RegisterPage = ({ navigation }) => {
   const [formData, setFormData] = useState({
@@ -26,13 +33,13 @@ const RegisterPage = ({ navigation }) => {
     password: "",
     first_name: "",
     last_name: "",
-    role: "passenger",
+    role: ROLE.PASSENGER,
   });
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
 
   const dispatch = useDispatch();
-  const { loading, error } = useSelector((state) => state.auth);
+  const { loading, error, isOtpSent, otpEmail } = useSelector((state) => state.auth);
 
   const toggleShowPassword = () => setShowPassword(!showPassword);
 
@@ -40,8 +47,11 @@ const RegisterPage = ({ navigation }) => {
     setFormData((current) => ({ ...current, [field]: value }));
   };
 
-  const handleSubmit = () => {
-    dispatch(registerUser(formData));
+  const handleSubmit = async () => {
+    const result = await dispatch(registerUser(formData));
+    if (registerUser.fulfilled.match(result)) {
+      navigation.navigate("OtpVerification", { email: result.payload.email });
+    }
   };
 
   const getInputWrapperStyle = (field) => [
@@ -148,22 +158,22 @@ const RegisterPage = ({ navigation }) => {
           </View>
 
           <View style={styles.roleRow}>
-            {["passenger", "driver"].map((role) => (
+            {ROLE_OPTIONS.map((opt) => (
               <TouchableOpacity
-                key={role}
-                onPress={() => updateField("role", role)}
+                key={opt.value}
+                onPress={() => updateField("role", opt.value)}
                 style={[
                   styles.roleButton,
-                  formData.role === role && styles.roleButtonActive,
+                  formData.role === opt.value && styles.roleButtonActive,
                 ]}
               >
                 <Text
                   style={[
                     styles.roleText,
-                    formData.role === role && styles.roleTextActive,
+                    formData.role === opt.value && styles.roleTextActive,
                   ]}
                 >
-                  {role === "passenger" ? "Passenger" : "Driver"}
+                  {opt.label}
                 </Text>
               </TouchableOpacity>
             ))}

@@ -1,10 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import Constants from "expo-constants";
+import { STORAGE_KEYS, AUTH, API_TIMEOUT, DEFAULT_API_URL } from "../../constants";
 
 const getApiUrl = () => {
-  // Use a hard fallback first, then try to override
-  let url = "http://localhost:8000";
+  let url = DEFAULT_API_URL;
 
   if (process.env.EXPO_PUBLIC_API_URL) {
     url = process.env.EXPO_PUBLIC_API_URL;
@@ -12,10 +12,9 @@ const getApiUrl = () => {
     url = Constants.expoConfig.extra.apiUrl;
   }
 
-  // Ensure it's an absolute URL and doesn't point to the dev server
   if (url.includes("localhost:8081") || url.includes("127.0.0.1:8081")) {
     console.warn("[VAYY] API_URL points to dev server! Falling back to 8000.");
-    url = "http://localhost:8000";
+    url = DEFAULT_API_URL;
   }
 
   return url;
@@ -27,7 +26,7 @@ console.log("[VAYY] Initialized API with Base URL:", API_URL);
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 10000,
+  timeout: API_TIMEOUT,
 });
 
 let authHandlers = {
@@ -43,8 +42,8 @@ export const configureAuthHandlers = (handlers) => {
 };
 
 const readToken = async () => {
-  const token = await AsyncStorage.getItem("token");
-  const accessToken = await AsyncStorage.getItem("access_token");
+  const token = await AsyncStorage.getItem(STORAGE_KEYS.token);
+  const accessToken = await AsyncStorage.getItem(STORAGE_KEYS.accessToken);
 
   return token || accessToken;
 };
@@ -82,18 +81,18 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
-      const refreshToken = await AsyncStorage.getItem("refresh_token");
+      const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.refreshToken);
 
       if (refreshToken) {
         try {
-          const res = await axios.post(`${API_URL}/api/auth/refresh/`, {
+          const res = await axios.post(`${API_URL}${AUTH.tokenRefresh}`, {
             refresh: refreshToken,
           });
           const nextToken = res.data.access || res.data.token;
 
           if (nextToken) {
-            await AsyncStorage.setItem("access_token", nextToken);
-            await AsyncStorage.setItem("token", nextToken);
+            await AsyncStorage.setItem(STORAGE_KEYS.accessToken, nextToken);
+            await AsyncStorage.setItem(STORAGE_KEYS.token, nextToken);
             authHandlers.onRefreshToken?.({ token: nextToken });
             originalRequest.headers.Authorization = `Bearer ${nextToken}`;
             return api(originalRequest);
@@ -109,6 +108,21 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+export const normalizeApiError = (error, fallbackMessage) => {
+  if (error.response?.data) {
+    const data = error.response.data;
+    if (typeof data === "string") return new Error(data);
+    if (data.message) return new Error(data.message);
+    if (data.detail) return new Error(data.detail);
+    if (data.error) return new Error(data.error);
+    const firstKey = Object.keys(data)[0];
+    if (firstKey && Array.isArray(data[firstKey])) {
+      return new Error(data[firstKey][0]);
+    }
+  }
+  return new Error(fallbackMessage || "An unexpected error occurred");
+};
 
 export { getWsUrl } from "./wsUrl";
 export default api;

@@ -1,37 +1,46 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import MapView from "react-native-maps";
-import AppFrame from "../../../components/AppFrame";
-import RaiseHandButton from "../../../components/RaiseHandButton";
-import StatBar from "../../../components/StatBar";
-import { colors } from "../../../theme/colors";
-import { spacing } from "../../../theme/spacing";
+import VayyMap from "../../shared/components/VayyMap";
+import AppFrame from "../../components/AppFrame";
+import RaiseHandButton from "../../components/RaiseHandButton";
+import StatBar from "../../components/StatBar";
+import { colors } from "../../theme/colors";
+import { spacing } from "../../theme/spacing";
 
-export function SharedAutoMapScreen({ navigation }) {
+export function SharedAutoMapScreen({ navigation, route }) {
+  const title = route?.params?.title || "Shared Auto";
+  const localFare = route?.params?.localFare || "";
+  const autosNearby = route?.params?.autosNearby || "";
+  const autoDistance = route?.params?.autoDistance || "";
+  const nextStop = route?.params?.nextStop || "";
+  const eta = route?.params?.eta || "";
+  const stopDistance = route?.params?.stopDistance || "";
+  const pillText = route?.params?.pillText || "";
+
   return (
-    <AppFrame navigation={navigation} title="Hazratganj → Charbagh" accent={colors.primary}>
+    <AppFrame navigation={navigation} title={title} accent={colors.primary}>
       <View style={styles.mapPage}>
-        <MapView
+        <VayyMap
           style={styles.mapBg}
           initialRegion={{
-            latitude: 26.8467,
-            longitude: 80.9462,
+            latitude: route?.params?.latitude || 26.8467,
+            longitude: route?.params?.longitude || 80.9462,
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}
           scrollEnabled={false}
           zoomEnabled={false}
         />
-        <View style={styles.mapPill}><Text style={styles.mapPillText}>Route R1 · Civil Lines next</Text></View>
+        {pillText ? <View style={styles.mapPill}><Text style={styles.mapPillText}>{pillText}</Text></View> : null}
         <View style={styles.mapBottom}>
           <RaiseHandButton accent={colors.primary} />
           <StatBar accent={colors.primary} stats={[
-            { label: "Local fare", value: "₹15" },
-            { label: "Autos nearby", value: "3" },
-            { label: "Auto distance", value: "180m" },
-            { label: "Next stop", value: "Civil Lines" },
-            { label: "ETA", value: "4 min" },
-            { label: "Stop distance", value: "0.3 km" },
+            { label: "Local fare", value: localFare ? `₹${localFare}` : "—" },
+            { label: "Autos nearby", value: autosNearby || "—" },
+            { label: "Auto distance", value: autoDistance || "—" },
+            { label: "Next stop", value: nextStop || "—" },
+            { label: "ETA", value: eta ? `${eta} min` : "—" },
+            { label: "Stop distance", value: stopDistance || "—" },
           ]} />
         </View>
       </View>

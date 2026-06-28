@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { User as UserIcon, Plus, Trash2, Edit, ShieldCheck, X, Save, Loader2, Mail, Phone, Info } from "lucide-react";
 import api from "../../../lib/api";
+import { API_PATHS } from "../../../constants/apiPaths";
 
 const DriversManager = ({ cityId }) => {
   const [drivers, setDrivers] = useState([]);
@@ -23,7 +24,7 @@ const DriversManager = ({ cityId }) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const uRes = await api.get(`/api/users/?city=${cityId}&role=driver`);
+      const uRes = await api.get(`${API_PATHS.admin.users}?city=${cityId}&role=driver`);
       const data = Array.isArray(uRes.data) ? uRes.data : uRes.data.results || [];
       setDrivers(data);
     } catch (error) {
@@ -65,12 +66,12 @@ const DriversManager = ({ cityId }) => {
       if (currentDriver) {
         // We only allow name updates from the frontend easily
         // Usually, profile updates require a specific endpoint but we'll stick to user logic for this MVP
-        await api.patch(`/api/users/${currentDriver.id}/`, {
+        await api.patch(API_PATHS.admin.userDetail(currentDriver.id), {
           first_name: formData.first_name,
           last_name: formData.last_name,
         });
       } else {
-        await api.post("/api/auth/register/", {
+        await api.post(API_PATHS.auth.register, {
             email: formData.email,
             password: "ChangeMe123!",
             role: "driver",
@@ -92,7 +93,7 @@ const DriversManager = ({ cityId }) => {
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this driver?")) {
       try {
-        await api.delete(`/api/users/${id}/`);
+        await api.delete(API_PATHS.admin.userDetail(id));
         fetchData();
       } catch (error) {
         console.error("Error deleting driver:", error);

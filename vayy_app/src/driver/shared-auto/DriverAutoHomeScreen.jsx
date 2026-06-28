@@ -22,6 +22,8 @@ import COLORS from "../../shared/constants/colors";
 import SHADOW from "../../shared/constants/shadow";
 import SPACING from "../../shared/constants/spacing";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { NOMINATIM_SEARCH, USER_AGENT, STORAGE_KEYS } from "../../constants";
+import { useSelector } from "react-redux";
 
 const { width } = Dimensions.get("window");
 
@@ -48,9 +50,9 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`;
+        const url = NOMINATIM_SEARCH(query);
         const response = await fetch(url, {
-          headers: { "User-Agent": "vayy-driver/1.0" },
+          headers: { "User-Agent": USER_AGENT },
           signal: controller.signal,
         });
         const data = await response.json();
@@ -114,6 +116,7 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
           <FlatList
             data={results}
             keyboardShouldPersistTaps="handled"
+            scrollEnabled={false}
             keyExtractor={(item) => String(item.place_id)}
             renderItem={({ item }) => (
               <Pressable onPress={() => handleSelect(item)} style={styles.resultRow}>
@@ -136,7 +139,8 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
 export default function DriverAutoHomeScreen({ navigation }) {
   const [pickup, setPickup] = useState(null);
   const [destination, setDestination] = useState(null);
-  const [driverName] = useState("Deepak");
+  const { user } = useSelector((state) => state.auth);
+  const driverName = user?.full_name || user?.name || user?.first_name || "Driver";
   const [imgIndex, setImgIndex] = useState(0);
   const [greeting, setGreeting] = useState("");
   const [subLine, setSubLine] = useState("");
@@ -148,7 +152,7 @@ export default function DriverAutoHomeScreen({ navigation }) {
 
   const loadRecentSearches = async () => {
     try {
-      const stored = await AsyncStorage.getItem("driver_recent_searches_auto");
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.driverRecentSearchesAuto);
       if (stored) setRecentSearches(JSON.parse(stored));
     } catch {}
   };
@@ -160,7 +164,7 @@ export default function DriverAutoHomeScreen({ navigation }) {
         (r) => r.pickup?.name !== pick?.name || r.destination?.name !== dest?.name,
       )].slice(0, 5);
       setRecentSearches(updated);
-      await AsyncStorage.setItem("driver_recent_searches_auto", JSON.stringify(updated));
+      await AsyncStorage.setItem(STORAGE_KEYS.driverRecentSearchesAuto, JSON.stringify(updated));
     } catch {}
   };
 

@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 
 import api, { API_URL } from "../shared/lib/api";
+import { AUTH, STORAGE_KEYS } from "../constants";
 
 const normalizeUser = (data) => {
   if (data.user) {
@@ -18,34 +19,41 @@ const normalizeUser = (data) => {
   };
 };
 
-const normalizeAuthPayload = (data) => ({
-  ...data,
-  token: data.token || data.access,
-  access: data.access || data.token,
-  refresh: data.refresh,
-  user: normalizeUser(data),
-});
+const normalizeAuthPayload = (data) => {
+  // Backend wraps tokens in a nested "tokens" object
+  const token = data.token || data.access || data.tokens?.access;
+  const refresh = data.refresh || data.tokens?.refresh;
+  return {
+    ...data,
+    token,
+    access: token,
+    refresh,
+    user: normalizeUser(data),
+  };
+};
 
 export const loginUser = createAsyncThunk(
   "auth/login",
   async (creds, thunkAPI) => {
     try {
-      const response = await api.post("/api/auth/login/", {
-        ...creds,
+      const response = await api.post(AUTH.login, {
         email: creds.email?.trim().toLowerCase(),
+        password: creds.password,
       });
-      const data = normalizeAuthPayload(response.data);
+
+      const payload = response.data.data || response.data;
+      const data = normalizeAuthPayload(payload);
 
       if (data.token) {
-        await AsyncStorage.setItem("token", data.token);
-        await AsyncStorage.setItem("access_token", data.token);
+        await AsyncStorage.setItem(STORAGE_KEYS.token, data.token);
+        await AsyncStorage.setItem(STORAGE_KEYS.accessToken, data.token);
       }
 
       if (data.refresh) {
-        await AsyncStorage.setItem("refresh_token", data.refresh);
+        await AsyncStorage.setItem(STORAGE_KEYS.refreshToken, data.refresh);
       }
 
-      await AsyncStorage.setItem("user", JSON.stringify(data.user));
+      await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(data.user));
 
       return data;
     } catch (error) {
@@ -66,24 +74,20 @@ export const registerUser = createAsyncThunk(
   "auth/register",
   async (data, thunkAPI) => {
     try {
-      const response = await api.post("/api/auth/register/", {
-        ...data,
+      const response = await api.post(AUTH.register, {
         email: data.email?.trim().toLowerCase(),
+        password: data.password,
+        role: data.role,
+        first_name: data.first_name || "",
+        last_name: data.last_name || "",
       });
-      const authData = normalizeAuthPayload(response.data);
 
-      if (authData.token) {
-        await AsyncStorage.setItem("token", authData.token);
-        await AsyncStorage.setItem("access_token", authData.token);
-      }
+      const payload = response.data.data || response.data;
+      const user = normalizeUser(payload);
 
-      if (authData.refresh) {
-        await AsyncStorage.setItem("refresh_token", authData.refresh);
-      }
+      await AsyncStorage.setItem(STORAGE_KEYS.pendingEmail, user.email);
 
-      await AsyncStorage.setItem("user", JSON.stringify(authData.user));
-
-      return authData;
+      return { user, email: user.email };
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data || { error: "Registration failed" },
@@ -92,30 +96,38 @@ export const registerUser = createAsyncThunk(
   },
 );
 
-export const googleLogin = createAsyncThunk(
-  "auth/googleLogin",
-  async (accessToken, thunkAPI) => {
+export const verifyOtp = createAsyncThunk(
+  "auth/verifyOtp",
+  async ({ email, otp }, thunkAPI) => {
     try {
-      const response = await api.post("/api/dj-rest-auth/google/", {
-        access_token: accessToken,
+      const response = await api.post(AUTH.verifyOtp, {
+        email: email?.trim().toLowerCase(),
+        otp,
       });
-      const data = normalizeAuthPayload(response.data);
 
-      if (data.token) {
-        await AsyncStorage.setItem("token", data.token);
-        await AsyncStorage.setItem("access_token", data.token);
-      }
+      const payload = response.data.data || response.data;
+      const user = normalizeUser(payload);
 
-      if (data.refresh) {
-        await AsyncStorage.setItem("refresh_token", data.refresh);
-      }
-
-      await AsyncStorage.setItem("user", JSON.stringify(data.user));
-
-      return data;
+      return { user, email };
     } catch (error) {
       return thunkAPI.rejectWithValue(
-        error.response?.data || "Google Login Failed",
+        error.response?.data || { error: "OTP verification failed" },
+      );
+    }
+  },
+);
+
+export const resendOtp = createAsyncThunk(
+  "auth/resendOtp",
+  async (email, thunkAPI) => {
+    try {
+      await api.post(AUTH.resendOtp, {
+        email: email?.trim().toLowerCase(),
+      });
+      return { email };
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data || { error: "Failed to resend OTP" },
       );
     }
   },
@@ -125,10 +137,10 @@ export const restoreAuthFromStorage = createAsyncThunk(
   "auth/restoreFromStorage",
   async () => {
     const [token, accessToken, refreshToken, userStr] = await Promise.all([
-      AsyncStorage.getItem("token"),
-      AsyncStorage.getItem("access_token"),
-      AsyncStorage.getItem("refresh_token"),
-      AsyncStorage.getItem("user"),
+      AsyncStorage.getItem(STORAGE_KEYS.token),
+      AsyncStorage.getItem(STORAGE_KEYS.accessToken),
+      AsyncStorage.getItem(STORAGE_KEYS.refreshToken),
+      AsyncStorage.getItem(STORAGE_KEYS.user),
     ]);
     const user = userStr ? JSON.parse(userStr) : null;
 
@@ -140,6 +152,20 @@ export const restoreAuthFromStorage = createAsyncThunk(
   },
 );
 
+export const logoutUser = createAsyncThunk(
+  "auth/logout",
+  async (_, thunkAPI) => {
+    thunkAPI.dispatch(authSlice.actions.logoutComplete());
+    await AsyncStorage.multiRemove([
+      STORAGE_KEYS.token,
+      STORAGE_KEYS.accessToken,
+      STORAGE_KEYS.refreshToken,
+      STORAGE_KEYS.user,
+      STORAGE_KEYS.pendingEmail,
+    ]);
+  }
+);
+
 const initialState = {
   user: null,
   token: null,
@@ -147,18 +173,21 @@ const initialState = {
   isAuthenticated: false,
   loading: false,
   error: null,
+  isOtpSent: false,
+  otpEmail: null,
 };
 
 const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    logout: (state) => {
-      AsyncStorage.multiRemove(["token", "access_token", "refresh_token", "user"]);
+    logoutComplete: (state) => {
       state.user = null;
       state.token = null;
       state.refreshToken = null;
       state.isAuthenticated = false;
+      state.isOtpSent = false;
+      state.otpEmail = null;
     },
     restoreAuth: (state, action) => {
       state.user = action.payload.user;
@@ -173,6 +202,10 @@ const authSlice = createSlice({
         state.refreshToken = action.payload.refreshToken;
       }
     },
+    clearOtpSent: (state) => {
+      state.isOtpSent = false;
+      state.otpEmail = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -183,6 +216,8 @@ const authSlice = createSlice({
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
         state.isAuthenticated = true;
+        state.isOtpSent = false;
+        state.otpEmail = null;
         state.token = action.payload.token;
         state.refreshToken = action.payload.refresh;
         state.user = action.payload.user;
@@ -193,34 +228,34 @@ const authSlice = createSlice({
       })
       .addCase(registerUser.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(registerUser.fulfilled, (state, action) => {
         state.loading = false;
-
-        if (action.payload.token && action.payload.user) {
-          state.isAuthenticated = true;
-          state.token = action.payload.token;
-          state.refreshToken = action.payload.refresh;
-          state.user = action.payload.user;
-        }
+        state.isOtpSent = true;
+        state.otpEmail = action.payload.email;
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
-      .addCase(googleLogin.pending, (state) => {
+      .addCase(verifyOtp.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(googleLogin.fulfilled, (state, action) => {
+      .addCase(verifyOtp.fulfilled, (state) => {
         state.loading = false;
-        state.isAuthenticated = true;
-        state.token = action.payload.token;
-        state.refreshToken = action.payload.refresh;
-        state.user = action.payload.user;
+        state.isOtpSent = false;
+        state.otpEmail = null;
       })
-      .addCase(googleLogin.rejected, (state, action) => {
+      .addCase(verifyOtp.rejected, (state, action) => {
         state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(resendOtp.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(resendOtp.rejected, (state, action) => {
         state.error = action.payload;
       })
       .addCase(restoreAuthFromStorage.pending, (state) => {
@@ -236,8 +271,8 @@ const authSlice = createSlice({
       .addCase(restoreAuthFromStorage.rejected, (state) => {
         state.loading = false;
       });
-  },
+  },  
 });
 
-export const { logout, restoreAuth, refreshTokenSuccess } = authSlice.actions;
+export const { logoutComplete, restoreAuth, refreshTokenSuccess, clearOtpSent } = authSlice.actions;
 export default authSlice.reducer;

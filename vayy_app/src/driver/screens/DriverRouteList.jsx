@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import api from "../../shared/lib/api";
 import COLORS from "../../shared/constants/colors";
+import { TRANSPORT } from "../../constants";
 import { buildRouteSummary, estimateStopTimeline } from "../utils/driverFlowUtils";
 
 const DUMMY_ROUTES = [
@@ -82,7 +83,7 @@ function StopDotLine({ startLabel, endLabel, viaLabel }) {
         <View style={s.dotOrange} />
         <View style={{ flex: 1 }}>
           <Text style={s.stopName}>{endLabel}</Text>
-          <Text style={s.stopSub}>via {viaLabel || "Sector 12"}</Text>
+          <Text style={s.stopSub}>via {viaLabel || "—"}</Text>
         </View>
       </View>
     </View>
@@ -120,7 +121,7 @@ function RouteCard({ item, index, expanded, onToggleExpand, onSelect }) {
         <View style={s.rightCol}>
           <View style={[s.statsBox, index === 0 && s.statsBoxBest]}>
             <Ionicons name="cash" size={16} color={index === 0 ? "#009849" : "#374151"} />
-            <Text style={[s.statsNum, index === 0 && s.statsNumBest]}>₹80</Text>
+            <Text style={[s.statsNum, index === 0 && s.statsNumBest]}>{item.fare ? `₹${item.fare}` : "--"}</Text>
             <Text style={s.statsLabel}>est.</Text>
           </View>
         </View>
@@ -182,14 +183,34 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
   const [isDummy, setIsDummy] = useState(false);
   const [expandedRouteId, setExpandedRouteId] = useState(null);
   const mode = routeProp?.params?.mode || "bike";
+  const pickup = routeProp?.params?.pickup;
+  const destination = routeProp?.params?.destination;
 
   const fetchRoutes = async () => {
     try {
       setLoading(true);
-      const response = await api.get("/api/driver/routes/");
-      const data = Array.isArray(response.data) ? response.data : [];
+
+      if (pickup?.lat && pickup?.lon && destination?.lat && destination?.lon) {
+        const params = new URLSearchParams({
+          origin_lat: String(pickup.lat),
+          origin_lng: String(pickup.lon),
+          dest_lat: String(destination.lat),
+          dest_lng: String(destination.lon),
+        });
+        const response = await api.get(`${TRANSPORT.routesSearchByLocation}?${params}`);
+        const data = response.data?.data ?? (Array.isArray(response.data) ? response.data : []);
+        if (data.length > 0) {
+          setRoutes(data);
+          setIsDummy(false);
+          return;
+        }
+      }
+
+      const response = await api.get(TRANSPORT.driverRoutes);
+      const data = response.data?.data ?? (Array.isArray(response.data) ? response.data : []);
       if (data.length > 0) {
         setRoutes(data);
+        setIsDummy(false);
       } else {
         setRoutes(DUMMY_ROUTES);
         setIsDummy(true);
@@ -216,11 +237,13 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
   }, [expandedRouteId, normalizedRoutes]);
 
   const onSelectRoute = (selectedRoute) => {
-    if (mode === "auto") {
-      navigation.navigate("AutoFindPassenger", { route: selectedRoute });
-    } else {
-      navigation.navigate("FindPassenger", { route: selectedRoute });
-    }
+    const routeData = {
+      ...selectedRoute,
+      mode,
+      pickup,
+      destination,
+    };
+    navigation.navigate("DriverFindPassengers", { route: routeData });
   };
 
   const renderItem = ({ item, index }) => (

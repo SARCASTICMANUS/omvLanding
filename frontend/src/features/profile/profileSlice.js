@@ -1,11 +1,12 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../lib/api";
+import { API_PATHS } from "../../constants/apiPaths";
 
 export const fetchProfile = createAsyncThunk(
   "profile/fetchProfile",
   async (_, thunkAPI) => {
     try {
-      const response = await api.get("/api/auth/me/");
+      const response = await api.get(API_PATHS.auth.me);
       return response.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(
@@ -19,7 +20,7 @@ export const updatePassengerProfile = createAsyncThunk(
   "profile/updatePassengerProfile",
   async ({ id, data }, thunkAPI) => {
     try {
-      const response = await api.patch(`/api/passenger-profiles/${id}/`, data);
+      const response = await api.patch(API_PATHS.auth.passengerProfile, data);
       return response.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(
@@ -33,7 +34,7 @@ export const updateDriverProfile = createAsyncThunk(
   "profile/updateDriverProfile",
   async ({ id, data }, thunkAPI) => {
     try {
-      const response = await api.patch(`/api/driver-profiles/${id}/`, data);
+      const response = await api.patch(API_PATHS.auth.driverProfile, data);
       return response.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(
@@ -47,7 +48,7 @@ export const updateUser = createAsyncThunk(
   "profile/updateUser",
   async ({ id, data }, thunkAPI) => {
     try {
-      const response = await api.patch(`/api/users/${id}/`, data);
+      const response = await api.patch(API_PATHS.admin.userDetail(id), data);
       return response.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(
