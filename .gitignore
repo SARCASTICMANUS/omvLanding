@@ -78,5 +78,7 @@ vayy_app/android/
 
 admin/dist
 admin/dist/
+admin/dist/*
 admin/node_modules
 admin/node_modules/
+admin/node_modules/*
