@@ -89,13 +89,15 @@ class RabbitMQService:
         """
         from communication.constants import (
             EXCHANGE_LOCATION, EXCHANGE_DISPATCH, EXCHANGE_NOTIFICATION,
-            EXCHANGE_BOARDING,
+            EXCHANGE_BOARDING, EXCHANGE_TRIP,
             QUEUE_LOCATION_AUTO, QUEUE_LOCATION_BIKE, QUEUE_LOCATION_PASSENGER,
             QUEUE_DISPATCH_ASSIGNMENT,
             QUEUE_NOTIFICATION_EVENTS, QUEUE_BOARDING,
+            QUEUE_TRIP_EVENTS,
             QUEUE_DLX, QUEUE_DEAD_LETTER,
             RK_LOCATION_AUTO, RK_LOCATION_BIKE, RK_LOCATION_PASSENGER, RK_DISPATCH_ASSIGN,
             RK_NOTIFICATION_ANY, RK_BOARDING_ANY,
+            RK_TRIP_ANY,
         )
 
         try:
@@ -117,7 +119,18 @@ class RabbitMQService:
                     }
                 )
                 channel.queue_bind(exchange=exchange, queue=name, routing_key=routing_key)
-                # Also bind with wildcard so location.gps flows through
+
+            # Location queues also bind with wildcard so location.gps flows through
+            def declare_location_queue(name, exchange, routing_key):
+                channel.queue_declare(
+                    queue=name,
+                    durable=True,
+                    arguments={
+                        'x-dead-letter-exchange': QUEUE_DLX,
+                        'x-dead-letter-routing-key': 'dead.letter'
+                    }
+                )
+                channel.queue_bind(exchange=exchange, queue=name, routing_key=routing_key)
                 channel.queue_bind(exchange=exchange, queue=name, routing_key="location.*")
 
             # Declare Exchanges
@@ -125,14 +138,16 @@ class RabbitMQService:
             channel.exchange_declare(exchange=EXCHANGE_DISPATCH, exchange_type='direct', durable=True)
             channel.exchange_declare(exchange=EXCHANGE_NOTIFICATION, exchange_type='topic', durable=True)
             channel.exchange_declare(exchange=EXCHANGE_BOARDING, exchange_type='topic', durable=True)
+            channel.exchange_declare(exchange=EXCHANGE_TRIP, exchange_type='topic', durable=True)
 
             # Declare and Bind Queues
-            declare_vayy_queue(QUEUE_LOCATION_AUTO, EXCHANGE_LOCATION, RK_LOCATION_AUTO)
-            declare_vayy_queue(QUEUE_LOCATION_BIKE, EXCHANGE_LOCATION, RK_LOCATION_BIKE)
-            declare_vayy_queue(QUEUE_LOCATION_PASSENGER, EXCHANGE_LOCATION, RK_LOCATION_PASSENGER)
+            declare_location_queue(QUEUE_LOCATION_AUTO, EXCHANGE_LOCATION, RK_LOCATION_AUTO)
+            declare_location_queue(QUEUE_LOCATION_BIKE, EXCHANGE_LOCATION, RK_LOCATION_BIKE)
+            declare_location_queue(QUEUE_LOCATION_PASSENGER, EXCHANGE_LOCATION, RK_LOCATION_PASSENGER)
             declare_vayy_queue(QUEUE_DISPATCH_ASSIGNMENT, EXCHANGE_DISPATCH, RK_DISPATCH_ASSIGN)
             declare_vayy_queue(QUEUE_NOTIFICATION_EVENTS, EXCHANGE_NOTIFICATION, RK_NOTIFICATION_ANY)
             declare_vayy_queue(QUEUE_BOARDING, EXCHANGE_BOARDING, RK_BOARDING_ANY)
+            declare_vayy_queue(QUEUE_TRIP_EVENTS, EXCHANGE_TRIP, RK_TRIP_ANY)
 
             logger.info("RabbitMQ infrastructure setup completed successfully")
 

@@ -1,7 +1,6 @@
 from django.db import transaction
 
 from tracking.models import HybridLog
-from tracking.services.event_publisher import TrackingEventPublisher
 from tracking.services.geo_service import GeoService
 
 
@@ -20,6 +19,8 @@ class GPSService:
         cell_towers=None,
         wifi_aps=None,
     ):
+        from tracking.tasks import process_location_update
+
         point = GeoService.create_point(lat, lng)
 
         log = HybridLog.objects.create(
@@ -33,7 +34,7 @@ class GPSService:
             wifi_aps=wifi_aps or [],
         )
 
-        TrackingEventPublisher.publish_gps_update(
+        process_location_update.delay(
             {
                 "vehicle_id": str(vehicle.id) if vehicle else None,
                 "trip_id": str(trip.id) if trip else None,

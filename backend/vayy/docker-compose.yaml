@@ -60,7 +60,6 @@ services:
     container_name: vayy-celery
     command: >
       sh -c "celery -A vayy worker -l info -Q celery,tracking,dispatch &
-             python manage.py consume_location &
              python manage.py consume_boarding"
     volumes:
       - .:/app
@@ -86,6 +85,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: redis_insight
+    restart: always
+    ports:
+      - "5540:5540"
+    volumes:
+      - redisinsight_data:/db
+    depends_on:
+      - redis
 
   nginx:
     image: nginx:alpine
@@ -123,3 +133,4 @@ volumes:
   rabbitmq_data:
   static_volume:
   media_volume:
+  redisinsight_data:

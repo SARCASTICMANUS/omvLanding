@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
     bind=True,
     max_retries=3,
     default_retry_delay=5,
-    queue="tracking"
+    queue="tracking",
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
 )
 def process_location_update(self, payload):
     """
@@ -30,7 +33,10 @@ def process_location_update(self, payload):
     bind=True,
     max_retries=3,
     default_retry_delay=5,
-    queue="tracking"
+    queue="tracking",
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
 )
 def process_gps_raw(self, payload):
     """
@@ -47,7 +53,10 @@ def process_gps_raw(self, payload):
     bind=True,
     max_retries=3,
     default_retry_delay=5,
-    queue="tracking"
+    queue="tracking",
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
 )
 def process_passenger_location(self, payload):
     """

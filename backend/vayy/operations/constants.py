@@ -68,7 +68,7 @@ DISPATCH_MODE_CHOICES = (
 )
 
 
-TRACKING_EXCHANGE = "tracking"
+TRACKING_EXCHANGE = "tracking"  # Kept for backward compatibility; prefer EXCHANGE_TRIP from communication.constants
 
 TRIP_STARTED = "trip.started"
 TRIP_COMPLETED = "trip.completed"

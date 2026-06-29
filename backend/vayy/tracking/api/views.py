@@ -16,6 +16,8 @@ from tracking.api.serializers import (
 )
 from tracking.services.geo_service import GeoService
 from tracking.services.gps_service import GPSService
+from tracking.services.redis_geo_service import RedisGeoService
+from tracking.tasks import process_location_update, process_passenger_location
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +83,8 @@ class GPSIngestAPIView(APIView):
     POST /tracking/gps
     Raw GPS ingestion endpoint for drivers.
     """
-    permission_classes = [IsAuthenticated, IsDriver]
+    # permission_classes = [IsAuthenticated, IsDriver]
+    # permission_classes = [IsAuthenticated]
 
     def post(self, request):
         _log_request("GPSIngest", request)
@@ -139,7 +142,8 @@ class TelemetryIngestAPIView(GPSIngestAPIView):
 class NearbyVehiclesAPIView(APIView):
     """
     GET /api/tracking/nearby
-    Finds active vehicles near a location.
+    Finds active vehicles near a location using Redis GEO.
+    Falls back to DB if Redis returns no results.
     """
     permission_classes = [IsAuthenticated]
 
@@ -158,14 +162,29 @@ class NearbyVehiclesAPIView(APIView):
                     "data": {}
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            vehicles = RideService.get_nearby_vehicles(lat, lng, radius, vehicle_type)
-            
+            # Primary: fetch from Redis GEO set
+            vehicles = RedisGeoService.get_nearby(lat, lng, radius, vehicle_type)
+
+            if vehicles:
+                resp = Response({
+                    "success": True,
+                    "message": f"Found {len(vehicles)} nearby vehicles",
+                    "data": vehicles
+                })
+                _log_response("NearbyVehicles", resp)
+                return resp
+
+            # Fallback: query DB if Redis has no results (cold start / cache miss)
+            logger.info("[NearbyVehicles] Redis miss, falling back to DB")
+            db_vehicles = RideService.get_nearby_vehicles(lat, lng, radius, vehicle_type)
+
             from operations.api.serializers import VehicleStateSerializer
-            
+            serialized = VehicleStateSerializer(db_vehicles, many=True).data
+
             resp = Response({
                 "success": True,
-                "message": f"Found {vehicles.count()} nearby vehicles",
-                "data": VehicleStateSerializer(vehicles, many=True).data
+                "message": f"Found {len(serialized)} nearby vehicles (db fallback)",
+                "data": serialized
             })
             _log_response("NearbyVehicles", resp)
             return resp
@@ -210,8 +229,7 @@ class PassengerLocationAPIView(APIView):
 
             saved_route_ids = list(profile.saved_routes.values_list("id", flat=True))
 
-            from tracking.services.event_publisher import TrackingEventPublisher
-            TrackingEventPublisher.publish_passenger_location({
+            process_passenger_location.delay({
                 "user_id": str(request.user.id),
                 "lat": float(lat),
                 "lng": float(lng),
@@ -225,6 +243,94 @@ class PassengerLocationAPIView(APIView):
             return resp
         except Exception as e:
             logger.exception(f"[PassengerLocation] Failed to update passenger location: {e}")
+            return Response(
+                {"success": False, "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class DriverLocationAPIView(APIView):
+    """
+    POST /api/tracking/driver-location/
+    Drivers push their GPS location here.
+    Publishes to RabbitMQ → consumer → Celery → LocationService → Redis GEO + DB + WS.
+
+    Request body:
+        {
+            "vehicle_id": "<uuid>",
+            "lat": 28.6139,
+            "lng": 77.209,
+            "speed": 25.0,       (optional)
+            "heading": 90.0,     (optional)
+            "trip_id": "<uuid>"  (optional)
+        }
+    """
+    permission_classes = [IsAuthenticated, IsDriver]
+
+    def post(self, request):
+        _log_request("DriverLocation", request)
+
+        vehicle_id = request.data.get("vehicle_id")
+        lat = request.data.get("lat")
+        lng = request.data.get("lng") or request.data.get("lon")
+        speed = request.data.get("speed", 0)
+        heading = request.data.get("heading", 0)
+        trip_id = request.data.get("trip_id")
+
+        if not vehicle_id or lat is None or lng is None:
+            return Response(
+                {"success": False, "message": "vehicle_id, lat, and lng are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            # Verify vehicle belongs to this driver
+            from operations.models import Vehicle
+            try:
+                vehicle = Vehicle.objects.get(id=vehicle_id)
+            except Vehicle.DoesNotExist:
+                return Response(
+                    {"success": False, "message": "Vehicle not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if vehicle.driver_id != request.user.id:
+                logger.warning(
+                    f"[DriverLocation] Unauthorized: user {request.user.id} "
+                    f"tried to update vehicle {vehicle_id} owned by {vehicle.driver_id}"
+                )
+                raise PermissionDenied("Vehicle is not assigned to this driver.")
+
+            # Publish to Celery for async processing
+            payload = {
+                "vehicle_id": str(vehicle_id),
+                "lat": float(lat),
+                "lng": float(lng),
+                "speed": float(speed),
+                "heading": float(heading),
+                "vehicle_type": vehicle.vehicle_type,
+            }
+            if trip_id:
+                payload["trip_id"] = str(trip_id)
+
+            process_location_update.delay(payload)
+
+            logger.info(
+                f"[DriverLocation] Dispatched GPS for vehicle {vehicle_id}: "
+                f"lat={lat} lng={lng} speed={speed} heading={heading}"
+            )
+
+            resp = Response({
+                "success": True,
+                "message": "Location published to processing queue",
+            })
+            _log_response("DriverLocation", resp)
+            return resp
+
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            logger.exception(f"[DriverLocation] Failed to publish location: {e}")
             return Response(
                 {"success": False, "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

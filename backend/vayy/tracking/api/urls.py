@@ -6,6 +6,7 @@ from tracking.api.views import (
     TripTrackingAPIView,
     NearbyVehiclesAPIView,
     PassengerLocationAPIView,
+    DriverLocationAPIView,
 )
 
 urlpatterns = [
@@ -38,5 +39,10 @@ urlpatterns = [
         "passenger-location/",
         PassengerLocationAPIView.as_view(),
         name="passenger-location",
+    ),
+    path(
+        "driver-location/",
+        DriverLocationAPIView.as_view(),
+        name="driver-location",
     ),
 ]

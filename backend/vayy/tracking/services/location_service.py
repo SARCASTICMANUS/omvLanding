@@ -9,6 +9,7 @@ from channels.layers import get_channel_layer
 from operations.models import Vehicle, ActiveTrip, VehicleState
 from tracking.models import HybridLog
 from tracking.services.geo_service import GeoService
+from tracking.services.redis_geo_service import RedisGeoService
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,21 @@ class LocationService:
 
             state.save()
 
-            # 4. Broadcast to WebSockets — format matches frontend expectation
+            # 4. Sync location to Redis GEO set for real-time nearby lookups
+            try:
+                RedisGeoService.add_vehicle(
+                    vehicle_id=str(vehicle_id),
+                    lat=lat,
+                    lng=lng,
+                    vehicle_type=vehicle.vehicle_type,
+                    driver_id=str(vehicle.driver_id) if vehicle.driver_id else None,
+                    vehicle_number=vehicle.vehicle_number,
+                    trip_id=str(active_trip.id) if active_trip else None,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to sync vehicle {vehicle_id} to Redis GEO: {e}")
+
+            # 5. Broadcast to WebSockets — format matches frontend expectation
             ws_payload = {
                 "type": "vehicle_update",
                 "lat": lat,

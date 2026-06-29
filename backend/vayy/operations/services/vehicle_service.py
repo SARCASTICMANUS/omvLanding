@@ -8,6 +8,8 @@ from operations.selectors.vehicle_selector import (
     VehicleSelector,
 )
 
+from tracking.services.redis_geo_service import RedisGeoService
+
 
 class VehicleService:
 
@@ -96,5 +98,11 @@ class VehicleService:
                 "updated_at",
             ]
         )
+
+        # Remove vehicle from Redis GEO set since it's deactivated
+        try:
+            RedisGeoService.remove_vehicle(str(vehicle_id))
+        except Exception:
+            pass
 
         return vehicle

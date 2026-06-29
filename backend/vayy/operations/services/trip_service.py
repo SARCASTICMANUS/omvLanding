@@ -8,7 +8,12 @@ from operations.models import (
 from operations.constants import (
     TRIP_STATUS_ACTIVE,
     TRIP_STATUS_COMPLETED,
+    TRIP_STARTED,
+    TRIP_COMPLETED,
+    TRIP_LOCATION,
 )
+
+from communication.constants import EXCHANGE_TRIP
 
 from operations.selectors.trip_selector import (
     TripSelector,
@@ -17,6 +22,8 @@ from operations.selectors.trip_selector import (
 from communication.services.rabbitmq_service import (
     RabbitMQService,
 )
+
+from tracking.services.redis_geo_service import RedisGeoService
 
 
 class TripService:
@@ -49,8 +56,8 @@ class TripService:
         )
 
         RabbitMQService.publish(
-            exchange="tracking",
-            routing_key="trip.started",
+            exchange=EXCHANGE_TRIP,
+            routing_key=TRIP_STARTED,
             payload={
                 "trip_id": str(trip.id),
                 "vehicle_id": str(vehicle.id),
@@ -87,9 +94,15 @@ class TripService:
             ]
         )
 
+        # Remove vehicle from Redis GEO set since trip ended
+        try:
+            RedisGeoService.remove_vehicle(str(trip.vehicle_id))
+        except Exception:
+            pass
+
         RabbitMQService.publish(
-            exchange="tracking",
-            routing_key="trip.completed",
+            exchange=EXCHANGE_TRIP,
+            routing_key=TRIP_COMPLETED,
             payload={
                 "trip_id": str(trip.id),
             },
@@ -113,8 +126,8 @@ class TripService:
         )
 
         RabbitMQService.publish(
-            exchange="tracking",
-            routing_key="trip.location",
+            exchange=EXCHANGE_TRIP,
+            routing_key=TRIP_LOCATION,
             payload={
                 "trip_id": str(trip.id),
                 "lat": point.y,

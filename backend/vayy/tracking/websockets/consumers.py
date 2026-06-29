@@ -1,7 +1,7 @@
 import json
 import logging
 from common.websockets.auth import BaseAuthenticatedConsumer
-from tracking.services.event_publisher import TrackingEventPublisher
+from tracking.tasks import process_location_update
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,8 @@ class VehicleTrackingConsumer(BaseAuthenticatedConsumer):
                     "speed": data.get("speed", 0),
                     "heading": data.get("heading", 0),
                 }
-                TrackingEventPublisher.publish_gps_update(payload)
-                logger.debug(f"Published location for vehicle {self.vehicle_id}")
+                process_location_update.delay(payload)
+                logger.debug(f"Dispatched location for vehicle {self.vehicle_id}")
             else:
                 logger.debug(f"Unknown message type from driver: {msg_type}")
         except json.JSONDecodeError:

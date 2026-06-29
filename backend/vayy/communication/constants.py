@@ -60,8 +60,16 @@ RK_BOARDING_CANCELLED = "boarding.request.cancelled"
 RK_BOARDING_BOARDED = "boarding.request.boarded"
 RK_BOARDING_ANY = "boarding.*"
 
+# Trip Tracking
+EXCHANGE_TRIP = "trip.tracking"
+QUEUE_TRIP_EVENTS = "trip.events"
+RK_TRIP_STARTED = "trip.started"
+RK_TRIP_COMPLETED = "trip.completed"
+RK_TRIP_LOCATION = "trip.location"
+RK_TRIP_ANY = "trip.*"
+
 # Existing (for backward compatibility if needed, but we will migrate)
 RABBITMQ_DEFAULT_EXCHANGE = "vayy"
-TRIP_QUEUE = "trip.events"
+TRIP_QUEUE = QUEUE_TRIP_EVENTS
 BOARDING_QUEUE = QUEUE_BOARDING
 NOTIFICATION_QUEUE = QUEUE_NOTIFICATION_EVENTS

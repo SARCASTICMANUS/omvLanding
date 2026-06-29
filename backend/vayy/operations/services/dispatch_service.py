@@ -17,6 +17,7 @@ from communication.services.rabbitmq_service import RabbitMQService
 from communication.services.notification_service import NotificationService
 from accounts.services.wallet_service import WalletService
 from operations.services.ride_service import RideService
+from tracking.services.redis_geo_service import RedisGeoService
 from communication.constants import EXCHANGE_DISPATCH, RK_DISPATCH_ASSIGN, RK_DISPATCH_CANCEL
 from operations.constants import (
     TRIP_STATUS_REQUESTED, TRIP_STATUS_ASSIGNED, TRIP_STATUS_ACCEPTED,
@@ -245,6 +246,11 @@ class DispatchService:
             state, _ = VehicleState.objects.get_or_create(vehicle=trip.vehicle)
             state.active_trip = None
             state.save()
+            # Remove vehicle from Redis GEO set
+            try:
+                RedisGeoService.remove_vehicle(str(trip.vehicle_id))
+            except Exception:
+                pass
 
         trip.save()
 
