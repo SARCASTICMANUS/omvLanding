@@ -12,20 +12,12 @@ ROLE_CHOICES = (
 
 # ---
 
-VEHICLE_BUS = "bus"
-VEHICLE_VAN = "van"
-VEHICLE_MINIBUS = "minibus"
-VEHICLE_CAR = "car"
+VEHICLE_BIKE = "bike"
 VEHICLE_AUTO = "auto"
-VEHICLE_TEMPO = "tempo"
 
 VEHICLE_TYPE_CHOICES = (
-    (VEHICLE_BUS, "Bus"),
-    (VEHICLE_VAN, "Van"),
-    (VEHICLE_MINIBUS, "Minibus"),
-    (VEHICLE_CAR, "Car"),
+    (VEHICLE_BIKE, "Bike"),
     (VEHICLE_AUTO, "Auto-Rickshaw"),
-    (VEHICLE_TEMPO, "Tempo Traveller"),
 )
 
 # --- Wallet & Transactions ---

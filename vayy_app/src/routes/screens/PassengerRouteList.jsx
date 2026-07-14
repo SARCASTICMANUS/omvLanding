@@ -183,6 +183,8 @@ export default function PassengerRouteList({ navigation, route }) {
     mode = "auto",
   } = route?.params || {};
 
+  console.log("initialDestination : ",initialDestination)
+
   const isBike = mode === "bike";
   const accent = "#009849";
   const pickup = initialPickup;

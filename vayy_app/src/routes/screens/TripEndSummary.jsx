@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import VayyCard from "../../shared/components/common/VayyCard";
 import VayyButton from "../../shared/components/common/VayyButton";
-import BusIconBadge from "../../shared/components/common/BusIconBadge";
+import VehicleIconBadge from "../../shared/components/common/VehicleIconBadge";
 import COLORS from "../../shared/constants/colors";
 import SPACING from "../../shared/constants/spacing";
 import RADIUS from "../../shared/constants/radius";

@@ -1,19 +1,11 @@
 # Vehicle Types
 
-VEHICLE_TYPE_BUS = "bus"
-VEHICLE_TYPE_VAN = "van"
-VEHICLE_TYPE_MINIBUS = "minibus"
-VEHICLE_TYPE_CAR = "car"
+VEHICLE_TYPE_BIKE = "bike"
 VEHICLE_TYPE_AUTO = "auto"
-VEHICLE_TYPE_TEMPO = "tempo"
 
 VEHICLE_TYPE_CHOICES = (
-    (VEHICLE_TYPE_BUS, "Bus"),
-    (VEHICLE_TYPE_VAN, "Van"),
-    (VEHICLE_TYPE_MINIBUS, "Minibus"),
-    (VEHICLE_TYPE_CAR, "Car"),
+    (VEHICLE_TYPE_BIKE, "Bike"),
     (VEHICLE_TYPE_AUTO, "Auto-Rickshaw"),
-    (VEHICLE_TYPE_TEMPO, "Tempo Traveller"),
 )
 
 

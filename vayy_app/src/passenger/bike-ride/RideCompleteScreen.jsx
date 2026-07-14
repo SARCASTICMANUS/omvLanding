@@ -29,7 +29,8 @@ export function RideCompleteScreen({ navigation, route }) {
   const tripId = route?.params?.tripId;
   const riderName = route?.params?.riderName || "Driver";
   const vehicleText = route?.params?.vehicleText || "";
-  const pickup = route?.params?.pickup || "";
+  const pickupRaw = route?.params?.pickup || "";
+  const pickup = typeof pickupRaw === "string" ? pickupRaw : pickupRaw?.name || pickupRaw?.display_name || "";
   const dropoff = route?.params?.dropoff || "";
   const distance = route?.params?.distance || "";
   const duration = route?.params?.duration || "";
@@ -39,6 +40,17 @@ export function RideCompleteScreen({ navigation, route }) {
 
   const now = new Date();
   const timeStr = `${now.toLocaleDateString("en-IN", { weekday: "short" })}, ${now.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`;
+
+  // ── Fare breakdown calculation ──
+  const distNum = typeof distance === "string" ? parseFloat(distance) || 0 : distance || 0;
+  const distKm = distNum > 1000 ? parseFloat((distNum / 1000).toFixed(1)) : distNum;
+  const durationMin = typeof duration === "string" ? parseInt(duration) || 5 : duration || 5;
+  const baseFare = 25;
+  const perKmRate = 12;
+  const platformFee = 5;
+  const distanceCharge = Math.round(distKm * perKmRate);
+  const timeCharge = Math.max(0, (durationMin - 3) * 2);
+  const totalFare = baseFare + distanceCharge + timeCharge + platformFee;
 
   return (
     <View style={styles.container}>
@@ -127,8 +139,36 @@ export function RideCompleteScreen({ navigation, route }) {
           <Text style={styles.sectionTitle}>Fare Breakdown</Text>
 
           <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Fare</Text>
-            <Text style={styles.fareValue}>₹{fare}</Text>
+            <Text style={styles.fareLabel}>Base Fare</Text>
+            <Text style={styles.fareValue}>₹{baseFare}</Text>
+          </View>
+          <View style={styles.fareDivider} />
+
+          <View style={styles.fareRow}>
+            <Text style={styles.fareLabel}>Distance ({distKm} km × ₹{perKmRate}/km)</Text>
+            <Text style={styles.fareValue}>₹{distanceCharge}</Text>
+          </View>
+          <View style={styles.fareDivider} />
+
+          {timeCharge > 0 && (
+            <>
+              <View style={styles.fareRow}>
+                <Text style={styles.fareLabel}>Time ({durationMin - 3} min × ₹2/min)</Text>
+                <Text style={styles.fareValue}>₹{timeCharge}</Text>
+              </View>
+              <View style={styles.fareDivider} />
+            </>
+          )}
+
+          <View style={styles.fareRow}>
+            <Text style={styles.fareLabel}>Platform Fee</Text>
+            <Text style={styles.fareValue}>₹{platformFee}</Text>
+          </View>
+          <View style={styles.fareDivider} />
+
+          <View style={styles.fareTotalRow}>
+            <Text style={styles.fareTotalLabel}>Total</Text>
+            <Text style={styles.fareTotalValue}>₹{fare || totalFare}</Text>
           </View>
         </View>
 
@@ -415,6 +455,22 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: "#E5E7EB",
     marginVertical: 8,
+  },
+  fareTotalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  fareTotalLabel: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  fareTotalValue: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#009849",
   },
   totalLabel: {
     fontSize: 16,

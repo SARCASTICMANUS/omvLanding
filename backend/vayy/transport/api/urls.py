@@ -8,7 +8,7 @@ from transport.api.views import (
     TripScheduleViewSet,
     StopTimeViewSet,
     NearbyStopListAPIView,
-    RouteByBusNumberAPIView,
+    RouteByRouteCodeAPIView,
     RouteScheduleAPIView,
     StopETAAPIView,
     RouteGeometryAPIView,
@@ -57,9 +57,9 @@ urlpatterns = [
         name="route-schedule",
     ),
     path(
-        "routes/bus/<str:bus_number>/",
-        RouteByBusNumberAPIView.as_view(),
-        name="route-bus-number",
+        "routes/code/<str:route_code>/",
+        RouteByRouteCodeAPIView.as_view(),
+        name="route-by-route-code",
     ),
     path("", include(router.urls)),
     path(

@@ -18,7 +18,7 @@ class TestDispatchWorkflow:
         route = Route.objects.create(name="Test Route", city=city)
         driver = User.objects.create_user(username="driver", password="password", role="driver")
         passenger = User.objects.create_user(username="passenger", password="password", role="passenger")
-        vehicle = Vehicle.objects.create(vehicle_number="V1", vehicle_type="car", city=city, driver=driver)
+        vehicle = Vehicle.objects.create(vehicle_number="V1", vehicle_type="bike", city=city, driver=driver)
         return {
             "city": city,
             "route": route,

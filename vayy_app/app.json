@@ -23,7 +23,12 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F8FAF9"
       },
-      "package": "com.vayy.autos"
+      "package": "com.vayy.autos",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ]
     },
     "plugins": [
       "expo-location",

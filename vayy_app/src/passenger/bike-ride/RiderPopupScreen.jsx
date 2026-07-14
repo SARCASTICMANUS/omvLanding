@@ -8,14 +8,14 @@ import {
   StatusBar,
   Platform,
 } from "react-native";
-import VayyMap from "../../shared/components/VayyMap";
+// import VayyMap, { GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Ionicons,
   MaterialIcons,
 } from "@expo/vector-icons";
-
+import { fetchRouteGeometry } from "../../routes/services/routeService";
 import { ConfirmPopup } from "./ConfirmPopup";
 
 const { width } = Dimensions.get("window");
@@ -24,11 +24,16 @@ export function RiderPopupScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const driverName = route?.params?.driverName || "Priya Sharma";
-  const vehicle = route?.params?.vehicle || "Royal Enfield Classic • UP 32 AZ 1234";
-  const otpDigits = route?.params?.otp ? String(route.params.otp).split("") : ["2","7","4","1"];
-  const labels = route?.params?.distanceLabels || ["1.2 km", "800 m", "400 m", "Arrived"];
-  const etas = route?.params?.etaLabels || ["5 min", "3 min", "2 min", "0 min"];
+  const [routePath, setRoutePath] = useState(null);
+  const driverName = route?.params?.driverName || "Driver";
+  const vehicle = route?.params?.vehicle || "";
+  const driverRating = route?.params?.driverRating || route?.params?.tripData?.driver_rating || null;
+  const otpDigits = route?.params?.otp ? String(route.params.otp).split("") : ["","","",""];
+  const rawDistance = Number(route?.params?.distance) || 1200;
+  const rawEta = Number(route?.params?.eta) || 5;
+  const distKm = rawDistance > 1000 ? `${(rawDistance / 1000).toFixed(1)} km` : `${rawDistance} m`;
+  const labels = route?.params?.distanceLabels || [distKm, `${Math.round(rawDistance * 0.66)}${rawDistance > 1000 ? ' km' : ' m'}`, `${Math.round(rawDistance * 0.33)}${rawDistance > 1000 ? ' km' : ' m'}`, "Arrived"];
+  const etas = route?.params?.etaLabels || [`${rawEta} min`, `${Math.max(1, Math.round(rawEta * 0.6))} min`, `${Math.max(1, Math.round(rawEta * 0.3))} min`, "0 min"];
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -56,6 +61,22 @@ export function RiderPopupScreen({ navigation, route }) {
     return () => clearInterval(timer);
   }, [navigation]);
 
+  useEffect(() => {
+    const loadRoute = async () => {
+      const routeId = route?.params?.route_id;
+      if (!routeId) return;
+      try {
+        const data = await fetchRouteGeometry(routeId);
+        if (data?.path) {
+          setRoutePath(data.path);
+        }
+      } catch (e) {
+        console.warn("Failed to load route geometry", e);
+      }
+    };
+    loadRoute();
+  }, [route?.params?.route_id]);
+
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
   const zoomIn = () => mapRef.current?.zoomIn();
@@ -67,7 +88,7 @@ export function RiderPopupScreen({ navigation, route }) {
 
       {/* Map Area */}
       <View style={styles.mapArea}>
-        <VayyMap
+        {/* <VayyMap
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
@@ -80,7 +101,24 @@ export function RiderPopupScreen({ navigation, route }) {
           scrollEnabled={true}
           zoomEnabled={true}
           zoomControlEnabled={true}
-        />
+        >
+          {routePath && (
+            <>
+              <GeoJSONSource id="routeSource" data={routePath} />
+              <Layer
+                id="routeLayer"
+                type="line"
+                source="routeSource"
+                paint={{
+                  "line-color": "#009849",
+                  "line-width": 5,
+                  "line-join": "round",
+                  "line-cap": "round",
+                }}
+              />
+            </>
+          )}
+        </VayyMap> */}
 
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
@@ -161,7 +199,7 @@ export function RiderPopupScreen({ navigation, route }) {
               <Text style={styles.avatarInitial}>{driverName.charAt(0)}</Text>
              <View style={styles.badge}>
                 <Ionicons name="star" size={10} color="#FFB800" />
-                <Text style={styles.ratingText}>4.9</Text>
+                <Text style={styles.ratingText}>{driverRating || "—"}</Text>
              </View>
           </View>
           <View style={styles.driverDetails}>
@@ -205,7 +243,7 @@ export function RiderPopupScreen({ navigation, route }) {
       <ConfirmPopup
         visible={showCancelConfirm}
         title="Cancel Ride?"
-        message="Your ride with Priya Sharma will be cancelled."
+        message={`Your ride with ${driverName} will be cancelled.`}
         confirmLabel="Yes, Cancel"
         confirmColor="#EF4444"
         icon="close-circle-outline"

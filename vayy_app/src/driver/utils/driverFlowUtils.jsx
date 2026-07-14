@@ -138,7 +138,6 @@ export const getRouteTitle = (route) =>
 export const getRouteCode = (route) =>
   route?.code ||
   route?.route_code ||
-  route?.bus_number ||
   route?.short_name ||
   route?.route_number ||
   `RT-${route?.id || "--"}`;

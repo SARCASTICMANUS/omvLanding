@@ -10,18 +10,23 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useDispatch } from "react-redux";
+import { completeDispatch } from "../../store/slices/dispatchSlice";
 import COLORS from "../../shared/constants/colors";
-import VayyMap from "../../shared/components/VayyMap";
+// import VayyMap from "../../shared/components/VayyMap";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
 const { width } = Dimensions.get("window");
 
 export default function BikeRideToDestinationScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const dispatchRedux = useDispatch();
   const buddy = route.params?.buddy;
+  const dispatchId = route.params?.dispatchId || buddy?.dispatchId;
   const mapRef = useRef(null);
-  const [distance, setDistance] = useState(3.8);
-  const [eta, setEta] = useState("12 min");
+  const initialDistance = Number(buddy?.distanceRaw) || Number(buddy?.distance) || 3.8;
+  const [distance, setDistance] = useState(initialDistance);
+  const [eta, setEta] = useState(`${Math.max(3, Math.round(initialDistance * 3))} min`);
   const [elapsed, setElapsed] = useState(0);
   const startTime = useRef(Date.now());
   const dotAnim = useRef(new Animated.Value(0)).current;
@@ -68,15 +73,38 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
 
-  const handleEndRide = () => {
-    navigation.navigate("BikeTripComplete", { buddy });
+  const handleEndRide = async () => {
+    if (dispatchId) {
+      try {
+        await dispatchRedux(completeDispatch(dispatchId)).unwrap();
+      } catch (e) {
+        console.warn("completeDispatch failed:", e);
+      }
+    }
+    const elapsedSec = Math.floor((Date.now() - startTime.current) / 1000);
+    navigation.navigate("BikeTripComplete", {
+      buddy,
+      dispatchId,
+      tripData: {
+        dispatch_id: dispatchId,
+        pickup: buddy?.pickup || "Pickup",
+        dropoff: buddy?.drop || "Destination",
+        pickupLat: buddy?.pickupLat,
+        pickupLng: buddy?.pickupLng,
+        dropLat: buddy?.dropLat,
+        dropLng: buddy?.dropLng,
+        distance: initialDistance,
+        duration: Math.round(elapsedSec / 60) || 1,
+        fare: buddy?.fareAmount || 45,
+      },
+    });
   };
 
   return (
     <View style={styles.root}>
       {/* Map area */}
       <View style={styles.mapArea}>
-        <VayyMap
+        {/* <VayyMap
           ref={mapRef}
           style={styles.mapBg}
           initialRegion={{
@@ -85,7 +113,7 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}
-        />
+        /> */}
 
         <View style={styles.driverOnMap}>
           <View style={styles.driverPulseOuter} />

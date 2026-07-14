@@ -56,7 +56,7 @@ class Route(models.Model):
         max_length=255,
     )
 
-    bus_number = models.CharField(
+    route_code = models.CharField(
         max_length=50,
         blank=True,
         default="",
@@ -121,8 +121,26 @@ class Stop(models.Model):
 
     order = models.PositiveIntegerField()
 
+    geometry = gis_models.LineStringField(
+        geography=True,
+        null=True,
+        blank=True,
+        help_text="Road segment from this stop to the next stop (OSRM snapped).",
+    )
+
+    cumulative_distance_m = models.FloatField(
+        default=0,
+        help_text="Cumulative distance from the first stop to this stop along the route.",
+    )
+
+    cumulative_duration_s = models.FloatField(
+        default=0,
+        help_text="Cumulative travel time from the first stop to this stop along the route.",
+    )
+
     class Meta:
         ordering = ["order"]
+        unique_together = [("route", "order")]
 
     def __str__(self):
         return self.name

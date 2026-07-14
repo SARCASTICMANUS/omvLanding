@@ -17,7 +17,7 @@ import { buildRouteSummary, estimateStopTimeline } from "../utils/driverFlowUtil
 const DUMMY_ROUTES = [
   {
     id: 101, route_id: 101, name: "Gomti Nagar → IT City", route_name: "Gomti Nagar → IT City",
-    code: "VAYY-101", bus_number: "VAYY-101", source_name: "Gomti Nagar, Lucknow",
+    code: "VAYY-101", route_code: "VAYY-101", source_name: "Gomti Nagar, Lucknow",
     destination_name: "IT City, Lucknow", start_name: "Gomti Nagar, Lucknow",
     end_name: "IT City, Lucknow", total_distance: 4200, distance_meters: 4200,
     duration_minutes: 18, eta_minutes: 18,
@@ -30,7 +30,7 @@ const DUMMY_ROUTES = [
   },
   {
     id: 102, route_id: 102, name: "Alambagh → SGPGI", route_name: "Alambagh → SGPGI",
-    code: "VAYY-102", bus_number: "VAYY-102", source_name: "Alambagh, Lucknow",
+    code: "VAYY-102", route_code: "VAYY-102", source_name: "Alambagh, Lucknow",
     destination_name: "SGPGI, Lucknow", start_name: "Alambagh, Lucknow",
     end_name: "SGPGI, Lucknow", total_distance: 8500, distance_meters: 8500,
     duration_minutes: 25, eta_minutes: 25,
@@ -43,7 +43,7 @@ const DUMMY_ROUTES = [
   },
   {
     id: 103, route_id: 103, name: "Charbagh → Indira Nagar", route_name: "Charbagh → Indira Nagar",
-    code: "VAYY-103", bus_number: "VAYY-103", source_name: "Charbagh, Lucknow",
+    code: "VAYY-103", route_code: "VAYY-103", source_name: "Charbagh, Lucknow",
     destination_name: "Indira Nagar, Lucknow", start_name: "Charbagh, Lucknow",
     end_name: "Indira Nagar, Lucknow", total_distance: 6200, distance_meters: 6200,
     duration_minutes: 15, eta_minutes: 15,

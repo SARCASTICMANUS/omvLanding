@@ -165,7 +165,7 @@ class PublicDriverProfile(models.Model):
     vehicle_type = models.CharField(
         max_length=20,
         choices=VEHICLE_TYPE_CHOICES,
-        default="bus",
+        default="auto",
     )
     is_verified = models.BooleanField(default=False)
     rating = models.FloatField(default=5.0)

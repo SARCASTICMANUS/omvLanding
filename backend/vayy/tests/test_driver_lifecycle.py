@@ -22,7 +22,7 @@ class TestDriverLifecycle:
         city = City.objects.create(name="Bangalore")
         route = Route.objects.create(name="Route 1", city=city, path="LINESTRING(0 0, 1 1)")
         driver = User.objects.create_user(username="driver", password="password", role="driver")
-        vehicle = Vehicle.objects.create(vehicle_number="KA-01-1234", vehicle_type="car", city=city, driver=driver)
+        vehicle = Vehicle.objects.create(vehicle_number="KA-01-1234", vehicle_type="bike", city=city, driver=driver)
         state = VehicleState.objects.create(vehicle=vehicle)
         trip = ActiveTrip.objects.create(vehicle=vehicle, route=route, driver=driver, status=TRIP_STATUS_ASSIGNED)
         return {

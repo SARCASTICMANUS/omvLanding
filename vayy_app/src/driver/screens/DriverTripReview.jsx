@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import BusIconBadge from "../../shared/components/common/BusIconBadge";
+import VehicleIconBadge from "../../shared/components/common/VehicleIconBadge";
 import MetricChip from "../../shared/components/common/MetricChip";
 import RouteLine from "../../shared/components/common/RouteLine";
 import VayyButton from "../../shared/components/common/VayyButton";
@@ -48,7 +48,7 @@ export default function DriverTripReview({ navigation, route: navRoute }) {
       <ScrollView contentContainerStyle={styles.content}>
         <VayyCard style={styles.overview}>
           <View style={styles.overviewHead}>
-            <BusIconBadge size={42} />
+            <VehicleIconBadge size={42} vehicleType={route?.vehicle_type || "auto"} />
             <Text style={styles.sectionTitle}>Route Overview</Text>
           </View>
           <RouteLine progress={50} />
@@ -66,7 +66,7 @@ export default function DriverTripReview({ navigation, route: navRoute }) {
           <View style={styles.metricRow}>
             <MetricChip value={summary.durationText} label="ETA" green />
             <MetricChip value={summary.distanceText} label="Distance" green />
-            <MetricChip value={summary.vehicleNumber || summary.bus_number || "--"} label="Vehicle" green />
+            <MetricChip value={summary.routeCode || summary.vehicleNumber || "--"} label="Vehicle" green />
           </View>
         </VayyCard>
 
@@ -110,7 +110,7 @@ export default function DriverTripReview({ navigation, route: navRoute }) {
 
         <VayyCard style={styles.summaryCard}>
           <View style={styles.ready}>
-            <BusIconBadge size={64} />
+            <VehicleIconBadge size={64} vehicleType={route?.vehicle_type || "auto"} />
             <Text style={styles.readyTitle}>Ready to Start?</Text>
             <Text style={styles.readyText}>
               Please review all stops and trip details before starting your journey.
@@ -120,7 +120,7 @@ export default function DriverTripReview({ navigation, route: navRoute }) {
             ["Total Stops", summary.stopsCount || 0],
             ["Distance", summary.distanceText || "--"],
             ["Estimated Time", summary.durationText || "--"],
-            ["Vehicle Number", summary.vehicleNumber || summary.bus_number || "--"],
+            ["Vehicle Number", summary.routeCode || summary.vehicleNumber || "--"],
             ["Route", `${summary.startLabel} -> ${summary.endLabel}`],
           ].map(([label, value]) => (
             <View key={label} style={styles.summaryRow}>

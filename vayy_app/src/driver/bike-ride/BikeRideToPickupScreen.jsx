@@ -11,15 +11,19 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useDispatch } from "react-redux";
+import { arrivedDispatch } from "../../store/slices/dispatchSlice";
 import COLORS from "../../shared/constants/colors";
-import VayyMap from "../../shared/components/VayyMap";
+// import VayyMap from "../../shared/components/VayyMap";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
 const { width } = Dimensions.get("window");
 
 export default function BikeRideToPickupScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const dispatchRedux = useDispatch();
   const buddy = route.params?.buddy;
+  const dispatchId = route.params?.dispatchId || buddy?.dispatchId;
   const mapRef = useRef(null);
   const [distance, setDistance] = useState(1.2);
   const [eta, setEta] = useState("4 min");
@@ -86,16 +90,23 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
 
   const handleArrived = () => setShowArrivedModal(true);
 
-  const confirmArrival = () => {
+  const confirmArrival = async () => {
     setShowArrivedModal(false);
-    navigation.navigate("BikeOTPEntry", { buddy });
+    if (dispatchId) {
+      try {
+        await dispatchRedux(arrivedDispatch(dispatchId)).unwrap();
+      } catch (e) {
+        console.warn("arrivedDispatch failed:", e);
+      }
+    }
+    navigation.navigate("BikeOTPEntry", { buddy, dispatchId });
   };
 
   return (
     <View style={styles.root}>
       {/* Map area */}
       <View style={styles.mapArea}>
-        <VayyMap
+        {/* <VayyMap
           ref={mapRef}
           style={styles.mapBg}
           initialRegion={{
@@ -104,7 +115,7 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}
-        />
+        /> */}
 
         <View style={styles.driverOnMap}>
           <View style={styles.driverDotOuter}>

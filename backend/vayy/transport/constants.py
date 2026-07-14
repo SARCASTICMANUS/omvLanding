@@ -1,7 +1,5 @@
 from django.db import models
 
-TRANSPORT_MODE_BUS = "bus"
-
 ROUTE_PUBLIC = "public"
 ROUTE_PRIVATE = "private"
 

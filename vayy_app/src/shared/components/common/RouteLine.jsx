@@ -12,8 +12,8 @@ export default function RouteLine({ progress = 45 }) {
       <View style={styles.startDot} />
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${clampedProgress}%` }]} />
-        <View style={[styles.busMarker, { left: `${clampedProgress}%` }]}>
-          <View style={styles.busGlyph} />
+        <View style={[styles.vehicleMarker, { left: `${clampedProgress}%` }]}>
+          <View style={styles.vehicleGlyph} />
         </View>
       </View>
       <View style={styles.endDot} />
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -2,
   },
-  busMarker: {
+  vehicleMarker: {
     alignItems: "center",
     backgroundColor: COLORS.white,
     borderColor: COLORS.primary,
@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
     top: -14,
     width: 26,
   },
-  busGlyph: {
+  vehicleGlyph: {
     backgroundColor: COLORS.primary,
     borderRadius: 3,
     height: 10,

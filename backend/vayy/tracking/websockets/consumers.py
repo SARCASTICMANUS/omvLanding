@@ -89,6 +89,43 @@ class TripTrackingConsumer(BaseAuthenticatedConsumer):
         await self.send(text_data=json.dumps(event["data"]))
 
 
+class RouteTrackingConsumer(BaseAuthenticatedConsumer):
+    """
+    Consumer for real-time vehicle updates on an entire route.
+    Groups: route_{route_id}
+
+    Passengers subscribe to this to see all vehicles moving on a route,
+    with their current stop, direction, and ETAs.
+    """
+    async def connect(self):
+        await super().connect()
+        self.route_id = str(self.scope['url_route']['kwargs']['route_id'])
+        self.group_name = f"route_{self.route_id}"
+
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+        logger.info(f"WebSocket connected to route tracking: {self.group_name}")
+
+    async def disconnect(self, close_code):
+        if not hasattr(self, 'group_name'):
+            return
+        await self.channel_layer.group_discard(
+            self.group_name,
+            self.channel_name
+        )
+        logger.info(f"WebSocket disconnected from route tracking: {self.group_name}")
+
+    async def route_vehicle_update(self, event):
+        """Forward vehicle updates on this route to the client."""
+        await self.send(text_data=json.dumps(event["data"]))
+
+    async def trip_update(self, event):
+        """Also handle trip_update broadcasts (backward compat)."""
+        await self.send(text_data=json.dumps(event["data"]))
+
+
 class RoutePassengerTrackingConsumer(BaseAuthenticatedConsumer):
     """
     Consumer for driver to receive real-time passenger locations on a route.
@@ -127,4 +164,41 @@ class RoutePassengerTrackingConsumer(BaseAuthenticatedConsumer):
 
     async def boarding_update(self, event):
         """Receive a boarding update (hand raise/lower) and forward to driver."""
+        await self.send(text_data=json.dumps(event["data"]))
+
+
+class RideRequestConsumer(BaseAuthenticatedConsumer):
+    """
+    Consumer for driver to receive ride requests.
+    Groups: driver_{driver_id}
+
+    When the matching worker finds a match, it publishes to this group
+    via the dispatch exchange.
+    """
+    async def connect(self):
+        await super().connect()
+        self.driver_id = str(self.user.id)
+        self.group_name = f"driver_{self.driver_id}"
+
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+        logger.info(f"Driver connected to ride requests: {self.group_name}")
+
+    async def disconnect(self, close_code):
+        if not hasattr(self, 'group_name'):
+            return
+        await self.channel_layer.group_discard(
+            self.group_name,
+            self.channel_name
+        )
+        logger.info(f"Driver disconnected from ride requests: {self.group_name}")
+
+    async def ride_request(self, event):
+        """Forward ride request to driver."""
+        await self.send(text_data=json.dumps(event["data"]))
+
+    async def ride_update(self, event):
+        """Forward ride lifecycle updates to driver."""
         await self.send(text_data=json.dumps(event["data"]))

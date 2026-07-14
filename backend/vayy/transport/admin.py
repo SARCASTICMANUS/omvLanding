@@ -12,9 +12,11 @@ from transport.models import (
 @admin.register(City)
 class CityAdmin(admin.ModelAdmin):
     list_display = (
+        "id",
         "name",
         "state",
         "country",
+        "created_at",
     )
 
     search_fields = (
@@ -22,38 +24,61 @@ class CityAdmin(admin.ModelAdmin):
         "state",
     )
 
+    readonly_fields = (
+        "created_at",
+    )
 
-class StopInline(
-    admin.TabularInline
-):
+
+class StopInline(admin.TabularInline):
     model = Stop
     extra = 0
+    fields = (
+        "order",
+        "name",
+        "location",
+        "geometry",
+        "cumulative_distance_m",
+        "cumulative_duration_s",
+    )
+    ordering = ("order",)
 
 
-class ScheduleInline(
-    admin.TabularInline
-):
+class ScheduleInline(admin.TabularInline):
     model = TripSchedule
     extra = 0
+    fields = (
+        "label",
+        "scheduled_start_time",
+        "is_active",
+    )
 
 
 @admin.register(Route)
 class RouteAdmin(admin.ModelAdmin):
     list_display = (
+        "id",
         "name",
         "city",
-        "bus_number",
+        "route_code",
         "start_name",
         "end_name",
+        "total_distance_meters",
+        "is_public",
     )
 
     search_fields = (
         "name",
-        "bus_number",
+        "route_code",
     )
 
     list_filter = (
         "city",
+        "is_public",
+    )
+
+    readonly_fields = (
+        "created_at",
+        "updated_at",
     )
 
     inlines = [
@@ -65,9 +90,12 @@ class RouteAdmin(admin.ModelAdmin):
 @admin.register(Stop)
 class StopAdmin(admin.ModelAdmin):
     list_display = (
+        "id",
         "name",
         "route",
         "order",
+        "cumulative_distance_m",
+        "cumulative_duration_s",
     )
 
     list_filter = (
@@ -78,19 +106,34 @@ class StopAdmin(admin.ModelAdmin):
         "name",
     )
 
+    ordering = ("route", "order")
 
-class StopTimeInline(
-    admin.TabularInline
-):
+    fields = (
+        "route",
+        "name",
+        "location",
+        "order",
+        "geometry",
+        "cumulative_distance_m",
+        "cumulative_duration_s",
+    )
+
+
+class StopTimeInline(admin.TabularInline):
     model = StopTime
     extra = 0
+    fields = (
+        "stop",
+        "stop_sequence",
+        "arrival_time",
+    )
+    ordering = ("stop_sequence",)
 
 
 @admin.register(TripSchedule)
-class TripScheduleAdmin(
-    admin.ModelAdmin
-):
+class TripScheduleAdmin(admin.ModelAdmin):
     list_display = (
+        "id",
         "route",
         "label",
         "scheduled_start_time",
@@ -99,6 +142,7 @@ class TripScheduleAdmin(
 
     list_filter = (
         "is_active",
+        "route",
     )
 
     inlines = [
@@ -107,16 +151,17 @@ class TripScheduleAdmin(
 
 
 @admin.register(StopTime)
-class StopTimeAdmin(
-    admin.ModelAdmin
-):
+class StopTimeAdmin(admin.ModelAdmin):
     list_display = (
+        "id",
         "trip_schedule",
         "stop",
-        "arrival_time",
         "stop_sequence",
+        "arrival_time",
     )
 
     list_filter = (
         "trip_schedule",
     )
+
+    ordering = ("trip_schedule", "stop_sequence")

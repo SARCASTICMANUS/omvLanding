@@ -193,7 +193,7 @@ backend/vayy/
 | GET | `stops/<id>/eta/` | Yes | ETA to stop |
 | GET | `routes/search-by-location/` | Yes | Search routes by lat/lng |
 | GET | `routes/preview/` | Yes | Route preview |
-| GET | `routes/bus/<bus_number>/` | Yes | Route by bus number |
+| GET | `routes/code/<route_code>/` | Yes | Route by route code |
 
 ### Operations (`/api/operations/`)
 

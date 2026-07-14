@@ -12,11 +12,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
-import { acceptDispatch, rejectDispatch, setDispatchStatus } from "../../store/slices/dispatchSlice";
+import { acceptDispatch, rejectDispatch } from "../../store/slices/dispatchSlice";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
-import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
+// import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
 const { width, height } = Dimensions.get("window");
@@ -28,12 +28,6 @@ const INITIAL_REGION = {
   longitudeDelta: 0.05,
 };
 
-const PASSENGERS = [
-  { id: "p1", name: "Ravi Kumar", rating: 4.8, trips: 23, pickup: "Hazratganj", drop: "IT City", distance: "400 m", fare: "₹35", eta: "4 min", lat: 26.8525, lng: 80.9489 },
-  { id: "p2", name: "Priya Singh", rating: 4.9, trips: 17, pickup: "Lalbagh", drop: "SGPGI", distance: "280 m", fare: "₹25", eta: "3 min", lat: 26.8611, lng: 80.9228 },
-  { id: "p3", name: "Amit Verma", rating: 4.7, trips: 31, pickup: "Gomti Nagar", drop: "Indira Nagar", distance: "550 m", fare: "₹40", eta: "5 min", lat: 26.8513, lng: 80.9860 },
-];
-
 const CHECKS = [
   { key: "network", label: "Network", icon: "wifi" },
   { key: "gps", label: "GPS Signal", icon: "navigate" },
@@ -44,7 +38,6 @@ const CHECKS = [
 export default function BikeFindPassengerScreen({ navigation, route: navRoute }) {
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
-  const dispatchId = navRoute?.params?.dispatchId;
   const { user } = useSelector((state) => state.auth);
   const userId = user?.id;
   const [showVerify, setShowVerify] = useState(true);
@@ -53,8 +46,6 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   const [phase, setPhase] = useState("scanning");
   const [online, setOnline] = useState(false);
   const [currentBuddy, setCurrentBuddy] = useState(null);
-  const [passengerIndex, setPassengerIndex] = useState(0);
-  const [selectedPassenger, setSelectedPassenger] = useState(null);
   const [bikePos, setBikePos] = useState({
     latitude: INITIAL_REGION.latitude,
     longitude: INITIAL_REGION.longitude,
@@ -67,15 +58,23 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
     if (data.type === "new_dispatch_request" && data.dispatch) {
       const req = data.dispatch;
       const realBuddy = {
-        id: req.id || "ws_req",
+        id: req.id || req.trip_id || "ws_req",
+        dispatchId: req.id || req.trip_id,
         name: req.passenger_name || req.user_name || "Passenger",
         rating: req.passenger_rating || 4.5,
         trips: req.passenger_trips || 0,
-        pickup: req.pickup_name || req.pickup || "Unknown",
-        drop: req.drop_name || req.drop || "Unknown",
+        pickup: (() => { const p = req.pickup_name || req.pickup; return typeof p === "string" ? p : p?.name || p?.display_name || "Unknown"; })(),
+        drop: (() => { const d = req.drop_name || req.drop; return typeof d === "string" ? d : d?.name || d?.display_name || "Unknown"; })(),
+        pickupLat: req.pickup_lat || req.pickup_latitude || null,
+        pickupLng: req.pickup_lng || req.pickup_longitude || null,
+        dropLat: req.drop_lat || req.drop_latitude || null,
+        dropLng: req.drop_lng || req.drop_longitude || null,
         distance: req.distance ? `${req.distance}` : "500 m",
         fare: req.fare ? `₹${req.fare}` : "₹30",
+        fareAmount: req.fare || 30,
         eta: req.eta ? `${req.eta} min` : "3 min",
+        otp: req.otp || null,
+        route_id: req.route_id || null,
         avatar: (req.passenger_name || "P").split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase() || "P",
       };
       setCurrentBuddy(realBuddy);
@@ -119,38 +118,30 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
     );
     sweep.start();
     const timer = setTimeout(() => {
-      setSelectedPassenger(PASSENGERS[passengerIndex]);
-      setPhase("found");
-      Animated.spring(slideAnim, { toValue: 0, friction: 10, tension: 50, useNativeDriver: true }).start();
+      // Real integration: keep scanning until WS delivers a real dispatch request
+      // No mock fallback — the scanning animation continues until handleWsMessage fires
     }, 4000);
     return () => {
       pulse.stop();
       sweep.stop();
       clearTimeout(timer);
     };
-  }, [online, passengerIndex, pulseAnim, sweepAnim]);
+  }, [online, pulseAnim, sweepAnim]);
 
   const handleAccept = () => {
-    if (dispatchId) {
-      dispatch(acceptDispatch(dispatchId));
+    if (currentBuddy?.dispatchId) {
+      dispatch(acceptDispatch(currentBuddy.dispatchId));
     }
-    navigation.navigate("BikeRideToPickup", { buddy: currentBuddy, dispatchId });
+    navigation.navigate("BikeRideToPickup", { buddy: currentBuddy, dispatchId: currentBuddy?.dispatchId });
   };
 
   const handleIgnore = () => {
-    if (dispatchId) {
-      dispatch(rejectDispatch(dispatchId));
+    if (currentBuddy?.dispatchId) {
+      dispatch(rejectDispatch(currentBuddy.dispatchId));
     }
     Animated.timing(slideAnim, { toValue: height, duration: 250, useNativeDriver: true }).start(() => {
-      const next = (passengerIndex + 1) % PASSENGERS.length;
-      setPassengerIndex(next);
-      setSelectedPassenger(null);
+      setCurrentBuddy(null);
       setPhase("scanning");
-      setTimeout(() => {
-        setSelectedPassenger(PASSENGERS[next]);
-        setPhase("found");
-        Animated.spring(slideAnim, { toValue: 0, friction: 10, tension: 50, useNativeDriver: true }).start();
-      }, 3000);
     });
   };
 
@@ -166,14 +157,13 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Real map background */}
-      <VayyMap
+      {/* <VayyMap
         ref={mapRef}
         initialRegion={INITIAL_REGION}
         style={styles.map}
         scrollEnabled={false}
         zoomEnabled={false}
       >
-        {/* Passenger markers */}
         {online && PASSENGERS.map((p) => (
           <ViewAnnotation
             key={p.id}
@@ -195,7 +185,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
             </View>
           </ViewAnnotation>
         )}
-      </VayyMap>
+      </VayyMap> */}
 
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
@@ -266,23 +256,23 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
         pointerEvents={phase === "found" ? "auto" : "none"}
       >
         <View style={styles.handle} />
-        {selectedPassenger && phase === "found" && (
+        {currentBuddy && phase === "found" && (
           <>
             <View style={styles.sheetHead}>
               <View style={styles.sheetAvatar}>
                 <Ionicons name="person-circle" size={44} color={COLORS.primary} />
               </View>
               <View style={styles.sheetMeta}>
-                <Text style={styles.sheetName}>{selectedPassenger.name}</Text>
+                <Text style={styles.sheetName}>{currentBuddy.name}</Text>
                 <View style={styles.sheetRow}>
                   <Ionicons name="star" size={12} color="#FFB800" />
-                  <Text style={styles.sheetRating}>{selectedPassenger.rating}</Text>
+                  <Text style={styles.sheetRating}>{currentBuddy.rating || "—"}</Text>
                   <Text style={styles.sheetDivider}>|</Text>
-                  <Text style={styles.sheetTrips}>{selectedPassenger.trips} trips</Text>
+                  <Text style={styles.sheetTrips}>{currentBuddy.trips || 0} trips</Text>
                 </View>
               </View>
               <View style={styles.sheetFare}>
-                <Text style={styles.sheetFareValue}>{selectedPassenger.fare}</Text>
+                <Text style={styles.sheetFareValue}>{currentBuddy.fare || "—"}</Text>
                 <Text style={styles.sheetFareLabel}>est.</Text>
               </View>
             </View>
@@ -296,19 +286,19 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
               <View style={styles.routeInfo}>
                 <View>
                   <Text style={styles.routeLabel}>FROM</Text>
-                  <Text style={styles.routeName}>{selectedPassenger.pickup}</Text>
+                  <Text style={styles.routeName}>{currentBuddy.pickup || "Pickup"}</Text>
                 </View>
                 <View>
                   <Text style={styles.routeLabel}>TO</Text>
-                  <Text style={styles.routeName}>{selectedPassenger.drop}</Text>
+                  <Text style={styles.routeName}>{currentBuddy.drop || "Destination"}</Text>
                 </View>
               </View>
               <View style={styles.routeMeta}>
                 <View style={styles.distBadge}>
                   <Ionicons name="walk" size={12} color={COLORS.primary} />
-                  <Text style={styles.distText}>{selectedPassenger.distance}</Text>
+                  <Text style={styles.distText}>{currentBuddy.distance || "—"}</Text>
                 </View>
-                <Text style={styles.etaText}>{selectedPassenger.eta}</Text>
+                <Text style={styles.etaText}>{currentBuddy.eta || "—"}</Text>
               </View>
             </View>
 

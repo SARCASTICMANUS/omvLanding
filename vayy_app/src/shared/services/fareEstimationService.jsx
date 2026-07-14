@@ -18,22 +18,12 @@ export const getRideEstimate = async (pickupLat, pickupLng, dropLat, dropLng, ve
 
 export const calculateFare = (distanceKm, vehicleType) => {
   const baseFares = {
-    car: 50,
     auto: 30,
     bike: 20,
-    van: 80,
-    minibus: 150,
-    bus: 200,
-    tempo: 120,
   };
   const perKmRates = {
-    car: 15,
     auto: 10,
     bike: 5,
-    van: 25,
-    minibus: 40,
-    bus: 50,
-    tempo: 35,
   };
 
   const baseFare = baseFares[vehicleType] || 50;

@@ -68,6 +68,13 @@ RK_TRIP_COMPLETED = "trip.completed"
 RK_TRIP_LOCATION = "trip.location"
 RK_TRIP_ANY = "trip.*"
 
+# Matching / Ride Requests
+EXCHANGE_MATCHING = "matching.requests"
+QUEUE_MATCHING = "matching.ride_requests"
+RK_MATCHING_RIDE_REQUEST = "matching.ride_request"
+RK_MATCHING_RIDE_LIFECYCLE = "matching.ride_lifecycle"
+RK_MATCHING_ANY = "matching.*"
+
 # Existing (for backward compatibility if needed, but we will migrate)
 RABBITMQ_DEFAULT_EXCHANGE = "vayy"
 TRIP_QUEUE = QUEUE_TRIP_EVENTS

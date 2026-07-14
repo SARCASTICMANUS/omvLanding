@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
-import VayyMap from "../../shared/components/VayyMap";
+// import VayyMap from "../../shared/components/VayyMap";
 import AutoCancelRideModal from "./AutoCancelRideModal";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
@@ -81,7 +81,7 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
   return (
     <View style={styles.root}>
       <View style={styles.mapArea}>
-        <VayyMap
+        {/* <VayyMap
           ref={mapRef}
           style={styles.mapBg}
           initialRegion={{
@@ -90,7 +90,7 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}
-        />
+        /> */}
         <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
         <View style={styles.driverOnMap}>

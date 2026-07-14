@@ -6,35 +6,92 @@ VAYY is a route-based mobility platform for passengers, auto drivers, and bike r
 
 ## Tech Stack
 
-* React Native + Expo
-* TypeScript
-<!-- * NativeWind -->
-* Redux Toolkit
-* React Navigation
-* Django Backend
-* WebSockets
-* MapLibre
-* OSM
-* OSRM
+* React Native 0.81.5 + Expo SDK 54
+* JavaScript (JSX) with TypeScript config
+* Redux Toolkit (9 slices)
+* React Navigation v6 (Stack + Bottom Tabs)
+* Axios (HTTP client with token refresh interceptor)
+* MapLibre React Native v11.3.6 (maps)
+* OpenStreetMap tiles via MapTiler API
+* OSRM (routing)
+* Nominatim (geocoding)
+* WebSockets (real-time updates)
+* expo-location (GPS tracking)
+* expo-notifications (push notifications)
+* expo-image-picker (camera/gallery)
+* @react-native-async-storage/async-storage (token persistence)
+* Django Backend (separate repo at backend/vayy/)
 
 ## Project Structure
 
-* app/ → Expo Router screens
-* src/components → Reusable UI
-* src/features → Business modules
-* src/hooks → Custom hooks
-* src/store → Redux
-* src/services → API layer
-* src/constants → Shared constants
+```
+vayy_app/
+├── App.js                  # Root component: Provider + SafeAreaProvider + LanguageProvider + AppNavigator
+├── src/
+│   ├── admin/              # Admin panel components & services
+│   ├── auth/               # Authentication module (LoginPage, RegisterPage, OTP, PasswordReset)
+│   ├── components/         # Legacy shared components
+│   ├── constants/          # Centralized constants (apiPaths, wsPaths, roles, theme, etc.)
+│   ├── data/               # Mock data
+│   ├── driver/             # Driver-side screens (bike-ride/, shared-auto/, screens/)
+│   ├── handshake/          # Passenger-driver connection
+│   ├── navigation/         # React Navigation (6 navigators)
+│   ├── passenger/          # Passenger-side screens (bike-ride/, shared-auto/, screens/)
+│   ├── routes/             # Route intelligence layer
+│   ├── screens/            # (Empty placeholder)
+│   ├── shared/             # Cross-cutting concerns (components, hooks, lib, utils)
+│   ├── store/              # Redux state management (9 slices)
+│   ├── theme/              # Legacy theme files
+│   ├── tracking/           # Live tracking screens
+│   └── utils/              # Utility functions
+├── docs/                   # Documentation (bike-flow-audit.md)
+└── assets/                 # Images (splash, icons, vehicle images)
+```
 
 ## Design System
 
-* Primary: #009849
+* Primary: #009849 (green)
 * Live Tracking: #00E676
-* Radius: 18px
+* Background: #F8FAF9
+* Cards: white with borderRadius: 20
+* Bottom sheets: borderTopLeftRadius: 32
+* Primary button: height 56, borderRadius 18, green shadow
+* Typography: headings "800"-"900", body "500"-"700"
+* Reusable components: VayyButton, VayyCard, VayyMap, VayyMarker, VehicleIconBadge, MetricChip, StatusBadge, ZoomControls
 * Mobile-first
 * Clean transit UI
 * No unnecessary redesigns
+
+## Navigation Architecture
+
+```
+AppNavigator (root)
+├── SplashCarousel (onboarding, first-time users)
+├── AuthNavigator (unauthenticated)
+│   ├── LoginPage
+│   ├── RegisterPage
+│   ├── OtpVerification
+│   └── PasswordReset
+├── PassengerNavigator (role = passenger/student)
+│   ├── Tabs: Home | Routes | Live Map | Alerts | Actions | Profile
+│   └── Stack: BikeMapPreRide, BikeSearching, RiderPopup, RideStats, RideComplete, AutoPreRide, AutoSearching, AutoRideComplete, etc.
+└── DriverNavigator (role = bikedriver/autodriver/driver)
+    ├── Tabs: Home | Routes | Actions | Profile
+    └── Stack: FindPassenger, BikeRideToPickup, BikeOTPEntry, BikeRideToDestination, BikeTripComplete, AheadAlert, BoardedPopup, AutoLiveTracking, etc.
+```
+
+## State Management
+
+Redux Toolkit with 9 slices registered in store.jsx:
+- **auth**: Login, register, OTP verify/resend, token restore
+- **vehicleMode**: Driver mode selection
+- **trip**: Trip management
+- **wallet**: Wallet operations
+- **tracking**: Live location tracking
+- **notifications**: Notification management
+- **profile**: Fetch/update user profile
+- **dispatch**: Dispatch lifecycle (request, accept, reject, arrived, start, complete, cancel)
+- **ride**: Ride history, rating submission, fare estimation, driver earnings
 
 ## Protected Rules
 
@@ -70,10 +127,38 @@ Driver Trip Planner
 * Keep components modular
 * Preserve current functionality
 
+## API Layer
+
+* Centralized `api.jsx` with Axios instance
+* Request interceptor adds `Authorization: Bearer <jwt>` header
+* Response interceptor handles 401 → token refresh → retry
+* All API paths centralized in `constants/apiPaths.js`
+* Error normalization via `normalizeApiError()`
+* Backend responses wrapped in `{ success, message, data }` format
+
+## WebSocket Pattern
+
+* `useWebSocket` hook: self-contained, one connection per instance, auto-reconnect with exponential backoff
+* `socketManager.js`: singleton alternative for shared connections
+* All raw `new WebSocket()` calls have been removed; 100% migrated to hook
+* Backend WebSocket endpoints:
+  - `ws/dispatch/<uuid:dispatch_id>/` (no auth)
+  - `ws/tracking/vehicle/<uuid:vehicle_id>/` (JWT auth)
+  - `ws/tracking/trip/<uuid:trip_id>/` (JWT auth)
+  - `ws/notifications/<uuid:user_id>/` (no auth)
+
+## Location Tracking
+
+* `locationService.js`: singleton wrapping expo-location
+* Foreground + background permission handling
+* `watchPositionAsync` with configurable accuracy/distance/time intervals
+* Real-time pipeline: Driver WS → RabbitMQ → Celery → Channels → Passenger WS
+
 ## Maps
 
 * Use MapLibre + OSM
 * Use OSRM routing
+* Use Nominatim for geocoding
 * Preserve existing map behavior
 
 ## Output Rules For Agents

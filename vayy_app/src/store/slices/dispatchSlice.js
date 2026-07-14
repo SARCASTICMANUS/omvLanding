@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../shared/lib/api";
-import { OPERATIONS } from "../../constants";
+import { OPERATIONS, TRACKING } from "../../constants";
 
 export const requestDispatch = createAsyncThunk(
   "dispatch/request",
@@ -9,11 +9,50 @@ export const requestDispatch = createAsyncThunk(
       const response = await api.post(OPERATIONS.dispatchRequest, {
         route_id,
         pickup_stop_id,
-        mode: mode || "bike",
+        mode: mode || "direct",
       });
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || "Failed to request dispatch");
+    }
+  }
+);
+
+export const fetchActiveRouteTrips = createAsyncThunk(
+  "dispatch/fetchActiveRouteTrips",
+  async (routeId, { rejectWithValue }) => {
+    try {
+      const response = await api.get(TRACKING.activeRouteTrips(routeId));
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || "Failed to fetch active trips");
+    }
+  }
+);
+
+export const createBoardingRequest = createAsyncThunk(
+  "dispatch/createBoardingRequest",
+  async ({ trip, pickup_stop }, { rejectWithValue }) => {
+    try {
+      const response = await api.post(OPERATIONS.boardingRequests, {
+        trip,
+        pickup_stop,
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || "Failed to create boarding request");
+    }
+  }
+);
+
+export const cancelBoardingRequest = createAsyncThunk(
+  "dispatch/cancelBoardingRequest",
+  async (requestId, { rejectWithValue }) => {
+    try {
+      await api.delete(`${OPERATIONS.boardingRequests}${requestId}/`);
+      return requestId;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || "Failed to cancel boarding request");
     }
   }
 );
@@ -96,12 +135,16 @@ const dispatchSlice = createSlice({
     activeDispatch: null,
     status: "idle",
     error: null,
+    activeTrips: [],
+    boardingRequest: null,
   },
   reducers: {
     clearDispatch: (state) => {
       state.activeDispatch = null;
       state.status = "idle";
       state.error = null;
+      state.activeTrips = [];
+      state.boardingRequest = null;
     },
     updateDispatchStatus: (state, action) => {
       if (state.activeDispatch) {
@@ -111,16 +154,63 @@ const dispatchSlice = createSlice({
     setDispatchStatus: (state, action) => {
       state.status = action.payload;
     },
+    setAssigned: (state, action) => {
+      state.status = "assigned";
+      if (action.payload) {
+        state.activeDispatch = { ...state.activeDispatch, ...action.payload };
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
+      .addCase(fetchActiveRouteTrips.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(fetchActiveRouteTrips.fulfilled, (state, action) => {
+        const payload = action.payload.data || action.payload;
+        state.activeTrips = Array.isArray(payload) ? payload : [];
+      })
+      .addCase(fetchActiveRouteTrips.rejected, (state, action) => {
+        state.error = action.payload;
+      })
+      .addCase(createBoardingRequest.pending, (state) => {
+        state.status = "requesting";
+        state.error = null;
+      })
+      .addCase(createBoardingRequest.fulfilled, (state, action) => {
+        const payload = action.payload.data || action.payload;
+        state.status = "requested";
+        state.boardingRequest = payload;
+      })
+      .addCase(createBoardingRequest.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload;
+      })
+      .addCase(cancelBoardingRequest.pending, (state) => {
+        state.status = "cancelling";
+        state.error = null;
+      })
+      .addCase(cancelBoardingRequest.fulfilled, (state) => {
+        state.status = "cancelled";
+        state.boardingRequest = null;
+      })
+      .addCase(cancelBoardingRequest.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload;
+      })
       .addCase(requestDispatch.pending, (state) => {
         state.status = "requesting";
         state.error = null;
       })
       .addCase(requestDispatch.fulfilled, (state, action) => {
-        state.status = "requested";
-        state.activeDispatch = action.payload.data || action.payload;
+        const payload = action.payload.data || action.payload;
+        if (payload.status === "no_drivers_available") {
+          state.status = "failed";
+          state.error = { message: "No drivers found nearby" };
+        } else {
+          state.status = "requested";
+          state.activeDispatch = payload;
+        }
       })
       .addCase(requestDispatch.rejected, (state, action) => {
         state.status = "failed";
@@ -201,5 +291,5 @@ const dispatchSlice = createSlice({
   },
 });
 
-export const { clearDispatch, updateDispatchStatus, setDispatchStatus } = dispatchSlice.actions;
+export const { clearDispatch, updateDispatchStatus, setDispatchStatus, setAssigned } = dispatchSlice.actions;
 export default dispatchSlice.reducer;

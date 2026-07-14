@@ -1,7 +1,7 @@
 import { configureStore } from "@reduxjs/toolkit";
 
 import {
-  logoutUser,
+  logout as logoutUser,
   refreshTokenSuccess,
   default as authReducer,
 } from "../auth/authSlice";

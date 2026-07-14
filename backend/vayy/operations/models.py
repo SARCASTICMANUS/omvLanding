@@ -134,6 +134,29 @@ class ActiveTrip(models.Model):
         db_index=True,
     )
 
+    direction = models.CharField(
+        max_length=10,
+        choices=(
+            ("outbound", "Outbound (first→last)"),
+            ("inbound", "Inbound (last→first)"),
+        ),
+        default="outbound",
+        db_index=True,
+    )
+
+    current_stop = models.ForeignKey(
+        Stop,
+        related_name="trips_at_stop",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+
+    current_segment_index = models.PositiveIntegerField(
+        default=0,
+        help_text="Index into route.stops ordered list; vehicle is between stop[i] and stop[i+1]",
+    )
+
     current_location = gis_models.PointField(
         geography=True,
         null=True,
@@ -169,12 +192,19 @@ class ActiveTrip(models.Model):
                     "status",
                 ]
             ),
+            models.Index(
+                fields=[
+                    "route",
+                    "status",
+                    "direction",
+                ]
+            ),
         ]
 
     def __str__(self):
         return (
             f"{self.route.name}"
-            f" ({self.status})"
+            f" ({self.status}/{self.direction})"
         )
 
 
@@ -218,7 +248,7 @@ class TripRating(models.Model):
 
 class VehicleState(models.Model):
     """
-    Runtime state.
+    Runtime state — extended with route-based tracking fields.
     """
 
     vehicle = models.OneToOneField(
@@ -255,6 +285,28 @@ class VehicleState(models.Model):
         geography=True,
         null=True,
         blank=True,
+    )
+
+    snapped_location = gis_models.PointField(
+        geography=True,
+        null=True,
+        blank=True,
+        help_text="GPS point snapped to route geometry via OSRM map matching",
+    )
+
+    current_stop_index = models.PositiveIntegerField(
+        default=0,
+        help_text="Sequence index of the most recently passed or current stop",
+    )
+
+    current_segment_index = models.PositiveIntegerField(
+        default=0,
+        help_text="Index of the road segment the vehicle is currently on",
+    )
+
+    distance_along_route_m = models.FloatField(
+        default=0,
+        help_text="Cumulative distance travelled along the route in metres",
     )
 
     last_updated = models.DateTimeField(

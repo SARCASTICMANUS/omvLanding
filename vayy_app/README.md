@@ -64,7 +64,7 @@ src/
 │
 ├── shared/
 │   ├── constants/                # colors, radius, spacing, shadow
-│   ├── components/common/        # VayyButton, VayyCard, BusIconBadge
+│   ├── components/common/        # VayyButton, VayyCard, VehicleIconBadge
 │   └── screens/                  # ProfileScreen (shared by both roles)
 │
 ├── auth/                         # Redux slice, login/register
@@ -222,9 +222,9 @@ src/
 | IntroPage | `passenger/screens/IntroPage.jsx` | Tab: Home — landing / hero |
 | PassengerTripPlanner | `passenger/screens/PassengerTripPlanner.jsx` | Tab: Live Map — pickup/dest search + route matching |
 | PassengerRouteList | `routes/screens/PassengerRouteList.jsx` | Route selection list |
-| AllBusesPage | `routes/screens/AllBusesPage.jsx` | Tab: Routes — all bus routes |
+| AllRoutesPage | `routes/screens/AllRoutesPage.jsx` | Tab: Routes — all routes |
 | PassengerStopsTimeline | `routes/screens/PassengerStopsTimeline.jsx` | Stop-by-stop route details |
-| PassengerLiveTracking | `tracking/screens/PassengerLiveTracking.jsx` | Live bus/driver tracking |
+| PassengerLiveTracking | `tracking/screens/PassengerLiveTracking.jsx` | Live vehicle tracking |
 | PassengerAlertsScreen | `handshake/screens/PassengerAlertsScreen.jsx` | Tab: Alerts |
 | PassengerActionsScreen | `passenger/screens/PassengerActionsScreen.jsx` | Tab: Actions |
 | DestinationSearchScreen | `passenger/screens/DestinationSearchScreen.jsx` | Search destination |
@@ -317,7 +317,7 @@ AppNavigator
 │
 └── PassengerNavigator (when role = "passenger" | "student")
     ├── Tab: Home        → IntroPage
-    ├── Tab: Routes      → AllBusesPage
+    ├── Tab: Routes      → AllRoutesPage
     ├── Tab: Live Map    → PassengerTripPlanner
     ├── Tab: Alerts      → PassengerAlertsScreen
     ├── Tab: Actions     → PassengerActionsScreen

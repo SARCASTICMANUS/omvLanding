@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+// import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import { View, StyleSheet } from "react-native";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
@@ -31,7 +31,7 @@ const AdminMap = ({ onRouteChange }) => {
 
   return (
     <View style={styles.container}>
-      <VayyMap ref={mapRef} style={styles.map} onPress={handleMapPress}>
+      {/* <VayyMap ref={mapRef} style={styles.map} onPress={handleMapPress}>
         {startPoint && (
           <ViewAnnotation id="start" lngLat={[startPoint.longitude, startPoint.latitude]} anchor="center">
             <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: "#009849", borderWidth: 2, borderColor: "#fff" }} />
@@ -81,7 +81,7 @@ const AdminMap = ({ onRouteChange }) => {
             />
           </GeoJSONSource>
         )}
-      </VayyMap>
+      </VayyMap> */}
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
     </View>
   );

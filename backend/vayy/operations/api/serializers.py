@@ -14,7 +14,7 @@ from transport.models import (
     TripSchedule,
 )
 from common.constants import VEHICLE_TYPE_CHOICES
-from operations.constants import VEHICLE_TYPE_CAR
+from operations.constants import VEHICLE_TYPE_AUTO
 
 class VehicleSerializer(
     serializers.ModelSerializer
@@ -68,8 +68,8 @@ class ActiveTripSerializer(
         source="route.name",
         read_only=True,
     )
-    bus_number = serializers.CharField(
-        source="route.bus_number",
+    route_code = serializers.CharField(
+        source="route.route_code",
         read_only=True,
     )
     vehicle_number = serializers.CharField(
@@ -99,7 +99,7 @@ class ActiveTripSerializer(
             "vehicle_type",
             "route",
             "route_name",
-            "bus_number",
+            "route_code",
             "city",
             "trip_schedule",
             "driver",
@@ -280,7 +280,7 @@ class RideEstimateSerializer(serializers.Serializer):
     pickup_lng = serializers.FloatField()
     drop_lat = serializers.FloatField()
     drop_lng = serializers.FloatField()
-    vehicle_type = serializers.ChoiceField(choices=VEHICLE_TYPE_CHOICES, default=VEHICLE_TYPE_CAR)
+    vehicle_type = serializers.ChoiceField(choices=VEHICLE_TYPE_CHOICES, default=VEHICLE_TYPE_AUTO)
 
 
 class RideEstimateResponseSerializer(serializers.Serializer):

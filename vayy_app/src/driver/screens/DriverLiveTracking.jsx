@@ -1,10 +1,10 @@
 import * as Location from "expo-location";
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+// import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import BusIconBadge from "../../shared/components/common/BusIconBadge";
+import VehicleIconBadge from "../../shared/components/common/VehicleIconBadge";
 import LiveDot from "../../shared/components/common/LiveDot";
 import VayyButton from "../../shared/components/common/VayyButton";
 import api from "../../shared/lib/api";
@@ -27,7 +27,7 @@ const toCoord = (point) => {
 
 export default function DriverLiveTracking({ navigation, route: navRoute }) {
   const { route, activeTrip } = navRoute?.params || {};
-  const [busPos, setBusPos] = useState(null);
+  const [vehiclePos, setVehiclePos] = useState(null);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [nextStops, setNextStops] = useState([]);
   const [passengers, setPassengers] = useState({});
@@ -52,7 +52,7 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
 
       // Initial position
       const initial = await Location.getCurrentPositionAsync({});
-      setBusPos({ lat: initial.coords.latitude, lon: initial.coords.longitude });
+      setVehiclePos({ lat: initial.coords.latitude, lon: initial.coords.longitude });
 
       // Start continuous watcher
       watcher = await Location.watchPositionAsync(
@@ -63,7 +63,7 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
         },
         (location) => {
           const newPos = { lat: location.coords.latitude, lon: location.coords.longitude };
-          setBusPos(newPos);
+          setVehiclePos(newPos);
           setCurrentSpeed(Math.max(0, Math.round((location.coords.speed || 0) * 3.6)));
 
           // Send to backend via WebSocket if connected
@@ -154,15 +154,15 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
     );
   }
 
-  const busCoord = toCoord(busPos);
+  const vehicleCoord = toCoord(vehiclePos);
   const routeCoords = summary.stops.map(toCoord).filter(Boolean);
-  const initial = busCoord || routeCoords[0] || { latitude: 28.6139, longitude: 77.209 };
+  const initial = vehicleCoord || routeCoords[0] || { latitude: 28.6139, longitude: 77.209 };
   const nextStop = nextStops[0] || summary.stops[1] || summary.stops[0];
   const passengerList = Object.values(passengers);
 
   return (
     <View style={styles.root}>
-      <VayyMap
+      {/* <VayyMap
         ref={mapRef}
         initialRegion={{ ...initial, latitudeDelta: 0.08, longitudeDelta: 0.08 }}
         style={styles.map}
@@ -190,11 +190,11 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
             />
           </GeoJSONSource>
         ) : null}
-        {busCoord ? (
-          <ViewAnnotation id="bus-marker" lngLat={[busCoord.longitude, busCoord.latitude]} anchor="center">
-            <View style={styles.busMarker}>
+        {vehicleCoord ? (
+          <ViewAnnotation id="vehicle-marker" lngLat={[vehicleCoord.longitude, vehicleCoord.latitude]} anchor="center">
+            <View style={styles.vehicleMarker}>
               <LiveDot size={13} />
-              <BusIconBadge size={38} />
+              <VehicleIconBadge size={38} vehicleType={activeTrip?.vehicle_type || "auto"} />
             </View>
           </ViewAnnotation>
         ) : null}
@@ -212,13 +212,13 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
             </ViewAnnotation>
           );
         })}
-      </VayyMap>
+      </VayyMap> */}
 
       <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
         <View style={styles.headerCard}>
           <View>
-            <Text style={styles.busTitle}>
-              Bus {activeTrip?.vehicle_number || activeTrip?.bus_number || summary.vehicleNumber || "VAYY 1024"}
+            <Text style={styles.vehicleTitle}>
+              {activeTrip?.route_code || activeTrip?.vehicle_number || summary.vehicleNumber || "VAYY Vehicle"}
             </Text>
             <Text style={styles.routeName}>{summary.title}</Text>
           </View>
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     margin: SPACING.base,
     padding: SPACING.base,
   },
-  busTitle: { color: COLORS.text, fontSize: 18, fontWeight: "900" },
+  vehicleTitle: { color: COLORS.text, fontSize: 18, fontWeight: "900" },
   routeName: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
   onTime: {
     backgroundColor: COLORS.success,
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
   },
   onTimeText: { color: COLORS.primary, fontSize: 12, fontWeight: "900" },
-  busMarker: { alignItems: "center", justifyContent: "center" },
+  vehicleMarker: { alignItems: "center", justifyContent: "center" },
   panel: {
     ...SHADOW.md,
     backgroundColor: COLORS.white,

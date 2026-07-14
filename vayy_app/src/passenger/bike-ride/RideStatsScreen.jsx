@@ -10,7 +10,7 @@ import {
   Modal,
   Linking,
 } from "react-native";
-import VayyMap from "../../shared/components/VayyMap";
+// import VayyMap from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -33,6 +33,12 @@ export function RideStatsScreen({ navigation, route }) {
   const destination = route?.params?.destination || "Charbagh Metro Gate 2";
   const eta = route?.params?.eta || "4";
   const distanceLeft = route?.params?.distance || "800";
+  const driverName = route?.params?.driverName || "Driver";
+  const vehicle = route?.params?.vehicle || "";
+  const dispatchId = route?.params?.dispatchId || "";
+  const fare = route?.params?.fare || 45;
+  const tripData = route?.params?.tripData || {};
+  const route_id = route?.params?.route_id || "";
   const [endRideCase, setEndRideCase] = useState("arrived");
   const [showShareModal, setShowShareModal] = useState(false);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
@@ -58,7 +64,23 @@ export function RideStatsScreen({ navigation, route }) {
 
   function handleConfirmEndRide() {
     setShowEndConfirm(false);
-    navigation.navigate("RideComplete");
+    navigation.navigate("RideComplete", {
+      tripId: tripData.trip_id || dispatchId,
+      riderName: driverName,
+      vehicleText: vehicle,
+      pickup: (() => {
+        const p = tripData.pickup_stop?.name || tripData.pickup;
+        if (!p) return "Pickup Stop";
+        return typeof p === "string" ? p : p.name || p.display_name || "Pickup Stop";
+      })(),
+      dropoff: destination,
+      distance: distanceLeft,
+      duration: eta,
+      fare: fare,
+      driverRating: 0,
+      paymentMethod: "Cash",
+      route_id,
+    });
   }
 
   function handleShareTrip() {
@@ -81,7 +103,7 @@ export function RideStatsScreen({ navigation, route }) {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <View style={styles.mapArea}>
-        <VayyMap
+        {/* <VayyMap
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
@@ -94,7 +116,7 @@ export function RideStatsScreen({ navigation, route }) {
           scrollEnabled
           zoomEnabled
           zoomControlEnabled
-        />
+        /> */}
 
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
@@ -128,7 +150,7 @@ export function RideStatsScreen({ navigation, route }) {
         <View style={styles.destLabel}>
           <Ionicons name="location" size={18} color="#009849" />
           <Text style={styles.destLabelText}>
-            Charbagh Metro{"\n"}Gate 2
+            {destination}
           </Text>
           <View style={styles.labelArrow} />
         </View>

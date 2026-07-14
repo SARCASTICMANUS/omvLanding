@@ -89,15 +89,15 @@ class RabbitMQService:
         """
         from communication.constants import (
             EXCHANGE_LOCATION, EXCHANGE_DISPATCH, EXCHANGE_NOTIFICATION,
-            EXCHANGE_BOARDING, EXCHANGE_TRIP,
+            EXCHANGE_BOARDING, EXCHANGE_TRIP, EXCHANGE_MATCHING,
             QUEUE_LOCATION_AUTO, QUEUE_LOCATION_BIKE, QUEUE_LOCATION_PASSENGER,
             QUEUE_DISPATCH_ASSIGNMENT,
             QUEUE_NOTIFICATION_EVENTS, QUEUE_BOARDING,
-            QUEUE_TRIP_EVENTS,
+            QUEUE_TRIP_EVENTS, QUEUE_MATCHING,
             QUEUE_DLX, QUEUE_DEAD_LETTER,
             RK_LOCATION_AUTO, RK_LOCATION_BIKE, RK_LOCATION_PASSENGER, RK_DISPATCH_ASSIGN,
             RK_NOTIFICATION_ANY, RK_BOARDING_ANY,
-            RK_TRIP_ANY,
+            RK_TRIP_ANY, RK_MATCHING_ANY,
         )
 
         try:
@@ -139,6 +139,7 @@ class RabbitMQService:
             channel.exchange_declare(exchange=EXCHANGE_NOTIFICATION, exchange_type='topic', durable=True)
             channel.exchange_declare(exchange=EXCHANGE_BOARDING, exchange_type='topic', durable=True)
             channel.exchange_declare(exchange=EXCHANGE_TRIP, exchange_type='topic', durable=True)
+            channel.exchange_declare(exchange=EXCHANGE_MATCHING, exchange_type='topic', durable=True)
 
             # Declare and Bind Queues
             declare_location_queue(QUEUE_LOCATION_AUTO, EXCHANGE_LOCATION, RK_LOCATION_AUTO)
@@ -148,6 +149,7 @@ class RabbitMQService:
             declare_vayy_queue(QUEUE_NOTIFICATION_EVENTS, EXCHANGE_NOTIFICATION, RK_NOTIFICATION_ANY)
             declare_vayy_queue(QUEUE_BOARDING, EXCHANGE_BOARDING, RK_BOARDING_ANY)
             declare_vayy_queue(QUEUE_TRIP_EVENTS, EXCHANGE_TRIP, RK_TRIP_ANY)
+            declare_vayy_queue(QUEUE_MATCHING, EXCHANGE_MATCHING, RK_MATCHING_ANY)
 
             logger.info("RabbitMQ infrastructure setup completed successfully")
 

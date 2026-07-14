@@ -140,7 +140,7 @@ class RouteListSerializer(
             "id",
             "city",
             "name",
-            "bus_number",
+            "route_code",
             "city_name",
             "start_name",
             "end_name",
@@ -169,7 +169,7 @@ class RouteDetailSerializer(
             "id",
             "city",
             "name",
-            "bus_number",
+            "route_code",
             "path",
             "start_name",
             "end_name",
@@ -243,14 +243,14 @@ class DriverRouteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Route
         fields = (
-            "id", "route_id", "name", "route_name", "code", "bus_number",
+            "id", "route_id", "name", "route_name", "code", "route_code",
             "source_name", "destination_name", "start_name", "end_name",
             "total_distance", "total_distance_meters", "distance_meters",
             "duration_minutes", "eta_minutes", "stops",
         )
 
     def get_code(self, obj):
-        return obj.bus_number or f"VAYY-{str(obj.id)[:8].upper()}"
+        return obj.route_code or f"VAYY-{str(obj.id)[:8].upper()}"
 
     def get_duration_minutes(self, obj):
         if obj.total_distance_meters and obj.total_distance_meters > 0:

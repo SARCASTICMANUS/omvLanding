@@ -8,7 +8,7 @@ import {
   Platform,
   Animated,
 } from "react-native";
-import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
+// import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -77,7 +77,7 @@ export function AutoDiscoveryScreen({ navigation }) {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <View style={styles.mapArea}>
-        <VayyMap
+        {/* <VayyMap
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
@@ -117,7 +117,7 @@ export function AutoDiscoveryScreen({ navigation }) {
               </ViewAnnotation>
             );
           })}
-        </VayyMap>
+        </VayyMap> */}
 
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />

@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
-import VayyMap from "../../shared/components/VayyMap";
+// import VayyMap from "../../shared/components/VayyMap";
 import AppFrame from "../../components/AppFrame";
 import BadgeChip from "../../components/BadgeChip";
 import Logo from "../../shared/components/common/Logo";
@@ -19,7 +19,7 @@ export default function PassengerHomeScreen({ navigation, mode = "auto" }) {
   return (
     <AppFrame showBack={false}>
       <View style={styles.home}>
-        <VayyMap
+        {/* <VayyMap
           style={styles.mapBg}
           initialRegion={{
             latitude: user?.latitude || 26.8467,
@@ -29,7 +29,7 @@ export default function PassengerHomeScreen({ navigation, mode = "auto" }) {
           }}
           scrollEnabled={false}
           zoomEnabled={false}
-        />
+        /> */}
         <View style={styles.homeTop}>
           <Logo />
           <Text style={styles.greeting}>Good morning, {displayName}</Text>

@@ -214,7 +214,7 @@ def main():
     parser.add_argument(
         "--vehicle-type",
         default=os.getenv("VEHICLE_TYPE", "auto"),
-        choices=["auto", "bike", "car", "van", "bus", "minibus", "tempo"],
+        choices=["auto", "bike"],
     )
     parser.add_argument(
         "--interval",

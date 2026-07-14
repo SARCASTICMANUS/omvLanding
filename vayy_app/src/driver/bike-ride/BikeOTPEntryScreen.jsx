@@ -11,11 +11,15 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useDispatch } from "react-redux";
+import { startDispatchTrip } from "../../store/slices/dispatchSlice";
 import COLORS from "../../shared/constants/colors";
 
 export default function BikeOTPEntryScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const dispatchRedux = useDispatch();
   const buddy = route.params?.buddy;
+  const dispatchId = route.params?.dispatchId || buddy?.dispatchId;
   const [otp, setOtp] = useState(["", "", "", ""]);
   const [showSuccess, setShowSuccess] = useState(false);
   const [otpError, setOtpError] = useState("");
@@ -52,7 +56,8 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
       ]).start();
       return;
     }
-    if (code === "0000") {
+    const expectedOtp = String(buddy?.otp || "");
+    if (expectedOtp && code !== expectedOtp) {
       setOtpError("Invalid code. Please try again.");
       Animated.sequence([
         Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
@@ -66,8 +71,14 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
     setOtpError("");
     setShowSuccess(true);
     Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 80, useNativeDriver: true }).start();
+    // Start the trip on backend
+    if (dispatchId) {
+      dispatchRedux(startDispatchTrip(dispatchId)).catch((e) => {
+        console.warn("startDispatchTrip failed:", e);
+      });
+    }
     setTimeout(() => {
-      navigation.replace("BikeRideToDestination", { buddy });
+      navigation.replace("BikeRideToDestination", { buddy, dispatchId });
     }, 1200);
   };
 

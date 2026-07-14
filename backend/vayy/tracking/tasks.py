@@ -135,6 +135,88 @@ def process_passenger_location(self, payload):
         raise self.retry(exc=exc)
 
 
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=5,
+    queue="matching",
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def process_ride_request(self, payload):
+    """
+    Celery task that runs the matching worker.
+    Filters by route → direction → proximity → sequence → ETA ranking,
+    then publishes ride request to the matched driver's RabbitMQ queue.
+    """
+    try:
+        from tracking.services.matching_service import MatchingService
+
+        logger.info(f"Processing ride request {payload.get('request_id')} for route {payload.get('route_id')}")
+
+        result = MatchingService.find_and_match_driver(payload)
+
+        if result:
+            logger.info(
+                f"Ride request {payload.get('request_id')} matched to "
+                f"vehicle {result['vehicle_id']} (ETA: {result['eta_to_pickup_s']}s)"
+            )
+        else:
+            logger.info(f"No driver found for ride request {payload.get('request_id')}")
+
+    except Exception as exc:
+        logger.error(f"Error processing ride request: {exc}")
+        raise self.retry(exc=exc)
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=5,
+    queue="matching",
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def process_ride_lifecycle(self, payload):
+    """
+    Celery task that handles ride lifecycle transitions:
+    accept, reject, board, complete.
+    """
+    try:
+        from tracking.services.matching_service import MatchingService
+
+        request_id = payload.get("request_id")
+        action = payload.get("action")
+        user_id = payload.get("user_id")
+
+        logger.info(f"Processing ride lifecycle: {action} for request {request_id}")
+
+        if action == "accept":
+            # Find the vehicle that accepted
+            boarding = __import__("operations.models", fromlist=["BoardingRequest"]).BoardingRequest.objects.get(id=request_id)
+            vehicle_id = str(boarding.trip.vehicle_id) if boarding.trip else ""
+            MatchingService.accept_ride(request_id, vehicle_id)
+
+        elif action == "reject":
+            boarding = __import__("operations.models", fromlist=["BoardingRequest"]).BoardingRequest.objects.get(id=request_id)
+            vehicle_id = str(boarding.trip.vehicle_id) if boarding.trip else ""
+            MatchingService.reject_ride(request_id, vehicle_id)
+
+        elif action == "board":
+            MatchingService.board_passenger(request_id)
+
+        elif action == "complete":
+            MatchingService.complete_ride(request_id)
+
+        logger.info(f"Ride lifecycle {action} completed for request {request_id}")
+
+    except Exception as exc:
+        logger.error(f"Error processing ride lifecycle: {exc}")
+        raise self.retry(exc=exc)
+
+
 @shared_task
 def sync_rabbitmq_infrastructure():
     """

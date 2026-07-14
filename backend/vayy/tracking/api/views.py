@@ -1,5 +1,6 @@
 import logging
 import json
+import time
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -7,17 +8,29 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from accounts.permissions import IsDriver, IsPassenger
-from operations.models import VehicleState, Vehicle, ActiveTrip
+from operations.models import VehicleState, Vehicle, ActiveTrip, BoardingRequest
 from operations.services.ride_service import RideService
 from tracking.selectors.hybrid_selector import HybridSelector
 from tracking.api.serializers import (
     HybridLogSerializer,
     TelemetryIngestSerializer,
+    StartRouteTripSerializer,
+    PassengerRaiseHandSerializer,
+    RideLifecycleSerializer,
+    RouteStopListSerializer,
 )
 from tracking.services.geo_service import GeoService
 from tracking.services.gps_service import GPSService
 from tracking.services.redis_geo_service import RedisGeoService
-from tracking.tasks import process_location_update, process_passenger_location
+from tracking.services.redis_route_service import RedisRouteService
+from tracking.services.matching_service import MatchingService
+from tracking.tasks import (
+    process_location_update,
+    process_passenger_location,
+    process_ride_request,
+    process_ride_lifecycle,
+)
+from transport.models import Route, Stop
 
 logger = logging.getLogger(__name__)
 
@@ -335,3 +348,474 @@ class DriverLocationAPIView(APIView):
                 {"success": False, "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+# ──────────────────────────────────────────────────────────────
+# Route-based trip management
+# ──────────────────────────────────────────────────────────────
+
+
+class StartRouteTripView(APIView):
+    """
+    POST /api/tracking/start-route-trip/
+    Driver selects a route and starts a trip.
+
+    Request:
+        { "vehicle_id": "<uuid>", "route_id": "<uuid>", "direction": "outbound" }
+
+    Creates ActiveTrip, registers vehicle in Redis route state,
+    and returns trip details + ordered stops.
+    """
+    permission_classes = [IsAuthenticated, IsDriver]
+
+    def post(self, request):
+        _log_request("StartRouteTrip", request)
+        serializer = StartRouteTripSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        vehicle = serializer.validated_data["_vehicle"]
+        route = serializer.validated_data["_route"]
+        direction = serializer.validated_data["direction"]
+
+        if vehicle.driver_id != request.user.id:
+            raise PermissionDenied("Vehicle is not assigned to this driver.")
+
+        try:
+            # Fetch ordered stops with cumulative distances
+            stops = list(route.stops.order_by("order"))
+            if not stops:
+                return Response(
+                    {"success": False, "message": "Route has no stops defined."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Compute cumulative distances if not yet set
+            from tracking.services.location_service import _haversine_m, _point_to_tuple
+            cumulative = 0.0
+            for i, stop in enumerate(stops):
+                if i == 0:
+                    stop.cumulative_distance_m = 0
+                    stop.cumulative_duration_s = 0
+                else:
+                    prev = stops[i - 1]
+                    seg_dist = _haversine_m(
+                        _point_to_tuple(prev.location),
+                        _point_to_tuple(stop.location),
+                    )
+                    cumulative += seg_dist
+                    stop.cumulative_distance_m = round(cumulative, 1)
+                    # Rough duration estimate: 20 km/h average
+                    stop.cumulative_duration_s = round(cumulative / (20 * 1000 / 3600), 1)
+                stop.save(update_fields=["cumulative_distance_m", "cumulative_duration_s"])
+
+            # Determine starting stop based on direction
+            start_stop = stops[0] if direction == "outbound" else stops[-1]
+
+            # Create ActiveTrip
+            trip = ActiveTrip.objects.create(
+                vehicle=vehicle,
+                route=route,
+                driver=request.user,
+                status="active",
+                direction=direction,
+                current_stop=start_stop,
+                current_segment_index=start_stop.order,
+            )
+
+            # Update VehicleState
+            state, _ = VehicleState.objects.get_or_create(vehicle=vehicle)
+            state.active_trip = trip
+            state.current_stop_index = start_stop.order
+            state.current_segment_index = start_stop.order
+            state.save(update_fields=["active_trip", "current_stop_index", "current_segment_index"])
+
+            # Register in Redis
+            RedisRouteService.add_active_trip(str(route.id), str(trip.id))
+            RedisRouteService.set_vehicle_route_state(
+                vehicle_id=str(vehicle.id),
+                route_id=str(route.id),
+                direction=direction,
+                current_stop_index=start_stop.order,
+                current_segment_index=start_stop.order,
+                distance_along_route_m=start_stop.cumulative_distance_m,
+                last_stop_id=str(start_stop.id),
+            )
+
+            logger.info(
+                f"[StartRouteTrip] Trip {trip.id} started on route {route.name} "
+                f"direction={direction} start_stop={start_stop.name}"
+            )
+
+            resp = Response({
+                "success": True,
+                "message": f"Trip started on {route.name}",
+                "data": {
+                    "trip_id": str(trip.id),
+                    "route_id": str(route.id),
+                    "route_name": route.name,
+                    "direction": direction,
+                    "start_stop": {
+                        "id": str(start_stop.id),
+                        "name": start_stop.name,
+                        "order": start_stop.order,
+                    },
+                    "total_stops": len(stops),
+                    "total_distance_m": round(cumulative, 1),
+                    "stops": [
+                        {
+                            "id": str(s.id),
+                            "name": s.name,
+                            "order": s.order,
+                            "cumulative_distance_m": s.cumulative_distance_m,
+                        }
+                        for s in stops
+                    ],
+                },
+            })
+            _log_response("StartRouteTrip", resp)
+            return resp
+
+        except PermissionDenied:
+            raise
+        except Exception as e:
+            logger.exception(f"[StartRouteTrip] Failed: {e}")
+            return Response(
+                {"success": False, "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class EndRouteTripView(APIView):
+    """
+    POST /api/tracking/end-route-trip/
+    Driver ends an active route trip.
+
+    Request: { "trip_id": "<uuid>" }
+    """
+    permission_classes = [IsAuthenticated, IsDriver]
+
+    def post(self, request):
+        _log_request("EndRouteTrip", request)
+        trip_id = request.data.get("trip_id")
+        if not trip_id:
+            return Response(
+                {"success": False, "message": "trip_id is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            trip = ActiveTrip.objects.get(id=trip_id, driver=request.user, status="active")
+        except ActiveTrip.DoesNotExist:
+            return Response(
+                {"success": False, "message": "Active trip not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        from django.utils import timezone
+        trip.status = "completed"
+        trip.ended_at = timezone.now()
+        trip.save(update_fields=["status", "ended_at"])
+
+        # Clean up Redis
+        RedisRouteService.remove_active_trip(str(trip.route_id), str(trip.id))
+        RedisRouteService.remove_vehicle_from_route(str(trip.route_id), str(trip.vehicle_id))
+        RedisRouteService.clear_vehicle_route_state(str(trip.vehicle_id))
+
+        # Update VehicleState
+        state, _ = VehicleState.objects.get_or_create(vehicle=trip.vehicle)
+        state.active_trip = None
+        state.current_stop_index = 0
+        state.current_segment_index = 0
+        state.distance_along_route_m = 0
+        state.snapped_location = None
+        state.save()
+
+        logger.info(f"[EndRouteTrip] Trip {trip.id} completed")
+
+        resp = Response({"success": True, "message": "Trip ended"})
+        _log_response("EndRouteTrip", resp)
+        return resp
+
+
+# ──────────────────────────────────────────────────────────────
+# Passenger ride request ("raise hand")
+# ──────────────────────────────────────────────────────────────
+
+
+class PassengerRaiseHandView(APIView):
+    """
+    POST /api/tracking/raise-hand/
+    Passenger requests a ride between two stops on a route.
+
+    Request:
+        {
+            "route_id": "<uuid>",
+            "pickup_stop_id": "<uuid>",
+            "dropoff_stop_id": "<uuid>",
+            "lat": 28.6139,
+            "lng": 77.209
+        }
+
+    Creates a BoardingRequest, dispatches matching worker via Celery.
+    """
+    permission_classes = [IsAuthenticated, IsPassenger]
+
+    def post(self, request):
+        _log_request("PassengerRaiseHand", request)
+        serializer = PassengerRaiseHandSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        route_id = serializer.validated_data["route_id"]
+        pickup_stop = serializer.validated_data["_pickup"]
+        dropoff_stop = serializer.validated_data["_dropoff"]
+        lat = serializer.validated_data["lat"]
+        lng = serializer.validated_data["lng"]
+
+        try:
+            # Check for existing pending request on this route
+            existing = BoardingRequest.objects.filter(
+                passenger=request.user,
+                status="pending",
+                pickup_stop__route_id=route_id,
+            ).exists()
+            if existing:
+                return Response(
+                    {"success": False, "message": "You already have a pending request on this route"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            # Find an active trip on this route to associate with
+            active_trip = ActiveTrip.objects.filter(
+                route_id=route_id, status="active"
+            ).select_related("vehicle").first()
+
+            if not active_trip:
+                return Response(
+                    {"success": False, "message": "No active trips on this route right now"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            boarding = BoardingRequest.objects.create(
+                passenger=request.user,
+                trip=active_trip,
+                pickup_stop=pickup_stop,
+                status="pending",
+            )
+
+            # Dispatch async matching
+            process_ride_request.delay({
+                "request_id": str(boarding.id),
+                "passenger_id": str(request.user.id),
+                "route_id": str(route_id),
+                "pickup_stop_id": str(pickup_stop.id),
+                "dropoff_stop_id": str(dropoff_stop.id),
+                "passenger_lat": lat,
+                "passenger_lng": lng,
+            })
+
+            logger.info(
+                f"[PassengerRaiseHand] Request {boarding.id} created for route {route_id} "
+                f"pickup={pickup_stop.name} dropoff={dropoff_stop.name}"
+            )
+
+            resp = Response({
+                "success": True,
+                "message": "Searching for drivers...",
+                "data": {
+                    "request_id": str(boarding.id),
+                    "pickup_stop": {"id": str(pickup_stop.id), "name": pickup_stop.name, "order": pickup_stop.order},
+                    "dropoff_stop": {"id": str(dropoff_stop.id), "name": dropoff_stop.name, "order": dropoff_stop.order},
+                    "route_name": active_trip.route.name,
+                    "vehicle_number": active_trip.vehicle.vehicle_number,
+                },
+            }, status=status.HTTP_201_CREATED)
+            _log_response("PassengerRaiseHand", resp)
+            return resp
+
+        except Exception as e:
+            logger.exception(f"[PassengerRaiseHand] Failed: {e}")
+            return Response(
+                {"success": False, "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class RideLifecycleView(APIView):
+    """
+    POST /api/tracking/ride-lifecycle/
+    Driver or system transitions a ride through states.
+
+    Request:
+        { "request_id": "<uuid>", "action": "accept"|"reject"|"board"|"complete" }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        _log_request("RideLifecycle", request)
+        serializer = RideLifecycleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        request_id = serializer.validated_data["request_id"]
+        action = serializer.validated_data["action"]
+
+        process_ride_lifecycle.delay({
+            "request_id": str(request_id),
+            "action": action,
+            "user_id": str(request.user.id),
+        })
+
+        resp = Response({
+            "success": True,
+            "message": f"Ride {action} dispatched",
+            "data": {"request_id": str(request_id), "action": action},
+        })
+        _log_response("RideLifecycle", resp)
+        return resp
+
+
+# ──────────────────────────────────────────────────────────────
+# Route info / stop list
+# ──────────────────────────────────────────────────────────────
+
+
+class RouteStopsView(APIView):
+    """
+    GET /api/tracking/route/<uuid:route_id>/stops/
+    Returns the ordered stops for a route with cumulative distances.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, route_id):
+        try:
+            route = Route.objects.get(id=route_id)
+        except Route.DoesNotExist:
+            return Response(
+                {"success": False, "message": "Route not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        stops = route.stops.order_by("order")
+        resp = Response({
+            "success": True,
+            "data": RouteStopListSerializer(route).data,
+        })
+        return resp
+
+
+class ActiveRouteTripsView(APIView):
+    """
+    GET /api/tracking/route/<uuid:route_id>/active-trips/
+    Returns all active trips on a route with their cached Redis state.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, route_id):
+        try:
+            route = Route.objects.get(id=route_id)
+        except Route.DoesNotExist:
+            return Response(
+                {"success": False, "message": "Route not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        trips = ActiveTrip.objects.filter(
+            route=route, status="active"
+        ).select_related("vehicle", "vehicle__driver", "current_stop")
+
+        trip_data = []
+        for trip in trips:
+            state = RedisRouteService.get_vehicle_route_state(str(trip.vehicle_id))
+            etas = RedisRouteService.get_vehicle_etas(str(trip.vehicle_id))
+            trip_data.append({
+                "trip_id": str(trip.id),
+                "vehicle_id": str(trip.vehicle_id),
+                "vehicle_number": trip.vehicle.vehicle_number,
+                "driver_name": trip.vehicle.driver.username if trip.vehicle.driver else "",
+                "direction": trip.direction,
+                "current_stop": {
+                    "id": str(trip.current_stop.id) if trip.current_stop else None,
+                    "name": trip.current_stop.name if trip.current_stop else "",
+                    "order": trip.current_stop.order if trip.current_stop else 0,
+                },
+                "current_segment_index": trip.current_segment_index,
+                "eta_to_next_stop_s": state.get("eta_to_next_stop_s") if state else None,
+                "downstream_etas": etas or {},
+                "last_updated": trip.last_updated.isoformat(),
+            })
+
+        resp = Response({
+            "success": True,
+            "data": trip_data,
+        })
+        return resp
+
+
+class NearbyRoutesView(APIView):
+    """
+    GET /api/tracking/nearby-routes/?lat=X&lng=Y&radius=2000
+    Returns routes whose stops are within radius metres of the given point.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            lat = float(request.query_params.get("lat", 0))
+            lng = float(request.query_params.get("lng", 0))
+            radius = int(request.query_params.get("radius", 2000))
+        except (TypeError, ValueError):
+            return Response(
+                {"success": False, "message": "Invalid lat/lng/radius"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not lat or not lng:
+            return Response(
+                {"success": False, "message": "lat and lng are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from django.contrib.gis.geos import Point
+        from django.contrib.gis.measure import D
+
+        point = Point(lng, lat, srid=4326)
+        stops_near = Stop.objects.filter(
+            location__distance_lte=(point, D(m=radius))
+        ).select_related("route").order_by("route_id")
+
+        route_map = {}
+        for stop in stops_near:
+            rid = str(stop.route_id)
+            if rid not in route_map:
+                route_map[rid] = {
+                    "route_id": rid,
+                    "route_name": stop.route.name,
+                    "route_code": stop.route.route_code,
+                    "start_name": stop.route.start_name,
+                    "end_name": stop.route.end_name,
+                    "nearest_stop": None,
+                    "nearest_distance_m": float("inf"),
+                    "active_trips": 0,
+                }
+            dist_m = point.distance(stop.location) * 111000
+            if dist_m < route_map[rid]["nearest_distance_m"]:
+                route_map[rid]["nearest_distance_m"] = round(dist_m, 1)
+                route_map[rid]["nearest_stop"] = {
+                    "id": str(stop.id),
+                    "name": stop.name,
+                    "order": stop.order,
+                }
+
+        # Add active trip counts
+        for rid, info in route_map.items():
+            info["active_trips"] = ActiveTrip.objects.filter(
+                route_id=rid, status="active"
+            ).count()
+            info["nearest_distance_m"] = round(info["nearest_distance_m"], 1)
+
+        routes = sorted(route_map.values(), key=lambda r: r["nearest_distance_m"])
+
+        resp = Response({
+            "success": True,
+            "data": routes,
+        })
+        return resp

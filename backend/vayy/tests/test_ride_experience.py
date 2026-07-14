@@ -20,7 +20,7 @@ class TestRideExperience:
         stop = Stop.objects.create(route=route, name="Stop 1", location=Point(77.5946, 12.9716, srid=4326), order=1)
         passenger = User.objects.create_user(username="passenger", password="password", role="passenger")
         driver = User.objects.create_user(username="driver", password="password", role="driver")
-        vehicle = Vehicle.objects.create(vehicle_number="KA-01-1234", vehicle_type="car", city=city, driver=driver)
+        vehicle = Vehicle.objects.create(vehicle_number="KA-01-1234", vehicle_type="bike", city=city, driver=driver)
         state = VehicleState.objects.create(vehicle=vehicle, current_location=Point(77.5956, 12.9726, srid=4326))
         return {
             "city": city,
@@ -39,7 +39,7 @@ class TestRideExperience:
             "pickup_lng": 77.5946,
             "drop_lat": 12.9816,
             "drop_lng": 77.6046,
-            "vehicle_type": "car"
+            "vehicle_type": "bike"
         }
         response = api_client.post(url, data)
         assert response.status_code == status.HTTP_200_OK

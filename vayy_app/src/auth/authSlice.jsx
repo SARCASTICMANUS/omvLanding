@@ -20,7 +20,6 @@ const normalizeUser = (data) => {
 };
 
 const normalizeAuthPayload = (data) => {
-  // Backend wraps tokens in a nested "tokens" object
   const token = data.token || data.access || data.tokens?.access;
   const refresh = data.refresh || data.tokens?.refresh;
   return {
@@ -152,10 +151,9 @@ export const restoreAuthFromStorage = createAsyncThunk(
   },
 );
 
-export const logoutUser = createAsyncThunk(
+export const logout = createAsyncThunk(
   "auth/logout",
-  async (_, thunkAPI) => {
-    thunkAPI.dispatch(authSlice.actions.logoutComplete());
+  async () => {
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.token,
       STORAGE_KEYS.accessToken,
@@ -163,7 +161,7 @@ export const logoutUser = createAsyncThunk(
       STORAGE_KEYS.user,
       STORAGE_KEYS.pendingEmail,
     ]);
-  }
+  },
 );
 
 const initialState = {
@@ -181,14 +179,6 @@ const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    logoutComplete: (state) => {
-      state.user = null;
-      state.token = null;
-      state.refreshToken = null;
-      state.isAuthenticated = false;
-      state.isOtpSent = false;
-      state.otpEmail = null;
-    },
     restoreAuth: (state, action) => {
       state.user = action.payload.user;
       state.token = action.payload.token;
@@ -270,9 +260,17 @@ const authSlice = createSlice({
       })
       .addCase(restoreAuthFromStorage.rejected, (state) => {
         state.loading = false;
+      })
+      .addCase(logout.fulfilled, (state) => {
+        state.user = null;
+        state.token = null;
+        state.refreshToken = null;
+        state.isAuthenticated = false;
+        state.isOtpSent = false;
+        state.otpEmail = null;
       });
-  },  
+  },
 });
 
-export const { logoutComplete, restoreAuth, refreshTokenSuccess, clearOtpSent } = authSlice.actions;
+export const { restoreAuth, refreshTokenSuccess, clearOtpSent } = authSlice.actions;
 export default authSlice.reducer;

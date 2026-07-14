@@ -430,15 +430,15 @@ class RouteDetailAPIView(APIView):
         return resp
 
 
-class RouteByBusNumberAPIView(APIView):
+class RouteByRouteCodeAPIView(APIView):
     permission_classes = [AllowAny]
 
-    def get(self, request, bus_number):
-        _log_request("RouteByBusNumber", request, extra=f"bus_number={bus_number}")
-        route = RouteSelector.get_route_by_bus_number(bus_number)
+    def get(self, request, route_code):
+        _log_request("RouteByRouteCode", request, extra=f"route_code={route_code}")
+        route = RouteSelector.get_route_by_route_code(route_code)
         serializer = RouteDetailSerializer(route)
         resp = Response(serializer.data, status=status.HTTP_200_OK)
-        _log_response("RouteByBusNumber", resp)
+        _log_response("RouteByRouteCode", resp)
         return resp
 
 
@@ -617,7 +617,7 @@ class RouteSearchByLocationAPIView(APIView):
             results.append({
                 "id": str(route.id),
                 "name": route.name,
-                "bus_number": route.bus_number,
+                "route_code": route.route_code,
                 "city_name": route.city.name if route.city else "",
                 "start_name": route.start_name,
                 "end_name": route.end_name,
@@ -627,7 +627,7 @@ class RouteSearchByLocationAPIView(APIView):
                 "rating": 4.5,
                 "review_count": 128,
                 "walk_minutes": walk_pickup_min,
-                "vehicle_type": "CNG",
+                "vehicle_type": "auto",
                 "payment_method": "Cash",
                 "distance_km": stop_distance_km,
                 "is_route_only": False,

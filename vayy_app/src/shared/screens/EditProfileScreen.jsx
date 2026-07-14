@@ -21,12 +21,8 @@ import VayyButton from "../components/common/VayyButton";
 import { DRIVER_ROLES } from "../../constants";
 
 const VEHICLE_TYPES = [
-  { label: "Bus", value: "bus" },
-  { label: "Van", value: "van" },
-  { label: "Minibus", value: "minibus" },
-  { label: "Car", value: "car" },
+  { label: "Bike", value: "bike" },
   { label: "Auto", value: "auto" },
-  { label: "Tempo", value: "tempo" },
 ];
 
 export default function EditProfileScreen({ navigation }) {

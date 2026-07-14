@@ -419,7 +419,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
                 <Text style={styles.heroTitleGreen}>Route</Text>
                 <Text style={styles.heroSubtitle}>
                   Enter your pickup and drop locations{"\n"}
-                  to find the best bus routes{"\n"}
+                  to find the best routes{"\n"}
                   and track in real-time.
                 </Text>
               </View>

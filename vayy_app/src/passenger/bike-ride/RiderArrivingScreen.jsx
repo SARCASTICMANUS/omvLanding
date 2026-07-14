@@ -12,7 +12,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
-import VayyMap from "../../shared/components/VayyMap";
+// import VayyMap from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -113,7 +113,7 @@ export function RiderArrivingScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity: screenOpacity }]}>
+      {/* <Animated.View style={[StyleSheet.absoluteFill, { opacity: screenOpacity }]}>
         <VayyMap
           style={styles.mapBg}
           ref={mapRef}
@@ -128,7 +128,7 @@ export function RiderArrivingScreen({ navigation }) {
           zoomEnabled
           zoomControlEnabled
         />
-      </Animated.View>
+      </Animated.View> */}
 
       <Animated.View style={{ flex: 1, opacity: screenOpacity }}>
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>

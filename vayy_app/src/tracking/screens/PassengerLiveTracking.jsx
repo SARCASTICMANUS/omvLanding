@@ -2,10 +2,10 @@ import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Alert, Linking, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+// import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import BusIconBadge from "../../shared/components/common/BusIconBadge";
+import VehicleIconBadge from "../../shared/components/common/VehicleIconBadge";
 import LiveDot from "../../shared/components/common/LiveDot";
 import VayyButton from "../../shared/components/common/VayyButton";
 import api from "../../shared/lib/api";
@@ -30,7 +30,7 @@ const toMapCoord = (point) => {
 export default function PassengerLiveTracking({ navigation, route }) {
   const tripId = route?.params?.tripId;
   const [tripData, setTripIdData] = useState(null);
-  const [busData, setBusData] = useState({ pos: null, eta: [] });
+  const [vehicleData, setVehicleData] = useState({ pos: null, eta: [] });
   const [loading, setLoading] = useState(true);
   const [wsStatus, setWsStatus] = useState("connecting");
   const [myPos, setMyPos] = useState(null);
@@ -42,7 +42,7 @@ export default function PassengerLiveTracking({ navigation, route }) {
 
   const handleWsMessage = useCallback((data) => {
     if (data.type === "city_vehicle_update" || data.type === "vehicle_update") {
-      setBusData({
+      setVehicleData({
         pos: [data.lat, data.lng || data.lon],
         eta: data.next_stop_eta || [],
       });
@@ -100,13 +100,13 @@ export default function PassengerLiveTracking({ navigation, route }) {
 
   useEffect(() => {
     markers.current = {
-      bus: busData.pos,
+      vehicle: vehicleData.pos,
       me: myPos,
     };
-  }, [busData.pos, myPos]);
+  }, [vehicleData.pos, myPos]);
 
-  const busCoord = busData.pos
-    ? { latitude: Number(busData.pos[0]), longitude: Number(busData.pos[1]) }
+  const vehicleCoord = vehicleData.pos
+    ? { latitude: Number(vehicleData.pos[0]), longitude: Number(vehicleData.pos[1]) }
     : null;
   const myCoord = toMapCoord(myPos);
   const destinationCoord = useMemo(() => {
@@ -115,12 +115,12 @@ export default function PassengerLiveTracking({ navigation, route }) {
   }, [tripData]);
   const routeCoords = useMemo(
     () =>
-      [myCoord, busCoord, destinationCoord].filter(Boolean),
-    [busCoord, destinationCoord, myCoord],
+      [myCoord, vehicleCoord, destinationCoord].filter(Boolean),
+    [vehicleCoord, destinationCoord, myCoord],
   );
-  const initial = myCoord || busCoord || destinationCoord || { latitude: 28.6139, longitude: 77.209 };
-  const etaMinutes = busData.eta?.[0]?.duration_seconds
-    ? Math.ceil(busData.eta[0].duration_seconds / 60)
+  const initial = myCoord || vehicleCoord || destinationCoord || { latitude: 28.6139, longitude: 77.209 };
+  const etaMinutes = vehicleData.eta?.[0]?.duration_seconds
+    ? Math.ceil(vehicleData.eta[0].duration_seconds / 60)
     : "--";
 
   const handleShareTrip = async () => {
@@ -179,7 +179,7 @@ export default function PassengerLiveTracking({ navigation, route }) {
 
   return (
     <View style={styles.root}>
-      <VayyMap
+      {/* <VayyMap
         ref={mapRef}
         initialRegion={{
           ...initial,
@@ -212,10 +212,10 @@ export default function PassengerLiveTracking({ navigation, route }) {
           </GeoJSONSource>
         ) : null}
 
-        {busCoord ? (
-          <ViewAnnotation id="bus-marker" lngLat={[busCoord.longitude, busCoord.latitude]} anchor="center">
-            <View style={styles.busMarker}>
-              <BusIconBadge size={34} />
+        {vehicleCoord ? (
+          <ViewAnnotation id="vehicle-marker" lngLat={[vehicleCoord.longitude, vehicleCoord.latitude]} anchor="center">
+            <View style={styles.vehicleMarker}>
+              <VehicleIconBadge size={34} vehicleType={tripData?.vehicle_type || "auto"} />
             </View>
           </ViewAnnotation>
         ) : null}
@@ -231,7 +231,7 @@ export default function PassengerLiveTracking({ navigation, route }) {
             <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.error, borderWidth: 2, borderColor: "#fff" }} />
           </ViewAnnotation>
         ) : null}
-      </VayyMap>
+      </VayyMap> */}
 
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
@@ -256,8 +256,8 @@ export default function PassengerLiveTracking({ navigation, route }) {
         <View style={styles.sheetHandle} />
         <View style={styles.sheetTop}>
           <View>
-            <Text style={styles.busTitle}>
-              {tripData?.bus_number ? `Bus ${tripData.bus_number}` : "City Vehicle"}
+            <Text style={styles.vehicleTitle}>
+              {tripData?.route_code || "VAYY Vehicle"}
             </Text>
             <Text style={styles.routeName}>{tripData?.route_name || "Active Route"}</Text>
           </View>
@@ -273,7 +273,7 @@ export default function PassengerLiveTracking({ navigation, route }) {
         </View>
 
         <View style={styles.alertBanner}>
-          <Text style={styles.alertText}>Stay alert! Your bus location updates live.</Text>
+          <Text style={styles.alertText}>Stay alert! Your vehicle location updates live.</Text>
           <TouchableOpacity style={styles.alertButton}>
             <Text style={styles.alertButtonText}>Turn On Alerts</Text>
           </TouchableOpacity>
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "900",
   },
-  busMarker: {
+  vehicleMarker: {
     alignItems: "center",
     justifyContent: "center",
   },
@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
   },
-  busTitle: {
+  vehicleTitle: {
     color: COLORS.text,
     fontSize: 22,
     fontWeight: "900",

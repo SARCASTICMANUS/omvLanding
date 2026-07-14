@@ -26,6 +26,7 @@ export const OPERATIONS = {
   dispatchStart: (id) => `/api/operations/dispatch/${id}/start/`,
   dispatchCancel: (id) => `/api/operations/dispatch/${id}/cancel/`,
   boardingRequests: "/api/operations/boarding-requests/",
+  boardingRequestBoarded: (id) => `/api/operations/boarding-requests/${id}/boarded/`,
 };
 
 export const TRANSPORT = {
@@ -49,6 +50,7 @@ export const TRACKING = {
   ingest: "/api/tracking/ingest/",
   passengerLocation: "/api/tracking/passenger-location/",
   nearbyVehicles: "/api/tracking/nearby/",
+  activeRouteTrips: (routeId) => `/api/tracking/route/${routeId}/active-trips/`,
 };
 
 export const COMMUNICATION = {

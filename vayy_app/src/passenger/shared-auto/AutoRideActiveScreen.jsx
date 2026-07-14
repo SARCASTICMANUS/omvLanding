@@ -8,7 +8,7 @@ import {
   StatusBar,
   Platform,
 } from "react-native";
-import VayyMap from "../../shared/components/VayyMap";
+// import VayyMap from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -54,7 +54,7 @@ export function AutoRideActiveScreen({ navigation }) {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <View style={styles.mapArea}>
-        <VayyMap
+        {/* <VayyMap
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
@@ -67,7 +67,7 @@ export function AutoRideActiveScreen({ navigation }) {
           scrollEnabled={true}
           zoomEnabled={true}
           zoomControlEnabled={true}
-        />
+        /> */}
 
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />

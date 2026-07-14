@@ -46,7 +46,7 @@ const DUMMY_ALERTS = [
   {
     id: "5",
     title: "Boarding Rejected",
-    message: "Boarding request for Trip #999 was rejected. The bus has reached capacity.",
+    message: "Boarding request for Trip #999 was rejected. The vehicle has reached capacity.",
     timestamp: "4 hours ago",
     type: "error",
   },

@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import api from "../../shared/lib/api";
-import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+// import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import COLORS from "../../shared/constants/colors";
 import { TRANSPORT, WS } from "../../constants";
 import { buildRouteSummary } from "../utils/driverFlowUtils";
@@ -250,7 +250,7 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
   return (
     <View style={styles.root}>
       {/* Map */}
-      <VayyMap
+      {/* <VayyMap
         ref={mapRef}
         cameraRef={cameraRef}
         style={styles.map}
@@ -262,7 +262,6 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
           zoom: 14,
         }}
       >
-        {/* Route line */}
         {routeCoords.length > 1 && (
           <GeoJSONSource
             id="route-line"
@@ -287,7 +286,6 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
           </GeoJSONSource>
         )}
 
-        {/* Stop markers */}
         {summary?.stops?.filter((s) => typeof s.lat === "number" && typeof s.lon === "number").map((stop, i) => (
           <ViewAnnotation
             key={`stop-${stop.id || i}`}
@@ -300,7 +298,6 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
           </ViewAnnotation>
         ))}
 
-        {/* Passenger markers */}
         {passengers
           .filter((p) => typeof p.lat === "number" && typeof p.lon === "number")
           .map((p) => (
@@ -323,7 +320,7 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
               </View>
             </ViewAnnotation>
           ))}
-      </VayyMap>
+      </VayyMap> */}
 
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 

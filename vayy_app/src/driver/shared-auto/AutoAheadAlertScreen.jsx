@@ -14,6 +14,8 @@ export default function AutoAheadAlertScreen({ navigation, route }) {
   const dispatch = useDispatch();
   const dispatchId = route?.params?.dispatchId;
   const passengerName = route?.params?.passengerName || "Ravi Kumar";
+  const destination = route?.params?.destination || null;
+  const nextStop = route?.params?.nextStop || null;
   const [count, setCount] = useState(10);
   const handled = useRef(false);
   const { user } = useSelector((state) => state.auth);
@@ -57,7 +59,7 @@ export default function AutoAheadAlertScreen({ navigation, route }) {
             if (handled.current) return;
             handled.current = true;
             if (dispatchId) dispatch(acceptDispatch(dispatchId));
-            navigation.navigate("BoardedPopup", { dispatchId, passengerName });
+            navigation.navigate("BoardedPopup", { dispatchId, passengerName, destination, nextStop });
           }} />
           <PrimaryButton label="Ignore ✕" accent={colors.textMuted} outline onPress={() => {
             if (handled.current) return;

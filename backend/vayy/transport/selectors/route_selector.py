@@ -45,13 +45,13 @@ class RouteSelector:
         )
 
     @staticmethod
-    def get_route_by_bus_number(
-        bus_number,
+    def get_route_by_route_code(
+        route_code,
     ):
         return (
             Route.objects
             .select_related("city")
-            .get(bus_number=bus_number)
+            .get(route_code=route_code)
         )
 
     @staticmethod

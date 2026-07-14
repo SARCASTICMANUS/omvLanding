@@ -22,7 +22,7 @@ export default function AutoBoardedPopupScreen({ navigation, route }) {
         <View style={styles.actions}>
           <PrimaryButton label="Yes, Boarded ✓" accent={colors.primary} onPress={() => {
             if (dispatchId) dispatch(arrivedDispatch(dispatchId));
-            navigation.navigate("AutoRideActive", { dispatchId });
+            navigation.navigate("AutoRideActive", { dispatchId, passengerName, destination, nextStop });
           }} />
           <PrimaryButton label="No, Skip" accent={colors.textMuted} outline onPress={() => navigation.goBack()} />
         </View>

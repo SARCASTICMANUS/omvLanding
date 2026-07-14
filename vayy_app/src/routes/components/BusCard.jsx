@@ -5,7 +5,7 @@ import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
 import SHADOW from "../../shared/constants/shadow";
 import SPACING from "../../shared/constants/spacing";
-import BusIconBadge from "../../shared/components/common/BusIconBadge";
+import VehicleIconBadge from "../../shared/components/common/VehicleIconBadge";
 import LiveDot from "../../shared/components/common/LiveDot";
 import MetricChip from "../../shared/components/common/MetricChip";
 import RouteLine from "../../shared/components/common/RouteLine";
@@ -14,7 +14,7 @@ import StatusBadge from "../../shared/components/common/StatusBadge";
 const pick = (...values) => values.find((value) => value !== undefined && value !== null && value !== "");
 
 export default function BusCard({ trip, onPress }) {
-  const busNumber = pick(trip?.bus_number, trip?.vehicle_number, trip?.vehicle?.number, "VAYY Bus");
+  const busNumber = pick(trip?.route_code, trip?.vehicle_number, trip?.vehicle?.number, "VAYY");
   const eta = pick(trip?.eta_minutes, trip?.eta, trip?.next_stop_eta, "--");
   const from = pick(trip?.source_name, trip?.origin, trip?.from, "Pickup");
   const to = pick(trip?.destination_name, trip?.destination, trip?.to, "Destination");
@@ -25,7 +25,7 @@ export default function BusCard({ trip, onPress }) {
     <TouchableOpacity activeOpacity={0.86} onPress={() => onPress?.(trip)} style={styles.card}>
       <View style={styles.topRow}>
         <View>
-          <BusIconBadge size={68} />
+          <VehicleIconBadge size={68} vehicleType={trip?.vehicle_type || "auto"} />
           <View style={styles.liveBadge}>
             <LiveDot size={6} />
             <Text style={styles.liveText}>LIVE</Text>

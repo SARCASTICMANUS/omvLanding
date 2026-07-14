@@ -9,7 +9,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
-import VayyMap from "../../shared/components/VayyMap";
+// import VayyMap, { ViewAnnotation, UserLocation } from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
@@ -20,9 +20,11 @@ import {
 
 import { NoRideFoundPopup } from "./NoRideFoundPopup";
 import { ConfirmPopup } from "./ConfirmPopup";
-import { requestDispatch, cancelDispatch, setDispatchStatus } from "../../store/slices/dispatchSlice";
+import { requestDispatch, cancelDispatch, setDispatchStatus, clearDispatch } from "../../store/slices/dispatchSlice";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
+// import locationService from "../../shared/lib/locationService";
+import ZoomControls from "../../shared/components/common/ZoomControls";
 
 const { width } = Dimensions.get("window");
 
@@ -30,102 +32,269 @@ export function BikeSearchingScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const { activeDispatch, status: dispatchStatus } = useSelector((state) => state.dispatch);
-  const scaleAnim = useRef(new Animated.Value(0)).current;
-  const opacityAnim = useRef(new Animated.Value(1)).current;
+  const waveAnim1 = useRef(new Animated.Value(0)).current;
+  const waveAnim2 = useRef(new Animated.Value(0)).current;
+  const waveAnim3 = useRef(new Animated.Value(0)).current;
   const [showNoRide, setShowNoRide] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const [searchStatus, setSearchStatus] = useState("searching");
+  const [searchStatus, setSearchStatus] = useState("locating");
   const timerRef = useRef(null);
   const { route_id, pickup_stop_id } = route?.params || {};
-  const dispatchId = activeDispatch?.id || activeDispatch?.dispatch_id;
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
+  const [currentPosition, setCurrentPosition] = useState(null);
+  const locationReadyRef = useRef(false);
+  const searchStartedRef = useRef(false);
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
 
+  const didFlyRef = useRef(false);
+
+  useEffect(() => {
+    didFlyRef.current = false;
+    locationReadyRef.current = false;
+    searchStartedRef.current = false;
+    setSearchStatus("locating");
+    setShowNoRide(false);
+    setShowCancelConfirm(false);
+    dispatch(clearDispatch());
+
+    return () => {
+      clearTimeout(timeoutRef.current);
+      // locationService.stopTracking();
+      dispatch(clearDispatch());
+    };
+  }, []);
+
+  useEffect(() => {
+    //  correct code to get real location
+    // let unsub;
+    // locationService.startTracking((coords) => {
+    //   const pos = { latitude: coords.latitude, longitude: coords.longitude };
+    //   setCurrentPosition(pos);
+    //   if (!didFlyRef.current && cameraRef.current) {
+    //     didFlyRef.current = true;
+    //     cameraRef.current.setStop({
+    //       center: [coords.longitude, coords.latitude],
+    //       zoom: 16,
+    //       duration: 1200,
+    //     });
+    //     setTimeout(() => {
+    //       locationReadyRef.current = true;
+    //       setSearchStatus("searching");
+    //     }, 1400);
+    //   }
+    // }, { distanceInterval: 10, timeInterval: 5000 });
+    // unsub = () => locationService.stopTracking();
+    // return () => { if (unsub) unsub(); };
+
+    // hardcode lucknow location
+    setCurrentPosition({ latitude: 26.725673, longitude: 80.9595103 });
+    if (cameraRef.current) {
+      cameraRef.current.setStop({
+        center: [80.9595103, 26.725673],
+        zoom: 16,
+        duration: 1200,
+      });
+    }
+    setTimeout(() => {
+      locationReadyRef.current = true;
+      setSearchStatus("searching");
+    }, 1400);
+    return () => {};
+  }, []);
+
+  const [activeTripId, setActiveTripId] = useState(null);
+  const timeoutRef = useRef(null);
+
+  // ── WebSocket: listen for driver accept/reject on the dispatch channel ──
   const handleWsMessage = useCallback((data) => {
-    if (data.type === "dispatch_accepted") {
+    // Backend sends raw payload: { trip_id, status, updated_at, ... }
+    // "accepted" / "assigned" means a driver was matched
+    if (data.status === "accepted" || data.status === "assigned") {
       dispatch(setDispatchStatus("accepted"));
-    } else if (data.type === "dispatch_rejected") {
+      if (data.driver_name || data.vehicle_number || data.otp) {
+        dispatch({ type: "dispatch/updateDispatchStatus", payload: {
+          driver_name: data.driver_name,
+          vehicle_number: data.vehicle_number,
+          otp: data.otp,
+          fare: data.fare,
+          distance: data.distance,
+        }});
+      }
+    } else if (data.status === "rejected" || data.status === "cancelled") {
+      clearTimeout(timeoutRef.current);
       dispatch(setDispatchStatus("failed"));
     }
   }, [dispatch]);
 
-  useWebSocket(dispatchId ? WS.dispatch(dispatchId) : null, {
-    enabled: !!dispatchId && dispatchStatus === "requested",
+  useWebSocket(activeTripId ? WS.dispatch(activeTripId) : null, {
+    enabled: !!activeTripId,
     onMessage: handleWsMessage,
   });
 
-  const startSearch = useCallback(() => {
+  const startSearch = useCallback(async () => {
+    if (!locationReadyRef.current || searchStartedRef.current) return;
+    searchStartedRef.current = true;
     setShowNoRide(false);
     setSearchStatus("searching");
 
     if (route_id && pickup_stop_id) {
-      dispatch(requestDispatch({ route_id, pickup_stop_id, mode: "bike" }));
-    } else {
-      timerRef.current = setTimeout(() => {
+      try {
+        const result = await dispatch(requestDispatch({
+          route_id,
+          pickup_stop_id,
+          mode: "direct",
+        })).unwrap();
+        const payload = result.data || result;
+        if (payload.status === "no_drivers_available") {
+          setShowNoRide(true);
+          setSearchStatus("failed");
+          return;
+        }
+        const tripId = payload.trip_id || payload.id;
+        if (tripId) {
+          setActiveTripId(tripId);
+        }
+        // 90s timeout: if no driver responds, cancel and show retry
+        timeoutRef.current = setTimeout(() => {
+          if (tripId) dispatch(cancelDispatch(tripId));
+          setShowNoRide(true);
+          setSearchStatus("failed");
+          setActiveTripId(null);
+        }, 90000);
+      } catch (err) {
+        console.warn("Dispatch request failed:", err);
         setShowNoRide(true);
         setSearchStatus("failed");
-      }, 4000);
+      }
     }
   }, [route_id, pickup_stop_id, dispatch]);
 
-  function handleTryAgain() {
+  useEffect(() => {
+    if (locationReadyRef.current && !searchStartedRef.current) {
+      startSearch();
+    }
+  }, [currentPosition, searchStatus, startSearch]);
+
+  async function handleTryAgain() {
     setShowNoRide(false);
     setSearchStatus("searching");
     clearTimeout(timerRef.current);
+    clearTimeout(timeoutRef.current);
+    searchStartedRef.current = false;
+    setActiveTripId(null);
 
     if (route_id && pickup_stop_id) {
-      dispatch(requestDispatch({ route_id, pickup_stop_id, mode: "bike" }));
-    } else {
-      timerRef.current = setTimeout(() => {
-        setSearchStatus("found");
-        setTimeout(() => {
-          navigation.navigate('RiderPopup');
-        }, 600);
-      }, 4000);
+      try {
+        const result = await dispatch(requestDispatch({
+          route_id,
+          pickup_stop_id,
+          mode: "direct",
+        })).unwrap();
+        const payload = result.data || result;
+        if (payload.status === "no_drivers_available") {
+          setShowNoRide(true);
+          setSearchStatus("failed");
+          return;
+        }
+        const tripId = payload.trip_id || payload.id;
+        if (tripId) {
+          setActiveTripId(tripId);
+        }
+        timeoutRef.current = setTimeout(() => {
+          if (tripId) dispatch(cancelDispatch(tripId));
+          setShowNoRide(true);
+          setSearchStatus("failed");
+          setActiveTripId(null);
+        }, 90000);
+      } catch (err) {
+        console.warn("Dispatch request failed:", err);
+        setShowNoRide(true);
+        setSearchStatus("failed");
+      }
     }
   }
 
   useEffect(() => {
-    if (dispatchStatus === "requested" || dispatchStatus === "accepted") {
+    if (dispatchStatus === "accepted") {
+      clearTimeout(timeoutRef.current);
       setSearchStatus("found");
-      setTimeout(() => navigation.navigate('RiderPopup'), 600);
+      const driverData = activeDispatch || {};
+      const pickupRaw = route?.params?.pickup;
+      const pickupStr = typeof pickupRaw === "string" ? pickupRaw : pickupRaw?.name || pickupRaw?.display_name || "Pickup";
+      const pickupName = route?.params?.pickupName || pickupStr;
+      const rawDist = Number(driverData.distance) || 1200;
+      const rawEta = Number(driverData.eta) || 5;
+      const fmtDist = (d) => d > 1000 ? `${(d / 1000).toFixed(1)} km` : `${d} m`;
+      const distanceLabels = [fmtDist(rawDist), fmtDist(Math.round(rawDist * 0.66)), fmtDist(Math.round(rawDist * 0.33)), "Arrived"];
+      const etaLabels = [`${rawEta} min`, `${Math.max(1, Math.round(rawEta * 0.6))} min`, `${Math.max(1, Math.round(rawEta * 0.3))} min`, "0 min"];
+      setTimeout(() => navigation.navigate('RiderPopup', {
+        driverName: driverData.driver_name || driverData.driver?.full_name || "Driver",
+        vehicle: driverData.vehicle_number || driverData.vehicle?.vehicle_number || "",
+        otp: driverData.otp || "0000",
+        distanceLabels,
+        etaLabels,
+        dispatchId: driverData.trip_id || driverData.id,
+        destination: route?.params?.destination || "Destination",
+        pickup: pickupStr,
+        pickupName: pickupName,
+        eta: driverData.eta || "5",
+        distance: driverData.distance || "1200",
+        fare: driverData.fare || route?.params?.fare || 45,
+        route_id,
+        tripData: driverData,
+      }), 600);
     }
     if (dispatchStatus === "failed") {
+      clearTimeout(timeoutRef.current);
       setShowNoRide(true);
       setSearchStatus("failed");
     }
-  }, [dispatchStatus, navigation]);
+  }, [dispatchStatus, navigation, activeDispatch, route?.params?.destination, route_id]);
 
   useEffect(() => {
-    Animated.loop(
-      Animated.parallel([
-        Animated.timing(scaleAnim, {
-          toValue: 1.5,
-          duration: 2000,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 0,
-          duration: 2000,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
+    const makeWave = (anim, delay) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.parallel([
+            Animated.timing(anim, {
+              toValue: 1,
+              duration: 2000,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+        ])
+      );
 
-    startSearch();
+    const w1 = makeWave(waveAnim1, 0);
+    const w2 = makeWave(waveAnim2, 660);
+    const w3 = makeWave(waveAnim3, 1320);
+    w1.start();
+    w2.start();
+    w3.start();
 
     return () => {
+      w1.stop();
+      w2.stop();
+      w3.stop();
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [startSearch, scaleAnim, opacityAnim]);
+  }, [waveAnim1, waveAnim2, waveAnim3]);
 
   const handleCancelRequest = () => {
     setShowCancelConfirm(false);
+    if (activeTripId) {
+      dispatch(cancelDispatch(activeTripId));
+    }
     navigation.goBack();
   };
 
@@ -135,53 +304,75 @@ export function BikeSearchingScreen({ navigation, route }) {
 
       {/* Map Area with Searching Animation */}
       <View style={styles.mapArea}>
-        <VayyMap
+        {/* <VayyMap
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
-          initialRegion={{
-            latitude: 26.8467,
-            longitude: 80.9462,
-            latitudeDelta: 0.02,
-            longitudeDelta: 0.02,
+          initialViewState={{
+            center: [currentPosition?.longitude || 80.9462, currentPosition?.latitude || 26.8467],
+            zoom: 15,
           }}
           scrollEnabled={true}
           zoomEnabled={true}
-          zoomControlEnabled={true}
-        />
+        >
+          <UserLocation />
+          {currentPosition && (
+            <ViewAnnotation id="user-pulse" lngLat={[currentPosition.longitude, currentPosition.latitude]}>
+              <View style={styles.pulseOnMap}>
+                <Animated.View
+                  style={[
+                    styles.waveRing,
+                    {
+                      transform: [{ scale: waveAnim1.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.8] }) }],
+                      opacity: waveAnim1.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                    },
+                  ]}
+                />
+                <Animated.View
+                  style={[
+                    styles.waveRing,
+                    {
+                      transform: [{ scale: waveAnim2.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.8] }) }],
+                      opacity: waveAnim2.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                    },
+                  ]}
+                />
+                <Animated.View
+                  style={[
+                    styles.waveRing,
+                    {
+                      transform: [{ scale: waveAnim3.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.8] }) }],
+                      opacity: waveAnim3.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                    },
+                  ]}
+                />
+                <View style={styles.userDot}>
+                  <Ionicons name="person" size={20} color="#FFFFFF" />
+                </View>
+              </View>
+            </ViewAnnotation>
+          )}
+        </VayyMap> */}
+        <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
           <View style={styles.headerLeft}>
-            <TouchableOpacity 
-              style={styles.iconBtn} 
+            <TouchableOpacity
+              style={styles.iconBtn}
               onPress={() => navigation.goBack()}
             >
               <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Finding Rider...</Text>
+            <Text style={styles.headerTitle}>
+              {searchStatus === "locating" ? "Getting Location..." : "Finding Rider..."}
+            </Text>
           </View>
 
           <TouchableOpacity style={styles.iconBtn}>
             <MaterialIcons name="more-vert" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-        </View>
-
-        {/* Searching Pulse Rings */}
-        <View style={styles.pulseContainer}>
-            <Animated.View 
-                style={[
-                    styles.pulseRing, 
-                    { 
-                        transform: [{ scale: scaleAnim }], 
-                        opacity: opacityAnim 
-                    }
-                ]} 
-            />
-            <View style={styles.userDot}>
-                <Ionicons name="person" size={20} color="#FFFFFF" />
-            </View>
         </View>
 
         {/* Floating Buttons */}
@@ -200,54 +391,79 @@ export function BikeSearchingScreen({ navigation, route }) {
       <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.handle} />
 
-        <View style={styles.availabilityRow}>
-          <View style={styles.availItem}>
-            <Ionicons name="bicycle" size={18} color="#009849" />
-            <Text style={styles.availText}><Text style={styles.availBold}>12</Text> riders nearby</Text>
+        {searchStatus === "locating" && (
+          <View style={styles.searchingInfo}>
+            <Text style={styles.searchingTitle}>Getting your location...</Text>
+            <Text style={styles.searchingSub}>Please wait while we find your position</Text>
           </View>
-          <View style={styles.availDivider} />
-          <View style={styles.availItem}>
-            <Ionicons name="time-outline" size={18} color="#009849" />
-            <Text style={styles.availText}><Text style={styles.availBold}>~2 min</Text> avg. wait</Text>
-          </View>
-        </View>
-
-        <View style={styles.searchingInfo}>
-            <Text style={styles.searchingTitle}>
-              {searchStatus === "found" ? "Rider Found!" : "Searching for nearby bikes..."}
-            </Text>
-            <Text style={styles.searchingSub}>
-              {searchStatus === "found"
-                ? "Connecting you to the nearest rider"
-                : "Your location has been shared with nearby riders"}
-            </Text>
-        </View>
-
-        {searchStatus === "found" ? (
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={styles.foundBtn}
-            onPress={() => navigation.replace('RiderArriving')}
-          >
-            <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
-            <Text style={styles.foundBtnText}>  Rider Found! Tap to view</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.raisedBtn}
-            disabled={true}
-          >
-            <Text style={styles.raisedText}>✋  Hand Raised</Text>
-          </TouchableOpacity>
         )}
-        
-        <TouchableOpacity 
+
+        {searchStatus === "searching" && (
+          <>
+            <View style={styles.searchingInfo}>
+              <Text style={styles.searchingTitle}>Searching for nearby bikes...</Text>
+              <Text style={styles.searchingSub}>Your location has been shared with nearby riders</Text>
+            </View>
+            <TouchableOpacity
+              activeOpacity={1}
+              style={styles.raisedBtn}
+              disabled={true}
+            >
+              <Text style={styles.raisedText}>✋  Hand Raised</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {searchStatus === "found" && (
+          <>
+            <View style={styles.searchingInfo}>
+              <Text style={styles.searchingTitle}>Rider Found!</Text>
+              <Text style={styles.searchingSub}>Connecting you to the nearest rider</Text>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={styles.foundBtn}
+              onPress={() => {
+                const pickupRaw = route?.params?.pickup;
+                const pickupStr = typeof pickupRaw === "string" ? pickupRaw : pickupRaw?.name || pickupRaw?.display_name || "Pickup";
+                const driverData = activeDispatch || {};
+                const rawDist = Number(driverData.distance) || 1200;
+                const rawEta = Number(driverData.eta) || 5;
+                const fmtDist = (d) => d > 1000 ? `${(d / 1000).toFixed(1)} km` : `${d} m`;
+                const distLabels = [fmtDist(rawDist), fmtDist(Math.round(rawDist * 0.66)), fmtDist(Math.round(rawDist * 0.33)), "Arrived"];
+                const etaLbls = [`${rawEta} min`, `${Math.max(1, Math.round(rawEta * 0.6))} min`, `${Math.max(1, Math.round(rawEta * 0.3))} min`, "0 min"];
+                navigation.replace('RiderPopup', {
+                  driverName: driverData.driver_name || driverData.driver?.full_name || "Driver",
+                  vehicle: driverData.vehicle_number || driverData.vehicle?.vehicle_number || "",
+                  otp: driverData.otp || "0000",
+                  distanceLabels: distLabels,
+                  etaLabels: etaLbls,
+                  dispatchId: driverData.trip_id || driverData.id || activeTripId,
+                  destination: route?.params?.destination || "Destination",
+                  pickup: pickupStr,
+                  pickupName: route?.params?.pickupName || pickupStr,
+                  eta: driverData.eta || "5",
+                  distance: driverData.distance || "1200",
+                  fare: driverData.fare || route?.params?.fare || 45,
+                  route_id,
+                  tripData: driverData,
+                });
+              }}
+            >
+              <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
+              <Text style={styles.foundBtnText}>  Rider Found! Tap to view</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {searchStatus !== "locating" && (
+          <TouchableOpacity
             onPress={() => setShowCancelConfirm(true)}
             style={styles.cancelLink}
-        >
+          >
             <Text style={styles.cancelLinkText}>Cancel Request</Text>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        )}
       </View>
 
       <NoRideFoundPopup
@@ -263,10 +479,7 @@ export function BikeSearchingScreen({ navigation, route }) {
         confirmLabel="Yes, Cancel"
         confirmColor="#EF4444"
         icon="close-circle-outline"
-        onConfirm={() => {
-          setShowCancelConfirm(false);
-          navigation.goBack();
-        }}
+        onConfirm={handleCancelRequest}
         onCancel={() => setShowCancelConfirm(false)}
       />
     </View>
@@ -325,18 +538,20 @@ const styles = StyleSheet.create({
   mapBg: {
     ...StyleSheet.absoluteFillObject,
   },
-  pulseContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
+  pulseOnMap: {
+    width: 100,
+    height: 100,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  pulseRing: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+  waveRing: {
+    position: "absolute",
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     borderWidth: 2,
-    borderColor: '#009849',
-    backgroundColor: 'rgba(0, 152, 73, 0.1)',
+    borderColor: "#009849",
+    backgroundColor: "rgba(0, 152, 73, 0.08)",
   },
   userDot: {
     width: 56,
@@ -438,7 +653,7 @@ const styles = StyleSheet.create({
   raisedBtn: {
     height: 60,
     borderRadius: 20,
-    backgroundColor: "rgba(0, 152, 73, 0.4)", // Faded green
+    backgroundColor: "rgba(0, 152, 73, 0.4)",
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Animated,
   Dimensions,
@@ -13,8 +13,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useSelector } from "react-redux";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import { WS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
-import VayyMap from "../../shared/components/VayyMap";
+// import VayyMap from "../../shared/components/VayyMap";
 
 const { width, height } = Dimensions.get("window");
 
@@ -27,6 +30,8 @@ const CHECKS = [
 
 export default function AutoFindPassengerScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const { user } = useSelector((state) => state.auth);
+  const userId = user?.id;
 
   const [showVerify, setShowVerify] = useState(true);
   const [checks, setChecks] = useState(CHECKS.map((c) => ({ ...c, status: "pending" })));
@@ -46,6 +51,25 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
   const notifSlide = useRef(new Animated.Value(-100)).current;
   const scanDot = useRef(new Animated.Value(0)).current;
   const dotAnim = useRef(new Animated.Value(0.3)).current;
+
+  const handleWsMessage = useCallback((data) => {
+    if (data.type === "new_dispatch_request" && data.dispatch) {
+      const req = data.dispatch;
+      const dispatchId = req.id || req.trip_id;
+      const passengerName = req.passenger_name || req.user_name || "Passenger";
+      navigation.navigate("AheadAlert", {
+        dispatchId,
+        passengerName,
+        destination: req.drop_name || req.drop || null,
+        nextStop: req.next_stop || null,
+      });
+    }
+  }, [navigation]);
+
+  useWebSocket(userId ? WS.notifications(userId) : null, {
+    enabled: !showVerify && !!userId,
+    onMessage: handleWsMessage,
+  });
 
   useEffect(() => {
     if (!showVerify) return;
@@ -171,7 +195,7 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
 
       {/* Map area */}
       <View style={styles.mapArea}>
-        <VayyMap
+        {/* <VayyMap
           style={styles.mapBg}
           initialRegion={{
             latitude: 26.8467,
@@ -181,7 +205,7 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
           }}
           scrollEnabled={false}
           zoomEnabled={false}
-        />
+        /> */}
 
         {/* Moving vehicle */}
         {!showVerify && online && (

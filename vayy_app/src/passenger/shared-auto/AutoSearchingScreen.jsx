@@ -11,7 +11,7 @@ import {
   Platform,
   ActivityIndicator,
 } from "react-native";
-import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
+// import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
@@ -21,7 +21,7 @@ import {
 } from "@expo/vector-icons";
 import { ConfirmPopup } from "../bike-ride/ConfirmPopup";
 import { NoRideFoundPopup } from "../bike-ride/NoRideFoundPopup";
-import { requestDispatch, setDispatchStatus } from "../../store/slices/dispatchSlice";
+import { fetchActiveRouteTrips, createBoardingRequest, setDispatchStatus } from "../../store/slices/dispatchSlice";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import { cancelBoardingRequest, getNearbyVehicles } from "../services/passengerService";
@@ -31,7 +31,7 @@ import { cancelBoardingRequest, getNearbyVehicles } from "../services/passengerS
 export function AutoSearchingScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
-  const { activeDispatch, status: dispatchStatus } = useSelector((state) => state.dispatch);
+  const { activeDispatch, status: dispatchStatus, boardingRequest } = useSelector((state) => state.dispatch);
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(1)).current;
   const [showNoRide, setShowNoRide] = useState(false);
@@ -41,13 +41,13 @@ export function AutoSearchingScreen({ navigation, route }) {
   const [handRaised, setHandRaised] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [nearbyCount, setNearbyCount] = useState(null);
+  const [activeTripData, setActiveTripData] = useState(null);
   const timerRef = useRef(null);
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
   const didFitRef = useRef(false);
 
   const { route_id, pickup_stop_id, trip, pickup, destination, boardingRequestId } = route?.params || {};
-  const dispatchId = activeDispatch?.id || activeDispatch?.dispatch_id;
 
   const pickupStop = trip?.pickup_stop || {};
   const pickupName = pickupStop?.name || pickup?.name || pickup?.display_name || "the stop";
@@ -76,25 +76,42 @@ export function AutoSearchingScreen({ navigation, route }) {
     tryFit(0);
   }, [pickupLat, pickupLon]);
 
+  const [activeTripId, setActiveTripId] = useState(null);
+
   const handleWsMessage = useCallback((data) => {
-    if (data.type === "dispatch_accepted") {
+    if (data.type === "trip_update" && data.status === "active") {
       dispatch(setDispatchStatus("accepted"));
-    } else if (data.type === "dispatch_rejected") {
-      dispatch(setDispatchStatus("failed"));
+    } else if (data.type === "boarding_update" && data.event === "boarded") {
+      dispatch(setDispatchStatus("accepted"));
     }
   }, [dispatch]);
 
-  useWebSocket(dispatchId ? WS.dispatch(dispatchId) : null, {
-    enabled: !!dispatchId && dispatchStatus === "requested",
+  useWebSocket(activeTripId ? WS.trackingTrip(activeTripId) : null, {
+    enabled: !!activeTripId,
     onMessage: handleWsMessage,
   });
 
-  const startSearch = useCallback(() => {
+  const startSearch = useCallback(async () => {
     setShowNoRide(false);
     setSearchStatus("searching");
 
     if (route_id && pickup_stop_id) {
-      dispatch(requestDispatch({ route_id, pickup_stop_id, mode: "auto" }));
+      try {
+        const result = await dispatch(fetchActiveRouteTrips(route_id)).unwrap();
+        const trips = result.data || result;
+        if (Array.isArray(trips) && trips.length > 0) {
+          const activeTrip = trips[0];
+          setActiveTripId(activeTrip.trip_id);
+          setActiveTripData(activeTrip);
+          dispatch(createBoardingRequest({ trip: activeTrip.trip_id, pickup_stop: pickup_stop_id }));
+        } else {
+          setShowNoRide(true);
+          setSearchStatus("failed");
+        }
+      } catch (err) {
+        setShowNoRide(true);
+        setSearchStatus("failed");
+      }
     } else {
       timerRef.current = setTimeout(() => {
         setShowNoRide(true);
@@ -103,13 +120,27 @@ export function AutoSearchingScreen({ navigation, route }) {
     }
   }, [route_id, pickup_stop_id, dispatch]);
 
-  function handleTryAgain() {
+  async function handleTryAgain() {
     setShowNoRide(false);
     setSearchStatus("searching");
     clearTimeout(timerRef.current);
 
     if (route_id && pickup_stop_id) {
-      dispatch(requestDispatch({ route_id, pickup_stop_id, mode: "auto" }));
+      try {
+        const result = await dispatch(fetchActiveRouteTrips(route_id)).unwrap();
+        const trips = result.data || result;
+        if (Array.isArray(trips) && trips.length > 0) {
+          const activeTrip = trips[0];
+          setActiveTripId(activeTrip.trip_id);
+          dispatch(createBoardingRequest({ trip: activeTrip.trip_id, pickup_stop: pickup_stop_id }));
+        } else {
+          setShowNoRide(true);
+          setSearchStatus("failed");
+        }
+      } catch (err) {
+        setShowNoRide(true);
+        setSearchStatus("failed");
+      }
     } else {
       timerRef.current = setTimeout(() => {
         setSearchStatus("found");
@@ -170,10 +201,11 @@ export function AutoSearchingScreen({ navigation, route }) {
   }, [pickupLat, pickupLon]);
 
   const handleLowerHand = useCallback(async () => {
-    if (!boardingRequestId || cancelling) return;
+    const reqId = boardingRequest?.id || boardingRequest?.request_id || boardingRequestId;
+    if (!reqId || cancelling) return;
     setCancelling(true);
     try {
-      await cancelBoardingRequest(boardingRequestId);
+      await cancelBoardingRequest(reqId);
       setHandRaised(false);
       navigation.goBack();
     } catch (error) {
@@ -181,14 +213,14 @@ export function AutoSearchingScreen({ navigation, route }) {
       setHandRaised(false);
       navigation.goBack();
     }
-  }, [boardingRequestId, cancelling, navigation]);
+  }, [boardingRequest, boardingRequestId, cancelling, navigation]);
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <View style={styles.mapArea}>
-        <VayyMap
+        {/* <VayyMap
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
@@ -207,7 +239,7 @@ export function AutoSearchingScreen({ navigation, route }) {
               </View>
             </ViewAnnotation>
           )}
-        </VayyMap>
+        </VayyMap> */}
 
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
@@ -329,7 +361,23 @@ export function AutoSearchingScreen({ navigation, route }) {
         icon="checkmark-circle-outline"
         onConfirm={() => {
           setShowBoardConfirm(false);
-          navigation.navigate('AutoRideComplete', { trip, pickup, destination, boardingRequestId });
+          const now = new Date();
+          const tripObj = activeTripData || trip || {};
+          const tripId = tripObj.trip_id || tripObj.id || "";
+          const fare = tripObj.fare || 0;
+          const distMeters = tripObj.total_distance_meters || 0;
+          const etaSec = tripObj.eta_seconds || 0;
+          const distKm = distMeters > 1000 ? `${(distMeters / 1000).toFixed(1)} km` : `${distMeters} m`;
+          const durMin = Math.max(1, Math.round(etaSec / 60));
+          navigation.navigate('AutoRideComplete', {
+            tripId,
+            boardedAt: now.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }),
+            droppedAt: "",
+            distance: distKm,
+            duration: `${durMin} min`,
+            fare,
+            paymentMethod: "Cash",
+          });
         }}
         onCancel={() => setShowBoardConfirm(false)}
       />

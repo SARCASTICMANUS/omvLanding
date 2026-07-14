@@ -13,7 +13,7 @@ import { rideBuddy } from "../../data/passengers";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 import { typography } from "../../theme/typography";
-import VayyMap from "../../shared/components/VayyMap";
+// import VayyMap from "../../shared/components/VayyMap";
 import PrimaryButton from "../../shared/components/common/PrimaryButton";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -25,7 +25,7 @@ const ACCENT = "#1D9E75";
 function MapPlaceholder() {
   return (
     <View style={styles.mapContainer}>
-      <VayyMap
+      {/* <VayyMap
         style={StyleSheet.absoluteFillObject}
         initialRegion={{
           latitude: 26.8467,
@@ -35,7 +35,7 @@ function MapPlaceholder() {
         }}
         scrollEnabled={false}
         zoomEnabled={false}
-      />
+      /> */}
       {/* VAYY Header overlay — Icons removed */}
       <View style={styles.mapHeader}>
         <View style={styles.mapHeaderLogo}>

@@ -53,6 +53,8 @@ backend/vayy/osrm/*.lua
 backend/**/migrations/*.py
 !backend/**/migrations/__init__.py
 backend/**/migrations/*.pyc
+backend/graphify-out
+backend/graphify-out/
 
 
 # --- Frontend (React) ---

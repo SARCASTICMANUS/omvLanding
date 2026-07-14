@@ -197,6 +197,144 @@ class DriverProfileSerializer(serializers.ModelSerializer):
         )
 
 
+# ── Merged serializers (User + Profile in one response) ─────
+
+
+class MergedPassengerProfileSerializer(serializers.Serializer):
+    """
+    GET/PUT /me/passenger-profile/
+    Returns User fields + PassengerProfile fields in one flat response.
+    """
+    # User fields
+    id = serializers.UUIDField(source="user.id", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    role = serializers.CharField(source="user.role", read_only=True)
+    is_staff = serializers.BooleanField(source="user.is_staff", read_only=True)
+    city = serializers.PrimaryKeyRelatedField(source="user.city", read_only=True)
+    city_name = serializers.CharField(source="user.city.name", read_only=True, default=None)
+    is_verified = serializers.BooleanField(source="user.is_verified", read_only=True)
+    first_name = serializers.CharField(source="user.first_name")
+    last_name = serializers.CharField(source="user.last_name")
+    date_joined = serializers.DateTimeField(source="user.date_joined", read_only=True)
+
+    # Profile fields
+    profile_id = serializers.UUIDField(source="profile.id", read_only=True)
+    display_name = serializers.CharField()
+    phone_number = serializers.CharField()
+    bio = serializers.CharField(required=False, allow_blank=True, default="")
+    profile_photo = serializers.CharField(required=False, allow_blank=True, default="")
+    home_location = serializers.SerializerMethodField()
+    current_location = serializers.SerializerMethodField()
+    last_active_at = serializers.DateTimeField(read_only=True)
+    saved_routes = serializers.PrimaryKeyRelatedField(
+        many=True, read_only=True,
+    )
+
+    class Meta:
+        fields = (
+            "id", "email", "role", "is_staff", "city", "city_name",
+            "is_verified", "first_name", "last_name", "date_joined",
+            "profile_id", "display_name", "phone_number", "bio",
+            "profile_photo", "home_location", "current_location",
+            "last_active_at", "saved_routes",
+        )
+
+    def get_home_location(self, obj):
+        loc = obj.get("home_location_obj")
+        if loc:
+            return {"lat": loc.y, "lng": loc.x}
+        return None
+
+    def get_current_location(self, obj):
+        loc = obj.get("current_location_obj")
+        if loc:
+            return {"lat": loc.y, "lng": loc.x}
+        return None
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["id"] = str(instance["user"].id)
+        data["profile_id"] = str(instance["profile"].id)
+        data["saved_routes"] = [str(r.id) for r in instance.get("saved_routes_obj", [])]
+        return data
+
+
+class MergedPassengerProfileUpdateSerializer(serializers.Serializer):
+    """
+    PUT /me/passenger-profile/ — update both User + Profile fields.
+    """
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+    city = serializers.UUIDField(required=False, allow_null=True)
+    display_name = serializers.CharField(required=False, allow_blank=True)
+    phone_number = serializers.CharField(required=False, allow_blank=True)
+    bio = serializers.CharField(required=False, allow_blank=True)
+    profile_photo = serializers.CharField(required=False, allow_blank=True)
+    saved_routes = serializers.ListField(
+        child=serializers.UUIDField(), required=False,
+    )
+
+
+class MergedDriverProfileSerializer(serializers.Serializer):
+    """
+    GET/PUT /me/driver-profile/
+    Returns User fields + DriverProfile fields in one flat response.
+    """
+    # User fields
+    id = serializers.UUIDField(source="user.id", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True)
+    role = serializers.CharField(source="user.role", read_only=True)
+    is_staff = serializers.BooleanField(source="user.is_staff", read_only=True)
+    city = serializers.PrimaryKeyRelatedField(source="user.city", read_only=True)
+    city_name = serializers.CharField(source="user.city.name", read_only=True, default=None)
+    is_verified_user = serializers.BooleanField(source="user.is_verified", read_only=True)
+    first_name = serializers.CharField(source="user.first_name")
+    last_name = serializers.CharField(source="user.last_name")
+    date_joined = serializers.DateTimeField(source="user.date_joined", read_only=True)
+
+    # Profile fields
+    profile_id = serializers.UUIDField(source="profile.id", read_only=True)
+    display_name = serializers.CharField()
+    phone_number = serializers.CharField()
+    bio = serializers.CharField(required=False, allow_blank=True, default="")
+    license_number = serializers.CharField(allow_null=True, allow_blank=True, default=None)
+    vehicle_number = serializers.CharField(required=False, allow_blank=True, default="")
+    vehicle_type = serializers.CharField()
+    is_verified = serializers.BooleanField(read_only=True)
+    rating = serializers.FloatField(read_only=True)
+    total_trips = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        fields = (
+            "id", "email", "role", "is_staff", "city", "city_name",
+            "is_verified_user", "first_name", "last_name", "date_joined",
+            "profile_id", "display_name", "phone_number", "bio",
+            "license_number", "vehicle_number", "vehicle_type",
+            "is_verified", "rating", "total_trips",
+        )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["id"] = str(instance["user"].id)
+        data["profile_id"] = str(instance["profile"].id)
+        return data
+
+
+class MergedDriverProfileUpdateSerializer(serializers.Serializer):
+    """
+    PUT /me/driver-profile/ — update both User + Profile fields.
+    """
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+    city = serializers.UUIDField(required=False, allow_null=True)
+    display_name = serializers.CharField(required=False, allow_blank=True)
+    phone_number = serializers.CharField(required=False, allow_blank=True)
+    bio = serializers.CharField(required=False, allow_blank=True)
+    license_number = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    vehicle_number = serializers.CharField(required=False, allow_blank=True)
+    vehicle_type = serializers.CharField(required=False)
+
+
 # DRIVER REGISTRATION
 class DriverRegistrationSerializer(serializers.Serializer):
     display_name = serializers.CharField()

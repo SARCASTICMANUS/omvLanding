@@ -16,10 +16,13 @@ class LocationService {
         return false;
       }
 
-      // Background tracking is essential for Drivers
-      const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
-      if (backgroundStatus !== "granted") {
-        console.warn("[LocationService] Background location denied. App will not track while minimized.");
+      try {
+        const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+        if (backgroundStatus !== "granted") {
+          console.warn("[LocationService] Background location denied. App will not track while minimized.");
+        }
+      } catch (bgErr) {
+        console.warn("[LocationService] Background permission not available:", bgErr.message);
       }
 
       return true;

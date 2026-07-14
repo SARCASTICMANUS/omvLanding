@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
-import { logoutUser } from "../../auth/authSlice";
+import { logout as logoutUser } from "../../auth/authSlice";
 import { fetchProfile } from "../../store/slices/profileSlice";
 
 import COLORS from "../constants/colors";
@@ -19,7 +19,7 @@ import SPACING from "../constants/spacing";
 import SHADOW from "../constants/shadow";
 import VayyButton from "../components/common/VayyButton";
 import VayyCard from "../components/common/VayyCard";
-import BusIconBadge from "../components/common/BusIconBadge";
+import VehicleIconBadge from "../components/common/VehicleIconBadge";
 import { DRIVER_ROLES } from "../../constants";
 
 export default function ProfileScreen({ navigation }) {
@@ -58,7 +58,7 @@ export default function ProfileScreen({ navigation }) {
         <VayyCard style={styles.profileCard}>
           <View style={styles.profileTop}>
             <View style={styles.avatarContainer}>
-              <BusIconBadge size={60} />
+              <VehicleIconBadge size={60} vehicleType={vehicleType} />
             </View>
             <View style={styles.profileInfo}>
               <Text style={styles.userName}>{displayName}</Text>

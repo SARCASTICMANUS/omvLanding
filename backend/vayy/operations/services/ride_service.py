@@ -39,23 +39,13 @@ class RideService:
         
         # Base fare calculation
         base_fares = {
-            "car": 50,
             "auto": 30,
             "bike": 20,
-            "van": 80,
-            "minibus": 150,
-            "bus": 200,
-            "tempo": 120
         }
         
         per_km_rates = {
-            "car": 15,
             "auto": 10,
             "bike": 5,
-            "van": 25,
-            "minibus": 40,
-            "bus": 50,
-            "tempo": 35
         }
         
         base_fare = base_fares.get(vehicle_type, 50)
@@ -85,8 +75,8 @@ class RideService:
             
         vehicle_type = trip.vehicle.vehicle_type
         
-        base_fares = {"car": 50, "auto": 30, "bike": 20, "van": 80, "minibus": 150, "bus": 200, "tempo": 120}
-        per_km_rates = {"car": 15, "auto": 10, "bike": 5, "van": 25, "minibus": 40, "bus": 50, "tempo": 35}
+        base_fares = {"auto": 30, "bike": 20}
+        per_km_rates = {"auto": 10, "bike": 5}
         
         base_fare = base_fares.get(vehicle_type, 50)
         per_km_rate = per_km_rates.get(vehicle_type, 15)
