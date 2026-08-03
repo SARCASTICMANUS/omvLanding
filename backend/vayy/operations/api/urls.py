@@ -27,6 +27,9 @@ from operations.api.views import (
     DriverInitiateRideAPIView,
     PassengerAcceptRideAPIView,
     PassengerRejectRideAPIView,
+    BroadcastAcceptAPIView,
+    BroadcastRejectAPIView,
+    BroadcastCancelAPIView,
 )
 
 urlpatterns = [
@@ -150,5 +153,22 @@ urlpatterns = [
         "dispatch/<uuid:trip_id>/cancel/",
         DispatchCancelAPIView.as_view(),
         name="dispatch-cancel",
+    ),
+
+    # Broadcast Dispatch Endpoints
+    path(
+        "dispatch/broadcast/<uuid:request_id>/accept/",
+        BroadcastAcceptAPIView.as_view(),
+        name="broadcast-accept",
+    ),
+    path(
+        "dispatch/broadcast/<uuid:request_id>/reject/",
+        BroadcastRejectAPIView.as_view(),
+        name="broadcast-reject",
+    ),
+    path(
+        "dispatch/broadcast/<uuid:request_id>/cancel/",
+        BroadcastCancelAPIView.as_view(),
+        name="broadcast-cancel",
     ),
 ]

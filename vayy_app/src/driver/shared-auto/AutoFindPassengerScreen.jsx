@@ -14,10 +14,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
+import { getAssignedVehicle } from "../services/driverService";
 import useWebSocket from "../../shared/hooks/useWebSocket";
+import useDriverLocationPush from "../hooks/useDriverLocationPush";
 import { WS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
-// import VayyMap from "../../shared/components/VayyMap";
+import VayyMap from "../../shared/components/VayyMap";
 
 const { width, height } = Dimensions.get("window");
 
@@ -67,7 +69,7 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
   }, [navigation]);
 
   useWebSocket(userId ? WS.notifications(userId) : null, {
-    enabled: !showVerify && !!userId,
+    enabled: !!userId,
     onMessage: handleWsMessage,
   });
 
@@ -130,16 +132,15 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
 
   useEffect(() => {
     if (!online || showVerify) return;
-    const stops = ["Hazratganj", "Lalbagh", "Charbagh", "Gomti Nagar", "IT City"];
-    let stopIdx = 0;
-    const interval = setInterval(() => {
-      setSpeed(20 + Math.floor(Math.random() * 20));
-      setEta(`${3 + Math.floor(Math.random() * 8)} min`);
-      if (Math.random() > 0.7) stopIdx = (stopIdx + 1) % stops.length;
-      setNextStop(stops[stopIdx]);
-      setProgress((prev) => Math.min(1, +(prev + 0.02 + Math.random() * 0.03).toFixed(3)));
-    }, 3000);
-    return () => clearInterval(interval);
+    let removed = false;
+    let sub = null;
+    import("../../shared/lib/locationService").then(({ default: locationService }) => {
+      if (removed) return;
+      locationService.startTracking((coords) => {
+        if (coords.speed != null) setSpeed(Math.round(coords.speed * 3.6));
+      }, { distanceInterval: 10, timeInterval: 5000 }).then((s) => { sub = s; });
+    });
+    return () => { removed = true; if (sub?.remove) sub.remove(); };
   }, [online, showVerify]);
 
   useEffect(() => {
@@ -153,28 +154,35 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
     return () => loop.stop();
   }, [dotAnim]);
 
-  useEffect(() => {
-    if (!online || showVerify) return;
-    const timer = setTimeout(() => {
-      const distances = ["400m", "800m", "1.2km", "2km"];
-      const dist = distances[Math.floor(Math.random() * distances.length)];
-      setNotification(dist);
-      Animated.spring(notifSlide, { toValue: 0, friction: 10, tension: 50, useNativeDriver: true }).start();
-      setTimeout(() => {
-        Animated.timing(notifSlide, { toValue: -100, duration: 300, useNativeDriver: true }).start(() => {
-          setNotification(null);
-        });
-      }, 2500);
-    }, 4000 + Math.random() * 3000);
-    return () => clearTimeout(timer);
-  }, [online, showVerify, notification, notifSlide]);
-
   const handleStart = () => {
     Animated.timing(verifySlide, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
       setShowVerify(false);
       setOnline(true);
     });
   };
+
+  const vehicleIdRef = useRef(null);
+  const [vehicleReady, setVehicleReady] = useState(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getAssignedVehicle();
+        if (!cancelled) {
+          vehicleIdRef.current = res?.data?.id || res?.id;
+          setVehicleReady(!!vehicleIdRef.current);
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  useDriverLocationPush({
+    enabled: online && vehicleReady,
+    vehicleId: vehicleIdRef.current,
+  });
 
   const handleStop = () => {
     setShowMenu(false);
@@ -195,7 +203,7 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
 
       {/* Map area */}
       <View style={styles.mapArea}>
-        {/* <VayyMap
+        <VayyMap
           style={styles.mapBg}
           initialRegion={{
             latitude: 26.8467,
@@ -205,7 +213,7 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
           }}
           scrollEnabled={false}
           zoomEnabled={false}
-        /> */}
+        />
 
         {/* Moving vehicle */}
         {!showVerify && online && (
@@ -265,7 +273,7 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
               <View style={[styles.rideDot, { backgroundColor: online ? "#22C55E" : "#EF4444" }]} />
               <Text style={styles.rideStatus}>{online ? "Online" : "Offline"}</Text>
             </View>
-            <Text style={styles.rideRoute}>Hazratganj → Gomti Nagar</Text>
+            <Text style={styles.rideRoute}>{nextStop && nextStop !== "--" ? `Towards ${nextStop}` : "On route"}</Text>
           </View>
 
           <View style={styles.statsRow}>

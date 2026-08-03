@@ -5,7 +5,7 @@ import { startDispatchTrip, completeDispatch } from "../../store/slices/dispatch
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import AppFrame from "../../components/AppFrame";
-// import VayyMap from "../../shared/components/VayyMap";
+import VayyMap from "../../shared/components/VayyMap";
 import StatBar from "../../components/StatBar";
 import PrimaryButton from "../../shared/components/common/VayyButton";
 import ZoomControls from "../../shared/components/common/ZoomControls";
@@ -60,15 +60,14 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
   }, [dispatchId, dispatchRedux, navigation, tripData, liveDistance, liveDuration, earning, livePassengers, route?.params?.stops, route?.params?.rating]);
 
   useEffect(() => {
-    const tick = isBike ? 3 : 5;
-    const timer = setInterval(() => setEarning((value) => value + tick), 2200);
-    return () => clearInterval(timer);
+    // Real earning would come from backend via WS or polling
+    // For now, start with initialEarning from params
   }, [isBike]);
 
   return (
     <AppFrame navigation={navigation} title="Trip active" accent={accent}>
       <View style={styles.mapPage}>
-        {/* <VayyMap
+        <VayyMap
           ref={mapRef}
           style={StyleSheet.absoluteFillObject}
           initialRegion={{
@@ -77,7 +76,7 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}
-        /> */}
+        />
         <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${liveProgress * 100}%`, backgroundColor: accent }]} />

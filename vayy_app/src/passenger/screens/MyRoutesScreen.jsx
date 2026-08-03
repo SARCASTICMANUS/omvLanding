@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
 import SPACING from "../../shared/constants/spacing";
-import api from "../../shared/lib/api";
+import { getRideHistory } from "../services/passengerService";
 
 function formatTrip(trip) {
   const pickup = trip.pickup_location || trip.origin || trip.boarded_at || "--";
@@ -102,8 +102,7 @@ export default function MyRoutesScreen({ navigation }) {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const response = await api.get("/api/ride/history/");
-        const data = response.data?.data || response.data;
+        const data = await getRideHistory();
         const items = Array.isArray(data) ? data : data?.results || [];
         setRoutes(items.map(formatTrip));
       } catch (error) {

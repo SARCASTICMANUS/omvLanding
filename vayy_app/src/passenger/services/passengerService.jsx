@@ -1,5 +1,5 @@
 import api, { normalizeApiError } from "../../shared/lib/api";
-import { AUTH, OPERATIONS, TRANSPORT, TRACKING } from "../../constants";
+import { AUTH, OPERATIONS, TRANSPORT, TRACKING, RIDE } from "../../constants";
 
 /**
  * Fetch passenger dashboard data (active trips, etc.)
@@ -142,6 +142,15 @@ export const getRouteGeometry = async (routeId) => {
   }
 };
 
+export const getRideHistory = async () => {
+  try {
+    const response = await api.get(RIDE.history);
+    return response.data?.data || response.data?.results || response.data || [];
+  } catch (error) {
+    throw normalizeApiError(error, "Unable to fetch ride history.");
+  }
+};
+
 export default {
   getPassengerDashboard,
   getRecentSearches,
@@ -153,4 +162,5 @@ export default {
   getRouteDetail,
   getRouteGeometry,
   searchRoutesByLocation,
+  getRideHistory,
 };

@@ -43,4 +43,6 @@ urlpatterns = [
     path("api/tracking/", include("tracking.api.urls")),
     path("api/communication/", include("communication.api.urls")),
     path("api/ride/", include("operations.api.ride_urls")),
+
+    path("api/admin/", include("transport.api.admin_urls")),
 ]

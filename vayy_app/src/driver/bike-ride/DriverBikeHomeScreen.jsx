@@ -1,10 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Animated,
   Dimensions,
-  Easing,
   FlatList,
-  Image,
   ImageBackground,
   KeyboardAvoidingView,
   Platform,
@@ -21,7 +18,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
 import SHADOW from "../../shared/constants/shadow";
-import SPACING from "../../shared/constants/spacing";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NOMINATIM_SEARCH, USER_AGENT, STORAGE_KEYS } from "../../constants";
 import { useSelector } from "react-redux";
@@ -141,10 +137,6 @@ export default function DriverBikeHomeScreen({ navigation }) {
   const [pickup, setPickup] = useState(null);
   const [destination, setDestination] = useState(null);
   const [online, setOnline] = useState(false);
-  const [greeting, setGreeting] = useState("");
-  const [subLine, setSubLine] = useState("");
-  const [showName, setShowName] = useState(false);
-  const cursorRef = useRef(new Animated.Value(1)).current;
 
   const canProceed = useMemo(
     () => Boolean(pickup?.lat && pickup?.lon && destination?.lat && destination?.lon),
@@ -183,58 +175,6 @@ export default function DriverBikeHomeScreen({ navigation }) {
   useEffect(() => {
     loadRecentSearches();
   }, []);
-
-  useEffect(() => {
-    const fullGreeting = "Namaste,";
-    const fullSub = "Aaj aap kahan jaana chahte hain?";
-    let t = 0;
-    let s = 0;
-    let phase = "greeting";
-
-    const cursorAnim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(cursorRef, { toValue: 0, duration: 400, useNativeDriver: true }),
-        Animated.timing(cursorRef, { toValue: 1, duration: 400, useNativeDriver: true }),
-      ]),
-    );
-    cursorAnim.start();
-
-    const tick = () => {
-      if (phase === "greeting") {
-        if (t < fullGreeting.length) {
-          setGreeting(fullGreeting.slice(0, t + 1));
-          t++;
-          setTimeout(tick, 60);
-        } else {
-          phase = "namaste_pause";
-          setTimeout(tick, 400);
-        }
-      } else if (phase === "namaste_pause") {
-        setShowName(true);
-        phase = "sub_pause";
-        setTimeout(tick, 500);
-      } else if (phase === "sub_pause") {
-        phase = "sub";
-        setTimeout(tick, 30);
-      } else if (phase === "sub") {
-        if (s < fullSub.length) {
-          setSubLine(fullSub.slice(0, s + 1));
-          s++;
-          setTimeout(tick, 40);
-        } else {
-          cursorAnim.stop();
-          cursorRef.setValue(0);
-        }
-      }
-    };
-    tick();
-
-    return () => {
-      cursorAnim.stop();
-    };
-  }, []);
-
-  // Removed bike animation effect; static hero images will be displayed.
 
   const handleNext = () => {
     if (!canProceed) return;
@@ -356,141 +296,17 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
-  runningBike: {
-    position: "absolute",
-    bottom: 0,
-    top:120,
-    width: width * 0.55,
-    height: "70%",
-    zIndex: 2,
-  },
-  road: {
-    position: "absolute",
-    bottom: 6,
-    // top:280,
-    left: 0,
-    right: 0,
-    height: 48,
-    backgroundColor: "#2D2D2D",
-    zIndex: 1,
-  },
-  roadDash: {
-    position: "absolute",
-    top: "50%",
-    width: 20,
-    height: 2.5,
-    backgroundColor: "#FCD34D",
-    marginTop: -1.25,
-    borderRadius: 1,
-  },
-  roadCharacters: {
-    position: "absolute",
-    // top:500,
-    bottom: 38,
-    right: 0,
-    // position:"relative",
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    alignItems: "flex-end",
-    // gap: 0,
-    zIndex: 3,
-  },
-  roadCharacter: {
-    right:30,
-    width: 55,
-    height: 160,
-    // backgroundColor:"red",
-    // borderRightColor:"green",
-    resizeMode: "cover",
-    // boxSizing: "none",
-  },
   heroOverlay: {
     position: "absolute",
     top: 0, left: 0, bottom: 0,
     width: "58%",
     backgroundColor: "rgba(247,248,248,0.72)",
   },
-  heroText: {
-    position: "absolute",
-    top: 20,
-    left: 20,
-    zIndex: 4,
-    maxWidth: "75%",
-  },
-  greetingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  namasteIcon: {
-    fontSize: 28,
-    marginBottom: 2,
-  },
-  typeCursor: {
-    width: 2,
-    height: 28,
-    backgroundColor: COLORS.primary,
-    marginLeft: 2,
-  },
-  subRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
   heroTitle: {
     fontSize: 30,
     fontWeight: "900",
     color: "#03111F",
     lineHeight: 34,
-  },
-  heroAccent: {
-    fontSize: 30,
-    fontWeight: "900",
-    color: COLORS.primary,
-    lineHeight: 34,
-  },
-  heroSub: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#4B5563",
-    lineHeight: 26,
-    marginTop: 16,
-  },
-  dotRow: {
-    position: "absolute",
-    bottom: 16,
-    left: 20,
-    flexDirection: "row",
-    gap: 6,
-    zIndex: 4,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#D1D5DB",
-  },
-  dotActive: {
-    width: 20,
-    backgroundColor: COLORS.primary,
-    borderRadius: 3,
-  },
-  topContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    top:30,
-    paddingHorizontal: 20,
-    // marginBottom: 10,
-    // height: 120,
-  },
-  textContainer: {
-    flex: 1,
-    maxWidth: "50%",
-  },
-  topImage: {
-    width: 50,
-    height: 50,
-    resizeMode: "contain",
   },
 
   /* ─── Panel ─── */

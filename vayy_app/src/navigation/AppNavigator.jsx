@@ -8,6 +8,7 @@ import { restoreAuthFromStorage } from "../auth/authSlice";
 import AuthNavigator from "./AuthNavigator";
 import DriverNavigator from "./DriverNavigator";
 import PassengerNavigator from "./PassengerNavigator";
+import AdminScreen from "../admin/screens/AdminScreen";
 import SplashCarouselScreen from "../passenger/splash/SplashCarouselScreen";
 import { DRIVER_ROLES, STORAGE_KEYS } from "../constants";
 
@@ -29,10 +30,15 @@ export default function AppNavigator() {
 
   const role = user?.role;
   const isDriver = DRIVER_ROLES.includes(role);
+  const isAdmin = role === "admin";
 
   let initialRoute;
   if (isAuthenticated) {
-    initialRoute = isDriver ? "DriverNavigator" : "PassengerNavigator";
+    if (isAdmin) {
+      initialRoute = "AdminScreen";
+    } else {
+      initialRoute = isDriver ? "DriverNavigator" : "PassengerNavigator";
+    }
   } else if (!onboardingDone) {
     initialRoute = "SplashCarousel";
   } else {
@@ -40,7 +46,7 @@ export default function AppNavigator() {
   }
 
   const tag = onboardingDone ? "onboarded" : "new";
-  const authTag = isAuthenticated ? (isDriver ? "driver" : "passenger") : "guest";
+  const authTag = isAuthenticated ? (isAdmin ? "admin" : isDriver ? "driver" : "passenger") : "guest";
 
   const navKey = `${tag}_${authTag}`;
 
@@ -54,6 +60,7 @@ export default function AppNavigator() {
         <Stack.Screen name="AuthNavigator" component={AuthNavigator} />
         <Stack.Screen name="DriverNavigator" component={DriverNavigator} />
         <Stack.Screen name="PassengerNavigator" component={PassengerNavigator} />
+        <Stack.Screen name="AdminScreen" component={AdminScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

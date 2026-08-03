@@ -1,5 +1,5 @@
 import logging
-import json
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.permissions import (
@@ -54,41 +54,11 @@ from common.responses import success_response, error_response
 
 logger = logging.getLogger(__name__)
 
-
-def _log_request(view_name, request, extra=None):
-    """Log incoming request details."""
-    data = {}
-    if hasattr(request, 'data') and request.data:
-        try:
-            data = json.loads(json.dumps(request.data, default=str))
-        except Exception:
-            data = str(request.data)
-    if hasattr(request, 'query_params') and request.query_params:
-        data = dict(request.query_params)
-    logger.info(
-        f"[{view_name}] REQUEST | method={request.method} path={request.path} "
-        f"user={getattr(request.user, 'id', 'anonymous')} data={data} {extra or ''}"
-    )
-
-
-def _log_response(view_name, response, extra=None):
-    """Log outgoing response details."""
-    resp_data = {}
-    try:
-        resp_data = json.loads(json.dumps(response.data, default=str)) if hasattr(response, 'data') else {}
-    except Exception:
-        resp_data = str(getattr(response, 'data', {}))
-    logger.info(
-        f"[{view_name}] RESPONSE | status={response.status_code} data={resp_data} {extra or ''}"
-    )
-
-
 # REGISTER
 class RegisterAPIView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        _log_request("Register", request)
         serializer = RegisterSerializer(
             data=request.data
         )
@@ -112,7 +82,6 @@ class RegisterAPIView(APIView):
             message="Registration successful. OTP sent.",
             status_code=status.HTTP_201_CREATED
         )
-        _log_response("Register", resp)
         return resp
 
 # LOGIN
@@ -120,7 +89,6 @@ class LoginAPIView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        _log_request("Login", request)
         serializer = LoginSerializer(
             data=request.data
         )
@@ -141,7 +109,6 @@ class LoginAPIView(APIView):
             },
             message="Login successful"
         )
-        _log_response("Login", resp)
         return resp
 
 # VERIFY OTP
@@ -149,7 +116,6 @@ class VerifyOTPAPIView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        _log_request("VerifyOTP", request)
         serializer = OTPSerializer(
             data=request.data
         )
@@ -164,14 +130,12 @@ class VerifyOTPAPIView(APIView):
             data=UserSerializer(user).data,
             message="Account verified successfully."
         )
-        _log_response("VerifyOTP", resp)
         return resp
 
 # RESEND OTP
 class ResendOTPAPIView(APIView):
     permission_classes = [AllowAny]
     def post(self, request):
-        _log_request("ResendOTP", request)
         serializer = ResendOTPSerializer(
             data=request.data
         )
@@ -184,7 +148,6 @@ class ResendOTPAPIView(APIView):
         resp = success_response(
             message="OTP resent successfully."
         )
-        _log_response("ResendOTP", resp)
         return resp
 
 # FORGOT PASSWORD
@@ -192,7 +155,6 @@ class ForgotPasswordAPIView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        _log_request("ForgotPassword", request)
         serializer = ForgotPasswordSerializer(
             data=request.data
         )
@@ -205,7 +167,6 @@ class ForgotPasswordAPIView(APIView):
         resp = success_response(
             message="Password reset OTP sent."
         )
-        _log_response("ForgotPassword", resp)
         return resp
 
 # RESET PASSWORD
@@ -213,7 +174,6 @@ class ResetPasswordAPIView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        _log_request("ResetPassword", request)
         serializer = ResetPasswordSerializer(
             data=request.data
         )
@@ -228,7 +188,6 @@ class ResetPasswordAPIView(APIView):
         resp = success_response(
             message="Password reset successful."
         )
-        _log_response("ResetPassword", resp)
         return resp
 
 # CHANGE PASSWORD
@@ -237,7 +196,6 @@ class ChangePasswordAPIView(APIView):
         IsAuthenticated
     ]
     def post(self, request):
-        _log_request("ChangePassword", request)
         serializer = ChangePasswordSerializer(
             data=request.data
         )
@@ -258,7 +216,6 @@ class ChangePasswordAPIView(APIView):
                 "message": "Password changed successfully."
             }
         )
-        _log_response("ChangePassword", resp)
         return resp
 
 # CURRENT USER
@@ -268,17 +225,14 @@ class CurrentUserAPIView(APIView):
     ]
 
     def get(self, request):
-        _log_request("CurrentUser(GET)", request)
         resp = Response(
             UserSerializer(
                 request.user
             ).data
         )
-        _log_response("CurrentUser(GET)", resp)
         return resp
 
     def patch(self, request):
-        _log_request("CurrentUser(PATCH)", request)
         serializer = CurrentUserUpdateSerializer(
             request.user,
             data=request.data,
@@ -294,7 +248,6 @@ class CurrentUserAPIView(APIView):
                 request.user
             ).data
         )
-        _log_response("CurrentUser(PATCH)", resp)
         return resp
 
     def put(self, request):
@@ -337,15 +290,12 @@ class PassengerProfileAPIView(APIView):
         }
 
     def get(self, request):
-        _log_request("PassengerProfile(GET)", request)
         data = self._get_merged_data(request.user)
         serializer = MergedPassengerProfileSerializer(data)
         resp = Response(serializer.data)
-        _log_response("PassengerProfile(GET)", resp)
         return resp
 
     def put(self, request):
-        _log_request("PassengerProfile(PUT)", request)
         update_ser = MergedPassengerProfileUpdateSerializer(data=request.data)
         update_ser.is_valid(raise_exception=True)
         attrs = update_ser.validated_data
@@ -379,9 +329,7 @@ class PassengerProfileAPIView(APIView):
         data = self._get_merged_data(user)
         serializer = MergedPassengerProfileSerializer(data)
         resp = Response(serializer.data)
-        _log_response("PassengerProfile(PUT)", resp)
         return resp
-
 
 # DRIVER PROFILE
 class DriverProfileAPIView(APIView):
@@ -418,15 +366,12 @@ class DriverProfileAPIView(APIView):
         }
 
     def get(self, request):
-        _log_request("DriverProfile(GET)", request)
         data = self._get_merged_data(request.user)
         serializer = MergedDriverProfileSerializer(data)
         resp = Response(serializer.data)
-        _log_response("DriverProfile(GET)", resp)
         return resp
 
     def put(self, request):
-        _log_request("DriverProfile(PUT)", request)
         update_ser = MergedDriverProfileUpdateSerializer(data=request.data)
         update_ser.is_valid(raise_exception=True)
         attrs = update_ser.validated_data
@@ -455,7 +400,6 @@ class DriverProfileAPIView(APIView):
         data = self._get_merged_data(user)
         serializer = MergedDriverProfileSerializer(data)
         resp = Response(serializer.data)
-        _log_response("DriverProfile(PUT)", resp)
         return resp
 
 # WALLET
@@ -463,7 +407,6 @@ class WalletAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        _log_request("Wallet(GET)", request)
         wallet = WalletService.get_or_create_wallet(request.user)
         transactions = Transaction.objects.filter(wallet=wallet).order_by("-created_at")
         
@@ -471,14 +414,12 @@ class WalletAPIView(APIView):
             "wallet": WalletSerializer(wallet).data,
             "transactions": TransactionSerializer(transactions, many=True).data
         })
-        _log_response("Wallet(GET)", resp)
         return resp
 
 class AddFundsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        _log_request("AddFunds", request)
         serializer = AddFundsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -491,7 +432,6 @@ class AddFundsAPIView(APIView):
         )
         
         resp = Response(TransactionSerializer(tx).data, status=status.HTTP_201_CREATED)
-        _log_response("AddFunds", resp)
         return resp
 
 # DRIVER DOCUMENTS (KYC)
@@ -499,19 +439,15 @@ class DriverDocumentAPIView(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
 
     def get(self, request):
-        _log_request("DriverDocument(GET)", request)
         docs = DriverDocument.objects.filter(driver=request.user)
         resp = Response(DriverDocumentSerializer(docs, many=True).data)
-        _log_response("DriverDocument(GET)", resp)
         return resp
 
     def post(self, request):
-        _log_request("DriverDocument(POST)", request)
         serializer = DriverDocumentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(driver=request.user)
         resp = Response(serializer.data, status=status.HTTP_201_CREATED)
-        _log_response("DriverDocument(POST)", resp)
         return resp
 
 # RECENT SEARCHES
@@ -519,17 +455,14 @@ class RecentSearchAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        _log_request("RecentSearch(GET)", request)
         searches = RecentSearch.objects.filter(
             user=request.user
         )[:10]
         serializer = RecentSearchSerializer(searches, many=True)
         resp = success_response(data=serializer.data)
-        _log_response("RecentSearch(GET)", resp)
         return resp
 
     def post(self, request):
-        _log_request("RecentSearch(POST)", request)
         serializer = RecentSearchCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         search = RecentSearch.objects.create(
@@ -550,7 +483,6 @@ class RecentSearchAPIView(APIView):
             message="Search saved.",
             status_code=status.HTTP_201_CREATED,
         )
-        _log_response("RecentSearch(POST)", resp)
         return resp
 
 # USERS (ADMIN ONLY)
@@ -571,13 +503,29 @@ class UserViewSet(
     ]
 
     def list(self, request, *args, **kwargs):
-        _log_request("UserViewSet(list)", request)
         resp = super().list(request, *args, **kwargs)
-        _log_response("UserViewSet(list)", resp)
         return resp
 
     def retrieve(self, request, *args, **kwargs):
-        _log_request("UserViewSet(retrieve)", request)
         resp = super().retrieve(request, *args, **kwargs)
-        _log_response("UserViewSet(retrieve)", resp)
         return resp
+
+
+class PushTokenAPIView(APIView):
+    """
+    POST /api/accounts/push-token/
+    Register or update Expo push notification token for the authenticated user.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        token = request.data.get("token")
+        if not token:
+            return Response(
+                {"success": False, "message": "token is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = request.user
+        user.push_token = token
+        user.save(update_fields=["push_token"])
+        return Response({"success": True, "message": "Push token updated"})

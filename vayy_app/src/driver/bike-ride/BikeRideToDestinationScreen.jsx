@@ -11,47 +11,202 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
+import * as Location from "expo-location";
 import { completeDispatch } from "../../store/slices/dispatchSlice";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import useDriverLocationPush from "../hooks/useDriverLocationPush";
+import { WS, OPERATIONS } from "../../constants";
+import api from "../../shared/lib/api";
 import COLORS from "../../shared/constants/colors";
-// import VayyMap from "../../shared/components/VayyMap";
+import VayyMap, { UserLocation, Marker, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import ZoomControls from "../../shared/components/common/ZoomControls";
+import { fetchRouteGeometry, getRoadDistance } from "../../routes/services/routeService";
+import { useCallback } from "react";
 
 const { width } = Dimensions.get("window");
+
+function distanceToSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.sqrt((px - ax) ** 2 + (py - ay) ** 2);
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  const cx = ax + t * dx;
+  const cy = ay + t * dy;
+  return Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
+}
+
+function splitRouteAtPosition(coords, pos) {
+  if (!coords || coords.length < 2) return { covered: [], remaining: coords || [] };
+  let minDist = Infinity;
+  let nearestIdx = 0;
+  let nearestT = 0;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const [lng1, lat1] = coords[i];
+    const [lng2, lat2] = coords[i + 1];
+    const dist = distanceToSegment(pos.longitude, pos.latitude, lng1, lat1, lng2, lat2);
+    if (dist < minDist) {
+      minDist = dist;
+      nearestIdx = i;
+      const dx = lng2 - lng1;
+      const dy = lat2 - lat1;
+      const len2 = dx * dx + dy * dy;
+      nearestT = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((pos.longitude - lng1) * dx + (pos.latitude - lat1) * dy) / len2));
+    }
+  }
+  const splitPoint = [
+    coords[nearestIdx][0] + nearestT * (coords[nearestIdx + 1][0] - coords[nearestIdx][0]),
+    coords[nearestIdx][1] + nearestT * (coords[nearestIdx + 1][1] - coords[nearestIdx][1]),
+  ];
+  return {
+    covered: [...coords.slice(0, nearestIdx + 1), splitPoint],
+    remaining: [splitPoint, ...coords.slice(nearestIdx + 1)],
+  };
+}
+
+function routeBearingFromPosition(coords, pos) {
+  if (!coords || coords.length < 2) return null;
+  let minDist = Infinity;
+  let nearestIdx = 0;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const [lng1, lat1] = coords[i];
+    const [lng2, lat2] = coords[i + 1];
+    const dist = distanceToSegment(pos.longitude, pos.latitude, lng1, lat1, lng2, lat2);
+    if (dist < minDist) { minDist = dist; nearestIdx = i; }
+  }
+  const nextIdx = Math.min(nearestIdx + 1, coords.length - 1);
+  const [lng1, lat1] = coords[nearestIdx];
+  const [lng2, lat2] = coords[nextIdx];
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const y = Math.sin(dLng) * Math.cos((lat2 * Math.PI) / 180);
+  const x = Math.cos((lat1 * Math.PI) / 180) * Math.sin((lat2 * Math.PI) / 180) -
+            Math.sin((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.cos(dLng);
+  const bearing = (Math.atan2(y, x) * 180) / Math.PI;
+  return (bearing + 360) % 360;
+}
 
 export default function BikeRideToDestinationScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const dispatchRedux = useDispatch();
   const buddy = route.params?.buddy;
   const dispatchId = route.params?.dispatchId || buddy?.dispatchId;
+  const dropLat = Number(buddy?.dropLat) || null;
+  const dropLng = Number(buddy?.dropLng) || null;
+  const routeId = buddy?.route_id || null;
   const mapRef = useRef(null);
-  const initialDistance = Number(buddy?.distanceRaw) || Number(buddy?.distance) || 3.8;
-  const [distance, setDistance] = useState(initialDistance);
-  const [eta, setEta] = useState(`${Math.max(3, Math.round(initialDistance * 3))} min`);
+  const [destCoords, setDestCoords] = useState(null);
+  const destCoordsRef = useRef(null);
+  const [distance, setDistance] = useState(null);
+  const [eta, setEta] = useState("—");
+  const vehicleIdRef = useRef(null);
   const [elapsed, setElapsed] = useState(0);
+  const [driverPos, setDriverPos] = useState(null);
+  const [heading, setHeading] = useState(0);
+  const [routePath, setRoutePath] = useState(null);
+  const [coveredPath, setCoveredPath] = useState(null);
+  const [remainingPath, setRemainingPath] = useState(null);
+  const [routeBearing, setRouteBearing] = useState(null);
+  const [mapCenter, setMapCenter] = useState(null);
+  const [vehicleReady, setVehicleReady] = useState(false);
   const startTime = useRef(Date.now());
   const dotAnim = useRef(new Animated.Value(0)).current;
+  const totalDistanceRef = useRef(null);
 
   useEffect(() => {
-    const distInterval = setInterval(() => {
-      setDistance((prev) => Math.max(0, +(prev - 0.015).toFixed(2)));
-    }, 2000);
+    let stopped = false;
+    (async () => {
+      try {
+        const res = await api.get(OPERATIONS.vehiclesMe);
+        vehicleIdRef.current = res?.data?.data?.id || res?.data?.id || res?.id;
+        setVehicleReady(true);
+      } catch {}
+      let destLat = dropLat;
+      let destLng = dropLng;
+      if (!destLat || !destLng) {
+        try {
+          const data = routeId ? await fetchRouteGeometry(routeId) : null;
+          if (data?.path) setRoutePath(data.path.coordinates || data.path);
+          if (data?.stops?.length) {
+            const last = data.stops[data.stops.length - 1];
+            const c = last.location?.coordinates || last.location;
+            destLat = c[1]; destLng = c[0];
+          } else if (data?.path?.coordinates?.length) {
+            const c = data.path.coordinates[data.path.coordinates.length - 1];
+            destLat = c[1]; destLng = c[0];
+          }
+        } catch (e) {
+          console.warn("Failed to resolve destination from route", e);
+        }
+      }
+      const dest = (destLat && destLng) ? { lat: destLat, lng: destLng } : null;
+      if (dest) { setDestCoords(dest); destCoordsRef.current = dest; }
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted" || stopped) return;
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      if (stopped) return;
+      const { latitude, longitude } = pos.coords;
+      setDriverPos({ latitude, longitude });
+      setMapCenter({ latitude, longitude });
+      if (dest) {
+        getRoadDistance(latitude, longitude, dest.lat, dest.lng).then((data) => {
+          if (stopped) return;
+          const d = data.distance_km;
+          setDistance(d);
+          totalDistanceRef.current = d;
+          setEta(data.duration_min <= 1 ? "Arriving" : `${data.duration_min} min`);
+        }).catch(() => {});
+      }
+    })();
     const timeInterval = setInterval(() => {
       const sec = Math.floor((Date.now() - startTime.current) / 1000);
       setElapsed(sec);
     }, 1000);
     return () => {
-      clearInterval(distInterval);
+      stopped = true;
       clearInterval(timeInterval);
     };
-  }, []);
+  }, [dropLat, dropLng, routeId]);
 
   useEffect(() => {
-    if (distance < 3) setEta("10 min");
-    if (distance < 2.5) setEta("7 min");
-    if (distance < 1.5) setEta("4 min");
-    if (distance < 0.5) setEta("1 min");
-    if (distance < 0.05) setEta("Arriving");
-  }, [distance]);
+    if (!driverPos || !destCoordsRef.current) return;
+    const { latitude, longitude } = driverPos;
+    const d = destCoordsRef.current;
+    if (d) {
+      getRoadDistance(latitude, longitude, d.lat, d.lng).then((data) => {
+        setDistance(data.distance_km);
+        setEta(data.duration_min <= 1 ? "Arriving" : `${data.duration_min} min`);
+      }).catch(() => {});
+    }
+  }, [driverPos]);
+
+  useDriverLocationPush({
+    enabled: vehicleReady && !!vehicleIdRef.current,
+    vehicleId: vehicleIdRef.current,
+    tripId: dispatchId,
+    onLocation: (loc) => { setDriverPos(loc); setHeading(loc.heading); },
+  });
+
+  useEffect(() => {
+    if (!routePath || !driverPos) return;
+    const { covered, remaining } = splitRouteAtPosition(routePath, driverPos);
+    setCoveredPath(covered);
+    setRemainingPath(remaining);
+    const brg = routeBearingFromPosition(routePath, driverPos);
+    if (brg != null) setRouteBearing(brg);
+  }, [driverPos, routePath]);
+
+  const cameraBearing = heading > 0 ? heading : (routeBearing || 0);
+
+  useEffect(() => {
+    if (!driverPos || !mapRef.current) return;
+    mapRef.current.setCamera({
+      center: [driverPos.longitude, driverPos.latitude],
+      zoom: 17,
+      pitch: 60,
+      bearing: cameraBearing,
+      duration: 1500,
+    });
+  }, [driverPos, cameraBearing]);
 
   useEffect(() => {
     Animated.loop(
@@ -68,7 +223,39 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
     return `${m}m ${s.toString().padStart(2, "0")}s`;
   };
 
-  const progress = Math.max(0, Math.min(1, (3.8 - distance) / 3.8));
+  const totalDist = totalDistanceRef.current || 1;
+  const progress = distance !== null ? Math.max(0, Math.min(1, (totalDist - distance) / totalDist)) : 0;
+
+  const handleWsMessage = useCallback((data) => {
+    if (data.status === "cancelled") {
+      navigation.navigate("DriverTabs");
+    }
+    if (data.status === "completed") {
+      const elapsedSec = Math.floor((Date.now() - startTime.current) / 1000);
+      const d = destCoordsRef.current;
+      navigation.replace("BikeTripComplete", {
+        buddy,
+        dispatchId,
+        tripData: {
+          dispatch_id: dispatchId,
+          pickup: buddy?.pickup || "Pickup",
+          dropoff: buddy?.drop || "Destination",
+          pickupLat: buddy?.pickupLat,
+          pickupLng: buddy?.pickupLng,
+          dropLat: d?.lat || buddy?.dropLat,
+          dropLng: d?.lng || buddy?.dropLng,
+          distance: totalDistanceRef.current?.toFixed(1) || "—",
+          duration: Math.round(elapsedSec / 60) || 1,
+          fare: buddy?.fareAmount || 45,
+        },
+      });
+    }
+  }, [navigation, buddy, dispatchId]);
+
+  useWebSocket(dispatchId ? WS.dispatch(dispatchId) : null, {
+    enabled: !!dispatchId,
+    onMessage: handleWsMessage,
+  });
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
@@ -82,6 +269,7 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
       }
     }
     const elapsedSec = Math.floor((Date.now() - startTime.current) / 1000);
+    const d = destCoordsRef.current;
     navigation.navigate("BikeTripComplete", {
       buddy,
       dispatchId,
@@ -91,9 +279,9 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
         dropoff: buddy?.drop || "Destination",
         pickupLat: buddy?.pickupLat,
         pickupLng: buddy?.pickupLng,
-        dropLat: buddy?.dropLat,
-        dropLng: buddy?.dropLng,
-        distance: initialDistance,
+        dropLat: d?.lat || buddy?.dropLat,
+        dropLng: d?.lng || buddy?.dropLng,
+        distance: totalDistanceRef.current?.toFixed(1) || "—",
         duration: Math.round(elapsedSec / 60) || 1,
         fare: buddy?.fareAmount || 45,
       },
@@ -102,38 +290,74 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
 
   return (
     <View style={styles.root}>
-      {/* Map area */}
       <View style={styles.mapArea}>
-        {/* <VayyMap
+        {!mapCenter ? (
+          <View style={styles.gpsLoading}>
+            <Text style={styles.gpsLoadingText}>Getting your location...</Text>
+          </View>
+        ) : (
+        <VayyMap
           ref={mapRef}
           style={styles.mapBg}
-          initialRegion={{
-            latitude: 26.8467,
-            longitude: 80.9462,
-            latitudeDelta: 0.05,
-            longitudeDelta: 0.05,
+          initialViewState={{
+            center: [mapCenter.longitude, mapCenter.latitude],
+            zoom: 17,
+            pitch: 60,
           }}
-        /> */}
-
-        <View style={styles.driverOnMap}>
-          <View style={styles.driverPulseOuter} />
-          <View style={styles.driverDot}>
-            <View style={styles.driverDotCore} />
-          </View>
-        </View>
-
-        <View style={styles.destOnMap}>
-          <View style={styles.destPinCircle}>
-            <Ionicons name="flag" size={16} color="#fff" />
-          </View>
-          <View style={styles.destPinStem} />
-        </View>
-
-        <View style={styles.pathOnMap}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <View key={i} style={[styles.pathDot, { opacity: 1 - i * 0.12 }]} />
-          ))}
-        </View>
+          scrollEnabled
+          zoomEnabled
+        >
+          <UserLocation visible={true} showsUserHeadingIndicator={true} />
+          {destCoords && (
+            <Marker id="destination" lngLat={[destCoords.lng, destCoords.lat]}>
+              <View style={styles.destMarker}>
+                <Ionicons name="flag" size={16} color="#fff" />
+              </View>
+            </Marker>
+          )}
+          {remainingPath && remainingPath.length > 1 && (
+            <GeoJSONSource
+              id="routeRemaining"
+              data={{
+                type: "Feature",
+                geometry: { type: "LineString", coordinates: remainingPath },
+              }}
+            >
+              <Layer
+                id="routeRemainingLayer"
+                type="line"
+                paint={{
+                  "line-color": "#009849",
+                  "line-width": 5,
+                  "line-join": "round",
+                  "line-cap": "round",
+                }}
+              />
+            </GeoJSONSource>
+          )}
+          {coveredPath && coveredPath.length > 1 && (
+            <GeoJSONSource
+              id="routeCovered"
+              data={{
+                type: "Feature",
+                geometry: { type: "LineString", coordinates: coveredPath },
+              }}
+            >
+              <Layer
+                id="routeCoveredLayer"
+                type="line"
+                paint={{
+                  "line-color": "#D1D5DB",
+                  "line-width": 3,
+                  "line-opacity": 0.5,
+                  "line-join": "round",
+                  "line-cap": "round",
+                }}
+              />
+            </GeoJSONSource>
+          )}
+        </VayyMap>
+        )}
 
         <View style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}>
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
@@ -146,7 +370,6 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
 
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
-      {/* Bottom sheet */}
       <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.handle} />
 
@@ -155,9 +378,9 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
             <Text style={styles.avatarText}>{buddy?.avatar || "RK"}</Text>
           </View>
           <View style={styles.buddyInfo}>
-            <Text style={styles.buddyName}>{buddy?.name || "Ravi Kumar"}</Text>
+            <Text style={styles.buddyName}>{buddy?.name || "Passenger"}</Text>
             <Text style={styles.destLabel}>
-              Drop: <Text style={{ fontWeight: "700", color: "#111827" }}>{buddy?.drop || "IT City"}</Text>
+              Drop: <Text style={{ fontWeight: "700", color: "#111827" }}>{buddy?.drop || "Destination"}</Text>
             </Text>
           </View>
           <View style={styles.etaBadge}>
@@ -169,7 +392,7 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Ionicons name="navigate" size={16} color={COLORS.primary} />
-            <Text style={styles.statValue}>{distance.toFixed(1)} km</Text>
+            <Text style={styles.statValue}>{distance != null ? distance.toFixed(1) : "—"} km</Text>
             <Text style={styles.statLabel}>remaining</Text>
           </View>
           <View style={styles.statDivider} />
@@ -181,7 +404,7 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Ionicons name="speedometer" size={16} color="#3B82F6" />
-            <Text style={styles.statValue}>28</Text>
+            <Text style={styles.statValue}>{elapsed > 0 && totalDist > 0 && distance != null ? Math.round(((totalDist - distance) / (elapsed / 3600)) || 0) : "—"}</Text>
             <Text style={styles.statLabel}>km/h avg</Text>
           </View>
         </View>
@@ -211,8 +434,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F8FAF9",
   },
-
-  /* map */
+  gpsLoading: { flex: 1, alignItems: "center", justifyContent: "center" },
+  gpsLoadingText: { fontSize: 15, fontWeight: "600", color: "#6B7280" },
   mapArea: {
     flex: 1,
     position: "relative",
@@ -222,97 +445,16 @@ const styles = StyleSheet.create({
   mapBg: {
     ...StyleSheet.absoluteFillObject,
   },
-  gridLine: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: "#E5E7EB",
-  },
-  gridLineV: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    width: 1,
-    backgroundColor: "#E5E7EB",
-  },
-  driverOnMap: {
-    position: "absolute",
-    bottom: "52%",
-    left: "40%",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  driverPulseOuter: {
-    position: "absolute",
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "rgba(0,152,73,0.1)",
-  },
-  driverDot: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.primary,
-    borderWidth: 4,
-    borderColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  driverDotCore: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#fff",
-  },
-  destOnMap: {
-    position: "absolute",
-    bottom: "62%",
-    left: "65%",
-    alignItems: "center",
-  },
-  destPinCircle: {
+  destMarker: {
     width: 36,
     height: 36,
     borderRadius: 18,
     backgroundColor: "#EF4444",
-    alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#EF4444",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  destPinStem: {
-    width: 3,
-    height: 10,
-    borderRadius: 2,
-    backgroundColor: "#EF4444",
-    marginTop: -2,
-  },
-  pathOnMap: {
-    position: "absolute",
-    bottom: "55%",
-    left: "46%",
-    gap: 5,
     alignItems: "center",
-    flexDirection: "row",
+    borderWidth: 3,
+    borderColor: "#FFFFFF",
   },
-  pathDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.primary,
-  },
-
-  /* map header */
   mapHeader: {
     position: "absolute",
     top: 0,
@@ -344,8 +486,6 @@ const styles = StyleSheet.create({
     color: "#111827",
     letterSpacing: -0.3,
   },
-
-  /* bottom sheet */
   bottomSheet: {
     backgroundColor: "#fff",
     borderTopLeftRadius: 32,
@@ -367,8 +507,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 20,
   },
-
-  /* buddy */
   buddySection: {
     flexDirection: "row",
     alignItems: "center",
@@ -416,8 +554,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#fff",
   },
-
-  /* stats */
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -450,8 +586,6 @@ const styles = StyleSheet.create({
     height: 32,
     backgroundColor: "#E5E7EB",
   },
-
-  /* progress */
   progressTrack: {
     height: 6,
     borderRadius: 3,
@@ -497,8 +631,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#9CA3AF",
   },
-
-  /* end ride */
   endRideBtn: {
     flexDirection: "row",
     alignItems: "center",

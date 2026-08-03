@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
-// import VayyMap from "../../shared/components/VayyMap";
+import VayyMap from "../../shared/components/VayyMap";
 import AutoCancelRideModal from "./AutoCancelRideModal";
 
 const { width } = Dimensions.get("window");
@@ -89,7 +89,7 @@ export default function AutoOTPEntryScreen({ navigation, route }) {
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
       <View style={[styles.mapArea, { paddingTop: insets.top + 10 }]}>
-        {/* <VayyMap
+        <VayyMap
           style={styles.mapBg}
           initialRegion={{
             latitude: 26.8467,
@@ -99,7 +99,7 @@ export default function AutoOTPEntryScreen({ navigation, route }) {
           }}
           scrollEnabled={false}
           zoomEnabled={false}
-        /> */}
+        />
 
         <View style={styles.checkOnMap}>
           <View style={styles.checkOuter}>

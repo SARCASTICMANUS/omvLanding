@@ -9,9 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import api from "../../shared/lib/api";
-import COLORS from "../../shared/constants/colors";
-import { TRANSPORT } from "../../constants";
+import { searchDriverRoutes, getDriverRoutes } from "../services/driverService";
 import { buildRouteSummary, estimateStopTimeline } from "../utils/driverFlowUtils";
 
 const DUMMY_ROUTES = [
@@ -191,25 +189,19 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
       setLoading(true);
 
       if (pickup?.lat && pickup?.lon && destination?.lat && destination?.lon) {
-        const params = new URLSearchParams({
-          origin_lat: String(pickup.lat),
-          origin_lng: String(pickup.lon),
-          dest_lat: String(destination.lat),
-          dest_lng: String(destination.lon),
-        });
-        const response = await api.get(`${TRANSPORT.routesSearchByLocation}?${params}`);
-        const data = response.data?.data ?? (Array.isArray(response.data) ? response.data : []);
-        if (data.length > 0) {
-          setRoutes(data);
+        const data = await searchDriverRoutes(pickup.lat, pickup.lon, destination.lat, destination.lon);
+        const routes = data?.data ?? (Array.isArray(data) ? data : []);
+        if (routes.length > 0) {
+          setRoutes(routes);
           setIsDummy(false);
           return;
         }
       }
 
-      const response = await api.get(TRANSPORT.driverRoutes);
-      const data = response.data?.data ?? (Array.isArray(response.data) ? response.data : []);
-      if (data.length > 0) {
-        setRoutes(data);
+      const data = await getDriverRoutes();
+      const routes = data?.data ?? (Array.isArray(data) ? data : []);
+      if (routes.length > 0) {
+        setRoutes(routes);
         setIsDummy(false);
       } else {
         setRoutes(DUMMY_ROUTES);

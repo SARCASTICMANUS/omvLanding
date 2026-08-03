@@ -12,8 +12,10 @@ export default function AutoBoardedPopupScreen({ navigation, route }) {
   const dispatch = useDispatch();
   const dispatchId = route?.params?.dispatchId;
   const passengerName = route?.params?.passengerName || "Ravi Kumar";
-  const destination = route?.params?.destination || "Charbagh";
-  const nextStop = route?.params?.nextStop || "Civil Lines";
+  const destinationRaw = route?.params?.destination || "Charbagh";
+  const destination = typeof destinationRaw === "string" ? destinationRaw : destinationRaw?.name || destinationRaw?.display_name || "Charbagh";
+  const nextStopRaw = route?.params?.nextStop || "Civil Lines";
+  const nextStop = typeof nextStopRaw === "string" ? nextStopRaw : nextStopRaw?.name || nextStopRaw?.display_name || "Civil Lines";
   return (
     <AppFrame navigation={navigation} title="Boarding check" accent={colors.autoAccent}>
       <View style={styles.sheetOnly}>

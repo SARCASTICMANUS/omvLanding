@@ -72,6 +72,7 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     'common.middleware.CorrelationIDMiddleware',
+    'common.middleware.RequestResponseLoggingMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -182,6 +183,11 @@ CORS_ALLOW_ALL_ORIGINS = env.bool(
 )
 
 CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=[],
+)
 
 # CHANNEL LAYERS
 CHANNEL_LAYERS = {

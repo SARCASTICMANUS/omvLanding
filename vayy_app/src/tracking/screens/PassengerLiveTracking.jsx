@@ -2,7 +2,7 @@ import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Alert, Linking, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-// import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import VehicleIconBadge from "../../shared/components/common/VehicleIconBadge";
@@ -10,7 +10,7 @@ import LiveDot from "../../shared/components/common/LiveDot";
 import VayyButton from "../../shared/components/common/VayyButton";
 import api from "../../shared/lib/api";
 import useWebSocket from "../../shared/hooks/useWebSocket";
-import { WS } from "../../constants";
+import { WS, OPERATIONS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
 import SHADOW from "../../shared/constants/shadow";
@@ -69,7 +69,7 @@ export default function PassengerLiveTracking({ navigation, route }) {
       }
 
       try {
-        const res = await api.get(`/api/operations/trips/${tripId}/`);
+        const res = await api.get(OPERATIONS.tripDetail(tripId));
         setTripIdData(res.data);
       } catch {
         setTripIdData(null);
@@ -179,7 +179,7 @@ export default function PassengerLiveTracking({ navigation, route }) {
 
   return (
     <View style={styles.root}>
-      {/* <VayyMap
+      <VayyMap
         ref={mapRef}
         initialRegion={{
           ...initial,
@@ -231,7 +231,7 @@ export default function PassengerLiveTracking({ navigation, route }) {
             <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.error, borderWidth: 2, borderColor: "#fff" }} />
           </ViewAnnotation>
         ) : null}
-      </VayyMap> */}
+      </VayyMap>
 
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 

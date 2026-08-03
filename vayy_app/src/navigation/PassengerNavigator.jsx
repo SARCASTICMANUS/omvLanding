@@ -22,7 +22,6 @@ import { RiderPopupScreen } from "../passenger/bike-ride/RiderPopupScreen";
 import { RideStatsScreen } from "../passenger/bike-ride/RideStatsScreen";
 import { BikeSearchingScreen } from "../passenger/bike-ride/BikeSearchingScreen";
 import { RideCompleteScreen } from "../passenger/bike-ride/RideCompleteScreen";
-import { RiderArrivingScreen } from "../passenger/bike-ride/RiderArrivingScreen";
 
 // Auto Flow Screens
 import { AutoPreRideScreen } from "../passenger/shared-auto/AutoPreRideScreen";
@@ -105,7 +104,6 @@ export default function PassengerNavigator() {
       <Stack.Screen name="RideStats" component={RideStatsScreen} />
       <Stack.Screen name="BikeSearching" component={BikeSearchingScreen} />
       <Stack.Screen name="RideComplete" component={RideCompleteScreen} />
-      <Stack.Screen name="RiderArriving" component={RiderArrivingScreen} />
 
       {/* Auto Flow */}
       <Stack.Screen name="AutoPreRide" component={AutoPreRideScreen} />

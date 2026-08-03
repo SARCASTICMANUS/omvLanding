@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Animated,
   Dimensions,
@@ -12,9 +12,15 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
+import * as Location from "expo-location";
 import { arrivedDispatch } from "../../store/slices/dispatchSlice";
+import { getRoadDistance } from "../../routes/services/routeService";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import useDriverLocationPush from "../hooks/useDriverLocationPush";
+import api from "../../shared/lib/api";
+import { WS, OPERATIONS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
-// import VayyMap from "../../shared/components/VayyMap";
+import VayyMap, { UserLocation, Marker } from "../../shared/components/VayyMap";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
 const { width } = Dimensions.get("window");
@@ -24,38 +30,79 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
   const dispatchRedux = useDispatch();
   const buddy = route.params?.buddy;
   const dispatchId = route.params?.dispatchId || buddy?.dispatchId;
+  const pickupLat = Number(buddy?.pickupLat) || null;
+  const pickupLng = Number(buddy?.pickupLng) || null;
   const mapRef = useRef(null);
-  const [distance, setDistance] = useState(1.2);
-  const [eta, setEta] = useState("4 min");
+  const cameraRef = useRef(null);
+  const [mapCenter, setMapCenter] = useState(null);
+  const [driverPos, setDriverPos] = useState(null);
+  const [heading, setHeading] = useState(0);
+  const [distance, setDistance] = useState(null);
+  const [eta, setEta] = useState("—");
   const [showArrivedModal, setShowArrivedModal] = useState(false);
-  const isInRange = distance <= 1;
+  const [vehicleReady, setVehicleReady] = useState(false);
+  const vehicleIdRef = useRef(null);
+  const isInRange = distance !== null && distance <= 0.3;
   const arrivePulse = useRef(new Animated.Value(1)).current;
-  const distanceAnim = useRef(new Animated.Value(1.2)).current;
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
   const dot3 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setDistance((prev) => {
-        const next = Math.max(0, +(prev - 0.02).toFixed(2));
-        if (next <= 0.05) {
-          clearInterval(interval);
-          setEta("Arriving");
-          return 0;
-        }
-        if (next < 0.3) setEta("1 min");
-        else if (next < 0.6) setEta("2 min");
-        else if (next < 0.9) setEta("3 min");
-        return next;
-      });
-    }, 1500);
-    return () => clearInterval(interval);
-  }, []);
+    let stopped = false;
+    (async () => {
+      try {
+        const res = await api.get(OPERATIONS.vehiclesMe);
+        vehicleIdRef.current = res?.data?.data?.id || res?.data?.id || res?.id;
+        setVehicleReady(true);
+      } catch {}
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted" || stopped) return;
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      if (stopped) return;
+      const initLat = pos.coords.latitude;
+      const initLng = pos.coords.longitude;
+      setDriverPos({ latitude: initLat, longitude: initLng });
+      setMapCenter({ latitude: initLat, longitude: initLng });
+      if (pickupLat && pickupLng) {
+        getRoadDistance(initLat, initLng, pickupLat, pickupLng).then((data) => {
+          if (stopped) return;
+          setDistance(data.distance_km);
+          setEta(data.duration_min <= 1 ? "Arriving" : `${data.duration_min} min`);
+        }).catch(() => {});
+      }
+    })();
+    return () => { stopped = true; };
+  }, [pickupLat, pickupLng]);
 
   useEffect(() => {
-    Animated.timing(distanceAnim, { toValue: distance, duration: 300, useNativeDriver: false }).start();
-  }, [distance, distanceAnim]);
+    if (!driverPos) return;
+    const { latitude, longitude } = driverPos;
+    if (pickupLat && pickupLng) {
+      getRoadDistance(latitude, longitude, pickupLat, pickupLng).then((data) => {
+        setDistance(data.distance_km);
+        setEta(data.duration_min <= 1 ? "Arriving" : `${data.duration_min} min`);
+      }).catch(() => {});
+    }
+  }, [driverPos, pickupLat, pickupLng]);
+
+  useDriverLocationPush({
+    enabled: vehicleReady && !!vehicleIdRef.current,
+    vehicleId: vehicleIdRef.current,
+    tripId: dispatchId,
+    onLocation: (loc) => { setDriverPos(loc); setHeading(loc.heading); },
+  });
+
+  useEffect(() => {
+    if (!driverPos || !mapRef.current) return;
+    mapRef.current.setCamera({
+      center: [driverPos.longitude, driverPos.latitude],
+      zoom: 17,
+      pitch: 60,
+      bearing: heading,
+      duration: 1500,
+    });
+  }, [driverPos, heading]);
 
   useEffect(() => {
     if (isInRange) {
@@ -85,6 +132,17 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
     return () => animations.forEach((a) => a.stop());
   }, [dot1, dot2, dot3]);
 
+  const handleWsMessage = useCallback((data) => {
+    if (data.status === "cancelled" || data.status === "completed") {
+      navigation.navigate("DriverTabs");
+    }
+  }, [navigation]);
+
+  useWebSocket(dispatchId ? WS.dispatch(dispatchId) : null, {
+    enabled: !!dispatchId,
+    onMessage: handleWsMessage,
+  });
+
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
 
@@ -106,34 +164,38 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
     <View style={styles.root}>
       {/* Map area */}
       <View style={styles.mapArea}>
-        {/* <VayyMap
-          ref={mapRef}
-          style={styles.mapBg}
-          initialRegion={{
-            latitude: 26.8467,
-            longitude: 80.9462,
-            latitudeDelta: 0.05,
-            longitudeDelta: 0.05,
-          }}
-        /> */}
-
-        <View style={styles.driverOnMap}>
-          <View style={styles.driverDotOuter}>
-            <View style={styles.driverDotInner} />
+        {!mapCenter ? (
+          <View style={styles.gpsLoading}>
+            <Text style={styles.gpsLoadingText}>Getting your location...</Text>
           </View>
-        </View>
-
-        {isInRange && <View style={styles.rangeCircle} />}
-        <View style={styles.buddyOnMap}>
-          <View style={styles.buddyPulseRing} />
-          <View style={[styles.buddyMarker, isInRange && styles.buddyMarkerActive]} />
-        </View>
-
-        <View style={styles.routeLine}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <View key={i} style={[styles.routeSeg, { opacity: 1 - i * 0.18 }]} />
-          ))}
-        </View>
+        ) : (
+        <VayyMap
+          ref={mapRef}
+          cameraRef={cameraRef}
+          style={styles.mapBg}
+          initialViewState={{
+            center: [mapCenter.longitude, mapCenter.latitude],
+            zoom: 17,
+            pitch: 60,
+          }}
+        >
+          <UserLocation
+            visible={true}
+            showsUserHeadingIndicator={true}
+          />
+          {pickupLng && pickupLat && (
+            <Marker
+              id="pickup"
+              lngLat={[pickupLng, pickupLat]}
+            >
+              <View style={styles.buddyMarkerWrap}>
+                <View style={styles.buddyPulseRing} />
+                <View style={[styles.buddyMarker, isInRange && styles.buddyMarkerActive]} />
+              </View>
+            </Marker>
+          )}
+        </VayyMap>
+        )}
 
         <View style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}>
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
@@ -155,8 +217,8 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
             <Text style={styles.avatarText}>{buddy?.avatar || "RK"}</Text>
           </View>
           <View style={styles.buddyInfo}>
-            <Text style={styles.buddyName}>{buddy?.name || "Ravi Kumar"}</Text>
-            <Text style={styles.buddyPickup}>{buddy?.pickup || "Hazratganj"}</Text>
+            <Text style={styles.buddyName}>{buddy?.name || "Passenger"}</Text>
+            <Text style={styles.buddyPickup}>{buddy?.pickup || "Pickup"}</Text>
           </View>
           <View style={styles.etaBadge}>
             <Ionicons name="time" size={13} color={COLORS.primary} />
@@ -167,7 +229,7 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
         <View style={styles.distSection}>
           <View style={styles.distHeader}>
             <Ionicons name="location" size={14} color={COLORS.primary} />
-            <Text style={styles.distValue}>{distance.toFixed(2)} km</Text>
+            <Text style={styles.distValue}>{distance != null ? distance.toFixed(2) : "—"} km</Text>
             <Text style={styles.distLabel}>to pickup</Text>
           </View>
           <View style={styles.progressTrack}>
@@ -264,50 +326,17 @@ const styles = StyleSheet.create({
   mapBg: {
     ...StyleSheet.absoluteFillObject,
   },
-  gridLine: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: "#E5E7EB",
-  },
-  gridLineV: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    width: 1,
-    backgroundColor: "#E5E7EB",
-  },
-  driverOnMap: {
-    position: "absolute",
-    bottom: "42%",
-    left: "30%",
-  },
-  driverDotOuter: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "rgba(0,152,73,0.1)",
+  gpsLoading: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  driverDotInner: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.primary,
-    borderWidth: 4,
-    borderColor: "#fff",
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
+  gpsLoadingText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#6B7280",
   },
-  buddyOnMap: {
-    position: "absolute",
-    bottom: "55%",
-    left: "62%",
+  buddyMarkerWrap: {
     alignItems: "center",
     justifyContent: "center",
   },
@@ -332,32 +361,6 @@ const styles = StyleSheet.create({
   buddyMarkerActive: {
     backgroundColor: COLORS.primary,
     shadowColor: COLORS.primary,
-  },
-  rangeCircle: {
-    position: "absolute",
-    bottom: "55%",
-    left: "62%",
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    backgroundColor: "rgba(0,152,73,0.06)",
-    marginLeft: -50,
-    marginBottom: -50,
-  },
-  routeLine: {
-    position: "absolute",
-    bottom: "47%",
-    left: "36%",
-    gap: 6,
-    alignItems: "center",
-  },
-  routeSeg: {
-    width: 4,
-    height: 8,
-    borderRadius: 2,
-    backgroundColor: COLORS.primary,
   },
 
   /* map header */

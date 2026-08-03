@@ -1,5 +1,4 @@
 import logging
-import json
 import time
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -34,33 +33,6 @@ from transport.models import Route, Stop
 
 logger = logging.getLogger(__name__)
 
-
-def _log_request(view_name, request, extra=None):
-    data = {}
-    if hasattr(request, 'data') and request.data:
-        try:
-            data = json.loads(json.dumps(request.data, default=str))
-        except Exception:
-            data = str(request.data)
-    if hasattr(request, 'query_params') and request.query_params:
-        data = dict(request.query_params)
-    logger.info(
-        f"[{view_name}] REQUEST | method={request.method} path={request.path} "
-        f"user={getattr(request.user, 'id', 'anonymous')} data={data} {extra or ''}"
-    )
-
-
-def _log_response(view_name, response, extra=None):
-    resp_data = {}
-    try:
-        resp_data = json.loads(json.dumps(response.data, default=str)) if hasattr(response, 'data') else {}
-    except Exception:
-        resp_data = str(getattr(response, 'data', {}))
-    logger.info(
-        f"[{view_name}] RESPONSE | status={response.status_code} data={resp_data} {extra or ''}"
-    )
-
-
 class VehicleTrackingAPIView(APIView):
     """
     GET /tracking/vehicle/{id}
@@ -69,12 +41,9 @@ class VehicleTrackingAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, vehicle_id):
-        _log_request("VehicleTracking", request, extra=f"vehicle_id={vehicle_id}")
         logs = HybridSelector.list_vehicle_logs(vehicle_id)
         resp = Response(HybridLogSerializer(logs, many=True).data)
-        _log_response("VehicleTracking", resp, extra=f"log_count={len(logs)}")
         return resp
-
 
 class TripTrackingAPIView(APIView):
     """
@@ -84,12 +53,9 @@ class TripTrackingAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, trip_id):
-        _log_request("TripTracking", request, extra=f"trip_id={trip_id}")
         logs = HybridSelector.list_trip_logs(trip_id)
         resp = Response(HybridLogSerializer(logs, many=True).data)
-        _log_response("TripTracking", resp, extra=f"log_count={len(logs)}")
         return resp
-
 
 class GPSIngestAPIView(APIView):
     """
@@ -100,7 +66,6 @@ class GPSIngestAPIView(APIView):
     # permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        _log_request("GPSIngest", request)
         serializer = TelemetryIngestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -135,7 +100,6 @@ class GPSIngestAPIView(APIView):
                 HybridLogSerializer(log).data,
                 status=status.HTTP_201_CREATED
             )
-            _log_response("GPSIngest", resp)
             return resp
         except Exception as e:
             logger.exception("[GPSIngest] Failed to ingest GPS data")
@@ -144,13 +108,11 @@ class GPSIngestAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-
 class TelemetryIngestAPIView(GPSIngestAPIView):
     """
     Alias for GPSIngestAPIView to support existing clients.
     """
     pass
-
 
 class NearbyVehiclesAPIView(APIView):
     """
@@ -161,7 +123,6 @@ class NearbyVehiclesAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        _log_request("NearbyVehicles", request)
         try:
             lat = float(request.query_params.get('lat', 0))
             lng = float(request.query_params.get('lng', 0))
@@ -184,7 +145,6 @@ class NearbyVehiclesAPIView(APIView):
                     "message": f"Found {len(vehicles)} nearby vehicles",
                     "data": vehicles
                 })
-                _log_response("NearbyVehicles", resp)
                 return resp
 
             # Fallback: query DB if Redis has no results (cold start / cache miss)
@@ -199,7 +159,6 @@ class NearbyVehiclesAPIView(APIView):
                 "message": f"Found {len(serialized)} nearby vehicles (db fallback)",
                 "data": serialized
             })
-            _log_response("NearbyVehicles", resp)
             return resp
         except Exception as e:
             logger.exception("[NearbyVehicles] Nearby vehicles search failed")
@@ -208,7 +167,6 @@ class NearbyVehiclesAPIView(APIView):
                 "message": "Internal error during search",
                 "data": {}
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class PassengerLocationAPIView(APIView):
     """
@@ -219,7 +177,6 @@ class PassengerLocationAPIView(APIView):
     permission_classes = [IsAuthenticated, IsPassenger]
 
     def post(self, request):
-        _log_request("PassengerLocation", request)
         lat = request.data.get("lat")
         lng = request.data.get("lng") or request.data.get("lon")
 
@@ -252,7 +209,6 @@ class PassengerLocationAPIView(APIView):
 
             logger.info(f"[PassengerLocation] Location updated for user {request.user.id}: lat={lat} lng={lng} saved_routes={len(saved_route_ids)}")
             resp = Response({"success": True, "message": "Location updated"})
-            _log_response("PassengerLocation", resp)
             return resp
         except Exception as e:
             logger.exception(f"[PassengerLocation] Failed to update passenger location: {e}")
@@ -260,7 +216,6 @@ class PassengerLocationAPIView(APIView):
                 {"success": False, "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
 
 class DriverLocationAPIView(APIView):
     """
@@ -281,7 +236,6 @@ class DriverLocationAPIView(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
 
     def post(self, request):
-        _log_request("DriverLocation", request)
 
         vehicle_id = request.data.get("vehicle_id")
         lat = request.data.get("lat")
@@ -337,7 +291,6 @@ class DriverLocationAPIView(APIView):
                 "success": True,
                 "message": "Location published to processing queue",
             })
-            _log_response("DriverLocation", resp)
             return resp
 
         except PermissionDenied:
@@ -349,11 +302,9 @@ class DriverLocationAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-
 # ──────────────────────────────────────────────────────────────
 # Route-based trip management
 # ──────────────────────────────────────────────────────────────
-
 
 class StartRouteTripView(APIView):
     """
@@ -369,7 +320,6 @@ class StartRouteTripView(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
 
     def post(self, request):
-        _log_request("StartRouteTrip", request)
         serializer = StartRouteTripSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -472,7 +422,6 @@ class StartRouteTripView(APIView):
                     ],
                 },
             })
-            _log_response("StartRouteTrip", resp)
             return resp
 
         except PermissionDenied:
@@ -484,7 +433,6 @@ class StartRouteTripView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-
 class EndRouteTripView(APIView):
     """
     POST /api/tracking/end-route-trip/
@@ -495,7 +443,6 @@ class EndRouteTripView(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
 
     def post(self, request):
-        _log_request("EndRouteTrip", request)
         trip_id = request.data.get("trip_id")
         if not trip_id:
             return Response(
@@ -533,14 +480,11 @@ class EndRouteTripView(APIView):
         logger.info(f"[EndRouteTrip] Trip {trip.id} completed")
 
         resp = Response({"success": True, "message": "Trip ended"})
-        _log_response("EndRouteTrip", resp)
         return resp
-
 
 # ──────────────────────────────────────────────────────────────
 # Passenger ride request ("raise hand")
 # ──────────────────────────────────────────────────────────────
-
 
 class PassengerRaiseHandView(APIView):
     """
@@ -561,7 +505,6 @@ class PassengerRaiseHandView(APIView):
     permission_classes = [IsAuthenticated, IsPassenger]
 
     def post(self, request):
-        _log_request("PassengerRaiseHand", request)
         serializer = PassengerRaiseHandSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -629,7 +572,6 @@ class PassengerRaiseHandView(APIView):
                     "vehicle_number": active_trip.vehicle.vehicle_number,
                 },
             }, status=status.HTTP_201_CREATED)
-            _log_response("PassengerRaiseHand", resp)
             return resp
 
         except Exception as e:
@@ -638,7 +580,6 @@ class PassengerRaiseHandView(APIView):
                 {"success": False, "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
 
 class RideLifecycleView(APIView):
     """
@@ -651,7 +592,6 @@ class RideLifecycleView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        _log_request("RideLifecycle", request)
         serializer = RideLifecycleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -669,14 +609,11 @@ class RideLifecycleView(APIView):
             "message": f"Ride {action} dispatched",
             "data": {"request_id": str(request_id), "action": action},
         })
-        _log_response("RideLifecycle", resp)
         return resp
-
 
 # ──────────────────────────────────────────────────────────────
 # Route info / stop list
 # ──────────────────────────────────────────────────────────────
-
 
 class RouteStopsView(APIView):
     """
@@ -700,7 +637,6 @@ class RouteStopsView(APIView):
             "data": RouteStopListSerializer(route).data,
         })
         return resp
-
 
 class ActiveRouteTripsView(APIView):
     """
@@ -748,7 +684,6 @@ class ActiveRouteTripsView(APIView):
             "data": trip_data,
         })
         return resp
-
 
 class NearbyRoutesView(APIView):
     """

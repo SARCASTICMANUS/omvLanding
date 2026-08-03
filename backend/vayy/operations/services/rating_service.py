@@ -24,7 +24,7 @@ class RatingService:
         if trip.status != "completed":
             raise ValueError("Only completed trips can be rated")
 
-        if trip.rating_record: # Check if already rated
+        if hasattr(trip, "rating_record"): # Check if already rated
              raise ValueError("Trip has already been rated")
 
         # Create rating

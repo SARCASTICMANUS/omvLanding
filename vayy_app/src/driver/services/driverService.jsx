@@ -1,9 +1,6 @@
 import api, { normalizeApiError } from "../../shared/lib/api";
-import { OPERATIONS, TRANSPORT, TRACKING } from "../../constants";
+import { OPERATIONS, TRANSPORT } from "../../constants";
 
-/**
- * Fetch available routes for the driver
- */
 export const getDriverRoutes = async () => {
   try {
     const response = await api.get(TRANSPORT.driverRoutes);
@@ -13,9 +10,6 @@ export const getDriverRoutes = async () => {
   }
 };
 
-/**
- * Start a trip for a specific route
- */
 export const startTrip = async (routeId, vehicleId, tripScheduleId) => {
   try {
     const response = await api.post(OPERATIONS.tripsStart, {
@@ -29,21 +23,6 @@ export const startTrip = async (routeId, vehicleId, tripScheduleId) => {
   }
 };
 
-/**
- * End an active trip
- */
-export const endTrip = async (tripId) => {
-  try {
-    const response = await api.patch(OPERATIONS.dispatchComplete(tripId));
-    return response.data;
-  } catch (error) {
-    throw normalizeApiError(error, "Unable to end trip.");
-  }
-};
-
-/**
- * Fetch next stops and passenger manifests for an active trip
- */
 export const getNextStops = async (tripId) => {
   try {
     const response = await api.get(`${OPERATIONS.trips}${tripId}/next-stops/`);
@@ -62,50 +41,30 @@ export const getAssignedVehicle = async () => {
   }
 };
 
-export const getActiveTrip = async () => {
+export const searchDriverRoutes = async (originLat, originLng, destLat, destLng, radius = 1000) => {
   try {
-    const response = await api.get(OPERATIONS.tripsMeActive);
+    const params = `origin_lat=${originLat}&origin_lng=${originLng}&dest_lat=${destLat}&dest_lng=${destLng}&radius=${radius}`;
+    const response = await api.get(`${TRANSPORT.routesSearchByLocation}?${params}`);
     return response.data;
   } catch (error) {
-    throw normalizeApiError(error, "Unable to fetch active trip.");
+    throw normalizeApiError(error, "Unable to search routes by location.");
   }
 };
 
-export const getTripBoardingRequests = async (tripId) => {
+export const getNearbyPassengers = async (routeId) => {
   try {
-    const response = await api.get(`${OPERATIONS.trips}${tripId}/boarding-requests/`);
+    const response = await api.get(TRANSPORT.routesNearbyPassengers(routeId));
     return response.data;
   } catch (error) {
-    throw normalizeApiError(error, "Unable to fetch boarding requests.");
-  }
-};
-
-export const markBoarded = async (requestId) => {
-  try {
-    const response = await api.post(`${OPERATIONS.boardingRequests}${requestId}/boarded/`);
-    return response.data;
-  } catch (error) {
-    throw normalizeApiError(error, "Unable to mark passenger boarded.");
-  }
-};
-
-export const sendTelemetry = async (payload) => {
-  try {
-    const response = await api.post(TRACKING.ingest, payload);
-    return response.data;
-  } catch (error) {
-    throw normalizeApiError(error, "Unable to send telemetry.");
+    throw normalizeApiError(error, "Unable to fetch nearby passengers.");
   }
 };
 
 export default {
   getDriverRoutes,
   startTrip,
-  endTrip,
   getNextStops,
   getAssignedVehicle,
-  getActiveTrip,
-  getTripBoardingRequests,
-  markBoarded,
-  sendTelemetry,
+  searchDriverRoutes,
+  getNearbyPassengers,
 };

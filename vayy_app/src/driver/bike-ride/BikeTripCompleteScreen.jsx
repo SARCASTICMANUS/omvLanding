@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Dimensions,
   Platform,
@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import api from "../../shared/lib/api";
+import { RIDE } from "../../constants";
 import COLORS from "../../shared/constants/colors";
 
 const { width } = Dimensions.get("window");
@@ -19,14 +21,26 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const buddy = route.params?.buddy || {};
   const tripData = route.params?.tripData || {};
+  const dispatchId = route.params?.dispatchId || buddy?.dispatchId || tripData?.dispatch_id;
 
   const distanceNum = Number(buddy.distance) || Number(tripData.distance) || 0;
   const durationNum = Number(buddy.duration) || Number(tripData.duration) || 0;
-  const fare = Number(buddy.fare) || Number(tripData.fare) || 0;
-  const baseFare = Math.round(fare * 0.35);
-  const distanceFare = Math.round(distanceNum * 5);
-  const timeFare = Math.round(durationNum * 2);
-  const rating = buddy.rating || tripData.rating || 0;
+  const riderRating = Number(buddy.rating) || Number(tripData.rating) || 0;
+
+  const [fareData, setFareData] = useState(null);
+
+  useEffect(() => {
+    if (!dispatchId) return;
+    api.get(RIDE.tripFare(dispatchId)).then((res) => {
+      const d = res.data?.data || res.data;
+      if (d) setFareData(d);
+    }).catch(() => {});
+  }, [dispatchId]);
+
+  const fare = fareData?.total_fare || Number(buddy.fare) || Number(tripData.fare) || 0;
+  const baseFare = fareData?.base_fare ?? Math.round(fare * 0.35);
+  const distanceFare = fareData?.distance_fare ?? Math.round(Number(distanceNum) * 5);
+  const timeFare = fareData?.time_fare ?? Math.round(Number(durationNum) * 2);
 
   const now = new Date();
   const timeStr = `${now.toLocaleDateString("en-IN", { weekday: "short" })}, ${now.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`;
@@ -46,7 +60,6 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
           </TouchableOpacity>
         )}
 
-        {/* Success */}
         <View style={styles.successSection}>
           <View style={styles.checkCircle}>
             <Ionicons name="checkmark" size={36} color="#fff" />
@@ -55,7 +68,6 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
           <Text style={styles.subtitle}>Buddy dropped off safely</Text>
         </View>
 
-        {/* Buddy card */}
         <View style={styles.card}>
           <View style={styles.buddyRow}>
             <View style={styles.avatar}>
@@ -63,17 +75,16 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
               <View style={styles.onlineDot} />
             </View>
             <View style={styles.buddyInfo}>
-              <Text style={styles.buddyName}>{buddy?.name || "Ravi Kumar"}</Text>
-              <Text style={styles.buddyRoute}>{buddy?.pickup || "Hazratganj"} → {buddy?.drop || "IT City"}</Text>
+              <Text style={styles.buddyName}>{buddy?.name || "Passenger"}</Text>
+              <Text style={styles.buddyRoute}>{buddy?.pickup || "Pickup"} → {buddy?.drop || "Destination"}</Text>
             </View>
             <View style={styles.ratingBadge}>
               <Ionicons name="star" size={14} color="#FFB800" />
-              <Text style={styles.ratingText}>{rating || "—"}</Text>
+              <Text style={styles.ratingText}>{riderRating || "—"}</Text>
             </View>
           </View>
         </View>
 
-        {/* Trip Details */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Trip Details</Text>
 
@@ -83,7 +94,7 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
             </View>
             <View style={styles.tripInfo}>
               <Text style={styles.tripLabel}>Pickup</Text>
-              <Text style={styles.tripValue}>{buddy?.pickup || "Hazratganj Metro Gate 2"}</Text>
+              <Text style={styles.tripValue}>{buddy?.pickup || "—"}</Text>
             </View>
           </View>
 
@@ -95,7 +106,7 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
             </View>
             <View style={styles.tripInfo}>
               <Text style={styles.tripLabel}>Dropoff</Text>
-              <Text style={styles.tripValue}>{buddy?.drop || "IT City"}</Text>
+              <Text style={styles.tripValue}>{buddy?.drop || "—"}</Text>
             </View>
           </View>
 
@@ -117,7 +128,6 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
           </View>
         </View>
 
-        {/* Earnings */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Earnings</Text>
 
@@ -140,32 +150,30 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
           </View>
         </View>
 
-        {/* Feedback from buddy */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Buddy Feedback</Text>
           <View style={styles.starRow}>
             {[1, 2, 3, 4, 5].map((star) => (
               <Ionicons
                 key={star}
-                name={star <= 5 ? "star" : "star-outline"}
+                name={star <= riderRating ? "star" : "star-outline"}
                 size={32}
-                color={star <= 5 ? "#FFB800" : "#D1D5DB"}
+                color={star <= riderRating ? "#FFB800" : "#D1D5DB"}
               />
             ))}
           </View>
           <Text style={styles.feedbackText}>"{buddy.feedback || "Thanks for riding!"}"</Text>
           <View style={styles.feedbackAuthor}>
             <Ionicons name="chatbubble-ellipses" size={14} color={COLORS.primary} />
-            <Text style={styles.feedbackAuthorText}>— {buddy?.name || "Ravi Kumar"}</Text>
+            <Text style={styles.feedbackAuthorText}>— {buddy?.name || "Passenger"}</Text>
           </View>
         </View>
 
-        {/* Actions */}
         <View style={styles.actions}>
           <TouchableOpacity
             activeOpacity={0.9}
             style={styles.primaryBtn}
-            onPress={() => navigation.navigate("DriverModeSelect")}
+            onPress={() => navigation.navigate("DriverTabs", { screen: "DriverModeSelect" })}
           >
             <Ionicons name="bicycle" size={20} color="#fff" />
             <Text style={styles.primaryBtnText}>  Next Ride</Text>
@@ -174,7 +182,7 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
           <TouchableOpacity
             activeOpacity={0.7}
             style={styles.secondaryBtn}
-            onPress={() => navigation.popToTop()}
+            onPress={() => navigation.reset({ index: 0, routes: [{ name: "DriverTabs" }] })}
           >
             <Text style={styles.secondaryBtnText}>Back to Home</Text>
           </TouchableOpacity>
@@ -209,8 +217,6 @@ const styles = StyleSheet.create({
     elevation: 3,
     marginBottom: 16,
   },
-
-  /* success */
   successSection: {
     alignItems: "center",
     marginBottom: 24,
@@ -239,8 +245,6 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontWeight: "500",
   },
-
-  /* card */
   card: {
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -251,8 +255,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 3,
   },
-
-  /* buddy */
   buddyRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -311,8 +313,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#111827",
   },
-
-  /* trip details */
   sectionTitle: {
     fontSize: 16,
     fontWeight: "800",
@@ -387,8 +387,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "#D1D5DB",
   },
-
-  /* fare */
   fareRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -420,8 +418,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: COLORS.primary,
   },
-
-  /* feedback */
   starRow: {
     flexDirection: "row",
     justifyContent: "center",
@@ -448,8 +444,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: COLORS.primary,
   },
-
-  /* actions */
   actions: {
     gap: 12,
     marginTop: 8,

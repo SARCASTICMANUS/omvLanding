@@ -785,7 +785,7 @@ import {
   StatusBar
 } from "react-native";
 import * as Location from "expo-location";
-// import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -884,8 +884,8 @@ export function AutoPreRideScreen({ navigation, route }) {
             500,
           );
         }
-      } else {
-        cameraRef.current.setStop({ center: [80.9462, 26.8467], zoom: 13, duration: 500 });
+      } else if (pickupLat != null && pickupLon != null) {
+        cameraRef.current.setStop({ center: [pickupLon, pickupLat], zoom: 15, duration: 500 });
       }
     };
 
@@ -992,7 +992,7 @@ export function AutoPreRideScreen({ navigation, route }) {
 
       {/* FIXED LAYER 1: Fullscreen isolated underlying map container */}
       <View style={styles.mapArea}>
-        {/* <VayyMap
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
@@ -1001,7 +1001,7 @@ export function AutoPreRideScreen({ navigation, route }) {
           initialViewState={
             pickupLat != null && pickupLon != null
               ? { center: [pickupLon, pickupLat], zoom: 15 }
-              : { center: [80.9462, 26.8467], zoom: 15 }
+              : { center: [80.8, 26.8], zoom: 12 }
           }
         >
           {routePath && (
@@ -1034,7 +1034,7 @@ export function AutoPreRideScreen({ navigation, route }) {
               </View>
             </ViewAnnotation>
           )}
-        </VayyMap> */}
+        </VayyMap>
       </View>
 
       {/* FIXED LAYER 2: Overlay Controls & Context Elements */}

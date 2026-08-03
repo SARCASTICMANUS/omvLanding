@@ -1,5 +1,4 @@
 import logging
-import json
 from rest_framework import status
 from rest_framework.exceptions import (
     PermissionDenied,
@@ -53,36 +52,17 @@ from transport.api.serializers import (
     StopTimeSerializer,
 )
 from transport.models import StopTime
-from operations.models import ActiveTrip
+from operations.models import ActiveTrip, DispatchRequest, VehicleState
+from operations.constants import (
+    TRIP_STATUS_REQUESTED,
+    TRIP_STATUS_ACCEPTED,
+    TRIP_STATUS_CANCELLED,
+)
+from django.utils import timezone
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 logger = logging.getLogger(__name__)
-
-
-def _log_request(view_name, request, extra=None):
-    data = {}
-    if hasattr(request, 'data') and request.data:
-        try:
-            data = json.loads(json.dumps(request.data, default=str))
-        except Exception:
-            data = str(request.data)
-    if hasattr(request, 'query_params') and request.query_params:
-        data = dict(request.query_params)
-    logger.info(
-        f"[{view_name}] REQUEST | method={request.method} path={request.path} "
-        f"user={getattr(request.user, 'id', 'anonymous')} data={data} {extra or ''}"
-    )
-
-
-def _log_response(view_name, response, extra=None):
-    resp_data = {}
-    try:
-        resp_data = json.loads(json.dumps(response.data, default=str)) if hasattr(response, 'data') else {}
-    except Exception:
-        resp_data = str(getattr(response, 'data', {}))
-    logger.info(
-        f"[{view_name}] RESPONSE | status={response.status_code} data={resp_data} {extra or ''}"
-    )
-
 
 class RideEstimateAPIView(APIView):
     """
@@ -92,7 +72,6 @@ class RideEstimateAPIView(APIView):
     permission_classes = [IsAuthenticated, IsPassenger]
 
     def post(self, request):
-        _log_request("RideEstimate", request)
         serializer = RideEstimateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -103,9 +82,7 @@ class RideEstimateAPIView(APIView):
             "message": "Estimate calculated successfully",
             "data": RideEstimateResponseSerializer(estimate).data
         })
-        _log_response("RideEstimate", resp)
         return resp
-
 
 class NearbyVehiclesAPIView(APIView):
     """
@@ -115,7 +92,6 @@ class NearbyVehiclesAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        _log_request("NearbyVehicles(operations)", request)
         lat = float(request.query_params.get('lat', 0))
         lng = float(request.query_params.get('lng', 0))
         radius = int(request.query_params.get('radius', 5000))
@@ -135,9 +111,7 @@ class NearbyVehiclesAPIView(APIView):
             "message": f"Found {vehicles.count()} nearby vehicles",
             "data": VehicleStateSerializer(vehicles, many=True).data
         })
-        _log_response("NearbyVehicles(operations)", resp)
         return resp
-
 
 class DispatchRequestAPIView(APIView):
     """
@@ -147,7 +121,6 @@ class DispatchRequestAPIView(APIView):
     permission_classes = [IsAuthenticated, IsPassenger]
 
     def post(self, request):
-        _log_request("DispatchRequest", request)
         serializer = DispatchRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -159,12 +132,10 @@ class DispatchRequestAPIView(APIView):
                 mode=serializer.validated_data.get("mode", "direct")
             )
             resp = Response(result, status=status.HTTP_202_ACCEPTED)
-            _log_response("DispatchRequest", resp)
             return resp
         except Exception as e:
             logger.exception("[DispatchRequest] Dispatch request failed")
             return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class DispatchAssignAPIView(APIView):
     """
@@ -174,7 +145,6 @@ class DispatchAssignAPIView(APIView):
     permission_classes = [IsAuthenticated] # Should be IsAdmin/IsStaff in real app
 
     def post(self, request):
-        _log_request("DispatchAssign", request)
         serializer = DispatchAssignSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -186,7 +156,6 @@ class DispatchAssignAPIView(APIView):
                 trip_schedule_id=serializer.validated_data.get("trip_schedule_id")
             )
             resp = Response(ActiveTripSerializer(trip).data, status=status.HTTP_201_CREATED)
-            _log_response("DispatchAssign", resp)
             return resp
         except ValueError as e:
             logger.warning(f"[DispatchAssign] Value error: {e}")
@@ -194,7 +163,6 @@ class DispatchAssignAPIView(APIView):
         except Exception as e:
             logger.exception("[DispatchAssign] Dispatch assignment failed")
             return Response({"detail": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class DispatchCancelAPIView(APIView):
     """
@@ -204,7 +172,6 @@ class DispatchCancelAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, trip_id):
-        _log_request("DispatchCancel", request, extra=f"trip_id={trip_id}")
         serializer = DispatchCancelSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -215,12 +182,10 @@ class DispatchCancelAPIView(APIView):
                 reason=serializer.validated_data["reason"]
             )
             resp = Response(ActiveTripSerializer(trip).data)
-            _log_response("DispatchCancel", resp)
             return resp
         except Exception as e:
             logger.exception(f"[DispatchCancel] Cancellation failed for trip {trip_id}")
             return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class DispatchDetailAPIView(APIView):
     """
@@ -230,16 +195,13 @@ class DispatchDetailAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, trip_id):
-        _log_request("DispatchDetail", request, extra=f"trip_id={trip_id}")
         try:
             trip = TripSelector.get_trip(trip_id)
             resp = Response(ActiveTripSerializer(trip).data)
-            _log_response("DispatchDetail", resp)
             return resp
         except ActiveTrip.DoesNotExist:
             logger.warning(f"[DispatchDetail] Trip {trip_id} not found")
             return Response({"detail": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
-
 
 class DriverInitiateRideAPIView(APIView):
     """
@@ -250,7 +212,6 @@ class DriverInitiateRideAPIView(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
 
     def post(self, request):
-        _log_request("DriverInitiateRide", request)
         passenger_id = request.data.get("passenger_id")
         route_id = request.data.get("route_id")
         pickup_stop_id = request.data.get("pickup_stop_id")
@@ -339,7 +300,6 @@ class DriverInitiateRideAPIView(APIView):
                 },
                 status=status.HTTP_201_CREATED,
             )
-            _log_response("DriverInitiateRide", resp)
             return resp
 
         except User.DoesNotExist:
@@ -361,7 +321,6 @@ class DriverInitiateRideAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-
 class PassengerAcceptRideAPIView(APIView):
     """
     PATCH /api/operations/dispatch/{trip_id}/passenger-accept/
@@ -370,7 +329,6 @@ class PassengerAcceptRideAPIView(APIView):
     permission_classes = [IsAuthenticated, IsPassenger]
 
     def patch(self, request, trip_id):
-        _log_request("PassengerAcceptRide", request, extra=f"trip_id={trip_id}")
         try:
             trip = ActiveTrip.objects.get(id=trip_id)
             if trip.status != TRIP_STATUS_REQUESTED:
@@ -395,7 +353,6 @@ class PassengerAcceptRideAPIView(APIView):
             )
 
             resp = Response({"success": True, "message": "Ride accepted", "data": payload})
-            _log_response("PassengerAcceptRide", resp)
             return resp
 
         except ActiveTrip.DoesNotExist:
@@ -405,7 +362,6 @@ class PassengerAcceptRideAPIView(APIView):
             logger.exception(f"[PassengerAcceptRide] Passenger accept ride failed: {e}")
             return Response({"success": False, "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 class PassengerRejectRideAPIView(APIView):
     """
     PATCH /api/operations/dispatch/{trip_id}/passenger-reject/
@@ -414,7 +370,6 @@ class PassengerRejectRideAPIView(APIView):
     permission_classes = [IsAuthenticated, IsPassenger]
 
     def patch(self, request, trip_id):
-        _log_request("PassengerRejectRide", request, extra=f"trip_id={trip_id}")
         try:
             trip = ActiveTrip.objects.get(id=trip_id)
             if trip.status != TRIP_STATUS_REQUESTED:
@@ -444,7 +399,6 @@ class PassengerRejectRideAPIView(APIView):
             )
 
             resp = Response({"success": True, "message": "Ride rejected", "data": payload})
-            _log_response("PassengerRejectRide", resp)
             return resp
 
         except ActiveTrip.DoesNotExist:
@@ -454,13 +408,11 @@ class PassengerRejectRideAPIView(APIView):
             logger.exception(f"[PassengerRejectRide] Passenger reject ride failed: {e}")
             return Response({"success": False, "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 DRIVER_ROLES = [
     "driver",
     "bikedriver",
     "autodriver",
 ]
-
 
 class VehicleListAPIView(APIView):
     permission_classes = [
@@ -468,7 +420,6 @@ class VehicleListAPIView(APIView):
     ]
 
     def get(self, request):
-        _log_request("VehicleList", request)
         city_id = request.query_params.get(
             "city_id"
         )
@@ -498,9 +449,7 @@ class VehicleListAPIView(APIView):
         )
 
         resp = Response(serializer.data)
-        _log_response("VehicleList", resp)
         return resp
-
 
 class DriverVehicleAPIView(APIView):
     permission_classes = [
@@ -509,7 +458,6 @@ class DriverVehicleAPIView(APIView):
     ]
 
     def get(self, request):
-        _log_request("DriverVehicle", request)
         vehicle = (
             VehicleSelector
             .get_driver_vehicle(
@@ -532,9 +480,7 @@ class DriverVehicleAPIView(APIView):
         resp = Response(
             VehicleSerializer(vehicle).data
         )
-        _log_response("DriverVehicle", resp)
         return resp
-
 
 class VehicleDetailAPIView(APIView):
     permission_classes = [
@@ -546,7 +492,6 @@ class VehicleDetailAPIView(APIView):
         request,
         vehicle_id,
     ):
-        _log_request("VehicleDetail", request, extra=f"vehicle_id={vehicle_id}")
         vehicle = (
             VehicleSelector
             .get_vehicle(vehicle_id)
@@ -555,9 +500,7 @@ class VehicleDetailAPIView(APIView):
         resp = Response(
             VehicleSerializer(vehicle).data
         )
-        _log_response("VehicleDetail", resp)
         return resp
-
 
 class VehicleStateAPIView(APIView):
     permission_classes = [
@@ -569,7 +512,6 @@ class VehicleStateAPIView(APIView):
         request,
         vehicle_id,
     ):
-        _log_request("VehicleState", request, extra=f"vehicle_id={vehicle_id}")
         vehicle = (
             VehicleSelector
             .get_vehicle(vehicle_id)
@@ -594,9 +536,7 @@ class VehicleStateAPIView(APIView):
         resp = Response(
             VehicleStateSerializer(state).data
         )
-        _log_response("VehicleState", resp)
         return resp
-
 
 class ActiveTripListAPIView(APIView):
     permission_classes = [
@@ -604,7 +544,6 @@ class ActiveTripListAPIView(APIView):
     ]
 
     def get(self, request):
-        _log_request("ActiveTripList", request)
         city_id = request.query_params.get(
             "city_id"
         )
@@ -634,9 +573,7 @@ class ActiveTripListAPIView(APIView):
         )
 
         resp = Response(serializer.data)
-        _log_response("ActiveTripList", resp)
         return resp
-
 
 class ActiveTripDetailAPIView(APIView):
     permission_classes = [
@@ -648,7 +585,6 @@ class ActiveTripDetailAPIView(APIView):
         request,
         trip_id,
     ):
-        _log_request("ActiveTripDetail", request, extra=f"trip_id={trip_id}")
         trip = TripSelector.get_trip(
             trip_id
         )
@@ -656,9 +592,7 @@ class ActiveTripDetailAPIView(APIView):
         resp = Response(
             ActiveTripSerializer(trip).data
         )
-        _log_response("ActiveTripDetail", resp)
         return resp
-
 
 class DriverActiveTripAPIView(APIView):
     permission_classes = [
@@ -667,7 +601,6 @@ class DriverActiveTripAPIView(APIView):
     ]
 
     def get(self, request):
-        _log_request("DriverActiveTrip", request)
         trip = (
             TripSelector
             .get_driver_active_trip(
@@ -690,9 +623,7 @@ class DriverActiveTripAPIView(APIView):
         resp = Response(
             ActiveTripSerializer(trip).data
         )
-        _log_response("DriverActiveTrip", resp)
         return resp
-
 
 class StartTripAPIView(APIView):
     permission_classes = [
@@ -701,7 +632,6 @@ class StartTripAPIView(APIView):
     ]
 
     def post(self, request):
-        _log_request("StartTrip", request)
         serializer = StartTripSerializer(
             data=request.data
         )
@@ -737,7 +667,6 @@ class StartTripAPIView(APIView):
             ActiveTripSerializer(trip).data,
             status=status.HTTP_201_CREATED,
         )
-        _log_response("StartTrip", resp)
         return resp
 
     def _get_vehicle(
@@ -768,7 +697,6 @@ class StartTripAPIView(APIView):
 
         return vehicle
 
-
 class DispatchAcceptAPIView(APIView):
     """
     PATCH /api/dispatch/{id}/accept
@@ -777,7 +705,6 @@ class DispatchAcceptAPIView(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
 
     def patch(self, request, trip_id):
-        _log_request("DispatchAccept", request, extra=f"trip_id={trip_id}")
         try:
             trip = DispatchService.accept_assignment(trip_id, request.user)
             resp = Response({
@@ -785,12 +712,10 @@ class DispatchAcceptAPIView(APIView):
                 "message": "Assignment accepted",
                 "data": ActiveTripSerializer(trip).data
             })
-            _log_response("DispatchAccept", resp)
             return resp
         except Exception as e:
             logger.exception(f"[DispatchAccept] Failed for trip {trip_id}")
             return Response({"success": False, "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 
 class DispatchRejectAPIView(APIView):
     """
@@ -800,7 +725,6 @@ class DispatchRejectAPIView(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
 
     def patch(self, request, trip_id):
-        _log_request("DispatchReject", request, extra=f"trip_id={trip_id}")
         try:
             trip = DispatchService.reject_assignment(trip_id, request.user)
             resp = Response({
@@ -808,12 +732,10 @@ class DispatchRejectAPIView(APIView):
                 "message": "Assignment rejected",
                 "data": ActiveTripSerializer(trip).data
             })
-            _log_response("DispatchReject", resp)
             return resp
         except Exception as e:
             logger.exception(f"[DispatchReject] Failed for trip {trip_id}")
             return Response({"success": False, "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 
 class DispatchArrivedAPIView(APIView):
     """
@@ -823,7 +745,6 @@ class DispatchArrivedAPIView(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
 
     def patch(self, request, trip_id):
-        _log_request("DispatchArrived", request, extra=f"trip_id={trip_id}")
         try:
             trip = DispatchService.arrived_at_pickup(trip_id, request.user)
             resp = Response({
@@ -831,45 +752,40 @@ class DispatchArrivedAPIView(APIView):
                 "message": "Driver arrived at pickup",
                 "data": ActiveTripSerializer(trip).data
             })
-            _log_response("DispatchArrived", resp)
             return resp
         except Exception as e:
             logger.exception(f"[DispatchArrived] Failed for trip {trip_id}")
             return Response({"success": False, "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-
 class DispatchStartAPIView(APIView):
     """
     PATCH /api/dispatch/{id}/start
-    Driver starts the trip.
+    Driver starts the trip after OTP verification.
     """
     permission_classes = [IsAuthenticated, IsDriver]
 
     def patch(self, request, trip_id):
-        _log_request("DispatchStart", request, extra=f"trip_id={trip_id}")
         try:
-            trip = DispatchService.start_trip(trip_id, request.user)
+            otp = request.data.get("otp")
+            trip = DispatchService.start_trip(trip_id, request.user, otp=otp)
             resp = Response({
                 "success": True,
                 "message": "Trip started",
                 "data": ActiveTripSerializer(trip).data
             })
-            _log_response("DispatchStart", resp)
             return resp
         except Exception as e:
             logger.exception(f"[DispatchStart] Failed for trip {trip_id}")
             return Response({"success": False, "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-
 class DispatchCompleteAPIView(APIView):
     """
     PATCH /api/dispatch/{id}/complete
-    Driver completes the trip.
+    Driver or passenger completes the trip.
     """
-    permission_classes = [IsAuthenticated, IsDriver]
+    permission_classes = [IsAuthenticated]
 
     def patch(self, request, trip_id):
-        _log_request("DispatchComplete", request, extra=f"trip_id={trip_id}")
         try:
             trip = DispatchService.complete_trip(trip_id, request.user)
             resp = Response({
@@ -877,12 +793,10 @@ class DispatchCompleteAPIView(APIView):
                 "message": "Trip completed",
                 "data": ActiveTripSerializer(trip).data
             })
-            _log_response("DispatchComplete", resp)
             return resp
         except Exception as e:
             logger.exception(f"[DispatchComplete] Failed for trip {trip_id}")
             return Response({"success": False, "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 
 class TripNextStopsAPIView(APIView):
     permission_classes = [
@@ -894,7 +808,6 @@ class TripNextStopsAPIView(APIView):
         request,
         trip_id,
     ):
-        _log_request("TripNextStops", request, extra=f"trip_id={trip_id}")
         trip = TripSelector.get_trip(
             trip_id
         )
@@ -918,9 +831,7 @@ class TripNextStopsAPIView(APIView):
                 many=True,
             ).data
         )
-        _log_response("TripNextStops", resp)
         return resp
-
 
 class TripBoardingRequestListAPIView(APIView):
     permission_classes = [
@@ -933,7 +844,6 @@ class TripBoardingRequestListAPIView(APIView):
         request,
         trip_id,
     ):
-        _log_request("TripBoardingRequestList", request, extra=f"trip_id={trip_id}")
         trip = TripSelector.get_trip(
             trip_id
         )
@@ -954,9 +864,7 @@ class TripBoardingRequestListAPIView(APIView):
                 many=True,
             ).data
         )
-        _log_response("TripBoardingRequestList", resp)
         return resp
-
 
 class BoardingRequestListAPIView(APIView):
     permission_classes = [
@@ -965,7 +873,6 @@ class BoardingRequestListAPIView(APIView):
     ]
 
     def get(self, request):
-        _log_request("BoardingRequestList(GET)", request)
         requests = (
             BoardingSelector
             .list_passenger_requests(
@@ -979,11 +886,9 @@ class BoardingRequestListAPIView(APIView):
         )
 
         resp = Response(serializer.data)
-        _log_response("BoardingRequestList(GET)", resp)
         return resp
 
     def post(self, request):
-        _log_request("BoardingRequestList(POST)", request)
         serializer = (
             BoardingRequestCreateSerializer(
                 data=request.data
@@ -1019,9 +924,7 @@ class BoardingRequestListAPIView(APIView):
             ).data,
             status=status.HTTP_201_CREATED,
         )
-        _log_response("BoardingRequestList(POST)", resp)
         return resp
-
 
 class BoardingRequestDetailAPIView(APIView):
     permission_classes = [
@@ -1033,7 +936,6 @@ class BoardingRequestDetailAPIView(APIView):
         request,
         request_id,
     ):
-        _log_request("BoardingRequestDetail(GET)", request, extra=f"request_id={request_id}")
         boarding_request = (
             BoardingSelector
             .get_request(request_id)
@@ -1048,7 +950,6 @@ class BoardingRequestDetailAPIView(APIView):
                 boarding_request
             ).data
         )
-        _log_response("BoardingRequestDetail(GET)", resp)
         return resp
 
     def delete(
@@ -1056,7 +957,6 @@ class BoardingRequestDetailAPIView(APIView):
         request,
         request_id,
     ):
-        _log_request("BoardingRequestDetail(DELETE)", request, extra=f"request_id={request_id}")
         boarding_request = (
             BoardingSelector
             .get_request(request_id)
@@ -1080,7 +980,6 @@ class BoardingRequestDetailAPIView(APIView):
                 boarding_request
             ).data
         )
-        _log_response("BoardingRequestDetail(DELETE)", resp)
         return resp
 
     def _check_access(
@@ -1102,7 +1001,6 @@ class BoardingRequestDetailAPIView(APIView):
             "to this request."
         )
 
-
 class BoardingRequestBoardedAPIView(APIView):
     permission_classes = [
         IsAuthenticated,
@@ -1114,7 +1012,6 @@ class BoardingRequestBoardedAPIView(APIView):
         request,
         request_id,
     ):
-        _log_request("BoardingRequestBoarded", request, extra=f"request_id={request_id}")
         boarding_request = (
             BoardingSelector
             .get_request(request_id)
@@ -1136,7 +1033,6 @@ class BoardingRequestBoardedAPIView(APIView):
                 boarding_request
             ).data
         )
-        _log_response("BoardingRequestBoarded", resp)
         return resp
 
 class TripRatingAPIView(APIView):
@@ -1147,7 +1043,6 @@ class TripRatingAPIView(APIView):
     permission_classes = [IsAuthenticated, IsPassenger]
 
     def post(self, request):
-        _log_request("TripRating", request)
         serializer = TripRatingSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -1159,12 +1054,10 @@ class TripRatingAPIView(APIView):
                 review=serializer.validated_data.get("review", "")
             )
             resp = Response(TripRatingSerializer(rating).data, status=status.HTTP_201_CREATED)
-            _log_response("TripRating", resp)
             return resp
         except Exception as e:
             logger.exception("[TripRating] Rating failed")
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 
 class TripHistoryAPIView(APIView):
     """
@@ -1174,7 +1067,6 @@ class TripHistoryAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        _log_request("TripHistory", request)
         from django.db.models import Q
         
         user = request.user
@@ -1199,9 +1091,7 @@ class TripHistoryAPIView(APIView):
             "count": trips.count(),
             "results": serializer.data
         })
-        _log_response("TripHistory", resp)
         return resp
-
 
 class DriverEarningsAPIView(APIView):
     """
@@ -1211,7 +1101,6 @@ class DriverEarningsAPIView(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
 
     def get(self, request):
-        _log_request("DriverEarnings", request)
         from datetime import timedelta
         from django.utils import timezone
         from operations.services.ride_service import RideService
@@ -1271,5 +1160,116 @@ class DriverEarningsAPIView(APIView):
             "period": period,
             "trips": trip_list,
         })
-        _log_response("DriverEarnings", resp)
         return resp
+
+class BroadcastAcceptAPIView(APIView):
+    """
+    POST /api/operations/dispatch/broadcast/<request_id>/accept/
+    Driver accepts a broadcast dispatch request.
+    First driver to accept wins; others get dismissed via WS.
+    """
+    permission_classes = [IsAuthenticated, IsDriver]
+
+    def post(self, request, request_id):
+        try:
+            result = DispatchService.accept_broadcast_request(str(request_id), request.user)
+            status_code = status.HTTP_200_OK if result["status"] == "accepted" else status.HTTP_202_ACCEPTED
+            resp = Response(result, status=status_code)
+            return resp
+        except DispatchRequest.DoesNotExist:
+            return Response(
+                {"status": "not_found", "message": "Dispatch request not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            logger.exception(f"[BroadcastAccept] Failed for request {request_id}")
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class BroadcastRejectAPIView(APIView):
+    """
+    POST /api/operations/dispatch/broadcast/<request_id>/reject/
+    Driver dismisses a broadcast dispatch request (skip).
+    """
+    permission_classes = [IsAuthenticated, IsDriver]
+
+    def post(self, request, request_id):
+        try:
+            result = DispatchService.dismiss_broadcast_request(str(request_id), request.user)
+            resp = Response(result)
+            return resp
+        except Exception as e:
+            logger.exception(f"[BroadcastReject] Failed for request {request_id}")
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class BroadcastCancelAPIView(APIView):
+    """
+    POST /api/operations/dispatch/broadcast/<request_id>/cancel/
+    Passenger cancels their broadcast dispatch request.
+    """
+    permission_classes = [IsAuthenticated, IsPassenger]
+
+    def post(self, request, request_id):
+        try:
+            result = DispatchService.cancel_broadcast_request(str(request_id), request.user)
+            resp = Response(result)
+            return resp
+        except DispatchRequest.DoesNotExist:
+            return Response(
+                {"status": "not_found", "message": "Dispatch request not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            logger.exception(f"[BroadcastCancel] Failed for request {request_id}")
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TripFareDetailAPIView(APIView):
+    """
+    GET /api/ride/trip/<trip_id>/fare/
+    Returns fare breakdown for a completed/active trip.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, trip_id):
+        from operations.services.ride_service import RideService
+
+        try:
+            trip = ActiveTrip.objects.get(id=trip_id)
+        except ActiveTrip.DoesNotExist:
+            return Response({"detail": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # If trip has stored fare, use it
+        if trip.total_fare is not None:
+            return Response({
+                "success": True,
+                "data": {
+                    "distance_km": round(trip.total_distance_m / 1000, 2) if trip.total_distance_m else 0,
+                    "duration_min": round(trip.total_duration_s / 60, 1) if trip.total_duration_s else 0,
+                    "total_fare": float(trip.total_fare),
+                }
+            })
+
+        # Otherwise calculate from route or estimate
+        route = trip.route
+        if route and route.total_distance_meters:
+            dist_km = route.total_distance_meters / 1000
+            dur_min = (dist_km / 25) * 60
+            vehicle_type = trip.vehicle.vehicle_type if trip.vehicle else "bike"
+            base_fare = 20 if vehicle_type == "bike" else 30
+            per_km = 5 if vehicle_type == "bike" else 10
+            total_fare = base_fare + (dist_km * per_km)
+            return Response({
+                "success": True,
+                "data": {
+                    "distance_km": round(dist_km, 2),
+                    "duration_min": round(dur_min, 1),
+                    "base_fare": base_fare,
+                    "per_km_charge": per_km,
+                    "total_fare": round(total_fare, 2),
+                }
+            })
+
+        return Response(
+            {"success": False, "message": "Fare data not available"},
+            status=status.HTTP_404_NOT_FOUND,
+        )

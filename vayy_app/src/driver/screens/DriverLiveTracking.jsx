@@ -1,13 +1,12 @@
 import * as Location from "expo-location";
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-// import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import VehicleIconBadge from "../../shared/components/common/VehicleIconBadge";
 import LiveDot from "../../shared/components/common/LiveDot";
 import VayyButton from "../../shared/components/common/VayyButton";
-import api from "../../shared/lib/api";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
@@ -15,6 +14,7 @@ import RADIUS from "../../shared/constants/radius";
 import SHADOW from "../../shared/constants/shadow";
 import SPACING from "../../shared/constants/spacing";
 import ZoomControls from "../../shared/components/common/ZoomControls";
+import { getNextStops } from "../services/driverService";
 import { buildRouteSummary } from "../utils/driverFlowUtils";
 
 const toCoord = (point) => {
@@ -92,9 +92,9 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
 
     const poll = async () => {
       try {
-        const res = await api.get(`/api/operations/trips/${tripId}/next-stops/`);
-        const data = Array.isArray(res.data) ? res.data : res.data?.results || res.data?.stops || [];
-        setNextStops(data);
+        const data = await getNextStops(tripId);
+        const stops = Array.isArray(data) ? data : data?.results || data?.stops || [];
+        setNextStops(stops);
       } catch {
         setNextStops([]);
       }
@@ -162,7 +162,7 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
 
   return (
     <View style={styles.root}>
-      {/* <VayyMap
+      <VayyMap
         ref={mapRef}
         initialRegion={{ ...initial, latitudeDelta: 0.08, longitudeDelta: 0.08 }}
         style={styles.map}
@@ -190,14 +190,12 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
             />
           </GeoJSONSource>
         ) : null}
-        {vehicleCoord ? (
-          <ViewAnnotation id="vehicle-marker" lngLat={[vehicleCoord.longitude, vehicleCoord.latitude]} anchor="center">
-            <View style={styles.vehicleMarker}>
-              <LiveDot size={13} />
-              <VehicleIconBadge size={38} vehicleType={activeTrip?.vehicle_type || "auto"} />
-            </View>
-          </ViewAnnotation>
-        ) : null}
+        <ViewAnnotation id="vehicle-marker" lngLat={vehicleCoord ? [vehicleCoord.longitude, vehicleCoord.latitude] : [0, 0]} anchor="center">
+          <View style={[styles.vehicleMarker, { opacity: vehicleCoord ? 1 : 0 }]}>
+            <LiveDot size={13} />
+            <VehicleIconBadge size={38} vehicleType={activeTrip?.vehicle_type || "auto"} />
+          </View>
+        </ViewAnnotation>
         {passengerList.map((passenger) => {
           const coord = toCoord(passenger);
           if (!coord) return null;
@@ -212,7 +210,7 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
             </ViewAnnotation>
           );
         })}
-      </VayyMap> */}
+      </VayyMap>
 
       <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
         <View style={styles.headerCard}>
@@ -257,7 +255,7 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
         <VayyButton fullWidth label="Call Control Room" onPress={() => {}} variant="outline" />
         <VayyButton fullWidth label="Report Issue" onPress={() => {}} variant="outline" />
 
-        <VayyButton fullWidth label="End Trip" onPress={() => navigation.navigate("DriverModeSelect")} variant="primary" />
+        <VayyButton fullWidth label="End Trip" onPress={() => navigation.navigate("DriverTabs", { screen: "DriverModeSelect" })} variant="primary" />
       </View>
 
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />

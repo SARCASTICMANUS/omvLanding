@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,29 +8,99 @@ import {
   StatusBar,
   Platform,
 } from "react-native";
-// import VayyMap from "../../shared/components/VayyMap";
+import VayyMap from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { useDispatch } from "react-redux";
+import { completeDispatch } from "../../store/slices/dispatchSlice";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import { WS } from "../../constants";
 
 const { width } = Dimensions.get("window");
+const DESTINATION_THRESHOLD = 100;
 
-export function AutoRideActiveScreen({ navigation }) {
+function haversine(a, b) {
+  const R = 6371e3;
+  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
+  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos((a.latitude * Math.PI) / 180) * Math.cos((b.latitude * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+export function AutoRideActiveScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const dispatchRedux = useDispatch();
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
-  const [remainingDistance] = useState(2400);
-  const [remainingEta] = useState(12);
-  const [speed] = useState(24);
+  const [speed, setSpeed] = useState(null);
+  const [remainingDistance, setRemainingDistance] = useState(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showEarlyEnd, setShowEarlyEnd] = useState(false);
-  const atDestination = remainingDistance <= 100;
+  const [endRideLoading, setEndRideLoading] = useState(false);
+
+  const destinationRaw = route?.params?.destination || "Destination";
+  const destination = typeof destinationRaw === "string" ? destinationRaw : destinationRaw?.name || destinationRaw?.display_name || "Destination";
+  const dispatchId = route?.params?.dispatchId || "";
+  const fare = route?.params?.fare || "—";
+  const distanceLeft = route?.params?.distance || "—";
+  const eta = route?.params?.eta || "—";
+  const driverName = route?.params?.driverName || "Auto Driver";
+  const vehicle = route?.params?.vehicle || "";
+  const tripData = route?.params?.tripData || {};
+  const route_id = route?.params?.route_id || "";
+
+  const atDestination = remainingDistance != null && remainingDistance <= DESTINATION_THRESHOLD;
+  const progress = remainingDistance != null && distanceLeft !== "—"
+    ? Math.max(0, Math.min(100, ((Number(distanceLeft) - remainingDistance) / Number(distanceLeft)) * 100))
+    : 0;
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
 
+  const handleWsMessage = useCallback((data) => {
+    if (data?.type === "trip_completed") {
+      navigation.navigate("AutoRideComplete", {
+        tripId: data.trip_id || dispatchId,
+        boardedAt: "",
+        droppedAt: "",
+        distance: distanceLeft,
+        duration: eta,
+        fare,
+        paymentMethod: "Cash",
+        route_id,
+      });
+    }
+  }, [dispatchId, distanceLeft, eta, fare, route_id, navigation]);
+
+  useWebSocket(dispatchId ? WS.dispatch(dispatchId) : null, {
+    onMessage: handleWsMessage,
+  });
+
+  useEffect(() => {
+    let removed = false;
+    let sub = null;
+    import("../../shared/lib/locationService").then(({ default: locationService }) => {
+      if (removed) return;
+      let prevPos = null;
+      locationService.startTracking((coords) => {
+        if (removed) return;
+        const pos = { latitude: coords.latitude, longitude: coords.longitude };
+        if (prevPos) {
+          const dist = haversine(prevPos, pos);
+          setRemainingDistance((d) => d != null ? Math.max(0, d - dist) : null);
+          setSpeed(coords.speed != null ? Math.round(coords.speed * 3.6) : null);
+        } else if (distanceLeft !== "—") {
+          setRemainingDistance(Number(distanceLeft) || null);
+        }
+        prevPos = pos;
+      }, { distanceInterval: 10, timeInterval: 3000 }).then((s) => { sub = s; });
+    });
+    return () => { removed = true; if (sub?.remove) sub.remove(); };
+  }, []);
+
   const handleEndRide = () => {
-    if (remainingDistance <= 100) {
+    if (atDestination) {
       setShowEndConfirm(true);
     } else {
       setShowEarlyEnd(true);
@@ -39,22 +109,46 @@ export function AutoRideActiveScreen({ navigation }) {
 
   const confirmEndRide = () => {
     setShowEndConfirm(false);
-    navigation.replace('AutoRideComplete');
+    setEndRideLoading(true);
+    const tripId = tripData.trip_id || dispatchId;
+    (async () => {
+      try {
+        await dispatchRedux(completeDispatch(tripId)).unwrap();
+      } catch (e) {
+        console.warn("completeDispatch auto passenger end ride failed:", e);
+      }
+    })();
+    navigation.replace('AutoRideComplete', {
+      tripId,
+      boardedAt: "",
+      droppedAt: "",
+      distance: distanceLeft,
+      duration: eta,
+      fare,
+      paymentMethod: "Cash",
+      route_id,
+    });
   };
 
   const confirmEarlyEnd = () => {
     setShowEarlyEnd(false);
-    navigation.replace('AutoRideComplete');
+    confirmEndRide();
   };
 
-  const progress = Math.max(0, Math.min(100, ((10000 - remainingDistance) / 10000) * 100));
+  const destinationLabel = remainingDistance != null
+    ? remainingDistance >= 1000
+      ? `${(remainingDistance / 1000).toFixed(1)} km`
+      : `${remainingDistance} m`
+    : "—";
+
+  const etaMinutes = remainingDistance != null ? Math.max(1, Math.round(remainingDistance / 200)) : null;
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <View style={styles.mapArea}>
-        {/* <VayyMap
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
@@ -67,7 +161,7 @@ export function AutoRideActiveScreen({ navigation }) {
           scrollEnabled={true}
           zoomEnabled={true}
           zoomControlEnabled={true}
-        /> */}
+        />
 
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
@@ -93,7 +187,7 @@ export function AutoRideActiveScreen({ navigation }) {
 
         <View style={styles.destLabel}>
           <Ionicons name="location" size={16} color="#009849" />
-          <Text style={styles.destLabelText}>Charbagh Metro Gate 2</Text>
+          <Text style={styles.destLabelText}>{destination}</Text>
         </View>
       </View>
 
@@ -113,19 +207,19 @@ export function AutoRideActiveScreen({ navigation }) {
         <View style={styles.statsRow}>
           <View style={styles.statCol}>
             <Ionicons name="speedometer" size={20} color="#009849" />
-            <Text style={styles.statValue}>{speed}</Text>
+            <Text style={styles.statValue}>{speed ?? "—"}</Text>
             <Text style={styles.statLabel}>km/h</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statCol}>
             <Ionicons name="location" size={20} color="#009849" />
-            <Text style={styles.statValue}>{(remainingDistance / 1000).toFixed(1)}</Text>
-            <Text style={styles.statLabel}>km left</Text>
+            <Text style={styles.statValue}>{destinationLabel}</Text>
+            <Text style={styles.statLabel}>left</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statCol}>
             <Ionicons name="time-outline" size={20} color="#009849" />
-            <Text style={styles.statValue}>{remainingEta}</Text>
+            <Text style={styles.statValue}>{etaMinutes ?? "—"}</Text>
             <Text style={styles.statLabel}>min left</Text>
           </View>
         </View>
@@ -133,7 +227,7 @@ export function AutoRideActiveScreen({ navigation }) {
         <View style={styles.nextStopCard}>
           <Ionicons name="flag" size={16} color="#009849" />
           <Text style={styles.nextStopText}>
-            Next stop: <Text style={styles.nextStopBold}>Hazratganj Metro Gate 2</Text>
+            Destination: <Text style={styles.nextStopBold}>{destination}</Text>
           </Text>
         </View>
 
@@ -179,7 +273,7 @@ export function AutoRideActiveScreen({ navigation }) {
             </View>
             <Text style={styles.modalTitle}>You Have Not Reached Your Destination</Text>
             <Text style={styles.modalMessage}>
-              You are still {(remainingDistance / 1000).toFixed(1)} km away from your selected destination.{'\n\n'}
+              You are still {destinationLabel} away from your selected destination.{'\n\n'}
               Are you sure you want to end this ride?
             </Text>
             <View style={styles.modalActions}>

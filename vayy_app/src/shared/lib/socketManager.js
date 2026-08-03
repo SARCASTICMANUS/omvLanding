@@ -1,115 +1,235 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppState } from "react-native";
 import { getWsUrl } from "./wsUrl";
-import { STORAGE_KEYS, WS, WS_MAX_RECONNECT } from "../../constants";
+import { STORAGE_KEYS, WS_MAX_RECONNECT } from "../../constants";
+
+const IDLE_TTL = 60000;
+
+let _idCounter = 0;
 
 class SocketManager {
   constructor() {
-    this.socket = null;
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = WS_MAX_RECONNECT;
-    this.listeners = new Map();
-    this.isConnected = false;
+    this.connections = new Map();
+    this.keepAlivePaths = new Set();
+    this.idleTimers = new Map();
+    AppState.addEventListener("change", (state) => {
+      if (state === "background") this._pauseAll();
+      if (state === "active") this._resumeAll();
+    });
   }
 
-  async connect(path = WS.cityPublic) {
-    if (this.socket) {
-      this.socket.close();
+  keepAlive(path) {
+    if (!path) return;
+    this.keepAlivePaths.add(path);
+    const entry = this.connections.get(path);
+    if (entry && entry.state === "disconnected" && entry.subscribers.size > 0) {
+      this._connect(path);
+    }
+  }
+
+  releaseKeepAlive(path) {
+    if (!path) return;
+    this.keepAlivePaths.delete(path);
+    const entry = this.connections.get(path);
+    if (entry && entry.subscribers.size === 0) {
+      this._startIdleTimer(path);
+    }
+  }
+
+  subscribe(path, { onMessage, onStateChange } = {}) {
+    if (!path) return () => {};
+
+    const id = ++_idCounter;
+    const isNew = !this.connections.has(path);
+
+    if (isNew) {
+      this.connections.set(path, {
+        socket: null,
+        state: "disconnected",
+        subscribers: new Map(),
+        reconnectAttempts: 0,
+        reconnectTimer: null,
+        paused: false,
+      });
     }
 
-    const token = await AsyncStorage.getItem(STORAGE_KEYS.accessToken) || await AsyncStorage.getItem(STORAGE_KEYS.token);
+    const entry = this.connections.get(path);
+
+    if (this.idleTimers.has(path)) {
+      clearTimeout(this.idleTimers.get(path));
+      this.idleTimers.delete(path);
+    }
+
+    entry.subscribers.set(id, { onMessage, onStateChange });
+
+    if (isNew || (entry.state === "disconnected" && !entry.paused)) {
+      this._connect(path);
+    }
+
+    if (onStateChange) {
+      try { onStateChange(entry.state); } catch {}
+    }
+
+    return () => {
+      this._unsubscribe(path, id);
+    };
+  }
+
+  send(path, type, payload = {}) {
+    const entry = this.connections.get(path);
+    if (!entry || !entry.socket) return;
+    if (entry.socket.readyState !== WebSocket.OPEN) return;
+    try {
+      entry.socket.send(JSON.stringify({ type, ...payload, timestamp: Date.now() }));
+    } catch (err) {
+      console.error("[SocketManager] Send failed:", err);
+    }
+  }
+
+  disconnect(path) {
+    const entry = this.connections.get(path);
+    if (!entry) return;
+    this.keepAlivePaths.delete(path);
+    if (this.idleTimers.has(path)) {
+      clearTimeout(this.idleTimers.get(path));
+      this.idleTimers.delete(path);
+    }
+    entry.reconnectAttempts = WS_MAX_RECONNECT;
+    clearTimeout(entry.reconnectTimer);
+    if (entry.socket) {
+      entry.socket.onopen = null;
+      entry.socket.onmessage = null;
+      entry.socket.onerror = null;
+      entry.socket.onclose = null;
+      entry.socket.close();
+      entry.socket = null;
+    }
+    entry.state = "disconnected";
+    this.connections.delete(path);
+  }
+
+  disconnectAll() {
+    for (const path of [...this.connections.keys()]) {
+      this.disconnect(path);
+    }
+  }
+
+  _connect(path) {
+    const entry = this.connections.get(path);
+    if (!entry || entry.subscribers.size === 0) return;
+
+    if (entry.socket && (entry.socket.readyState === WebSocket.OPEN || entry.socket.readyState === WebSocket.CONNECTING)) return;
+
+    this._connectInternal(path);
+  }
+
+  async _connectInternal(path) {
+    const entry = this.connections.get(path);
+    if (!entry || entry.subscribers.size === 0) return;
+
+    const token =
+      (await AsyncStorage.getItem(STORAGE_KEYS.accessToken)) ||
+      (await AsyncStorage.getItem(STORAGE_KEYS.token));
     const url = getWsUrl(path) + (token ? `?token=${token}` : "");
 
-    console.log("[SocketManager] Connecting to:", url);
+    entry.paused = false;
+    this._setState(path, "connecting");
 
-    this.socket = new WebSocket(url);
+    const ws = new WebSocket(url);
+    entry.socket = ws;
 
-    this.socket.onopen = () => {
-      console.log("[SocketManager] Connected");
-      this.isConnected = true;
-      this.reconnectAttempts = 0;
-      this.emit("connected", null);
+    ws.onopen = () => {
+      if (entry.socket !== ws) return;
+      entry.reconnectAttempts = 0;
+      this._setState(path, "connected");
     };
 
-    this.socket.onmessage = (event) => {
+    ws.onmessage = (event) => {
+      if (entry.socket !== ws) return;
       try {
         if (!event.data) return;
         const data = JSON.parse(event.data);
-        
-        if (__DEV__) console.log("[SocketManager] Message:", data.type || "unknown");
-        
-        // Basic validation: ensure type exists
-        if (!data.type) {
-          console.warn("[SocketManager] Received message without type:", data);
-          return;
+        for (const { onMessage } of entry.subscribers.values()) {
+          try { onMessage(data); } catch (err) {
+            console.error("[SocketManager] Subscriber error:", err);
+          }
         }
-
-        this.emit(data.type, data);
-        this.emit("message", data); // Global listener
       } catch (err) {
-        console.error("[SocketManager] Malformed WebSocket payload:", err, event.data);
+        console.error("[SocketManager] Malformed payload:", err);
       }
     };
 
-    this.socket.onerror = (error) => {
-      if (__DEV__) console.error("[SocketManager] WebSocket Error:", error);
-      this.emit("error", error);
-    };
+    ws.onerror = () => {};
 
-    this.socket.onclose = (event) => {
-      this.isConnected = false;
-      if (__DEV__) console.log("[SocketManager] Disconnected", event.code, event.reason);
-      this.emit("disconnected", { code: event.code, reason: event.reason });
-      this.emit("state_change", "disconnected");
+    ws.onclose = (event) => {
+      if (entry.socket !== ws) return;
+      entry.socket = null;
+      this._setState(path, "disconnected");
 
-      // Exponential backoff for reconnection
-      if (this.reconnectAttempts < this.maxReconnectAttempts) {
-        this.reconnectAttempts++;
-        const timeout = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-        this.emit("state_change", "reconnecting");
-        setTimeout(() => this.connect(path), timeout);
-      } else {
-        this.emit("state_change", "failed");
+      if (entry.paused) return;
+
+      if (entry.reconnectAttempts < WS_MAX_RECONNECT && entry.subscribers.size > 0) {
+        entry.reconnectAttempts++;
+        const delay = Math.min(1000 * Math.pow(2, entry.reconnectAttempts), 30000);
+        this._setState(path, "reconnecting");
+        entry.reconnectTimer = setTimeout(() => {
+          entry.reconnectTimer = null;
+          this._connectInternal(path);
+        }, delay);
+      } else if (entry.subscribers.size > 0) {
+        this._setState(path, "failed");
       }
     };
   }
 
-  send(type, payload) {
-    if (this.isConnected && this.socket && this.socket.readyState === WebSocket.OPEN) {
-      try {
-        const message = JSON.stringify({ type, ...payload, timestamp: Date.now() });
-        this.socket.send(message);
-      } catch (err) {
-        console.error("[SocketManager] Failed to send message:", err);
+  _unsubscribe(path, id) {
+    const entry = this.connections.get(path);
+    if (!entry) return;
+    entry.subscribers.delete(id);
+
+    if (entry.subscribers.size === 0 && !this.keepAlivePaths.has(path)) {
+      this._startIdleTimer(path);
+    }
+  }
+
+  _startIdleTimer(path) {
+    if (this.idleTimers.has(path)) return;
+    this.idleTimers.set(path, setTimeout(() => {
+      this.idleTimers.delete(path);
+      this.disconnect(path);
+    }, IDLE_TTL));
+  }
+
+  _setState(path, state) {
+    const entry = this.connections.get(path);
+    if (!entry) return;
+    entry.state = state;
+    for (const { onStateChange } of entry.subscribers.values()) {
+      try { onStateChange(state); } catch {}
+    }
+  }
+
+  _pauseAll() {
+    for (const [path, entry] of this.connections) {
+      if (entry.socket) {
+        entry.paused = true;
+        entry.socket.onopen = null;
+        entry.socket.onmessage = null;
+        entry.socket.onerror = null;
+        entry.socket.onclose = null;
+        entry.socket.close();
+        entry.socket = null;
       }
-    } else {
-      if (__DEV__) console.warn("[SocketManager] Socket not ready. Message queued or dropped.");
+      entry.state = "disconnected";
     }
   }
 
-  on(event, callback) {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, []);
-    }
-    this.listeners.get(event).push(callback);
-    return () => this.off(event, callback);
-  }
-
-  off(event, callback) {
-    if (!this.listeners.has(event)) return;
-    const callbacks = this.listeners.get(event).filter((cb) => cb !== callback);
-    this.listeners.set(event, callbacks);
-  }
-
-  emit(event, data) {
-    if (this.listeners.has(event)) {
-      this.listeners.get(event).forEach((cb) => cb(data));
-    }
-  }
-
-  disconnect() {
-    this.reconnectAttempts = this.maxReconnectAttempts; // Prevent auto-reconnect
-    if (this.socket) {
-      this.socket.close();
+  _resumeAll() {
+    for (const [path, entry] of this.connections) {
+      entry.paused = false;
+      if (entry.subscribers.size > 0) {
+        this._connectInternal(path);
+      }
     }
   }
 }

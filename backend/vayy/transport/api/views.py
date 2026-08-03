@@ -30,33 +30,6 @@ from transport.services.osrm_service import OSRMService
 
 logger = logging.getLogger(__name__)
 
-
-def _log_request(view_name, request, extra=None):
-    data = {}
-    if hasattr(request, 'data') and request.data:
-        try:
-            data = json.loads(json.dumps(request.data, default=str))
-        except Exception:
-            data = str(request.data)
-    if hasattr(request, 'query_params') and request.query_params:
-        data = dict(request.query_params)
-    logger.info(
-        f"[{view_name}] REQUEST | method={request.method} path={request.path} "
-        f"user={getattr(request.user, 'id', 'anonymous')} data={data} {extra or ''}"
-    )
-
-
-def _log_response(view_name, response, extra=None):
-    resp_data = {}
-    try:
-        resp_data = json.loads(json.dumps(response.data, default=str)) if hasattr(response, 'data') else {}
-    except Exception:
-        resp_data = str(getattr(response, 'data', {}))
-    logger.info(
-        f"[{view_name}] RESPONSE | status={response.status_code} data={resp_data} {extra or ''}"
-    )
-
-
 class CityViewSet(viewsets.ModelViewSet):
     queryset = City.objects.all()
     serializer_class = CitySerializer
@@ -66,29 +39,20 @@ class CityViewSet(viewsets.ModelViewSet):
         return CitySelector.list_cities()
 
     def list(self, request, *args, **kwargs):
-        _log_request("CityViewSet(list)", request)
         resp = super().list(request, *args, **kwargs)
-        _log_response("CityViewSet(list)", resp)
         return resp
 
     def create(self, request, *args, **kwargs):
-        _log_request("CityViewSet(create)", request)
         resp = super().create(request, *args, **kwargs)
-        _log_response("CityViewSet(create)", resp)
         return resp
 
     def update(self, request, *args, **kwargs):
-        _log_request("CityViewSet(update)", request)
         resp = super().update(request, *args, **kwargs)
-        _log_response("CityViewSet(update)", resp)
         return resp
 
     def destroy(self, request, *args, **kwargs):
-        _log_request("CityViewSet(destroy)", request)
         resp = super().destroy(request, *args, **kwargs)
-        _log_response("CityViewSet(destroy)", resp)
         return resp
-
 
 class RouteViewSet(viewsets.ModelViewSet):
     queryset = Route.objects.all()
@@ -122,41 +86,30 @@ class RouteViewSet(viewsets.ModelViewSet):
         )
 
     def list(self, request, *args, **kwargs):
-        _log_request("RouteViewSet(list)", request)
         resp = super().list(request, *args, **kwargs)
-        _log_response("RouteViewSet(list)", resp)
         return resp
 
     def create(self, request, *args, **kwargs):
-        _log_request("RouteViewSet(create)", request)
         resp = super().create(request, *args, **kwargs)
-        _log_response("RouteViewSet(create)", resp)
         return resp
 
     def update(self, request, *args, **kwargs):
-        _log_request("RouteViewSet(update)", request)
         resp = super().update(request, *args, **kwargs)
-        _log_response("RouteViewSet(update)", resp)
         return resp
 
     def destroy(self, request, *args, **kwargs):
-        _log_request("RouteViewSet(destroy)", request)
         resp = super().destroy(request, *args, **kwargs)
-        _log_response("RouteViewSet(destroy)", resp)
         return resp
 
     @action(detail=True, methods=['post'])
     def recalculate_distance(self, request, pk=None):
-        _log_request("RouteViewSet(recalculate_distance)", request, extra=f"pk={pk}")
         route = self.get_object()
         distance = RouteService.recalculate_route_distance(route.id)
         resp = Response({
             "success": True,
             "total_distance_meters": distance
         })
-        _log_response("RouteViewSet(recalculate_distance)", resp)
         return resp
-
 
 class StopViewSet(viewsets.ModelViewSet):
     queryset = Stop.objects.all()
@@ -164,29 +117,20 @@ class StopViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def list(self, request, *args, **kwargs):
-        _log_request("StopViewSet(list)", request)
         resp = super().list(request, *args, **kwargs)
-        _log_response("StopViewSet(list)", resp)
         return resp
 
     def create(self, request, *args, **kwargs):
-        _log_request("StopViewSet(create)", request)
         resp = super().create(request, *args, **kwargs)
-        _log_response("StopViewSet(create)", resp)
         return resp
 
     def update(self, request, *args, **kwargs):
-        _log_request("StopViewSet(update)", request)
         resp = super().update(request, *args, **kwargs)
-        _log_response("StopViewSet(update)", resp)
         return resp
 
     def destroy(self, request, *args, **kwargs):
-        _log_request("StopViewSet(destroy)", request)
         resp = super().destroy(request, *args, **kwargs)
-        _log_response("StopViewSet(destroy)", resp)
         return resp
-
 
 class TripScheduleViewSet(viewsets.ModelViewSet):
     queryset = TripSchedule.objects.all()
@@ -194,29 +138,20 @@ class TripScheduleViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def list(self, request, *args, **kwargs):
-        _log_request("TripScheduleViewSet(list)", request)
         resp = super().list(request, *args, **kwargs)
-        _log_response("TripScheduleViewSet(list)", resp)
         return resp
 
     def create(self, request, *args, **kwargs):
-        _log_request("TripScheduleViewSet(create)", request)
         resp = super().create(request, *args, **kwargs)
-        _log_response("TripScheduleViewSet(create)", resp)
         return resp
 
     def update(self, request, *args, **kwargs):
-        _log_request("TripScheduleViewSet(update)", request)
         resp = super().update(request, *args, **kwargs)
-        _log_response("TripScheduleViewSet(update)", resp)
         return resp
 
     def destroy(self, request, *args, **kwargs):
-        _log_request("TripScheduleViewSet(destroy)", request)
         resp = super().destroy(request, *args, **kwargs)
-        _log_response("TripScheduleViewSet(destroy)", resp)
         return resp
-
 
 class StopTimeViewSet(viewsets.ModelViewSet):
     queryset = StopTime.objects.all()
@@ -224,29 +159,20 @@ class StopTimeViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def list(self, request, *args, **kwargs):
-        _log_request("StopTimeViewSet(list)", request)
         resp = super().list(request, *args, **kwargs)
-        _log_response("StopTimeViewSet(list)", resp)
         return resp
 
     def create(self, request, *args, **kwargs):
-        _log_request("StopTimeViewSet(create)", request)
         resp = super().create(request, *args, **kwargs)
-        _log_response("StopTimeViewSet(create)", resp)
         return resp
 
     def update(self, request, *args, **kwargs):
-        _log_request("StopTimeViewSet(update)", request)
         resp = super().update(request, *args, **kwargs)
-        _log_response("StopTimeViewSet(update)", resp)
         return resp
 
     def destroy(self, request, *args, **kwargs):
-        _log_request("StopTimeViewSet(destroy)", request)
         resp = super().destroy(request, *args, **kwargs)
-        _log_response("StopTimeViewSet(destroy)", resp)
         return resp
-
 
 class RouteScheduleAPIView(APIView):
     """
@@ -256,7 +182,6 @@ class RouteScheduleAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, route_id):
-        _log_request("RouteSchedule", request, extra=f"route_id={route_id}")
         try:
             schedules = TripSchedule.objects.filter(route_id=route_id, is_active=True).prefetch_related('stop_times', 'stop_times__stop')
             
@@ -274,12 +199,10 @@ class RouteScheduleAPIView(APIView):
                 "message": "Route schedule fetched",
                 "data": data
             })
-            _log_response("RouteSchedule", resp)
             return resp
         except Exception as e:
             logger.exception(f"[RouteSchedule] Failed for route {route_id}")
             return Response({"success": False, "message": str(e)}, status=status.HTTP_404_NOT_FOUND)
-
 
 class StopETAAPIView(APIView):
     """
@@ -289,7 +212,6 @@ class StopETAAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, stop_id):
-        _log_request("StopETA", request, extra=f"stop_id={stop_id}")
         try:
             stop = Stop.objects.get(id=stop_id)
             etas = ETAService.get_stop_etas(stop_id)
@@ -299,12 +221,10 @@ class StopETAAPIView(APIView):
                 "message": "Stop ETAs fetched",
                 "data": etas
             })
-            _log_response("StopETA", resp)
             return resp
         except Stop.DoesNotExist:
             logger.warning(f"[StopETA] Stop {stop_id} not found")
             return Response({"success": False, "message": "Stop not found"}, status=status.HTTP_404_NOT_FOUND)
-
 
 class RouteGeometryAPIView(APIView):
     """
@@ -314,7 +234,6 @@ class RouteGeometryAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, route_id):
-        _log_request("RouteGeometry", request, extra=f"route_id={route_id}")
         try:
             route = Route.objects.get(id=route_id)
             stops = route.stops.all().order_by("order")
@@ -339,12 +258,10 @@ class RouteGeometryAPIView(APIView):
                     "stops": stop_markers
                 }
             })
-            _log_response("RouteGeometry", resp)
             return resp
         except Route.DoesNotExist:
             logger.warning(f"[RouteGeometry] Route {route_id} not found")
             return Response({"success": False, "message": "Route not found"}, status=status.HTTP_404_NOT_FOUND)
-
 
 class DynamicRouteUpdateAPIView(APIView):
     """
@@ -354,7 +271,6 @@ class DynamicRouteUpdateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def patch(self, request, route_id):
-        _log_request("DynamicRouteUpdate", request, extra=f"route_id={route_id}")
         try:
             route = Route.objects.get(id=route_id)
             if 'is_public' in request.data:
@@ -366,42 +282,33 @@ class DynamicRouteUpdateAPIView(APIView):
                 "message": "Route updated",
                 "data": RouteDetailSerializer(route).data
             })
-            _log_response("DynamicRouteUpdate", resp)
             return resp
         except Route.DoesNotExist:
             logger.warning(f"[DynamicRouteUpdate] Route {route_id} not found")
             return Response({"success": False, "message": "Route not found"}, status=status.HTTP_404_NOT_FOUND)
 
-
 class CityListAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        _log_request("CityList", request)
         cities = CitySelector.list_cities()
         serializer = CitySerializer(cities, many=True)
         resp = Response(serializer.data, status=status.HTTP_200_OK)
-        _log_response("CityList", resp)
         return resp
-
 
 class CityDetailAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, city_id):
-        _log_request("CityDetail", request, extra=f"city_id={city_id}")
         city = CitySelector.get_city(city_id)
         serializer = CitySerializer(city)
         resp = Response(serializer.data, status=status.HTTP_200_OK)
-        _log_response("CityDetail", resp)
         return resp
-
 
 class RouteListAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        _log_request("RouteList", request)
         city_id = request.query_params.get("city_id")
         search = request.query_params.get("search")
 
@@ -414,39 +321,30 @@ class RouteListAPIView(APIView):
 
         serializer = RouteListSerializer(routes, many=True)
         resp = Response(serializer.data, status=status.HTTP_200_OK)
-        _log_response("RouteList", resp)
         return resp
-
 
 class RouteDetailAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, route_id):
-        _log_request("RouteDetail", request, extra=f"route_id={route_id}")
         route = RouteSelector.get_route(route_id)
         serializer = RouteDetailSerializer(route)
         resp = Response(serializer.data, status=status.HTTP_200_OK)
-        _log_response("RouteDetail", resp)
         return resp
-
 
 class RouteByRouteCodeAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, route_code):
-        _log_request("RouteByRouteCode", request, extra=f"route_code={route_code}")
         route = RouteSelector.get_route_by_route_code(route_code)
         serializer = RouteDetailSerializer(route)
         resp = Response(serializer.data, status=status.HTTP_200_OK)
-        _log_response("RouteByRouteCode", resp)
         return resp
-
 
 class NearbyStopListAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        _log_request("NearbyStopList", request)
         serializer = NearbyStopQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
 
@@ -468,9 +366,7 @@ class NearbyStopListAPIView(APIView):
             stop.distance_meters = stop.distance.m if stop.distance else None
 
         resp = Response(NearbyStopSerializer(stops, many=True).data, status=status.HTTP_200_OK)
-        _log_response("NearbyStopList", resp)
         return resp
-
 
 class NearbyStopQuerySerializer(serializers.Serializer):
     lat = serializers.FloatField()
@@ -486,7 +382,6 @@ class NearbyStopQuerySerializer(serializers.Serializer):
         if value < -180 or value > 180:
             raise serializers.ValidationError("Longitude must be between -180 and 180.")
         return value
-
 
 class RouteSearchByLocationSerializer(serializers.Serializer):
     origin_lat = serializers.FloatField()
@@ -515,7 +410,6 @@ class RouteSearchByLocationSerializer(serializers.Serializer):
             raise serializers.ValidationError("dest_lng must be between -180 and 180.")
         return value
 
-
 class RouteSearchByLocationAPIView(APIView):
     """
     GET /api/transport/routes/search-by-location/
@@ -527,7 +421,6 @@ class RouteSearchByLocationAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        _log_request("RouteSearchByLocation", request)
         serializer = RouteSearchByLocationSerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
 
@@ -643,15 +536,12 @@ class RouteSearchByLocationAPIView(APIView):
             "message": f"Found {len(results)} routes",
             "data": results,
         })
-        _log_response("RouteSearchByLocation", resp)
         return resp
-
 
 class RoutePreviewInputSerializer(serializers.Serializer):
     lat = serializers.FloatField()
     lon = serializers.FloatField()
     name = serializers.CharField(required=False, default="")
-
 
 class DriverRouteListAPIView(APIView):
     """
@@ -661,16 +551,13 @@ class DriverRouteListAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        _log_request("DriverRouteList", request)
         routes = DriverRouteSelector.list_driver_routes()
         serializer = DriverRouteSerializer(routes, many=True)
         resp = Response({
             "success": True,
             "data": serializer.data,
         })
-        _log_response("DriverRouteList", resp)
         return resp
-
 
 class RoutePreviewAPIView(APIView):
     """
@@ -680,7 +567,6 @@ class RoutePreviewAPIView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        _log_request("RoutePreview", request)
         try:
             start_data = request.data.get("start")
             end_data = request.data.get("end")
@@ -712,7 +598,6 @@ class RoutePreviewAPIView(APIView):
 
             logger.info(f"[RoutePreview] Generated {len(previews)} route previews for {len(waypoints)} waypoints")
             resp = Response(previews, status=status.HTTP_200_OK)
-            _log_response("RoutePreview", resp)
             return resp
 
         except Exception as e:
@@ -721,7 +606,6 @@ class RoutePreviewAPIView(APIView):
                 {"success": False, "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
 
 class PassengersAlongRouteAPIView(APIView):
     """
@@ -733,7 +617,6 @@ class PassengersAlongRouteAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, route_id):
-        _log_request("PassengersAlongRoute", request, extra=f"route_id={route_id}")
         from transport.models import Route
         from accounts.models import PublicPassengerProfile
         from django.contrib.gis.geos import MultiPoint
@@ -815,5 +698,64 @@ class PassengersAlongRouteAPIView(APIView):
                 "passengers_found": len(results),
             },
         })
-        _log_response("PassengersAlongRoute", resp)
         return resp
+
+
+class RoadDistanceInputSerializer(serializers.Serializer):
+    origin_lat = serializers.FloatField()
+    origin_lng = serializers.FloatField()
+    dest_lat = serializers.FloatField()
+    dest_lng = serializers.FloatField()
+
+
+class RoadDistanceAPIView(APIView):
+    """
+    POST /api/transport/road-distance/
+    Returns road distance (meters) and duration (seconds) between two coordinates via OSRM.
+
+    Request:
+    {
+        "origin_lat": 26.8467,
+        "origin_lng": 80.9462,
+        "dest_lat": 26.8567,
+        "dest_lng": 80.9562
+    }
+
+    Response:
+    {
+        "success": true,
+        "data": {
+            "distance_m": 1234.5,
+            "distance_km": 1.23,
+            "duration_s": 180,
+            "duration_min": 3
+        }
+    }
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = RoadDistanceInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        origin = (serializer.validated_data["origin_lng"], serializer.validated_data["origin_lat"])
+        dest = (serializer.validated_data["dest_lng"], serializer.validated_data["dest_lat"])
+
+        distance_m = OSRMService.get_road_distance_m(origin, dest)
+        duration_s = OSRMService.get_road_duration_s(origin, dest)
+
+        if distance_m is None or duration_s is None:
+            return Response(
+                {"success": False, "message": "OSRM routing failed", "data": None},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response({
+            "success": True,
+            "data": {
+                "distance_m": distance_m,
+                "distance_km": round(distance_m / 1000, 2),
+                "duration_s": duration_s,
+                "duration_min": max(1, round(duration_s / 60)),
+            },
+        })

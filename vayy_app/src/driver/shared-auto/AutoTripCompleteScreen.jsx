@@ -174,7 +174,7 @@ export default function AutoTripCompleteScreen({ navigation, route }) {
           <TouchableOpacity
             activeOpacity={0.7}
             style={styles.secondaryBtn}
-            onPress={() => navigation.popToTop()}
+            onPress={() => navigation.reset({ index: 0, routes: [{ name: "DriverTabs" }] })}
           >
             <Text style={styles.secondaryBtnText}>Back to Home</Text>
           </TouchableOpacity>

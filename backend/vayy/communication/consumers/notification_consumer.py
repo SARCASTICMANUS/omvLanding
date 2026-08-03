@@ -34,7 +34,11 @@ class NotificationConsumer:
             # Route to specific delivery service
             success = False
             if notification.notification_type == "sms":
-                success = SMSService.send(notification.user.phone, notification.message)
+                phone = (
+                    getattr(getattr(notification.user, 'passenger_profile', None), 'phone_number', None)
+                    or getattr(getattr(notification.user, 'driver_profile', None), 'phone_number', '')
+                )
+                success = SMSService.send(phone, notification.message)
             elif notification.notification_type == "email":
                 success = EmailService.send(notification.title, notification.message, notification.user.email)
             elif notification.notification_type == "push":

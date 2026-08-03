@@ -29,34 +29,6 @@ export const submitRating = createAsyncThunk(
   }
 );
 
-export const getRideEstimate = createAsyncThunk(
-  "ride/getEstimate",
-  async ({ pickup_lat, pickup_lng, drop_lat, drop_lng, vehicle_type }, { rejectWithValue }) => {
-    try {
-      const response = await api.post(RIDE.estimate, {
-        pickup_lat, pickup_lng, drop_lat, drop_lng, vehicle_type,
-      });
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data || "Failed to get estimate");
-    }
-  }
-);
-
-export const fetchDriverEarnings = createAsyncThunk(
-  "ride/fetchEarnings",
-  async ({ period } = {}, { rejectWithValue }) => {
-    try {
-      const params = {};
-      if (period) params.period = period;
-      const response = await api.get(RIDE.earnings, { params });
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data || "Failed to fetch earnings");
-    }
-  }
-);
-
 const rideSlice = createSlice({
   name: "ride",
   initialState: {
@@ -65,17 +37,8 @@ const rideSlice = createSlice({
     historyLoading: false,
     historyError: null,
     ratingLoading: false,
-    estimate: null,
-    estimateLoading: false,
-    earnings: null,
-    earningsLoading: false,
-    earningsError: null,
   },
-  reducers: {
-    clearEstimate: (state) => {
-      state.estimate = null;
-    },
-  },
+  reducers: {},
   extraReducers: (builder) => {
     builder
       .addCase(fetchRideHistory.pending, (state) => {
@@ -99,31 +62,8 @@ const rideSlice = createSlice({
       })
       .addCase(submitRating.rejected, (state) => {
         state.ratingLoading = false;
-      })
-      .addCase(getRideEstimate.pending, (state) => {
-        state.estimateLoading = true;
-      })
-      .addCase(getRideEstimate.fulfilled, (state, action) => {
-        state.estimateLoading = false;
-        state.estimate = action.payload.data || action.payload;
-      })
-      .addCase(getRideEstimate.rejected, (state) => {
-        state.estimateLoading = false;
-      })
-      .addCase(fetchDriverEarnings.pending, (state) => {
-        state.earningsLoading = true;
-        state.earningsError = null;
-      })
-      .addCase(fetchDriverEarnings.fulfilled, (state, action) => {
-        state.earningsLoading = false;
-        state.earnings = action.payload.data || action.payload;
-      })
-      .addCase(fetchDriverEarnings.rejected, (state, action) => {
-        state.earningsLoading = false;
-        state.earningsError = action.payload;
       });
   },
 });
 
-export const { clearEstimate } = rideSlice.actions;
 export default rideSlice.reducer;

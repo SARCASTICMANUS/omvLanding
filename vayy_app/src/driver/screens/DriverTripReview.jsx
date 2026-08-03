@@ -11,7 +11,7 @@ import Header from "../../shared/components/navigation/Header";
 import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
 import SPACING from "../../shared/constants/spacing";
-import api from "../../shared/lib/api";
+import { startTrip } from "../services/driverService";
 import { buildRouteSummary, estimateStopTimeline } from "../utils/driverFlowUtils";
 
 export default function DriverTripReview({ navigation, route: navRoute }) {
@@ -27,10 +27,8 @@ export default function DriverTripReview({ navigation, route: navRoute }) {
 
     setStarting(true);
     try {
-      const response = await api.post("/api/operations/trips/start/", {
-        route_id: String(route.id || route.route_id),
-      });
-      navigation.navigate("DriverLiveTracking", { route, activeTrip: response.data });
+      const data = await startTrip(route.id || route.route_id);
+      navigation.navigate("DriverLiveTracking", { route, activeTrip: data });
     } finally {
       setStarting(false);
     }

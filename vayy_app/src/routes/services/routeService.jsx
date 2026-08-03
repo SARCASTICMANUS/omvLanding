@@ -70,6 +70,20 @@ export const searchRoutesByLocation = async (
   }
 };
 
+export const getRoadDistance = async (originLat, originLng, destLat, destLng) => {
+  try {
+    const response = await api.post(TRANSPORT.roadDistance, {
+      origin_lat: originLat,
+      origin_lng: originLng,
+      dest_lat: destLat,
+      dest_lng: destLng,
+    });
+    return response.data?.data || response.data;
+  } catch (error) {
+    throw normalizeApiError(error, "Unable to fetch road distance.");
+  }
+};
+
 export default {
   fetchRouteDetail,
   fetchRouteList,
@@ -77,4 +91,5 @@ export default {
   fetchRouteSchedule,
   previewRoute,
   searchRoutesByLocation,
+  getRoadDistance,
 };

@@ -191,11 +191,21 @@ class LocationService:
             state.current_location = point
             state.last_updated = timezone.now()
 
-            # ── 2. Store HybridLog for persistence ───────────
+            # ── 2. Resolve active trip ───────────────────────
+            active_trip = None
+            if trip_id:
+                try:
+                    active_trip = ActiveTrip.objects.get(id=trip_id, status__in=["accepted", "arrived", "active"])
+                except ActiveTrip.DoesNotExist:
+                    logger.warning(f"ActiveTrip {trip_id} not found")
+
+            if not active_trip:
+                active_trip = ActiveTrip.objects.filter(vehicle=vehicle, status__in=["accepted", "arrived", "active"]).first()
+
+            # ── 3. Store HybridLog for persistence ───────────
             try:
                 from accounts.models import User
                 driver = vehicle.driver if hasattr(vehicle, "driver") and vehicle.driver else None
-                active_trip = ActiveTrip.objects.filter(vehicle=vehicle, status="active").first()
                 HybridLog.objects.create(
                     user=driver,
                     vehicle=vehicle,
@@ -207,17 +217,6 @@ class LocationService:
                 )
             except Exception as e:
                 logger.warning(f"Failed to store HybridLog: {e}")
-
-            # ── 3. Resolve active trip ───────────────────────
-            active_trip = None
-            if trip_id:
-                try:
-                    active_trip = ActiveTrip.objects.get(id=trip_id, status="active")
-                except ActiveTrip.DoesNotExist:
-                    logger.warning(f"ActiveTrip {trip_id} not found")
-
-            if not active_trip:
-                active_trip = ActiveTrip.objects.filter(vehicle=vehicle, status="active").first()
 
             # ── 4. Route-based processing ────────────────────
             next_stop_eta_list = []
@@ -304,6 +303,20 @@ class LocationService:
             except Exception as e:
                 logger.warning(f"Failed to sync to Redis GEO: {e}")
 
+            # ── Compute remaining distance & ETA ─────────────
+            remaining_distance_km = None
+            remaining_duration_min = None
+            if route_stops and dist_along is not None:
+                total_route_m = max(
+                    (s.cumulative_distance_m for s in route_stops if s.cumulative_distance_m),
+                    default=0
+                )
+                remaining_m = max(0, total_route_m - dist_along)
+                remaining_distance_km = round(remaining_m / 1000, 2)
+                if etas:
+                    max_eta_s = max(etas.values())
+                    remaining_duration_min = round(max_eta_s / 60, 1)
+
             # ── 6. Broadcast via WebSocket ───────────────────
             ws_payload = {
                 "type": "vehicle_update",
@@ -316,6 +329,8 @@ class LocationService:
                 "route_id": str(active_trip.route_id) if active_trip else None,
                 "direction": active_trip.direction if active_trip else None,
                 "current_stop_index": state.current_stop_index,
+                "remaining_distance_km": remaining_distance_km,
+                "remaining_duration_min": remaining_duration_min,
                 "next_stop_eta": next_stop_eta_list,
                 "snapped_lat": state.snapped_location.y if state.snapped_location else None,
                 "snapped_lng": state.snapped_location.x if state.snapped_location else None,

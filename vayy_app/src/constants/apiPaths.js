@@ -10,10 +10,13 @@ export const AUTH = {
   passengerProfile: "/api/accounts/me/passenger-profile/",
   wallet: "/api/accounts/wallet/",
   walletAddFunds: "/api/accounts/wallet/add-funds/",
+  pushToken: "/api/accounts/push-token/",
 };
 
 export const OPERATIONS = {
   trips: "/api/operations/trips/",
+  tripDetail: (id) => `/api/operations/trips/${id}/`,
+  tripNextStops: (id) => `/api/operations/trips/${id}/next-stops/`,
   tripsStart: "/api/operations/trips/start/",
   tripsMeActive: "/api/operations/trips/me/active/",
   vehicles: "/api/operations/vehicles/",
@@ -25,6 +28,9 @@ export const OPERATIONS = {
   dispatchArrived: (id) => `/api/operations/dispatch/${id}/arrived/`,
   dispatchStart: (id) => `/api/operations/dispatch/${id}/start/`,
   dispatchCancel: (id) => `/api/operations/dispatch/${id}/cancel/`,
+  broadcastAccept: (requestId) => `/api/operations/dispatch/broadcast/${requestId}/accept/`,
+  broadcastReject: (requestId) => `/api/operations/dispatch/broadcast/${requestId}/reject/`,
+  broadcastCancel: (requestId) => `/api/operations/dispatch/broadcast/${requestId}/cancel/`,
   boardingRequests: "/api/operations/boarding-requests/",
   boardingRequestBoarded: (id) => `/api/operations/boarding-requests/${id}/boarded/`,
 };
@@ -37,6 +43,7 @@ export const TRANSPORT = {
   driverRoutes: "/api/transport/driver/routes/",
   stopsNearby: "/api/transport/stops/nearby/",
   cities: "/api/transport/cities/",
+  roadDistance: "/api/transport/road-distance/",
 };
 
 export const RIDE = {
@@ -44,11 +51,13 @@ export const RIDE = {
   history: "/api/ride/history/",
   rating: "/api/ride/rating/",
   earnings: "/api/ride/earnings/",
+  tripFare: (id) => `/api/ride/trip/${id}/fare/`,
 };
 
 export const TRACKING = {
   ingest: "/api/tracking/ingest/",
   passengerLocation: "/api/tracking/passenger-location/",
+  driverLocation: "/api/tracking/driver-location/",
   nearbyVehicles: "/api/tracking/nearby/",
   activeRouteTrips: (routeId) => `/api/tracking/route/${routeId}/active-trips/`,
 };

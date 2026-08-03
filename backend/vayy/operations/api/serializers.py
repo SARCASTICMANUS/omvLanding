@@ -88,6 +88,9 @@ class ActiveTripSerializer(
         source="rating_record",
         read_only=True
     )
+    otp = serializers.CharField(
+        read_only=True
+    )
 
     class Meta:
         model = ActiveTrip
@@ -108,6 +111,10 @@ class ActiveTripSerializer(
             "started_at",
             "ended_at",
             "last_updated",
+            "otp",
+            "total_distance_m",
+            "total_duration_s",
+            "total_fare",
             "rating",
         )
 

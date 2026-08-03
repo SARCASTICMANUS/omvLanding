@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,16 +8,16 @@ import {
   StatusBar,
   ScrollView,
   Platform,
-  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Ionicons,
   MaterialIcons,
-  MaterialCommunityIcons,
 } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import { submitRating } from "../../store/slices/rideSlice";
+import { RIDE } from "../../constants";
+import api from "../../shared/lib/api";
 
 const { width } = Dimensions.get("window");
 
@@ -25,32 +25,39 @@ export function RideCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const [rating, setRating] = useState(0);
+  const [fareData, setFareData] = useState(null);
   const { ratingLoading } = useSelector((state) => state.ride);
   const tripId = route?.params?.tripId;
   const riderName = route?.params?.riderName || "Driver";
   const vehicleText = route?.params?.vehicleText || "";
   const pickupRaw = route?.params?.pickup || "";
   const pickup = typeof pickupRaw === "string" ? pickupRaw : pickupRaw?.name || pickupRaw?.display_name || "";
-  const dropoff = route?.params?.dropoff || "";
+  const dropoffRaw = route?.params?.dropoff || "";
+  const dropoff = typeof dropoffRaw === "string" ? dropoffRaw : dropoffRaw?.name || dropoffRaw?.display_name || "";
   const distance = route?.params?.distance || "";
   const duration = route?.params?.duration || "";
   const fare = route?.params?.fare || 0;
   const driverRating = route?.params?.driverRating || 0;
   const paymentMethod = route?.params?.paymentMethod || "Cash";
 
+  useEffect(() => {
+    if (!tripId) return;
+    api.get(RIDE.tripFare(tripId)).then((res) => {
+      const d = res.data?.data || res.data;
+      if (d) setFareData(d);
+    }).catch(() => {});
+  }, [tripId]);
+
   const now = new Date();
   const timeStr = `${now.toLocaleDateString("en-IN", { weekday: "short" })}, ${now.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`;
 
-  // ── Fare breakdown calculation ──
   const distNum = typeof distance === "string" ? parseFloat(distance) || 0 : distance || 0;
   const distKm = distNum > 1000 ? parseFloat((distNum / 1000).toFixed(1)) : distNum;
-  const durationMin = typeof duration === "string" ? parseInt(duration) || 5 : duration || 5;
-  const baseFare = 25;
-  const perKmRate = 12;
-  const platformFee = 5;
-  const distanceCharge = Math.round(distKm * perKmRate);
-  const timeCharge = Math.max(0, (durationMin - 3) * 2);
-  const totalFare = baseFare + distanceCharge + timeCharge + platformFee;
+  const durationMin = typeof duration === "string" ? parseInt(duration) || null : duration || null;
+  const totalFare = fareData?.total_fare || fare || "—";
+  const baseFare = fareData?.base_fare ?? Math.round(Number(totalFare) * 0.35);
+  const distanceFare = fareData?.distance_fare ?? (distKm > 0 ? Math.round(Number(distKm) * 5) : 0);
+  const timeFare = fareData?.time_fare ?? (durationMin ? Math.round(Number(durationMin) * 2) : 0);
 
   return (
     <View style={styles.container}>
@@ -142,33 +149,19 @@ export function RideCompleteScreen({ navigation, route }) {
             <Text style={styles.fareLabel}>Base Fare</Text>
             <Text style={styles.fareValue}>₹{baseFare}</Text>
           </View>
-          <View style={styles.fareDivider} />
-
           <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Distance ({distKm} km × ₹{perKmRate}/km)</Text>
-            <Text style={styles.fareValue}>₹{distanceCharge}</Text>
+            <Text style={styles.fareLabel}>Distance ({distKm > 0 ? `${distKm} km × ₹5/km` : "—"})</Text>
+            <Text style={styles.fareValue}>₹{distanceFare}</Text>
           </View>
-          <View style={styles.fareDivider} />
-
-          {timeCharge > 0 && (
-            <>
-              <View style={styles.fareRow}>
-                <Text style={styles.fareLabel}>Time ({durationMin - 3} min × ₹2/min)</Text>
-                <Text style={styles.fareValue}>₹{timeCharge}</Text>
-              </View>
-              <View style={styles.fareDivider} />
-            </>
-          )}
-
           <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Platform Fee</Text>
-            <Text style={styles.fareValue}>₹{platformFee}</Text>
+            <Text style={styles.fareLabel}>Time ({durationMin ? `${durationMin} min × ₹2/min` : "—"})</Text>
+            <Text style={styles.fareValue}>₹{timeFare}</Text>
           </View>
           <View style={styles.fareDivider} />
 
           <View style={styles.fareTotalRow}>
             <Text style={styles.fareTotalLabel}>Total</Text>
-            <Text style={styles.fareTotalValue}>₹{fare || totalFare}</Text>
+            <Text style={styles.fareTotalValue}>₹{totalFare}</Text>
           </View>
         </View>
 
@@ -178,7 +171,7 @@ export function RideCompleteScreen({ navigation, route }) {
               <Ionicons name="wallet" size={16} color="#009849" />
               <Text style={styles.paymentBadgeText}>Paid via {paymentMethod}</Text>
             </View>
-            <Text style={styles.paymentAmount}>₹{fare}</Text>
+            <Text style={styles.paymentAmount}>₹{totalFare}</Text>
           </View>
         </View>
 
@@ -229,7 +222,7 @@ export function RideCompleteScreen({ navigation, route }) {
               if (rating > 0 && tripId) {
                 await dispatch(submitRating({ trip: tripId, rating }));
               }
-              navigation.popToTop();
+              navigation.reset({ index: 0, routes: [{ name: "PassengerTabs" }] });
             }}
           >
             <Text style={styles.secondaryBtnText}>Back to Home</Text>

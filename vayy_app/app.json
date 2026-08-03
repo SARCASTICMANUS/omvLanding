@@ -24,6 +24,7 @@
         "backgroundColor": "#F8FAF9"
       },
       "package": "com.vayy.autos",
+      "usesCleartextTraffic": true,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
@@ -31,12 +32,17 @@
       ]
     },
     "plugins": [
-      "expo-location",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow vayy-autos to access your location even when the app is in the background."
+        }
+      ],
       "expo-notifications",
       "@maplibre/maplibre-react-native"
     ],
     "extra": {
-      "apiUrl": ""
+      "apiUrl": "https://guise-bunt-doorway.ngrok-free.dev"
     }
   }
 }

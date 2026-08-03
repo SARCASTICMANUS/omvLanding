@@ -11,7 +11,7 @@ import {
   Platform,
   ActivityIndicator,
 } from "react-native";
-// import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
+import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
@@ -69,8 +69,6 @@ export function AutoSearchingScreen({ navigation, route }) {
       didFitRef.current = true;
       if (pickupLat != null && pickupLon != null) {
         cameraRef.current.setStop({ center: [pickupLon, pickupLat], zoom: 15, duration: 500 });
-      } else {
-        cameraRef.current.setStop({ center: [80.9462, 26.8467], zoom: 13, duration: 500 });
       }
     };
     tryFit(0);
@@ -220,7 +218,7 @@ export function AutoSearchingScreen({ navigation, route }) {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <View style={styles.mapArea}>
-        {/* <VayyMap
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
@@ -229,7 +227,7 @@ export function AutoSearchingScreen({ navigation, route }) {
           initialViewState={
             pickupLat != null && pickupLon != null
               ? { center: [pickupLon, pickupLat], zoom: 15 }
-              : { center: [80.9462, 26.8467], zoom: 13 }
+              : { center: [80.8, 26.8], zoom: 12 }
           }
         >
           {pickupLat != null && pickupLon != null && (
@@ -239,7 +237,7 @@ export function AutoSearchingScreen({ navigation, route }) {
               </View>
             </ViewAnnotation>
           )}
-        </VayyMap> */}
+        </VayyMap>
 
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
@@ -350,7 +348,7 @@ export function AutoSearchingScreen({ navigation, route }) {
       <NoRideFoundPopup
         visible={showNoRide}
         onTryAgain={handleTryAgain}
-        onCancel={() => navigation.goBack()}
+        onCancel={() => setShowNoRide(false)}
       />
 
       <ConfirmPopup
@@ -361,7 +359,6 @@ export function AutoSearchingScreen({ navigation, route }) {
         icon="checkmark-circle-outline"
         onConfirm={() => {
           setShowBoardConfirm(false);
-          const now = new Date();
           const tripObj = activeTripData || trip || {};
           const tripId = tripObj.trip_id || tripObj.id || "";
           const fare = tripObj.fare || 0;
@@ -369,14 +366,17 @@ export function AutoSearchingScreen({ navigation, route }) {
           const etaSec = tripObj.eta_seconds || 0;
           const distKm = distMeters > 1000 ? `${(distMeters / 1000).toFixed(1)} km` : `${distMeters} m`;
           const durMin = Math.max(1, Math.round(etaSec / 60));
-          navigation.navigate('AutoRideComplete', {
+          navigation.navigate('AutoRideActive', {
             tripId,
-            boardedAt: now.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }),
-            droppedAt: "",
-            distance: distKm,
-            duration: `${durMin} min`,
+            dispatchId: activeDispatch?.id || "",
+            destination: tripObj.destination || destination,
             fare,
-            paymentMethod: "Cash",
+            distance: distKm,
+            eta: `${durMin} min`,
+            driverName: tripObj.driver?.name || tripObj.driver_name || "Auto Driver",
+            vehicle: tripObj.vehicle?.number || tripObj.vehicle_number || "",
+            tripData: tripObj,
+            route_id,
           });
         }}
         onCancel={() => setShowBoardConfirm(false)}

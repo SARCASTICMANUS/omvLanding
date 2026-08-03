@@ -1,6 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-// import VayyMap from "../../shared/components/VayyMap";
+import VayyMap from "../../shared/components/VayyMap";
 import AppFrame from "../../components/AppFrame";
 import RaiseHandButton from "../../components/RaiseHandButton";
 import StatBar from "../../components/StatBar";
@@ -20,7 +20,7 @@ export function SharedAutoMapScreen({ navigation, route }) {
   return (
     <AppFrame navigation={navigation} title={title} accent={colors.primary}>
       <View style={styles.mapPage}>
-        {/* <VayyMap
+        <VayyMap
           style={styles.mapBg}
           initialRegion={{
             latitude: route?.params?.latitude || 26.8467,
@@ -30,7 +30,7 @@ export function SharedAutoMapScreen({ navigation, route }) {
           }}
           scrollEnabled={false}
           zoomEnabled={false}
-        /> */}
+        />
         {pillText ? <View style={styles.mapPill}><Text style={styles.mapPillText}>{pillText}</Text></View> : null}
         <View style={styles.mapBottom}>
           <RaiseHandButton accent={colors.primary} />

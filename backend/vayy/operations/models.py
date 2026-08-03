@@ -176,6 +176,33 @@ class ActiveTrip(models.Model):
         auto_now=True,
     )
 
+    otp = models.CharField(
+        max_length=4,
+        null=True,
+        blank=True,
+        help_text="4-digit OTP for passenger-driver handshake verification",
+    )
+
+    total_distance_m = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Total trip distance in meters (from OSRM)",
+    )
+
+    total_duration_s = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Total trip duration in seconds (from OSRM)",
+    )
+
+    total_fare = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Total fare for the trip",
+    )
+
     class Meta:
         ordering = ["-started_at"]
 
@@ -392,3 +419,81 @@ class BoardingRequest(models.Model):
             f"{self.passenger.email}"
             f" - {self.status}"
         )
+
+
+class DispatchRequest(models.Model):
+    """
+    Broadcast dispatch request — sent to all nearby drivers on a route.
+    First driver to accept wins; others get dismissed.
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_EXPIRED = "expired"
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Pending"),
+        (STATUS_ACCEPTED, "Accepted"),
+        (STATUS_CANCELLED, "Cancelled"),
+        (STATUS_EXPIRED, "Expired"),
+    )
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    passenger = models.ForeignKey(
+        User,
+        related_name="dispatch_requests",
+        on_delete=models.CASCADE,
+    )
+
+    route = models.ForeignKey(
+        Route,
+        related_name="dispatch_requests",
+        on_delete=models.CASCADE,
+    )
+
+    pickup_stop = models.ForeignKey(
+        Stop,
+        related_name="dispatch_requests",
+        on_delete=models.CASCADE,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+    )
+
+    accepted_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        related_name="accepted_dispatches",
+        on_delete=models.SET_NULL,
+    )
+
+    notified_drivers = models.JSONField(
+        default=list,
+        help_text="List of driver IDs who received the broadcast",
+    )
+
+    pickup_lat = models.FloatField(null=True, blank=True)
+    pickup_lng = models.FloatField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["route", "status"]),
+        ]
+
+    def __str__(self):
+        return f"DispatchRequest({self.id} | {self.status} | route={self.route.name})"

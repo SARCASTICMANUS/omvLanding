@@ -273,6 +273,15 @@ Integrate all backend APIs into the vayy_app frontend according to the mobile ap
 - Fixed `BikeSearchingScreen.jsx`: added missing `mapRef = useRef(null)`, `zoomIn`, `zoomOut`
 - Fixed `AutoSearchingScreen.jsx`: added missing `mapRef = useRef(null)`, `zoomIn`, `zoomOut`
 - Fixed `RiderPopupScreen.jsx`: added missing `mapRef = useRef(null)`, `zoomIn`, `zoomOut`
+- Fixed `BikeRideToDestinationScreen.jsx`: replaced haversine distance with OSRM `getRoadDistance` for real road distance/ETA
+- Fixed `BikeTripCompleteScreen.jsx`: fares + rating fetched from backend `RIDE.tripFare(dispatchId)` API; stars display actual rating dynamically
+- Fixed `RideStatsScreen.jsx`: added route polyline from `fetchRouteGeometry`; replaced visual share modal with real `Share.share()`
+- Fixed `RideCompleteScreen.jsx`: fare breakdown now fetched from backend `RIDE.tripFare(tripId)` API; `submitRating` verified and preserved
+- Verified `BikeOTPEntryScreen.jsx`: buddy params flow through correctly; `startDispatchTrip` endpoint matches backend (`PATCH /api/operations/dispatch/{id}/start/`)
+- Fixed duplicate `import api` in `BikeFindPassengerScreen.jsx` (lines 18 & 22)
+- Fixed `data.path` extraction in 3 route geometry loads: `data.path.coordinates || data.path` (backend returns GeoJSON geometry object, not raw array)
+- Fixed `style` → `paint` on `Layer` components in `RideStatsScreen`, `BikeRideToDestinationScreen`, `RiderPopupScreen` (fixes `style` is deprecated warning)
+- Fixed `initialDistance` → `totalDistanceRef.current` ref bug in `BikeRideToDestinationScreen.handleEndRide`
 
 ### In Progress
 - (none)

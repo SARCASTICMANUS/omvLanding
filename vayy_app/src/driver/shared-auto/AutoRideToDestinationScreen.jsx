@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
-// import VayyMap from "../../shared/components/VayyMap";
+import VayyMap from "../../shared/components/VayyMap";
 import AutoCancelRideModal from "./AutoCancelRideModal";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
@@ -20,8 +20,9 @@ const { width } = Dimensions.get("window");
 export default function AutoRideToDestinationScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const buddy = route.params?.buddy;
-  const [distance, setDistance] = useState(3.8);
-  const [eta, setEta] = useState("12 min");
+  const initialDist = buddy?.distance_km || null;
+  const [distance, setDistance] = useState(initialDist);
+  const [eta, setEta] = useState(buddy?.eta ? `${buddy.eta} min` : "—");
   const [elapsed, setElapsed] = useState(0);
   const [showCancel, setShowCancel] = useState(false);
   const mapRef = useRef(null);
@@ -31,17 +32,37 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
   const dotAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const distInterval = setInterval(() => {
-      setDistance((prev) => Math.max(0, +(prev - 0.015).toFixed(2)));
-    }, 2000);
+    let removed = false;
+    let sub = null;
+    import("../../shared/lib/locationService").then(({ default: locationService }) => {
+      if (removed) return;
+      let prevPos = null;
+      const destLat = buddy?.dest_lat || null;
+      const destLon = buddy?.dest_lon || null;
+      locationService.startTracking((coords) => {
+        if (removed) return;
+        if (destLat != null && destLon != null) {
+          const R = 6371e3;
+          const dLat = ((destLat - coords.latitude) * Math.PI) / 180;
+          const dLon = ((destLon - coords.longitude) * Math.PI) / 180;
+          const x = Math.sin(dLat / 2) ** 2 + Math.cos((coords.latitude * Math.PI) / 180) * Math.cos((destLat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+          const distKm = R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x)) / 1000;
+          setDistance(Math.round(distKm * 10) / 10);
+          if (distKm < 0.3) setEta("Arriving");
+          else if (distKm < 1) setEta("3 min");
+          else setEta(`${Math.max(1, Math.round(distKm * 3))} min`);
+        }
+        prevPos = { latitude: coords.latitude, longitude: coords.longitude };
+      }, { distanceInterval: 25, timeInterval: 5000 }).then((s) => { sub = s; });
+    });
+    return () => { removed = true; if (sub?.remove) sub.remove(); };
+  }, [buddy?.dest_lat, buddy?.dest_lon]);
+  useEffect(() => {
     const timeInterval = setInterval(() => {
       const sec = Math.floor((Date.now() - startTime.current) / 1000);
       setElapsed(sec);
     }, 1000);
-    return () => {
-      clearInterval(distInterval);
-      clearInterval(timeInterval);
-    };
+    return () => clearInterval(timeInterval);
   }, []);
 
   useEffect(() => {
@@ -67,7 +88,8 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
     return `${m}m ${s.toString().padStart(2, "0")}s`;
   };
 
-  const progress = Math.max(0, Math.min(1, (3.8 - distance) / 3.8));
+  const totalDist = initialDist || 1;
+  const progress = distance != null ? Math.max(0, Math.min(1, (totalDist - distance) / totalDist)) : 0;
 
   const handleEndRide = () => {
     navigation.navigate("AutoTripComplete", { buddy });
@@ -81,7 +103,7 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
   return (
     <View style={styles.root}>
       <View style={styles.mapArea}>
-        {/* <VayyMap
+        <VayyMap
           ref={mapRef}
           style={styles.mapBg}
           initialRegion={{
@@ -90,7 +112,7 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}
-        /> */}
+        />
         <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
         <View style={styles.driverOnMap}>
@@ -144,7 +166,7 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Ionicons name="navigate" size={16} color={COLORS.primary} />
-            <Text style={styles.statValue}>{distance.toFixed(1)} km</Text>
+            <Text style={styles.statValue}>{distance != null ? distance.toFixed(1) : "—"} km</Text>
             <Text style={styles.statLabel}>remaining</Text>
           </View>
           <View style={styles.statDivider} />

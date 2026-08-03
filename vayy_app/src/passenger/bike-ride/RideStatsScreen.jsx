@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,8 +9,10 @@ import {
   Platform,
   Modal,
   Linking,
+  Share,
 } from "react-native";
-// import VayyMap from "../../shared/components/VayyMap";
+import VayyMap, { UserLocation, Marker, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+import SmoothMarker from "../../shared/components/common/SmoothMarker";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -19,42 +21,165 @@ import {
   MaterialCommunityIcons,
   Feather,
 } from "@expo/vector-icons";
-
-import { ConfirmPopup } from "./ConfirmPopup";
+import * as Location from "expo-location";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import { WS } from "../../constants";
+import { useDispatch } from "react-redux";
+import { completeDispatch } from "../../store/slices/dispatchSlice";
+import { fetchRouteGeometry } from "../../routes/services/routeService";
 
 const { width } = Dimensions.get("window");
 const DESTINATION_THRESHOLD = 100;
 
+function haversine(a, b) {
+  const R = 6371e3;
+  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
+  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos((a.latitude * Math.PI) / 180) * Math.cos((b.latitude * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
 export function RideStatsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const [speed, setSpeed] = useState(24);
-  const [remainingDistance, setRemainingDistance] = useState(800);
+  const dispatchRedux = useDispatch();
+  const [speed, setSpeed] = useState(null);
+  const [remainingDistance, setRemainingDistance] = useState(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
-  const destination = route?.params?.destination || "Charbagh Metro Gate 2";
-  const eta = route?.params?.eta || "4";
-  const distanceLeft = route?.params?.distance || "800";
+  const [passengerPos, setPassengerPos] = useState(null);
+  const [driverPos, setDriverPos] = useState(null);
+  const [mapCenter, setMapCenter] = useState(null);
+  const destinationRaw = route?.params?.destination || "Destination";
+  const destination = typeof destinationRaw === "string" ? destinationRaw : destinationRaw?.name || destinationRaw?.display_name || "Destination";
+  const eta = route?.params?.eta || "—";
+  const distanceLeft = route?.params?.distance || "—";
   const driverName = route?.params?.driverName || "Driver";
   const vehicle = route?.params?.vehicle || "";
   const dispatchId = route?.params?.dispatchId || "";
-  const fare = route?.params?.fare || 45;
+  const fare = route?.params?.fare || "—";
   const tripData = route?.params?.tripData || {};
   const route_id = route?.params?.route_id || "";
+  const destLat = tripData?.dropLat || tripData?.dropoff_lat || null;
+  const destLng = tripData?.dropLng || tripData?.dropoff_lng || null;
+  const [routePath, setRoutePath] = useState(null);
   const [endRideCase, setEndRideCase] = useState("arrived");
-  const [showShareModal, setShowShareModal] = useState(false);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+  const navigatingRef = useRef(false);
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
+
+  useEffect(() => {
+    let stopped = false;
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted" || stopped) return;
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      if (stopped) return;
+      const { latitude, longitude } = pos.coords;
+      setPassengerPos({ latitude, longitude });
+      setMapCenter({ latitude, longitude });
+    })();
+    return () => { stopped = true; };
+  }, []);
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
 
+  const handleWsMessage = useCallback((data) => {
+    if (navigatingRef.current) return;
+    if (data.status === "cancelled") {
+      navigatingRef.current = true;
+      navigation.navigate("PassengerTabs");
+    }
+    if (data.status === "completed" || data?.type === "trip_completed") {
+      navigatingRef.current = true;
+      const pickupVal = (() => {
+        const p = tripData.pickup_stop?.name || tripData.pickup;
+        if (!p) return "Pickup Stop";
+        return typeof p === "string" ? p : p.name || p.display_name || "Pickup Stop";
+      })();
+      navigation.navigate("RideComplete", {
+        tripId: data.trip_id || dispatchId,
+        riderName: driverName,
+        vehicleText: vehicle,
+        pickup: pickupVal,
+        dropoff: destination,
+        distance: distanceLeft,
+        duration: eta,
+        fare: fare,
+        driverRating: 0,
+        paymentMethod: "Cash",
+        route_id,
+      });
+    }
+  }, [dispatchId, driverName, vehicle, tripData, destination, distanceLeft, eta, fare, route_id, navigation]);
+
+  useWebSocket(dispatchId ? WS.dispatch(dispatchId) : null, {
+    onMessage: handleWsMessage,
+  });
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      setSpeed(Math.floor(Math.random() * (28 - 22 + 1)) + 22);
-      setRemainingDistance((d) => Math.max(0, d - Math.floor(Math.random() * 50 + 10)));
-    }, 3000);
-    return () => clearInterval(interval);
+    let removed = false;
+    let sub = null;
+    import("../../shared/lib/locationService").then(({ default: locationService }) => {
+      if (removed) return;
+      let prevPos = null;
+      locationService.startTracking((coords) => {
+        if (removed) return;
+        const pos = { latitude: coords.latitude, longitude: coords.longitude };
+        if (prevPos) {
+          const dist = haversine(prevPos, pos);
+          setRemainingDistance((d) => d != null ? Math.max(0, d - dist) : null);
+          setSpeed(coords.speed != null ? Math.round(coords.speed * 3.6) : null);
+        } else if (distanceLeft !== "—") {
+          setRemainingDistance(Number(distanceLeft) || null);
+        }
+        prevPos = pos;
+      }, { distanceInterval: 10, timeInterval: 3000 }).then((s) => { sub = s; });
+    });
+    return () => { removed = true; if (sub?.remove) sub.remove(); };
   }, []);
+
+  // Tracking WS for live distance/ETA from backend
+  const handleTrackingMessage = useCallback((data) => {
+    if (data.type === "vehicle_update") {
+      const lat = data.lat;
+      const lng = data.lng || data.lon;
+      if (lat && lng) {
+        setDriverPos({ latitude: lat, longitude: lng });
+      }
+      if (data.remaining_distance_km != null) {
+        setRemainingDistance(data.remaining_distance_km * 1000);
+      }
+    }
+  }, []);
+
+  useWebSocket(dispatchId ? WS.trackingTrip(dispatchId) : null, {
+    enabled: !!dispatchId,
+    onMessage: handleTrackingMessage,
+  });
+
+  useEffect(() => {
+    if (passengerPos && destLat && destLng && mapRef.current) {
+      const minLng = Math.min(passengerPos.longitude, destLng);
+      const maxLng = Math.max(passengerPos.longitude, destLng);
+      const minLat = Math.min(passengerPos.latitude, destLat);
+      const maxLat = Math.max(passengerPos.latitude, destLat);
+      mapRef.current.fitBounds([minLng, minLat, maxLng, maxLat], 80, 800);
+    }
+  }, [passengerPos, destLat, destLng]);
+
+  useEffect(() => {
+    const loadRoute = async () => {
+      if (!route_id) return;
+      try {
+        const data = await fetchRouteGeometry(route_id);
+        if (data?.path) setRoutePath(data.path.coordinates || data.path);
+      } catch (e) {
+        console.warn("Failed to load route geometry", e);
+      }
+    };
+    loadRoute();
+  }, [route_id]);
 
   function handleEndRideTap() {
     const hasReached = remainingDistance <= DESTINATION_THRESHOLD;
@@ -64,8 +189,17 @@ export function RideStatsScreen({ navigation, route }) {
 
   function handleConfirmEndRide() {
     setShowEndConfirm(false);
+    setEndRideLoading(true);
+    const tripId = tripData.trip_id || dispatchId;
+    (async () => {
+      try {
+        await dispatchRedux(completeDispatch(tripId)).unwrap();
+      } catch (e) {
+        console.warn("completeDispatch passenger end ride failed:", e);
+      }
+    })();
     navigation.navigate("RideComplete", {
-      tripId: tripData.trip_id || dispatchId,
+      tripId,
       riderName: driverName,
       vehicleText: vehicle,
       pickup: (() => {
@@ -84,39 +218,81 @@ export function RideStatsScreen({ navigation, route }) {
   }
 
   function handleShareTrip() {
-    setShowShareModal(true);
+    const shareText = [
+      `📍 ${driverName} is riding me to ${destination} via VAYY!`,
+      `⏱ ETA: ${eta} · 📏 ${distanceLeft}`,
+      `🆔 Trip: ${tripData.trip_id || dispatchId}`,
+    ].join("\n");
+    Share.share({ message: shareText }).catch(() => {});
   }
 
   function handleEmergency() {
     setShowEmergencyModal(true);
   }
 
-  const destinationLabel =
-    remainingDistance >= 1000
+  const destinationLabel = remainingDistance != null
+    ? remainingDistance >= 1000
       ? `${(remainingDistance / 1000).toFixed(1)} km`
-      : `${remainingDistance} m`;
-
-  const etaMinutes = Math.max(1, Math.round(remainingDistance / 200));
+      : `${remainingDistance} m`
+    : "—";
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <View style={styles.mapArea}>
-        {/* <VayyMap
+        {!mapCenter ? (
+          <View style={styles.gpsLoading}>
+            <Text style={styles.gpsLoadingText}>Getting your location...</Text>
+          </View>
+        ) : (
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
-          initialRegion={{
-            latitude: 26.8467,
-            longitude: 80.9462,
-            latitudeDelta: 0.05,
-            longitudeDelta: 0.05,
+          initialViewState={{
+            center: [mapCenter.longitude, mapCenter.latitude],
+            zoom: 14,
           }}
           scrollEnabled
           zoomEnabled
-          zoomControlEnabled
-        /> */}
+        >
+          <UserLocation visible={true} showsUserHeadingIndicator={true} />
+          {destLat && destLng && (
+            <Marker id="destination" lngLat={[destLng, destLat]}>
+              <View style={styles.destMarker}>
+                <Ionicons name="flag" size={16} color="#FFFFFF" />
+              </View>
+            </Marker>
+          )}
+          {driverPos && (
+            <SmoothMarker id="driver" targetLat={driverPos.latitude} targetLng={driverPos.longitude}>
+              <View style={styles.driverMarker}>
+                <Text style={styles.driverEmoji}>🏍️</Text>
+              </View>
+            </SmoothMarker>
+          )}
+          {routePath && (
+            <GeoJSONSource
+              id="route-path"
+              data={{
+                type: "Feature",
+                geometry: { type: "LineString", coordinates: routePath },
+              }}
+            >
+              <Layer
+                id="route-path-layer"
+                type="line"
+                paint={{
+                  "line-color": "#009849",
+                  "line-width": 4,
+                  "line-opacity": 0.7,
+                }}
+              />
+            </GeoJSONSource>
+          )}
+        </VayyMap>
+        )}
 
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
@@ -142,46 +318,10 @@ export function RideStatsScreen({ navigation, route }) {
           </View>
         </View>
 
-        <View style={styles.poiLabel}>
-          <Ionicons name="train-outline" size={14} color="#60A5FA" />
-          <Text style={styles.poiText}>{destination}</Text>
-        </View>
-
-        <View style={styles.destLabel}>
-          <Ionicons name="location" size={18} color="#009849" />
-          <Text style={styles.destLabelText}>
-            {destination}
-          </Text>
-          <View style={styles.labelArrow} />
-        </View>
-
-        <View style={styles.destMarkerOuter}>
-          <View style={styles.destMarker}>
-            <Ionicons name="flag" size={20} color="#FFFFFF" />
-          </View>
-        </View>
-
-        <View style={styles.distanceCallout}>
-          <Text style={styles.distanceCalloutValue}>{distanceLeft} m</Text>
-          <Text style={styles.distanceCalloutLabel}>away</Text>
-          <View style={styles.calloutArrow} />
-        </View>
-
-        <View style={styles.routeContainer}>
-          <View style={styles.routeSegment1} />
-          <View style={styles.routeSegment2} />
-          <View style={styles.routeSegment3} />
-          <View style={styles.routeMidDot} />
-        </View>
-
-        <View style={styles.bikeMarker}>
-          <Text style={{ fontSize: 24 }}>🏍️</Text>
-        </View>
-
-        <TouchableOpacity style={styles.recenterBtn} onPress={zoomIn}>
+        <TouchableOpacity style={styles.zoomBtnTop} onPress={zoomIn}>
           <Text style={styles.zoomText}>+</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.recenterBtn} onPress={zoomOut}>
+        <TouchableOpacity style={styles.zoomBtnBottom} onPress={zoomOut}>
           <Text style={styles.zoomText}>−</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.recenterBtn}>
@@ -222,7 +362,7 @@ export function RideStatsScreen({ navigation, route }) {
           <View style={styles.statCol}>
             <MaterialCommunityIcons name="speedometer" size={24} color="#009849" />
             <Text style={styles.statLabel}>Speed</Text>
-            <Text style={styles.statValueGreen}>{speed} <Text style={styles.smallUnit}>km/h</Text></Text>
+            <Text style={styles.statValueGreen}>{speed != null ? speed : "—"} {speed != null && <Text style={styles.smallUnit}>km/h</Text>}</Text>
           </View>
         </View>
 
@@ -283,43 +423,7 @@ export function RideStatsScreen({ navigation, route }) {
         </View>
       </Modal>
 
-      <Modal visible={showShareModal} transparent animationType="slide" statusBarTranslucent>
-        <View style={styles.shareOverlay}>
-          <View style={[styles.shareCard, { paddingBottom: insets.bottom + 24 }]}>
-            <View style={styles.shareHandle} />
-            <Text style={styles.shareTitle}>Share Trip</Text>
-            <Text style={styles.shareSub}>Let someone know your ride status</Text>
 
-            <TouchableOpacity style={styles.shareOption}>
-              <View style={[styles.shareIconWrap, { backgroundColor: "#25D366" }]}>
-                <Ionicons name="logo-whatsapp" size={24} color="#FFFFFF" />
-              </View>
-              <Text style={styles.shareOptionText}>WhatsApp</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.shareOption}>
-              <View style={[styles.shareIconWrap, { backgroundColor: "#0084FF" }]}>
-                <Ionicons name="chatbubble-ellipses" size={24} color="#FFFFFF" />
-              </View>
-              <Text style={styles.shareOptionText}>SMS</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.shareOption}>
-              <View style={[styles.shareIconWrap, { backgroundColor: "#6B7280" }]}>
-                <Ionicons name="copy" size={24} color="#FFFFFF" />
-              </View>
-              <Text style={styles.shareOptionText}>Copy Trip Link</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.shareCloseBtn}
-              onPress={() => setShowShareModal(false)}
-            >
-              <Text style={styles.shareCloseText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       <Modal visible={showEmergencyModal} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.emergencyOverlay}>
@@ -364,6 +468,8 @@ const styles = StyleSheet.create({
     position: "relative",
     backgroundColor: "#F8FAF9",
   },
+  gpsLoading: { flex: 1, alignItems: "center", justifyContent: "center" },
+  gpsLoadingText: { fontSize: 15, fontWeight: "600", color: "#6B7280" },
   header: {
     position: "absolute",
     top: 0,
@@ -375,7 +481,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 24,
     paddingBottom: 12,
-    backgroundColor: "rgba(0,152,73,0.6)",
     overflow: "hidden",
   },
   headerLeft: {
@@ -425,173 +530,49 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   mapArea: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     backgroundColor: "#F9FAFB",
   },
   mapBg: {
     ...StyleSheet.absoluteFillObject,
   },
-  poiLabel: {
-    position: "absolute",
-    top: "35%",
-    left: "15%",
-    alignItems: "center",
-    gap: 4,
-  },
-  poiText: {
-    fontSize: 12,
-    color: "#9CA3AF",
-    fontWeight: "600",
-  },
-  destLabel: {
-    position: "absolute",
-    top: 80,
-    right: 20,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  destLabelText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#111827",
-    lineHeight: 18,
-  },
-  labelArrow: {
-    position: "absolute",
-    bottom: -6,
-    left: "50%",
-    width: 12,
-    height: 12,
-    backgroundColor: "#FFFFFF",
-    transform: [{ rotate: "45deg" }, { translateX: -6 }],
-  },
-  destMarkerOuter: {
-    position: "absolute",
-    top: 140,
-    right: 90,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(0,152,73,0.1)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
   destMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: "#009849",
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 3,
+    borderColor: "#FFFFFF",
   },
-  distanceCallout: {
-    position: "absolute",
-    bottom: "45%",
-    left: 40,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1.5,
-    borderColor: "#009849",
+  driverMarker: {
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    justifyContent: "center",
   },
-  distanceCalloutValue: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#009849",
+  driverEmoji: {
+    fontSize: 28,
   },
-  distanceCalloutLabel: {
-    fontSize: 12,
-    color: "#111827",
+  zoomBtnTop: {
+    position: "absolute", right: 20, bottom: 120, width: 56, height: 56,
+    borderRadius: 28, backgroundColor: "#FFFFFF", justifyContent: "center",
+    alignItems: "center", shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 4,
+  },
+  zoomBtnBottom: {
+    position: "absolute", right: 20, bottom: 56, width: 56, height: 56,
+    borderRadius: 28, backgroundColor: "#FFFFFF", justifyContent: "center",
+    alignItems: "center", shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 4,
+  },
+  zoomText: {
+    fontSize: 22,
     fontWeight: "600",
-  },
-  calloutArrow: {
-    position: "absolute",
-    bottom: -8,
-    left: "30%",
-    width: 14,
-    height: 14,
-    backgroundColor: "#FFFFFF",
-    borderRightWidth: 1.5,
-    borderBottomWidth: 1.5,
-    borderColor: "#009849",
-    transform: [{ rotate: "45deg" }],
-  },
-  routeContainer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  routeSegment1: {
-    position: "absolute",
-    top: 180,
-    right: 105,
-    width: 4,
-    height: 100,
-    backgroundColor: "#009849",
-    borderRadius: 2,
-  },
-  routeSegment2: {
-    position: "absolute",
-    top: 275,
-    right: 105,
-    width: 110,
-    height: 4,
-    backgroundColor: "#009849",
-    transform: [{ rotate: "45deg" }, { translateX: -35 }],
-    borderRadius: 2,
-  },
-  routeSegment3: {
-    position: "absolute",
-    top: 380,
-    left: "35%",
-    width: 4,
-    height: 100,
-    backgroundColor: "#009849",
-    borderRadius: 2,
-  },
-  routeMidDot: {
-    position: "absolute",
-    top: 360,
-    left: "34.5%",
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 2,
-    borderColor: "#009849",
-  },
-  bikeMarker: {
-    position: "absolute",
-    bottom: "22%",
-    left: "25%",
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 6,
+    color: "#111827",
+    lineHeight: 24,
   },
   recenterBtn: {
     position: "absolute",
     right: 20,
-    bottom: 30,
+    bottom: 36,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -604,10 +585,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   bottomSheet: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
@@ -694,12 +671,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "800",
   },
-  zoomText: {
-    fontSize: 22,
-    fontWeight: "600",
-    color: "#111827",
-    lineHeight: 24,
-  },
   endOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -778,77 +749,6 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontSize: 14,
     fontWeight: "700",
-  },
-  shareOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end",
-  },
-  shareCard: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 25,
-    elevation: 20,
-  },
-  shareHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#E5E7EB",
-    alignSelf: "center",
-    marginBottom: 20,
-  },
-  shareTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#111827",
-    textAlign: "center",
-  },
-  shareSub: {
-    fontSize: 13,
-    color: "#6B7280",
-    fontWeight: "500",
-    textAlign: "center",
-    marginTop: 4,
-    marginBottom: 24,
-  },
-  shareOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-  },
-  shareIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  shareOptionText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  shareCloseBtn: {
-    height: 50,
-    borderRadius: 18,
-    backgroundColor: "#F3F4F6",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 16,
-  },
-  shareCloseText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#6B7280",
   },
   emergencyOverlay: {
     flex: 1,

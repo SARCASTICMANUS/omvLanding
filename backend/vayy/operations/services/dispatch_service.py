@@ -1,6 +1,8 @@
 import logging
+import random
 from decimal import Decimal
 from typing import Dict, Any, List, Optional
+from geopy.distance import distance as geopy_distance
 from django.db import transaction
 from django.utils import timezone
 from django.contrib.gis.geos import Point
@@ -10,8 +12,9 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from rest_framework.exceptions import PermissionDenied
 
+from datetime import timedelta
 from accounts.models import User, PublicDriverProfile
-from operations.models import Vehicle, ActiveTrip, VehicleState, BoardingRequest
+from operations.models import Vehicle, ActiveTrip, VehicleState, BoardingRequest, DispatchRequest
 from transport.models import Route, TripSchedule
 from communication.services.rabbitmq_service import RabbitMQService
 from communication.services.notification_service import NotificationService
@@ -108,15 +111,202 @@ class DispatchService:
         return {"status": "assigned", "trip_id": str(trip.id), "driver_name": trip.driver.get_full_name()}
 
     @staticmethod
-    def _handle_broadcast_dispatch(passenger: User, route_id: str, pickup_stop_id: str, candidates: List[Dict]):
+    def _handle_broadcast_dispatch(passenger: User, route_id: str, pickup_stop_id: str, candidates: List[Dict]) -> Dict[str, Any]:
         """
-        In a real app, this would notify all N drivers and the first to accept wins.
-        For this prototype, we'll assign to the first and queue the rest as fallback.
+        Broadcasts the dispatch request to ALL nearby drivers on the route.
+        First driver to accept wins; others get dismissed via WS.
         """
-        # Logic for real broadcast involves a different model (DispatchSession)
-        # to track multiple offers. For now, we reuse the direct assignment
-        # but return a broadcast status.
-        return DispatchService._assign_to_driver(passenger, route_id, pickup_stop_id, candidates[0])
+        from transport.models import Stop
+
+        stop = Stop.objects.get(id=pickup_stop_id)
+        route = Route.objects.get(id=route_id)
+        passenger_name = passenger.get_full_name() or passenger.email
+
+        # Create broadcast dispatch request
+        dispatch_request = DispatchRequest.objects.create(
+            passenger=passenger,
+            route=route,
+            pickup_stop=stop,
+            pickup_lat=stop.location.y,
+            pickup_lng=stop.location.x,
+            notified_drivers=[str(c["driver"].id) for c in candidates],
+            expires_at=timezone.now() + timedelta(seconds=90),
+        )
+
+        # Notify EACH candidate driver via their notification WS
+        for candidate in candidates:
+            driver = candidate["driver"]
+            payload = {
+                "type": "new_dispatch_request",
+                "dispatch": {
+                    "request_id": str(dispatch_request.id),
+                    "passenger_id": str(passenger.id),
+                    "passenger_name": passenger_name,
+                    "route_id": route_id,
+                    "route_name": route.name,
+                    "pickup_stop_id": pickup_stop_id,
+                    "pickup_name": stop.name,
+                    "pickup_lat": stop.location.y,
+                    "pickup_lng": stop.location.x,
+                    "distance_km": round(candidate["distance"], 2),
+                    "score": round(candidate["score"], 1),
+                },
+            }
+            DispatchService._notify_ws(
+                f"notifications_{driver.id}",
+                "notification_broadcast",
+                payload,
+            )
+
+        # Schedule 90s timeout — expire if no one accepts
+        from operations.tasks import expire_broadcast_request
+        expire_broadcast_request.apply_async(
+            (str(dispatch_request.id),),
+            countdown=90,
+        )
+
+        logger.info(
+            f"Broadcast dispatch {dispatch_request.id} sent to {len(candidates)} drivers "
+            f"on route {route.name}"
+        )
+
+        return {
+            "status": "pending",
+            "request_id": str(dispatch_request.id),
+            "drivers_notified": len(candidates),
+        }
+
+    @staticmethod
+    @transaction.atomic
+    def accept_broadcast_request(request_id: str, driver: User) -> Dict[str, Any]:
+        """
+        Driver accepts a broadcast dispatch request.
+        Uses select_for_update to prevent race conditions (only one driver wins).
+        """
+        dispatch_request = DispatchRequest.objects.select_for_update().get(id=request_id)
+
+        if dispatch_request.status != DispatchRequest.STATUS_PENDING:
+            return {
+                "status": "already_taken",
+                "message": "Request already accepted by another driver",
+            }
+
+        if timezone.now() > dispatch_request.expires_at:
+            dispatch_request.status = DispatchRequest.STATUS_EXPIRED
+            dispatch_request.save()
+            return {"status": "expired", "message": "Request has expired"}
+
+        # Find driver's vehicle
+        vehicle_state = VehicleState.objects.select_related("vehicle").filter(
+            vehicle__driver=driver,
+            vehicle__is_active=True,
+        ).first()
+
+        if not vehicle_state:
+            return {
+                "status": "no_vehicle",
+                "message": "No active vehicle found for this driver",
+            }
+
+        # Mark request as accepted
+        dispatch_request.status = DispatchRequest.STATUS_ACCEPTED
+        dispatch_request.accepted_by = driver
+        dispatch_request.save()
+
+        # Create ActiveTrip with OTP — status ACCEPTED since driver already accepted
+        otp = f"{random.randint(1000, 9999)}"
+        trip = ActiveTrip.objects.create(
+            vehicle=vehicle_state.vehicle,
+            route=dispatch_request.route,
+            driver=driver,
+            status=TRIP_STATUS_ACCEPTED,
+            started_at=timezone.now(),
+            otp=otp,
+        )
+
+        # Notify winning driver — you got the ride
+        DispatchService._notify_ws(
+            f"notifications_{driver.id}",
+            "notification_broadcast",
+            {
+                "type": "request_accepted",
+                "trip_id": str(trip.id),
+                "request_id": str(dispatch_request.id),
+                "route_name": dispatch_request.route.name,
+                "otp": otp,
+            },
+        )
+
+        # Notify ALL OTHER drivers — dismiss popup
+        for driver_id_str in dispatch_request.notified_drivers:
+            if str(driver.id) != driver_id_str:
+                DispatchService._notify_ws(
+                    f"notifications_{driver_id_str}",
+                    "notification_broadcast",
+                    {
+                        "type": "request_cancelled",
+                        "request_id": str(dispatch_request.id),
+                        "reason": "accepted_by_other",
+                    },
+                )
+
+        # Notify passenger via dispatch WS — driver found
+        DispatchService._notify_ws(
+            f"dispatch_{trip.id}",
+            "dispatch_update",
+            {
+                "trip_id": str(trip.id),
+                "status": trip.status,
+                "driver_name": driver.get_full_name(),
+                "vehicle_number": vehicle_state.vehicle.vehicle_number,
+                "otp": otp,
+                "requested_at": timezone.now().isoformat(),
+            },
+        )
+
+        # Compute distance from driver to pickup for passenger display
+        dist_km = None
+        eta = None
+        if vehicle_state.current_location and dispatch_request.pickup_lat:
+            driver_loc = (vehicle_state.current_location.y, vehicle_state.current_location.x)
+            pickup_loc = (dispatch_request.pickup_lat, dispatch_request.pickup_lng)
+            dist_km = round(geopy_distance(driver_loc, pickup_loc).km, 2)
+            eta = max(1, round(dist_km / 30 * 60))  # ~30 km/h avg city speed
+
+        # Notify passenger via broadcast WS — driver accepted with OTP
+        DispatchService._notify_ws(
+            f"broadcast_{dispatch_request.id}",
+            "broadcast_update",
+            {
+                "type": "request_accepted",
+                "trip_id": str(trip.id),
+                "driver_name": driver.get_full_name(),
+                "vehicle_number": vehicle_state.vehicle.vehicle_number,
+                "otp": otp,
+                "distance_km": dist_km,
+                "eta": eta,
+            },
+        )
+
+        logger.info(
+            f"Broadcast dispatch {request_id} accepted by driver {driver.id} → trip {trip.id}"
+        )
+
+        return {
+            "status": "accepted",
+            "trip_id": str(trip.id),
+            "driver_name": driver.get_full_name(),
+            "otp": otp,
+        }
+
+    @staticmethod
+    def dismiss_broadcast_request(request_id: str, driver: User) -> Dict[str, Any]:
+        """
+        Driver explicitly rejects/dismisses a broadcast request.
+        No state change — popup just disappears locally.
+        """
+        logger.info(f"Driver {driver.id} dismissed broadcast request {request_id}")
+        return {"status": "dismissed"}
 
     @staticmethod
     def re_dispatch(trip_id: str):
@@ -148,9 +338,9 @@ class DispatchService:
         # Find available vehicles within 10km (great-circle for initial filter)
         available_vehicles = VehicleState.objects.filter(
             vehicle__is_active=True,
-            vehicle__driver__driver_profile__is_verified=True,
-            active_trip__isnull=True,
-            current_location__distance_lte=(stop.location, D(km=10))
+            # vehicle__driver__driver_profile__is_verified=True,
+            # active_trip__isnull=True,
+            # current_location__distance_lte=(stop.location, D(km=10))
         ).annotate(
             distance=Distance('current_location', stop.location)
         ).select_related('vehicle', 'vehicle__driver', 'vehicle__driver__driver_profile')
@@ -311,18 +501,79 @@ class DispatchService:
         return DispatchService.update_trip_status(trip_id, TRIP_STATUS_ARRIVED, driver)
 
     @staticmethod
-    def start_trip(trip_id: str, driver: User):
+    def start_trip(trip_id: str, driver: User, otp: str = None):
+        trip = ActiveTrip.objects.get(id=trip_id)
+        if trip.driver != driver:
+            raise ValueError("Not your trip")
+        if trip.otp and otp and trip.otp != otp:
+            raise ValueError("Invalid OTP")
         return DispatchService.update_trip_status(trip_id, TRIP_STATUS_ACTIVE, driver)
 
     @staticmethod
-    def complete_trip(trip_id: str, driver: User):
-        # Update driver stats
-        profile = driver.driver_profile
-        profile.total_trips += 1
-        profile.save()
-        return DispatchService.update_trip_status(trip_id, TRIP_STATUS_COMPLETED, driver)
+    def complete_trip(trip_id: str, user: User):
+        trip = ActiveTrip.objects.select_related("vehicle", "route").get(id=trip_id)
+        # Calculate fare from OSRM if not already set
+        if trip.total_fare is None:
+            from transport.services.osrm_service import OSRMService
+            origin = None
+            dest = None
+            stops = trip.route.stops.all().order_by("order") if trip.route else []
+            if stops.count() >= 2:
+                origin_coords = stops.first().location
+                dest_coords = stops.last().location
+                if origin_coords and dest_coords:
+                    origin = (origin_coords.x, origin_coords.y)
+                    dest = (dest_coords.x, dest_coords.y)
+            if origin and dest:
+                dist_m = OSRMService.get_road_distance_m(origin, dest)
+                dur_s = OSRMService.get_road_duration_s(origin, dest)
+                if dist_m and dur_s:
+                    trip.total_distance_m = dist_m
+                    trip.total_duration_s = dur_s
+                    dist_km = dist_m / 1000
+                    vtype = trip.vehicle.vehicle_type if trip.vehicle else "bike"
+                    base_fare = 20 if vtype == "bike" else 30
+                    per_km = 5 if vtype == "bike" else 10
+                    trip.total_fare = base_fare + (dist_km * per_km)
+                    trip.save(update_fields=["total_distance_m", "total_duration_s", "total_fare"])
+        # Update driver stats (only when the driver completes)
+        is_driver = trip.driver == user
+        if is_driver:
+            profile = user.driver_profile
+            profile.total_trips += 1
+            profile.save()
+        return DispatchService.update_trip_status(trip_id, TRIP_STATUS_COMPLETED, driver=user if is_driver else None)
 
     @staticmethod
     def cancel_dispatch(trip_id: str, user: User, reason: str = "user_cancelled"):
         # Any party can cancel for now, but in real app we check role/permissions
         return DispatchService.update_trip_status(trip_id, TRIP_STATUS_CANCELLED)
+
+    @staticmethod 
+    def cancel_broadcast_request(request_id: str, user: User) -> Dict[str, Any]:
+        """
+        Passenger cancels their broadcast dispatch request.
+        Notifies all drivers to dismiss the popup.
+        """
+        dispatch_request = DispatchRequest.objects.get(id=request_id)
+
+        if dispatch_request.status != DispatchRequest.STATUS_PENDING:
+            return {"status": "already_resolved", "message": "Request already resolved"}
+
+        dispatch_request.status = DispatchRequest.STATUS_CANCELLED
+        dispatch_request.save()
+
+        # Notify all drivers → dismiss popup
+        for driver_id_str in dispatch_request.notified_drivers:
+            DispatchService._notify_ws(
+                f"notifications_{driver_id_str}",
+                "notification_broadcast",
+                {
+                    "type": "request_cancelled",
+                    "request_id": str(dispatch_request.id),
+                    "reason": "passenger_cancelled",
+                },
+            )
+
+        logger.info(f"Broadcast dispatch {request_id} cancelled by passenger {user.id}")
+        return {"status": "cancelled"}

@@ -48,6 +48,13 @@ class User(AbstractUser):
         blank=True,
     )
 
+    push_token = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Expo push notification token",
+    )
+
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 

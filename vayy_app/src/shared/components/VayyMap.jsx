@@ -1,307 +1,216 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// VayyMap — ENTIRELY COMMENTED OUT
-// All map-related code below is preserved but inactive.
-// To restore, uncomment the desired version (dummy or MapLibre).
-// ═══════════════════════════════════════════════════════════════════════════════
+import React, { forwardRef, useImperativeHandle, useRef, useCallback } from "react";
+import { StyleSheet } from "react-native";
+import {
+  Map,
+  Camera,
+  ViewAnnotation,
+  GeoJSONSource,
+  Layer,
+  Marker,
+  UserLocation,
+  Images,
+  Animated,
+} from "@maplibre/maplibre-react-native";
 
-// ─── Dummy Expo Go version (no native deps) ──────────────────────────────────
-//
-// import React, { forwardRef, useImperativeHandle } from "react";
-// import { View, StyleSheet, Text } from "react-native";
-//
-// function ViewAnnotation({ children }) {
-//   return children || null;
-// }
-//
-// function GeoJSONSource() {
-//   return null;
-// }
-//
-// function Layer() {
-//   return null;
-// }
-//
-// function Marker({ children }) {
-//   return children || null;
-// }
-//
-// function UserLocation() {
-//   return null;
-// }
-//
-// function Polyline() {
-//   return null;
-// }
-//
-// const VayyMap = forwardRef(function VayyMap(
-//   {
-//     style,
-//     initialRegion,
-//     initialViewState,
-//     scrollEnabled = true,
-//     zoomEnabled = true,
-//     pitchEnabled = true,
-//     rotateEnabled = true,
-//     onPress,
-//     cameraRef,
-//     children,
-//     ...rest
-//   },
-//   ref
-// ) {
-//   useImperativeHandle(ref, () => ({
-//     getZoom: async () => 14,
-//     zoomIn: async () => {},
-//     zoomOut: async () => {},
-//     fitBounds: () => {},
-//     setCamera: () => {},
-//   }));
-//
-//   return (
-//     <View style={[styles.map, style]}>
-//       <Text style={styles.placeholder}>Map (Expo Go)</Text>
-//       {children}
-//     </View>
-//   );
-// });
-//
-// const styles = StyleSheet.create({
-//   map: {
-//     flex: 1,
-//     backgroundColor: "#E8E8E8",
-//     justifyContent: "center",
-//     alignItems: "center",
-//   },
-//   placeholder: {
-//     fontSize: 14,
-//     color: "#999",
-//   },
-// });
-//
-// export default VayyMap;
-// export { ViewAnnotation, GeoJSONSource, Layer, Marker, UserLocation, Polyline };
+const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_API_KEY || "VHJ2bQbYo88r3CZHiOKU";
+const MAPTILER_STYLE = `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`;
 
-// ─── Original MapLibre implementation ────────────────────────────────────────
-//
-// import React, { forwardRef, useImperativeHandle, useRef, useCallback } from "react";
-// import { StyleSheet } from "react-native";
-// import { Map, Camera, ViewAnnotation, GeoJSONSource, Layer } from "@maplibre/maplibre-react-native";
-//
-// const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_API_KEY || "VHJ2bQbYo88r3CZHiOKU";
-// const MAPTILER_STYLE = `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`;
-//
-// function zoomToDelta(zoom) {
-//   const lngDelta = 360 / Math.pow(2, zoom);
-//   const latDelta = lngDelta * Math.abs(Math.cos((26.8467 * Math.PI) / 180));
-//   return { latitudeDelta: latDelta, longitudeDelta: lngDelta };
-// }
-//
-// function deltaToZoom(latDelta) {
-//   return Math.round(14 - Math.log2((latDelta || 0.05) * 111 / 2));
-// }
-//
-// function initialViewStateFromProps(props) {
-//   if (props.center && Array.isArray(props.center)) {
-//     return {
-//       center: props.center,
-//       zoom: props.zoom || 14,
-//       pitch: props.pitch || 0,
-//       heading: props.heading || 0,
-//     };
-//   }
-//   if (props.center && typeof props.center === "object" && props.center.latitude != null) {
-//     const zoom = props.center.latitudeDelta
-//       ? Math.round(14 - Math.log2((props.center.latitudeDelta || 0.05) * 111 / 2))
-//       : 14;
-//     return {
-//       center: [props.center.longitude || 80.9462, props.center.latitude || 26.8467],
-//       zoom: zoom,
-//       pitch: 0,
-//       heading: 0,
-//     };
-//   }
-//   if (props.initialViewState) {
-//     const [lon, lat] = props.initialViewState.center || [80.9462, 26.8467];
-//     return {
-//       center: [lon, lat],
-//       zoom: props.initialViewState.zoom || 14,
-//       pitch: props.initialViewState.pitch || 0,
-//       heading: props.initialViewState.heading || 0,
-//     };
-//   }
-//   return undefined;
-// }
-//
-// const VayyMap = forwardRef(function VayyMap(
-//   {
-//     style,
-//     initialRegion,
-//     initialViewState,
-//     scrollEnabled = true,
-//     zoomEnabled = true,
-//     pitchEnabled = true,
-//     rotateEnabled = true,
-//     onPress,
-//     cameraRef,
-//     children,
-//     ...rest
-//   },
-//   ref
-// ) {
-//   const mapRef = useRef(null);
-//   const cameraRefInternal = useRef(null);
-//   const activeCameraRef = cameraRef || cameraRefInternal;
-//
-//   const viewState = initialViewStateFromProps({
-//     center: initialRegion,
-//     initialViewState,
-//     zoom: initialViewState?.zoom,
-//     pitch: initialViewState?.pitch,
-//     heading: initialViewState?.heading
-//   });
-//
-//   useImperativeHandle(ref, () => ({
-//     getZoom: async () => {
-//       try {
-//         return await mapRef.current?.getZoom();
-//       } catch {
-//         return 14;
-//       }
-//     },
-//     zoomIn: async (delta = 1, duration = 300) => {
-//       try {
-//         const zoom = await mapRef.current?.getZoom();
-//         const center = await mapRef.current?.getCenter();
-//         const pitch = await mapRef.current?.getPitch();
-//         const bearing = await mapRef.current?.getBearing();
-//         activeCameraRef.current?.setStop({
-//           center,
-//           zoom: Math.min((zoom || 14) + delta, 22),
-//           pitch: pitch || 0,
-//           heading: bearing || 0,
-//           duration,
-//         });
-//       } catch {}
-//     },
-//     zoomOut: async (delta = 1, duration = 300) => {
-//       try {
-//         const zoom = await mapRef.current?.getZoom();
-//         const center = await mapRef.current?.getCenter();
-//         const pitch = await mapRef.current?.getPitch();
-//         const bearing = await mapRef.current?.getBearing();
-//         activeCameraRef.current?.setStop({
-//           center,
-//           zoom: Math.max((zoom || 14) - delta, 2),
-//           pitch: pitch || 0,
-//           heading: bearing || 0,
-//           duration,
-//         });
-//       } catch {}
-//     },
-//     fitBounds: (bounds, paddingOrOptions, duration) => {
-//       if (!bounds || !Array.isArray(bounds) || bounds.length < 4) return;
-//       const [west, south, east, north] = bounds;
-//       let d = 500;
-//       let pad = { paddingTop: 80, paddingRight: 80, paddingBottom: 80, paddingLeft: 80 };
-//       if (typeof paddingOrOptions === "number") {
-//         d = paddingOrOptions;
-//       } else if (paddingOrOptions && typeof paddingOrOptions === "object") {
-//         if (paddingOrOptions.top != null || paddingOrOptions.paddingTop != null) {
-//           pad = {
-//             paddingTop: paddingOrOptions.top ?? paddingOrOptions.paddingTop ?? 80,
-//             paddingRight: paddingOrOptions.right ?? paddingOrOptions.paddingRight ?? 80,
-//             paddingBottom: paddingOrOptions.bottom ?? paddingOrOptions.paddingBottom ?? 80,
-//             paddingLeft: paddingOrOptions.left ?? paddingOrOptions.paddingLeft ?? 80,
-//           };
-//         } else if (paddingOrOptions.padding) {
-//           pad = {
-//             paddingTop: paddingOrOptions.padding.top ?? 80,
-//             paddingRight: paddingOrOptions.padding.right ?? 80,
-//             paddingBottom: paddingOrOptions.padding.bottom ?? 80,
-//             paddingLeft: paddingOrOptions.padding.left ?? 80,
-//           };
-//         }
-//         if (paddingOrOptions.duration) d = paddingOrOptions.duration;
-//       }
-//       if (typeof duration === "number") d = duration;
-//       activeCameraRef.current?.fitBounds(
-//         [west, south, east, north],
-//         { top: pad.paddingTop, right: pad.paddingRight, bottom: pad.paddingBottom, left: pad.paddingLeft },
-//         d
-//       );
-//     },
-//     setCamera: (stop) => {
-//       if (!stop) return;
-//       const center = stop.center || [80.9462, 26.8467];
-//       const zoom = stop.zoom || 14;
-//       activeCameraRef.current?.setStop({
-//         center,
-//         zoom,
-//         pitch: stop.pitch || 0,
-//         heading: stop.heading || 0,
-//         duration: stop.duration || 500,
-//       });
-//     },
-//   }));
-//
-//   const handlePress = useCallback(
-//     (event) => {
-//       if (onPress) {
-//         const geometry = event?.geometry;
-//         const coords = geometry?.coordinates;
-//         onPress({
-//           nativeEvent: {
-//             coordinate: coords
-//               ? { latitude: coords[1], longitude: coords[0] }
-//               : undefined,
-//             lngLat: coords
-//               ? [coords[0], coords[1]]
-//               : undefined,
-//           },
-//         });
-//       }
-//     },
-//     [onPress]
-//   );
-//
-//   return (
-//     <Map
-//       ref={mapRef}
-//       style={[styles.map, style]}
-//       mapStyle={MAPTILER_STYLE}
-//       scrollEnabled={scrollEnabled}
-//       zoomEnabled={zoomEnabled}
-//       touchPitch={pitchEnabled}
-//       touchRotate={rotateEnabled}
-//       onPress={handlePress}
-//       attribution={false}
-//       logo={false}
-//       compass={false}
-//       scaleBar={false}
-//       {...rest}
-//     >
-//       {viewState && (
-//         <Camera
-//           ref={activeCameraRef}
-//           initialViewState={{
-//             center: viewState.center,
-//             zoom: viewState.zoom,
-//             pitch: viewState.pitch,
-//             heading: viewState.heading,
-//           }}
-//           animationDuration={500}
-//         />
-//       )}
-//       {children}
-//     </Map>
-//   );
-// });
-//
-// const styles = StyleSheet.create({
-//   map: {
-//     flex: 1,
-//   },
-// });
-//
-// export default VayyMap;
-// export { ViewAnnotation, GeoJSONSource, Layer };
+function convertInitialRegion(region) {
+  if (!region) return undefined;
+  const { latitude, longitude, latitudeDelta } = region;
+  const zoom = latitudeDelta
+    ? Math.round(14 - Math.log2(((latitudeDelta || 0.05) * 111) / 2))
+    : 14;
+  return {
+    center: [longitude || 80.9462, latitude || 26.8467],
+    zoom,
+  };
+}
+
+const VayyMap = forwardRef(function VayyMap(
+  {
+    style,
+    initialRegion,
+    initialViewState,
+    scrollEnabled = true,
+    zoomEnabled = true,
+    pitchEnabled = true,
+    rotateEnabled = true,
+    zoomControlEnabled,
+    onPress,
+    cameraRef,
+    mapRef: mapRefProp,
+    children,
+    ...rest
+  },
+  ref
+) {
+  const internalMapRef = useRef(null);
+  const internalCameraRef = useRef(null);
+  const activeMapRef = mapRefProp || internalMapRef;
+  const activeCameraRef = cameraRef || internalCameraRef;
+
+  const viewState =
+    initialViewState ||
+    convertInitialRegion(initialRegion) || {
+      center: [80.9462, 26.8467],
+      zoom: 14,
+    };
+
+  useImperativeHandle(ref, () => ({
+    getZoom: async () => {
+      try {
+        return await activeMapRef.current?.getZoom();
+      } catch {
+        return 14;
+      }
+    },
+    getCenter: async () => {
+      try {
+        return await activeMapRef.current?.getCenter();
+      } catch {
+        return [80.9462, 26.8467];
+      }
+    },
+    zoomIn: async (delta = 1, duration = 300) => {
+      try {
+        const zoom = await activeMapRef.current?.getZoom();
+        const center = await activeMapRef.current?.getCenter();
+        const pitch = await activeMapRef.current?.getPitch();
+        const heading = await activeMapRef.current?.getBearing();
+        activeCameraRef.current?.setStop({
+          center: center || [80.9462, 26.8467],
+          zoom: Math.min((zoom || 14) + delta, 22),
+          bearing: heading || 0,
+          duration,
+        });
+      } catch {}
+    },
+    zoomOut: async (delta = 1, duration = 300) => {
+      try {
+        const zoom = await activeMapRef.current?.getZoom();
+        const center = await activeMapRef.current?.getCenter();
+        const pitch = await activeMapRef.current?.getPitch();
+        const heading = await activeMapRef.current?.getBearing();
+        activeCameraRef.current?.setStop({
+          center: center || [80.9462, 26.8467],
+          zoom: Math.max((zoom || 14) - delta, 2),
+          bearing: heading || 0,
+          duration,
+        });
+      } catch {}
+    },
+    fitBounds: (bounds, paddingOrOptions, duration) => {
+      if (!bounds || !Array.isArray(bounds) || bounds.length < 4) return;
+      const [west, south, east, north] = bounds;
+      let d = 500;
+      let pad = {
+        paddingTop: 80,
+        paddingRight: 80,
+        paddingBottom: 80,
+        paddingLeft: 80,
+      };
+      if (typeof paddingOrOptions === "number") {
+        d = paddingOrOptions;
+      } else if (paddingOrOptions && typeof paddingOrOptions === "object") {
+        if (paddingOrOptions.top != null || paddingOrOptions.paddingTop != null) {
+          pad = {
+            paddingTop: paddingOrOptions.top ?? paddingOrOptions.paddingTop ?? 80,
+            paddingRight: paddingOrOptions.right ?? paddingOrOptions.paddingRight ?? 80,
+            paddingBottom: paddingOrOptions.bottom ?? paddingOrOptions.paddingBottom ?? 80,
+            paddingLeft: paddingOrOptions.left ?? paddingOrOptions.paddingLeft ?? 80,
+          };
+        } else if (paddingOrOptions.padding) {
+          pad = {
+            paddingTop: paddingOrOptions.padding.top ?? 80,
+            paddingRight: paddingOrOptions.padding.right ?? 80,
+            paddingBottom: paddingOrOptions.padding.bottom ?? 80,
+            paddingLeft: paddingOrOptions.padding.left ?? 80,
+          };
+        }
+        if (paddingOrOptions.duration) d = paddingOrOptions.duration;
+      }
+      if (typeof duration === "number") d = duration;
+      activeCameraRef.current?.fitBounds(
+        [west, south, east, north],
+        pad,
+        d
+      );
+    },
+    setCamera: (stop) => {
+      if (!stop) return;
+      const center = stop.center || [80.9462, 26.8467];
+      const zoom = stop.zoom || 14;
+      activeCameraRef.current?.setStop({
+        center,
+        zoom,
+        bearing: stop.bearing ?? stop.heading ?? 0,
+        pitch: stop.pitch ?? 0,
+        duration: stop.duration ?? 500,
+      });
+    },
+    getBearing: async () => {
+      try {
+        return await activeMapRef.current?.getBearing();
+      } catch {
+        return 0;
+      }
+    },
+    getPitch: async () => {
+      try {
+        return await activeMapRef.current?.getPitch();
+      } catch {
+        return 0;
+      }
+    },
+  }));
+
+  const handlePress = useCallback(
+    (event) => {
+      if (onPress) {
+        const geometry = event?.geometry;
+        const coords = geometry?.coordinates;
+        onPress({
+          nativeEvent: {
+            coordinate: coords
+              ? { latitude: coords[1], longitude: coords[0] }
+              : undefined,
+            lngLat: coords ? [coords[0], coords[1]] : undefined,
+          },
+        });
+      }
+    },
+    [onPress]
+  );
+
+  return (
+    <Map
+      ref={activeMapRef}
+      style={[styles.map, style]}
+      mapStyle={MAPTILER_STYLE}
+      dragPan={scrollEnabled}
+      touchZoom={zoomEnabled}
+      touchPitch={pitchEnabled}
+      touchRotate={rotateEnabled}
+      onPress={handlePress}
+      scaleBar={false}
+      {...rest}
+    >
+      <Camera
+        ref={activeCameraRef}
+        initialViewState={viewState}
+      />
+      {children}
+    </Map>
+  );
+});
+
+const styles = StyleSheet.create({
+  map: {
+    flex: 1,
+    backgroundColor: "#E8E8E8",
+  },
+});
+
+export default VayyMap;
+export { ViewAnnotation, GeoJSONSource, Layer, Marker, UserLocation, Camera, Images, Animated };

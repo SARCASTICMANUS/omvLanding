@@ -27,6 +27,59 @@ def check_assignment_timeout(trip_id):
         pass
 
 
+@shared_task
+def expire_broadcast_request(request_id):
+    """
+    Expires a broadcast dispatch request after timeout (90s).
+    Notifies all drivers to dismiss popup, and notifies passenger.
+    """
+    from operations.models import DispatchRequest
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    try:
+        dispatch_request = DispatchRequest.objects.get(id=request_id)
+
+        if dispatch_request.status != DispatchRequest.STATUS_PENDING:
+            return
+
+        dispatch_request.status = DispatchRequest.STATUS_EXPIRED
+        dispatch_request.save()
+
+        channel_layer = get_channel_layer()
+
+        # Notify all drivers → dismiss popup
+        for driver_id_str in dispatch_request.notified_drivers:
+            async_to_sync(channel_layer.group_send)(
+                f"notifications_{driver_id_str}",
+                {
+                    "type": "notification_broadcast",
+                    "data": {
+                        "type": "request_expired",
+                        "request_id": str(dispatch_request.id),
+                    },
+                },
+            )
+
+        # Notify passenger → no drivers available
+        # Passenger listens on a broadcast_{request_id} group
+        async_to_sync(channel_layer.group_send)(
+            f"broadcast_{dispatch_request.id}",
+            {
+                "type": "broadcast_update",
+                "data": {
+                    "type": "no_drivers_available",
+                    "request_id": str(dispatch_request.id),
+                },
+            },
+        )
+
+        logger.info(f"Broadcast dispatch {request_id} expired — notified {len(dispatch_request.notified_drivers)} drivers")
+
+    except DispatchRequest.DoesNotExist:
+        logger.warning(f"Broadcast dispatch {request_id} not found for expiry")
+
+
 @shared_task(
     bind=True,
     default_retry_delay=10,

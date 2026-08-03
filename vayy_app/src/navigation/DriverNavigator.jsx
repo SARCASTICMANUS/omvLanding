@@ -1,5 +1,4 @@
 import React from "react";
-import { Text, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 
@@ -10,7 +9,6 @@ import DriverRouteList from "../driver/screens/DriverRouteList";
 import DriverFindPassengersScreen from "../driver/screens/DriverFindPassengersScreen";
 import DriverLiveTracking from "../driver/screens/DriverLiveTracking";
 import DriverTripReview from "../driver/screens/DriverTripReview";
-import DriverActionsScreen from "../driver/bike-ride/DriverActionsScreen";
 import DriverTripHistoryScreen from "../driver/screens/DriverTripHistoryScreen";
 import ProfileScreen from "../shared/screens/ProfileScreen";
 import EditProfileScreen from "../shared/screens/EditProfileScreen";
@@ -22,7 +20,7 @@ import AutoFindPassengerScreen from "../driver/shared-auto/AutoFindPassengerScre
 import AutoRideToPickupScreen from "../driver/shared-auto/AutoRideToPickupScreen";
 import AutoRideToDestinationScreen from "../driver/shared-auto/AutoRideToDestinationScreen";
 import AutoTripCompleteScreen from "../driver/shared-auto/AutoTripCompleteScreen";
-import { LayoutDashboard, Map, User, Settings } from "lucide-react-native";
+import { LayoutDashboard, Map, User } from "lucide-react-native";
 
 // Auto Flow Screens (for future)
 import AutoAheadAlertScreen from "../driver/shared-auto/AutoAheadAlertScreen";
@@ -31,14 +29,11 @@ import AutoLiveTrackingScreen from "../driver/shared-auto/AutoLiveTrackingScreen
 
 // Bike Flow Screens
 import { BikeSearchingScreen } from "../passenger/bike-ride/BikeSearchingScreen";
-import BuddyRequestPopupScreen from "../driver/bike-ride/BikeBookingScreen";
 import BikeOTPEntryScreen from "../driver/bike-ride/BikeOTPEntryScreen";
-import BikeOTPHandshakeScreen from "../driver/bike-ride/BikeOTPHandshakeScreen";
 import VehicleSelectionScreen from "../driver/screens/VehicleSelectionScreen";
 import BikeRideToPickupScreen from "../driver/bike-ride/BikeRideToPickupScreen";
 import BikeRideToDestinationScreen from "../driver/bike-ride/BikeRideToDestinationScreen";
 import BikeTripCompleteScreen from "../driver/bike-ride/BikeTripCompleteScreen";
-import BikeTrackingScreen from "../driver/bike-ride/BikeTrackingScreen";
 import TripEndSummary from "../routes/screens/TripEndSummary";
 
 const Tab = createBottomTabNavigator();
@@ -70,7 +65,6 @@ function DriverTabs() {
     >
       <Tab.Screen name="DriverModeSelect" component={DriverModeSelectScreen} options={{ title: "Home", tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} /> }} />
       <Tab.Screen name="DriverRoutes" component={DriverRouteList} options={{ title: "Routes", tabBarIcon: ({ color, size }) => <Map size={size} color={color} /> }} />
-      <Tab.Screen name="DriverActions" component={DriverActionsScreen} options={{ title: "Actions", tabBarIcon: ({ color, size }) => <Settings size={size} color={color} /> }} />
       <Tab.Screen name="ProfileScreen" component={ProfileScreen} options={{ title: "Profile", tabBarIcon: ({ color, size }) => <User size={size} color={color} /> }} />
     </Tab.Navigator>
   );
@@ -92,13 +86,10 @@ export default function DriverNavigator() {
       <Stack.Screen name="BoardedPopup" component={AutoBoardedPopupScreen} />
       <Stack.Screen name="AutoRideActive" component={AutoLiveTrackingScreen} />
       <Stack.Screen name="BikeSearching" component={BikeSearchingScreen} />
-      <Stack.Screen name="BuddyRequestPopup" component={BuddyRequestPopupScreen} />
       <Stack.Screen name="BikeOTPEntry" component={BikeOTPEntryScreen} />
-      <Stack.Screen name="OTPHandshake" component={BikeOTPHandshakeScreen} />
       <Stack.Screen name="BikeRideToPickup" component={BikeRideToPickupScreen} />
       <Stack.Screen name="BikeRideToDestination" component={BikeRideToDestinationScreen} />
       <Stack.Screen name="BikeTripComplete" component={BikeTripCompleteScreen} />
-      <Stack.Screen name="BikeTracking" component={BikeTrackingScreen} />
       <Stack.Screen name="TripEndSummary" component={TripEndSummary} />
       <Stack.Screen name="DriverAutoHome" component={DriverAutoHomeScreen} />
       <Stack.Screen name="AutoFindPassenger" component={AutoFindPassengerScreen} />

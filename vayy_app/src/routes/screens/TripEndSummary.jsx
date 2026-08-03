@@ -13,7 +13,7 @@ export default function TripEndSummary({ navigation, route }) {
   const { summary = {}, stats = {} } = route.params || {};
 
   const handleFinish = () => {
-    navigation.navigate("DriverHome");
+    navigation.navigate("DriverTabs");
   };
 
   return (

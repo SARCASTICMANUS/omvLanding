@@ -45,18 +45,6 @@ export const createBoardingRequest = createAsyncThunk(
   }
 );
 
-export const cancelBoardingRequest = createAsyncThunk(
-  "dispatch/cancelBoardingRequest",
-  async (requestId, { rejectWithValue }) => {
-    try {
-      await api.delete(`${OPERATIONS.boardingRequests}${requestId}/`);
-      return requestId;
-    } catch (error) {
-      return rejectWithValue(error.response?.data || "Failed to cancel boarding request");
-    }
-  }
-);
-
 export const cancelDispatch = createAsyncThunk(
   "dispatch/cancel",
   async (tripId, { rejectWithValue }) => {
@@ -107,9 +95,9 @@ export const arrivedDispatch = createAsyncThunk(
 
 export const startDispatchTrip = createAsyncThunk(
   "dispatch/start",
-  async (tripId, { rejectWithValue }) => {
+  async ({ tripId, otp }, { rejectWithValue }) => {
     try {
-      const response = await api.patch(OPERATIONS.dispatchStart(tripId));
+      const response = await api.patch(OPERATIONS.dispatchStart(tripId), { otp });
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || "Failed to start trip");
@@ -125,6 +113,42 @@ export const completeDispatch = createAsyncThunk(
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || "Failed to complete trip");
+    }
+  }
+);
+
+export const acceptBroadcast = createAsyncThunk(
+  "dispatch/acceptBroadcast",
+  async (requestId, { rejectWithValue }) => {
+    try {
+      const response = await api.post(OPERATIONS.broadcastAccept(requestId));
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || "Failed to accept broadcast");
+    }
+  }
+);
+
+export const rejectBroadcast = createAsyncThunk(
+  "dispatch/rejectBroadcast",
+  async (requestId, { rejectWithValue }) => {
+    try {
+      const response = await api.post(OPERATIONS.broadcastReject(requestId));
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || "Failed to reject broadcast");
+    }
+  }
+);
+
+export const cancelBroadcast = createAsyncThunk(
+  "dispatch/cancelBroadcast",
+  async (requestId, { rejectWithValue }) => {
+    try {
+      const response = await api.post(OPERATIONS.broadcastCancel(requestId));
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || "Failed to cancel broadcast");
     }
   }
 );
@@ -154,12 +178,6 @@ const dispatchSlice = createSlice({
     setDispatchStatus: (state, action) => {
       state.status = action.payload;
     },
-    setAssigned: (state, action) => {
-      state.status = "assigned";
-      if (action.payload) {
-        state.activeDispatch = { ...state.activeDispatch, ...action.payload };
-      }
-    },
   },
   extraReducers: (builder) => {
     builder
@@ -183,18 +201,6 @@ const dispatchSlice = createSlice({
         state.boardingRequest = payload;
       })
       .addCase(createBoardingRequest.rejected, (state, action) => {
-        state.status = "failed";
-        state.error = action.payload;
-      })
-      .addCase(cancelBoardingRequest.pending, (state) => {
-        state.status = "cancelling";
-        state.error = null;
-      })
-      .addCase(cancelBoardingRequest.fulfilled, (state) => {
-        state.status = "cancelled";
-        state.boardingRequest = null;
-      })
-      .addCase(cancelBoardingRequest.rejected, (state, action) => {
         state.status = "failed";
         state.error = action.payload;
       })
@@ -287,9 +293,40 @@ const dispatchSlice = createSlice({
       .addCase(completeDispatch.rejected, (state, action) => {
         state.status = "failed";
         state.error = action.payload;
+      })
+      .addCase(acceptBroadcast.pending, (state) => {
+        state.status = "accepting";
+        state.error = null;
+      })
+      .addCase(acceptBroadcast.fulfilled, (state, action) => {
+        const payload = action.payload.data || action.payload;
+        if (payload.status === "accepted") {
+          state.status = "broadcast_accepted";
+          state.activeDispatch = payload;
+        } else {
+          state.status = "failed";
+          state.error = { message: payload.message || "Request already taken" };
+        }
+      })
+      .addCase(acceptBroadcast.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload;
+      })
+      .addCase(rejectBroadcast.fulfilled, (state) => {
+        state.status = "broadcast_rejected";
+      })
+      .addCase(rejectBroadcast.rejected, (state, action) => {
+        state.error = action.payload;
+      })
+      .addCase(cancelBroadcast.fulfilled, (state) => {
+        state.status = "broadcast_cancelled";
+        state.activeDispatch = null;
+      })
+      .addCase(cancelBroadcast.rejected, (state, action) => {
+        state.error = action.payload;
       });
   },
 });
 
-export const { clearDispatch, updateDispatchStatus, setDispatchStatus, setAssigned } = dispatchSlice.actions;
+export const { clearDispatch, updateDispatchStatus, setDispatchStatus } = dispatchSlice.actions;
 export default dispatchSlice.reducer;

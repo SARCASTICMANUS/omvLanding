@@ -4,6 +4,7 @@ from operations.api.views import (
     TripRatingAPIView,
     TripHistoryAPIView,
     DriverEarningsAPIView,
+    TripFareDetailAPIView,
 )
 
 urlpatterns = [
@@ -11,4 +12,5 @@ urlpatterns = [
     path('rating/', TripRatingAPIView.as_view(), name='trip-rating'),
     path('history/', TripHistoryAPIView.as_view(), name='trip-history'),
     path('earnings/', DriverEarningsAPIView.as_view(), name='driver-earnings'),
+    path('trip/<uuid:trip_id>/fare/', TripFareDetailAPIView.as_view(), name='trip-fare'),
 ]

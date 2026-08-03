@@ -18,11 +18,10 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
-import api from "../../shared/lib/api";
-import { saveRecentSearch, searchRoutesByLocation } from "../services/passengerService";
+import { getRecentSearches, saveRecentSearch, searchRoutesByLocation } from "../services/passengerService";
 
 import COLORS from "../../shared/constants/colors";
-import { NOMINATIM_SEARCH, USER_AGENT, AUTH, STORAGE_KEYS } from "../../constants";
+import { NOMINATIM_SEARCH, USER_AGENT } from "../../constants";
 import RADIUS from "../../shared/constants/radius";
 import SHADOW from "../../shared/constants/shadow";
 import SPACING from "../../shared/constants/spacing";
@@ -292,8 +291,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
   const fetchRecentSearches = async () => {
     try {
       setFetchingRecent(true);
-      const response = await api.get("/api/accounts/recent-searches/");
-      const data = response.data?.data || response.data;
+      const data = await getRecentSearches();
       setRecentSearches(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to fetch recent searches:", error);

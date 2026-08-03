@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useCallback } from "react";
 import {
   Animated,
   Keyboard,
@@ -13,6 +13,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
 import { startDispatchTrip } from "../../store/slices/dispatchSlice";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import { WS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
 
 export default function BikeOTPEntryScreen({ navigation, route }) {
@@ -43,7 +45,7 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     const code = otp.join("");
     if (code.length < 4) {
       setOtpError("");
@@ -56,31 +58,40 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
       ]).start();
       return;
     }
-    const expectedOtp = String(buddy?.otp || "");
-    if (expectedOtp && code !== expectedOtp) {
-      setOtpError("Invalid code. Please try again.");
-      Animated.sequence([
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 8, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -8, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
-      ]).start();
-      return;
+    // Verify OTP via backend
+    if (dispatchId) {
+      try {
+        await dispatchRedux(startDispatchTrip({ tripId: dispatchId, otp: code })).unwrap();
+      } catch (e) {
+        setOtpError("Invalid code. Please try again.");
+        Animated.sequence([
+          Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 8, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -8, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+        ]).start();
+        return;
+      }
     }
     setOtpError("");
     setShowSuccess(true);
     Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 80, useNativeDriver: true }).start();
-    // Start the trip on backend
-    if (dispatchId) {
-      dispatchRedux(startDispatchTrip(dispatchId)).catch((e) => {
-        console.warn("startDispatchTrip failed:", e);
-      });
-    }
     setTimeout(() => {
       navigation.replace("BikeRideToDestination", { buddy, dispatchId });
     }, 1200);
   };
+
+  const handleWsMessage = useCallback((data) => {
+    if (data.status === "cancelled" || data.status === "completed") {
+      navigation.navigate("DriverTabs");
+    }
+  }, [navigation]);
+
+  useWebSocket(dispatchId ? WS.dispatch(dispatchId) : null, {
+    enabled: !!dispatchId,
+    onMessage: handleWsMessage,
+  });
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -99,8 +110,8 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
             <Text style={styles.avatarText}>{buddy?.avatar || "RK"}</Text>
           </View>
           <View>
-            <Text style={styles.buddyName}>{buddy?.name || "Ravi Kumar"}</Text>
-            <Text style={styles.buddyDetail}>{buddy?.pickup || "Hazratganj"}</Text>
+            <Text style={styles.buddyName}>{buddy?.name || "Passenger"}</Text>
+            <Text style={styles.buddyDetail}>{buddy?.pickup || "Pickup"}</Text>
           </View>
         </View>
 

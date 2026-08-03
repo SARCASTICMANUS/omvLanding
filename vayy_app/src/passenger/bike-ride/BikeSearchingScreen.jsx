@@ -9,7 +9,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
-// import VayyMap, { ViewAnnotation, UserLocation } from "../../shared/components/VayyMap";
+import VayyMap, { ViewAnnotation, UserLocation } from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
@@ -20,13 +20,12 @@ import {
 
 import { NoRideFoundPopup } from "./NoRideFoundPopup";
 import { ConfirmPopup } from "./ConfirmPopup";
-import { requestDispatch, cancelDispatch, setDispatchStatus, clearDispatch } from "../../store/slices/dispatchSlice";
+import { requestDispatch, cancelDispatch, cancelBroadcast, setDispatchStatus, clearDispatch } from "../../store/slices/dispatchSlice";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
-// import locationService from "../../shared/lib/locationService";
+import locationService from "../../shared/lib/locationService";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
-const { width } = Dimensions.get("window");
 
 export function BikeSearchingScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -45,11 +44,15 @@ export function BikeSearchingScreen({ navigation, route }) {
   const [currentPosition, setCurrentPosition] = useState(null);
   const locationReadyRef = useRef(false);
   const searchStartedRef = useRef(false);
+  const [activeTripId, setActiveTripId] = useState(null);
+  const [activeRequestId, setActiveRequestId] = useState(null);
+  const timeoutRef = useRef(null);
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
 
   const didFlyRef = useRef(false);
+  const navigatedRiderPopupRef = useRef(false);
 
   useEffect(() => {
     didFlyRef.current = false;
@@ -63,52 +66,84 @@ export function BikeSearchingScreen({ navigation, route }) {
     return () => {
       clearTimeout(timeoutRef.current);
       // locationService.stopTracking();
+      if (activeRequestId) {
+        dispatch(cancelBroadcast(activeRequestId));
+      }
       dispatch(clearDispatch());
     };
   }, []);
 
   useEffect(() => {
-    //  correct code to get real location
-    // let unsub;
-    // locationService.startTracking((coords) => {
-    //   const pos = { latitude: coords.latitude, longitude: coords.longitude };
-    //   setCurrentPosition(pos);
-    //   if (!didFlyRef.current && cameraRef.current) {
-    //     didFlyRef.current = true;
-    //     cameraRef.current.setStop({
-    //       center: [coords.longitude, coords.latitude],
-    //       zoom: 16,
-    //       duration: 1200,
-    //     });
-    //     setTimeout(() => {
-    //       locationReadyRef.current = true;
-    //       setSearchStatus("searching");
-    //     }, 1400);
-    //   }
-    // }, { distanceInterval: 10, timeInterval: 5000 });
-    // unsub = () => locationService.stopTracking();
-    // return () => { if (unsub) unsub(); };
-
-    // hardcode lucknow location
-    setCurrentPosition({ latitude: 26.725673, longitude: 80.9595103 });
-    if (cameraRef.current) {
-      cameraRef.current.setStop({
-        center: [80.9595103, 26.725673],
-        zoom: 16,
-        duration: 1200,
-      });
-    }
-    setTimeout(() => {
-      locationReadyRef.current = true;
-      setSearchStatus("searching");
-    }, 1400);
-    return () => {};
+    let unsub;
+    locationService.startTracking((coords) => {
+      const pos = { latitude: coords.latitude, longitude: coords.longitude };
+      setCurrentPosition(pos);
+      if (!didFlyRef.current) {
+        didFlyRef.current = true;
+        if (cameraRef.current) {
+          cameraRef.current.setStop({
+            center: [coords.longitude, coords.latitude],
+            zoom: 16,
+            duration: 1200,
+          });
+        }
+        setTimeout(() => {
+          locationReadyRef.current = true;
+          setSearchStatus("searching");
+        }, 1400);
+      }
+    }, { distanceInterval: 10, timeInterval: 5000 });
+    unsub = () => locationService.stopTracking();
+    return () => { if (unsub) unsub(); };
   }, []);
 
-  const [activeTripId, setActiveTripId] = useState(null);
-  const timeoutRef = useRef(null);
+  // ── WebSocket: listen for broadcast dispatch updates (passenger) ──
+  const handleBroadcastWsMessage = useCallback((data) => {
+    if (data.type === "request_accepted" && data.trip_id) {
+      // A driver accepted — navigate to RiderPopup with trip data
+      clearTimeout(timeoutRef.current);
+      dispatch(setDispatchStatus("accepted"));
+      setActiveTripId(data.trip_id);
+      setSearchStatus("found");
 
-  // ── WebSocket: listen for driver accept/reject on the dispatch channel ──
+      const pickupRaw = route?.params?.pickup;
+      const pickupStr = typeof pickupRaw === "string" ? pickupRaw : pickupRaw?.name || pickupRaw?.display_name || "Pickup";
+      const distMeters = data.distance_km ? Math.round(data.distance_km * 1000) : null;
+      const distKm = data.distance_km ? `${data.distance_km} km` : "—";
+      const distLabels = distMeters ? [distKm, `${Math.round(distMeters * 0.66)}m`, `${Math.round(distMeters * 0.33)}m`, "Arrived"] : [distKm];
+      const etaMin = data.eta || 5;
+      const etaLabels = [`${etaMin} min`, `${Math.max(1, Math.round(etaMin * 0.6))} min`, `${Math.max(1, Math.round(etaMin * 0.3))} min`, "0 min"];
+      navigatedRiderPopupRef.current = true;
+      setTimeout(() => navigation.navigate("RiderPopup", {
+        driverName: data.driver_name || "Driver",
+        vehicle: data.vehicle_number || "",
+        otp: data.otp || "—",
+        distanceLabels: distLabels,
+        etaLabels: etaLabels,
+        dispatchId: data.trip_id,
+        destination: route?.params?.destination || "Destination",
+        pickup: pickupStr,
+        pickupName: route?.params?.pickupName || pickupStr,
+        eta: String(etaMin),
+        distance: distMeters ? String(distMeters) : "—",
+        fare: route?.params?.fare || "—",
+        route_id,
+        tripData: data,
+      }), 600);
+    } else if (data.type === "no_drivers_available") {
+      clearTimeout(timeoutRef.current);
+      setShowNoRide(true);
+      setSearchStatus("failed");
+      setActiveRequestId(null);
+    }
+  }, [dispatch, navigation, route?.params, route_id]);
+
+  useWebSocket(activeRequestId ? WS.dispatchBroadcast(activeRequestId) : null, {
+    enabled: !!activeRequestId,
+    onMessage: handleBroadcastWsMessage,
+  });
+
+  // ── WebSocket: listen for driver accept/reject on the dispatch channel (direct mode fallback) ──
   const handleWsMessage = useCallback((data) => {
     // Backend sends raw payload: { trip_id, status, updated_at, ... }
     // "accepted" / "assigned" means a driver was matched
@@ -145,7 +180,7 @@ export function BikeSearchingScreen({ navigation, route }) {
         const result = await dispatch(requestDispatch({
           route_id,
           pickup_stop_id,
-          mode: "direct",
+          mode: "broadcast",
         })).unwrap();
         const payload = result.data || result;
         if (payload.status === "no_drivers_available") {
@@ -153,15 +188,21 @@ export function BikeSearchingScreen({ navigation, route }) {
           setSearchStatus("failed");
           return;
         }
+        // Store request_id for broadcast WS listener
+        const requestId = payload.request_id;
+        if (requestId) {
+          setActiveRequestId(requestId);
+        }
         const tripId = payload.trip_id || payload.id;
         if (tripId) {
           setActiveTripId(tripId);
         }
         // 90s timeout: if no driver responds, cancel and show retry
         timeoutRef.current = setTimeout(() => {
-          if (tripId) dispatch(cancelDispatch(tripId));
+          if (requestId) dispatch(cancelBroadcast(requestId));
           setShowNoRide(true);
           setSearchStatus("failed");
+          setActiveRequestId(null);
           setActiveTripId(null);
         }, 90000);
       } catch (err) {
@@ -185,13 +226,14 @@ export function BikeSearchingScreen({ navigation, route }) {
     clearTimeout(timeoutRef.current);
     searchStartedRef.current = false;
     setActiveTripId(null);
+    setActiveRequestId(null);
 
     if (route_id && pickup_stop_id) {
       try {
         const result = await dispatch(requestDispatch({
           route_id,
           pickup_stop_id,
-          mode: "direct",
+          mode: "broadcast",
         })).unwrap();
         const payload = result.data || result;
         if (payload.status === "no_drivers_available") {
@@ -199,14 +241,19 @@ export function BikeSearchingScreen({ navigation, route }) {
           setSearchStatus("failed");
           return;
         }
+        const requestId = payload.request_id;
+        if (requestId) {
+          setActiveRequestId(requestId);
+        }
         const tripId = payload.trip_id || payload.id;
         if (tripId) {
           setActiveTripId(tripId);
         }
         timeoutRef.current = setTimeout(() => {
-          if (tripId) dispatch(cancelDispatch(tripId));
+          if (requestId) dispatch(cancelBroadcast(requestId));
           setShowNoRide(true);
           setSearchStatus("failed");
+          setActiveRequestId(null);
           setActiveTripId(null);
         }, 90000);
       } catch (err) {
@@ -218,31 +265,31 @@ export function BikeSearchingScreen({ navigation, route }) {
   }
 
   useEffect(() => {
-    if (dispatchStatus === "accepted") {
+    if (dispatchStatus === "accepted" && !navigatedRiderPopupRef.current) {
       clearTimeout(timeoutRef.current);
       setSearchStatus("found");
       const driverData = activeDispatch || {};
       const pickupRaw = route?.params?.pickup;
       const pickupStr = typeof pickupRaw === "string" ? pickupRaw : pickupRaw?.name || pickupRaw?.display_name || "Pickup";
       const pickupName = route?.params?.pickupName || pickupStr;
-      const rawDist = Number(driverData.distance) || 1200;
-      const rawEta = Number(driverData.eta) || 5;
-      const fmtDist = (d) => d > 1000 ? `${(d / 1000).toFixed(1)} km` : `${d} m`;
-      const distanceLabels = [fmtDist(rawDist), fmtDist(Math.round(rawDist * 0.66)), fmtDist(Math.round(rawDist * 0.33)), "Arrived"];
-      const etaLabels = [`${rawEta} min`, `${Math.max(1, Math.round(rawEta * 0.6))} min`, `${Math.max(1, Math.round(rawEta * 0.3))} min`, "0 min"];
+                const rawDist = Number(driverData.distance) || null;
+      const rawEta = Number(driverData.eta) || null;
+      const fmtDist = (d) => d == null ? "—" : d > 1000 ? `${(d / 1000).toFixed(1)} km` : `${d} m`;
+      const distanceLabels = rawDist != null ? [fmtDist(rawDist), fmtDist(Math.round(rawDist * 0.66)), fmtDist(Math.round(rawDist * 0.33)), "Arrived"] : ["—"];
+      const etaLabels = rawEta != null ? [`${rawEta} min`, `${Math.max(1, Math.round(rawEta * 0.6))} min`, `${Math.max(1, Math.round(rawEta * 0.3))} min`, "0 min"] : ["—"];
       setTimeout(() => navigation.navigate('RiderPopup', {
         driverName: driverData.driver_name || driverData.driver?.full_name || "Driver",
         vehicle: driverData.vehicle_number || driverData.vehicle?.vehicle_number || "",
-        otp: driverData.otp || "0000",
+                  otp: driverData.otp || "—",
         distanceLabels,
         etaLabels,
         dispatchId: driverData.trip_id || driverData.id,
         destination: route?.params?.destination || "Destination",
         pickup: pickupStr,
         pickupName: pickupName,
-        eta: driverData.eta || "5",
+                  eta: driverData.eta || "—",
         distance: driverData.distance || "1200",
-        fare: driverData.fare || route?.params?.fare || 45,
+                  fare: driverData.fare || route?.params?.fare || "—",
         route_id,
         tripData: driverData,
       }), 600);
@@ -292,7 +339,9 @@ export function BikeSearchingScreen({ navigation, route }) {
 
   const handleCancelRequest = () => {
     setShowCancelConfirm(false);
-    if (activeTripId) {
+    if (activeRequestId) {
+      dispatch(cancelBroadcast(activeRequestId));
+    } else if (activeTripId) {
       dispatch(cancelDispatch(activeTripId));
     }
     navigation.goBack();
@@ -304,12 +353,12 @@ export function BikeSearchingScreen({ navigation, route }) {
 
       {/* Map Area with Searching Animation */}
       <View style={styles.mapArea}>
-        {/* <VayyMap
+        <VayyMap
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
           initialViewState={{
-            center: [currentPosition?.longitude || 80.9462, currentPosition?.latitude || 26.8467],
+            center: currentPosition ? [currentPosition.longitude, currentPosition.latitude] : [80.8, 26.8],
             zoom: 15,
           }}
           scrollEnabled={true}
@@ -352,7 +401,7 @@ export function BikeSearchingScreen({ navigation, route }) {
               </View>
             </ViewAnnotation>
           )}
-        </VayyMap> */}
+        </VayyMap>
         <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
         {/* Header */}
@@ -427,24 +476,24 @@ export function BikeSearchingScreen({ navigation, route }) {
                 const pickupRaw = route?.params?.pickup;
                 const pickupStr = typeof pickupRaw === "string" ? pickupRaw : pickupRaw?.name || pickupRaw?.display_name || "Pickup";
                 const driverData = activeDispatch || {};
-                const rawDist = Number(driverData.distance) || 1200;
-                const rawEta = Number(driverData.eta) || 5;
-                const fmtDist = (d) => d > 1000 ? `${(d / 1000).toFixed(1)} km` : `${d} m`;
-                const distLabels = [fmtDist(rawDist), fmtDist(Math.round(rawDist * 0.66)), fmtDist(Math.round(rawDist * 0.33)), "Arrived"];
-                const etaLbls = [`${rawEta} min`, `${Math.max(1, Math.round(rawEta * 0.6))} min`, `${Math.max(1, Math.round(rawEta * 0.3))} min`, "0 min"];
+      const rawDist = Number(driverData.distance) || null;
+                const rawEta = Number(driverData.eta) || null;
+                const fmtDist = (d) => d == null ? "—" : d > 1000 ? `${(d / 1000).toFixed(1)} km` : `${d} m`;
+                const distLabels = rawDist != null ? [fmtDist(rawDist), fmtDist(Math.round(rawDist * 0.66)), fmtDist(Math.round(rawDist * 0.33)), "Arrived"] : ["—"];
+                const etaLbls = rawEta != null ? [`${rawEta} min`, `${Math.max(1, Math.round(rawEta * 0.6))} min`, `${Math.max(1, Math.round(rawEta * 0.3))} min`, "0 min"] : ["—"];
                 navigation.replace('RiderPopup', {
                   driverName: driverData.driver_name || driverData.driver?.full_name || "Driver",
                   vehicle: driverData.vehicle_number || driverData.vehicle?.vehicle_number || "",
-                  otp: driverData.otp || "0000",
+        otp: driverData.otp || "—",
                   distanceLabels: distLabels,
                   etaLabels: etaLbls,
                   dispatchId: driverData.trip_id || driverData.id || activeTripId,
                   destination: route?.params?.destination || "Destination",
                   pickup: pickupStr,
                   pickupName: route?.params?.pickupName || pickupStr,
-                  eta: driverData.eta || "5",
-                  distance: driverData.distance || "1200",
-                  fare: driverData.fare || route?.params?.fare || 45,
+        eta: driverData.eta || "—",
+                  distance: driverData.distance || "—",
+        fare: driverData.fare || route?.params?.fare || "—",
                   route_id,
                   tripData: driverData,
                 });
@@ -469,7 +518,7 @@ export function BikeSearchingScreen({ navigation, route }) {
       <NoRideFoundPopup
         visible={showNoRide}
         onTryAgain={handleTryAgain}
-        onCancel={() => navigation.goBack()}
+        onCancel={() => setShowNoRide(false)}
       />
 
       <ConfirmPopup

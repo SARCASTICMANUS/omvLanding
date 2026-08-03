@@ -188,7 +188,7 @@ export function AutoRideCompleteScreen({ navigation, route }) {
               if (rating > 0 && tripId) {
                 await dispatch(submitRating({ trip: tripId, rating }));
               }
-              navigation.popToTop();
+              navigation.reset({ index: 0, routes: [{ name: "PassengerTabs" }] });
             }}
           >
             <Text style={styles.secondaryBtnText}>Return Home</Text>

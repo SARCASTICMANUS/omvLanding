@@ -58,7 +58,7 @@ export default function DriverTripHistoryScreen({ navigation, route }) {
 
         <TouchableOpacity
           style={[styles.primaryBtn, { backgroundColor: accent }]}
-          onPress={() => navigation.navigate("DriverModeSelect")}
+          onPress={() => navigation.navigate("DriverTabs", { screen: "DriverModeSelect" })}
         >
           <Text style={styles.primaryBtnText}>Start New Trip</Text>
         </TouchableOpacity>

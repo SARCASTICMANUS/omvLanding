@@ -18,6 +18,7 @@ from accounts.api.views import (
     DriverDocumentAPIView,
     RecentSearchAPIView,
     UserViewSet,
+    PushTokenAPIView,
 )
 
 router = DefaultRouter()
@@ -58,4 +59,7 @@ urlpatterns = [
 
     # Recent Searches
     path("recent-searches/", RecentSearchAPIView.as_view()),
+
+    # Push Notifications
+    path("push-token/", PushTokenAPIView.as_view()),
 ]

@@ -1,5 +1,5 @@
-import React, { useRef, useState } from "react";
-// import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+import React, { useEffect, useRef, useState } from "react";
+import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import { View, StyleSheet } from "react-native";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
@@ -11,6 +11,10 @@ const AdminMap = ({ onRouteChange }) => {
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
 
+  useEffect(() => {
+    onRouteChange({ startPoint, endPoint, stops });
+  }, [startPoint, endPoint, stops, onRouteChange]);
+
   const handleMapPress = (e) => {
     const coord = e.nativeEvent.lngLat;
 
@@ -21,24 +25,20 @@ const AdminMap = ({ onRouteChange }) => {
     } else {
       setStops([...stops, coord]);
     }
-
-    onRouteChange({
-      startPoint,
-      endPoint,
-      stops,
-    });
   };
+
+  const toCoord = (p) => p ? [p[0], p[1]] : null;
 
   return (
     <View style={styles.container}>
-      {/* <VayyMap ref={mapRef} style={styles.map} onPress={handleMapPress}>
+      <VayyMap ref={mapRef} style={styles.map} onPress={handleMapPress}>
         {startPoint && (
-          <ViewAnnotation id="start" lngLat={[startPoint.longitude, startPoint.latitude]} anchor="center">
+          <ViewAnnotation id="start" lngLat={toCoord(startPoint)} anchor="center">
             <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: "#009849", borderWidth: 2, borderColor: "#fff" }} />
           </ViewAnnotation>
         )}
         {endPoint && (
-          <ViewAnnotation id="end" lngLat={[endPoint.longitude, endPoint.latitude]} anchor="center">
+          <ViewAnnotation id="end" lngLat={toCoord(endPoint)} anchor="center">
             <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: "#EF4444", borderWidth: 2, borderColor: "#fff" }} />
           </ViewAnnotation>
         )}
@@ -47,7 +47,7 @@ const AdminMap = ({ onRouteChange }) => {
           <ViewAnnotation
             key={`stop-${index}`}
             id={`stop-${index}`}
-            lngLat={[stop.longitude, stop.latitude]}
+            lngLat={toCoord(stop)}
             anchor="center"
           >
             <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: "#F59E0B", borderWidth: 2, borderColor: "#fff" }} />
@@ -62,9 +62,9 @@ const AdminMap = ({ onRouteChange }) => {
               geometry: {
                 type: "LineString",
                 coordinates: [
-                  [startPoint.longitude, startPoint.latitude],
-                  ...stops.map((s) => [s.longitude, s.latitude]),
-                  [endPoint.longitude, endPoint.latitude],
+                  toCoord(startPoint),
+                  ...stops.map((s) => toCoord(s)),
+                  toCoord(endPoint),
                 ],
               },
             }}
@@ -81,7 +81,7 @@ const AdminMap = ({ onRouteChange }) => {
             />
           </GeoJSONSource>
         )}
-      </VayyMap> */}
+      </VayyMap>
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
     </View>
   );

@@ -22,8 +22,8 @@ services:
     image: rabbitmq:3.13-management   #rabbitmq:4-management
     container_name: vayy-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: admin123
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -55,12 +55,24 @@ services:
       redis:
         condition: service_healthy
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: vayy-ngrok
+    depends_on:
+      - web
+    command: http web:8000
+    environment:
+      - NGROK_AUTHTOKEN=3Gufk5Dojxrl16MBjGBnDUNuRzk_7T2wAURUmA8BTL3X8aPas
+    ports:
+      - "4040:4040"
+
   celery:
     build: .
     container_name: vayy-celery
     command: >
       sh -c "celery -A vayy worker -l info -Q celery,tracking,dispatch &
-             python manage.py consume_boarding"
+             python manage.py consume_boarding &
+             python manage.py consume_location"
     volumes:
       - .:/app
       - /app/.venv/        # <-- Apply the same mask here

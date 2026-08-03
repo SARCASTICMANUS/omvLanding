@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
-// import VayyMap from "../../shared/components/VayyMap";
+import VayyMap from "../../shared/components/VayyMap";
 import AutoCancelRideModal from "./AutoCancelRideModal";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
@@ -21,8 +21,9 @@ const { width } = Dimensions.get("window");
 export default function AutoRideToPickupScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const buddy = route.params?.buddy;
-  const [distance, setDistance] = useState(1.2);
-  const [eta, setEta] = useState("4 min");
+  const initialDist = buddy?.distance_km || null;
+  const [distance, setDistance] = useState(initialDist);
+  const [eta, setEta] = useState(buddy?.eta ? `${buddy.eta} min` : "—");
   const [showArrivedModal, setShowArrivedModal] = useState(false);
   const mapRef = useRef(null);
   const zoomIn = () => mapRef.current?.zoomIn();
@@ -36,22 +37,15 @@ export default function AutoRideToPickupScreen({ navigation, route }) {
   const dot3 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setDistance((prev) => {
-        const next = Math.max(0, +(prev - 0.02).toFixed(2));
-        if (next <= 0.05) {
-          clearInterval(interval);
-          setEta("Arriving");
-          return 0;
-        }
-        if (next < 0.3) setEta("1 min");
-        else if (next < 0.6) setEta("2 min");
-        else if (next < 0.9) setEta("3 min");
-        return next;
-      });
-    }, 1500);
-    return () => clearInterval(interval);
-  }, []);
+    if (distance == null) return;
+    if (distance <= 0.03) {
+      setEta("Arriving");
+      return;
+    }
+    if (distance < 0.3) setEta("1 min");
+    else if (distance < 0.6) setEta("2 min");
+    else if (distance < 0.9) setEta("3 min");
+  }, [distance]);
 
   useEffect(() => {
     Animated.timing(distanceAnim, { toValue: distance, duration: 300, useNativeDriver: false }).start();
@@ -100,7 +94,7 @@ export default function AutoRideToPickupScreen({ navigation, route }) {
   return (
     <View style={styles.root}>
       <View style={styles.mapArea}>
-        {/* <VayyMap
+        <VayyMap
           ref={mapRef}
           style={styles.mapBg}
           initialRegion={{
@@ -109,7 +103,7 @@ export default function AutoRideToPickupScreen({ navigation, route }) {
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}
-        /> */}
+        />
         <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
         <View style={styles.driverOnMap}>
@@ -159,7 +153,7 @@ export default function AutoRideToPickupScreen({ navigation, route }) {
         <View style={styles.distSection}>
           <View style={styles.distHeader}>
             <Ionicons name="location" size={14} color={COLORS.primary} />
-            <Text style={styles.distValue}>{distance.toFixed(2)} km</Text>
+            <Text style={styles.distValue}>{distance != null ? distance.toFixed(2) : "—"} km</Text>
             <Text style={styles.distLabel}>to pickup</Text>
           </View>
           <View style={styles.progressTrack}>

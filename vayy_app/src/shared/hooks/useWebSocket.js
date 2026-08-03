@@ -1,139 +1,86 @@
 import { useEffect, useRef, useCallback, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getWsUrl } from "../lib/wsUrl";
-import { STORAGE_KEYS } from "../../constants";
+import socketManager from "../lib/socketManager";
+import { useWebSocketContext } from "../lib/WebSocketProvider";
 
-const MAX_RECONNECT = 5;
+const CHANNEL_TO_ID_KEY = {
+  dispatch: "dispatchId",
+  broadcast: "broadcastId",
+  trackingTrip: "tripId",
+  trackingVehicle: "vehicleId",
+};
 
-/**
- * Self-contained WebSocket hook — each instance owns its own connection.
- * No shared singleton, no cross-component interference.
- */
+function resolveChannel(path) {
+  if (!path) return null;
+  if (path.match(/^\/ws\/notifications\//)) return "notification";
+  if (path.match(/^\/ws\/dispatch\/broadcast\//)) return "broadcast";
+  if (path.match(/^\/ws\/dispatch\//)) return "dispatch";
+  if (path.match(/^\/ws\/tracking\/trip\//)) return "trackingTrip";
+  if (path.match(/^\/ws\/tracking\/vehicle\//)) return "trackingVehicle";
+  return null;
+}
+
+function extractId(path) {
+  if (!path) return null;
+  const parts = path.split("/").filter(Boolean);
+  return parts[parts.length - 1] || null;
+}
+
 export default function useWebSocket(path, options = {}) {
-  const { onMessage, autoConnect = true, enabled = true } = options;
+  const { onMessage, enabled = true } = options;
   const [connectionState, setConnectionState] = useState("disconnected");
-  const wsRef = useRef(null);
-  const reconnectRef = useRef(0);
-  const reconnectTimerRef = useRef(null);
-  const mountedRef = useRef(true);
-  const pathRef = useRef(path);
   const onMessageRef = useRef(onMessage);
+  const pathRef = useRef(path);
 
-  // Keep refs fresh without triggering re-connect
-  pathRef.current = path;
   onMessageRef.current = onMessage;
+  pathRef.current = path;
 
-  const cleanup = useCallback(() => {
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
-    if (wsRef.current) {
-      wsRef.current.onopen = null;
-      wsRef.current.onmessage = null;
-      wsRef.current.onerror = null;
-      wsRef.current.onclose = null;
-      if (
-        wsRef.current.readyState === WebSocket.OPEN ||
-        wsRef.current.readyState === WebSocket.CONNECTING
-      ) {
-        wsRef.current.close();
-      }
-      wsRef.current = null;
-    }
-    reconnectRef.current = MAX_RECONNECT; // prevent stale reconnect
-  }, []);
+  const wsContext = useWebSocketContext();
+  const channel = path ? resolveChannel(path) : null;
+  const idsSetRef = useRef(false);
 
-  const connect = useCallback(async () => {
-    if (!mountedRef.current) return;
-    cleanup();
-
-    const currentPath = pathRef.current;
-    if (!currentPath) return;
-
-    try {
-      const token =
-        (await AsyncStorage.getItem(STORAGE_KEYS.accessToken)) ||
-        (await AsyncStorage.getItem(STORAGE_KEYS.token));
-      const url = getWsUrl(currentPath) + (token ? `?token=${token}` : "");
-
-      console.log("[useWebSocket] Connecting to:", url);
-      setConnectionState("connecting");
-
-      const ws = new WebSocket(url);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        if (!mountedRef.current || ws !== wsRef.current) return;
-        console.log("[useWebSocket] Connected:", currentPath);
-        reconnectRef.current = 0;
-        setConnectionState("connected");
-      };
-
-      ws.onmessage = (event) => {
-        if (!mountedRef.current || ws !== wsRef.current) return;
-        try {
-          if (!event.data) return;
-          const data = JSON.parse(event.data);
-          onMessageRef.current?.(data);
-        } catch (err) {
-          console.error("[useWebSocket] Malformed payload:", err);
-        }
-      };
-
-      ws.onerror = (error) => {
-        if (__DEV__) console.error("[useWebSocket] Error:", error);
-      };
-
-      ws.onclose = (event) => {
-        if (!mountedRef.current || ws !== wsRef.current) return;
-        console.log("[useWebSocket] Disconnected:", event.code, event.reason);
-        setConnectionState("disconnected");
-        wsRef.current = null;
-
-        // Auto-reconnect with exponential backoff
-        if (reconnectRef.current < MAX_RECONNECT) {
-          reconnectRef.current++;
-          const delay = Math.min(1000 * Math.pow(2, reconnectRef.current), 30000);
-          setConnectionState("reconnecting");
-          reconnectTimerRef.current = setTimeout(() => {
-            reconnectTimerRef.current = null;
-            connect();
-          }, delay);
-        } else {
-          setConnectionState("failed");
-        }
-      };
-    } catch (err) {
-      console.error("[useWebSocket] Connect failed:", err);
-      setConnectionState("failed");
-    }
-  }, [cleanup]);
-
-  // Mount / path / enabled changes
   useEffect(() => {
-    mountedRef.current = true;
-
-    if (autoConnect && enabled && path) {
-      reconnectRef.current = 0;
-      connect();
+    if (!enabled || !path) {
+      setConnectionState("disconnected");
+      return;
     }
+
+    if (channel && !idsSetRef.current) {
+      const key = CHANNEL_TO_ID_KEY[channel];
+      if (key) {
+        wsContext.setChannelIds({ [key]: extractId(path) });
+        idsSetRef.current = true;
+      }
+    }
+
+    const unsub = socketManager.subscribe(path, {
+      onMessage: (data) => {
+        onMessageRef.current?.(data);
+      },
+      onStateChange: (state) => {
+        setConnectionState(state);
+      },
+    });
+
+    setConnectionState(
+      socketManager.connections.get(path)?.state || "disconnected"
+    );
 
     return () => {
-      mountedRef.current = false;
-      cleanup();
+      unsub();
     };
-  }, [path, autoConnect, enabled, connect, cleanup]);
+  }, [path, enabled, channel]);
 
-  const send = useCallback((type, payload) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify({ type, ...payload, timestamp: Date.now() }));
-      } catch (err) {
-        console.error("[useWebSocket] Send failed:", err);
-      }
-    }
-  }, []);
+  const send = useCallback(
+    (type, payload) => {
+      if (!pathRef.current) return;
+      socketManager.send(pathRef.current, type, payload);
+    },
+    [],
+  );
 
-  return { send, connectionState, isConnected: connectionState === "connected" };
+  return {
+    send,
+    connectionState,
+    isConnected: connectionState === "connected",
+  };
 }

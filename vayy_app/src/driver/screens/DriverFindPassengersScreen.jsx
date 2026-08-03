@@ -10,10 +10,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import api from "../../shared/lib/api";
-// import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+import { getNearbyPassengers } from "../services/driverService";
+import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import COLORS from "../../shared/constants/colors";
-import { TRANSPORT, WS } from "../../constants";
+import { WS } from "../../constants";
 import { buildRouteSummary } from "../utils/driverFlowUtils";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import ZoomControls from "../../shared/components/common/ZoomControls";
@@ -41,9 +41,9 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
   const fetchPassengers = useCallback(async () => {
     if (!routeId) return;
     try {
-      const response = await api.get(TRANSPORT.routesNearbyPassengers(routeId));
-      const data = response.data?.data ?? [];
-      const metaInfo = response.data?.meta ?? null;
+      const response = await getNearbyPassengers(routeId);
+      const data = response?.data ?? [];
+      const metaInfo = response?.meta ?? null;
       setPassengers(data);
       passengersRef.current = data;
       setMeta(metaInfo);
@@ -250,7 +250,7 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
   return (
     <View style={styles.root}>
       {/* Map */}
-      {/* <VayyMap
+      <VayyMap
         ref={mapRef}
         cameraRef={cameraRef}
         style={styles.map}
@@ -312,15 +312,12 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
                 p.hand_raised && styles.passengerMarkerHandRaised,
                 p.wants_route && !p.hand_raised && styles.passengerMarkerWants,
               ]}>
-                {p.hand_raised ? (
-                  <Text style={styles.handEmoji}>✋</Text>
-                ) : (
-                  <Ionicons name="person" size={14} color="#fff" />
-                )}
+                <Text style={[styles.handEmoji, !p.hand_raised && { display: "none" }]}>✋</Text>
+                <Ionicons name="person" size={14} color="#fff" style={p.hand_raised && { display: "none" }} />
               </View>
             </ViewAnnotation>
           ))}
-      </VayyMap> */}
+      </VayyMap>
 
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
@@ -357,7 +354,21 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
           <View style={styles.stateCard}>
             <Ionicons name="people-outline" size={32} color="#D1D5DB" />
             <Text style={styles.stateText}>No passengers found nearby</Text>
-            <Text style={styles.stateSub}>Passengers will appear when they search for this route</Text>
+            <Text style={styles.stateSub}>Start your radar to receive ride requests in real-time</Text>
+            <TouchableOpacity
+              style={styles.startRadarBtn}
+              onPress={() => {
+                if (mode === "auto") {
+                  navigation.navigate("AutoFindPassenger", { route: selectedRoute });
+                } else {
+                  navigation.navigate("FindPassenger", { route: selectedRoute });
+                }
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="radio" size={18} color="#fff" />
+              <Text style={styles.startRadarBtnText}>Start Radar</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <FlatList
@@ -491,6 +502,18 @@ const styles = StyleSheet.create({
   stateCard: { alignItems: "center", paddingVertical: 24, gap: 8 },
   stateText: { fontSize: 14, fontWeight: "600", color: "#9CA3AF" },
   stateSub: { fontSize: 12, color: "#D1D5DB", textAlign: "center" },
+  startRadarBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: COLORS.primary,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginTop: 12,
+  },
+  startRadarBtnText: { color: "#fff", fontSize: 14, fontWeight: "800" },
 
   /* accept button */
   acceptBtn: {

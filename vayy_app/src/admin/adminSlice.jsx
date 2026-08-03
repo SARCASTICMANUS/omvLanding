@@ -2,8 +2,6 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import {
   fetchRoutesAPI,
   createRouteAPI,
-  updateRouteAPI,
-  deleteRouteAPI,
 } from "./services/adminRouteService";
 import {
   fetchStopsAPI,

@@ -16,6 +16,7 @@ from transport.api.views import (
     RouteSearchByLocationAPIView,
     DriverRouteListAPIView,
     PassengersAlongRouteAPIView,
+    RoadDistanceAPIView,
 )
 
 router = DefaultRouter()
@@ -71,5 +72,10 @@ urlpatterns = [
         "stops/<uuid:stop_id>/eta/",
         StopETAAPIView.as_view(),
         name="stop-eta",
+    ),
+    path(
+        "road-distance/",
+        RoadDistanceAPIView.as_view(),
+        name="road-distance",
     ),
 ]

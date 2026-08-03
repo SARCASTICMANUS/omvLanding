@@ -61,7 +61,7 @@ export const markBoarded = createAsyncThunk(
   "trip/markBoarded",
   async (requestId, { rejectWithValue }) => {
     try {
-      const response = await api.post(`/api/operations/boarding-requests/${requestId}/boarded/`);
+      const response = await api.post(OPERATIONS.boardingRequestBoarded(requestId));
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || "Failed to mark as boarded");

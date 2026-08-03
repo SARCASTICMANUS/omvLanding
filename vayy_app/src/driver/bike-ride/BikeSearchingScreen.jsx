@@ -1,23 +1,18 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-// import VayyMap, { UserLocation } from "../../shared/components/VayyMap";
+import VayyMap, { UserLocation } from "../../shared/components/VayyMap";
 import COLORS from "../../shared/constants/colors";
-import SPACING from "../../shared/constants/spacing";
 
 export default function BikeSearchingScreen({ navigation, route }) {
-  const mapRef = useRef(null);
-  const cameraRef = useRef(null);
   const [isMapReady, setIsMapReady] = useState(false);
 
   return (
     <View style={styles.root}>
       <View style={styles.mapArea}>
-        {/* <VayyMap
+        <VayyMap
           style={styles.map}
-          mapRef={mapRef}
-          cameraRef={cameraRef}
           initialViewState={{
             center: [80.9462, 26.8467],
             zoom: 14,
@@ -25,7 +20,7 @@ export default function BikeSearchingScreen({ navigation, route }) {
           onDidFinishLoadingMap={() => setIsMapReady(true)}
         >
           <UserLocation />
-        </VayyMap> */}
+        </VayyMap>
       </View>
 
       <SafeAreaView style={styles.overlay} pointerEvents="box-none">

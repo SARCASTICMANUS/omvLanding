@@ -8,7 +8,7 @@ import {
   Platform,
 } from "react-native";
 import * as Location from "expo-location";
-// import VayyMap, { GeoJSONSource, Layer, UserLocation, Marker } from "../../shared/components/VayyMap";
+import VayyMap, { GeoJSONSource, Layer, UserLocation, Marker } from "../../shared/components/VayyMap";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons";
@@ -19,7 +19,6 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const [showConfirm, setShowConfirm] = useState(false);
   const [sheetHeight, setSheetHeight] = useState(280);
-  const [isMapReady, setIsMapReady] = useState(false);
   const [routePath, setRoutePath] = useState(null);
   const [routeStops, setRouteStops] = useState([]);
   const [currentZoomLevel, setCurrentZoomLevel] = useState(14);
@@ -50,7 +49,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
 
   const initialCenter = pickupLat != null && pickupLon != null
     ? [pickupLon, pickupLat]
-    : [80.9462, 26.8467];
+    : null;
 
   // Fetch route geometry on mount
   useEffect(() => {
@@ -73,7 +72,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
 
   // 2. WORKING ZOOM & LOCATION INTERFACE (V11 SPEC)
   const handleZoom = async (zoomIn) => {
-    if (!cameraRef.current || !isMapReady) return;
+    if (!cameraRef.current) return;
     try {
       let targetZoom = currentZoomLevel;
       if (mapRef.current && typeof mapRef.current.getZoom === "function") {
@@ -94,7 +93,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   };
 
   const handleGetCurrentLocation = async () => {
-    if (!cameraRef.current || !isMapReady) return;
+    if (!cameraRef.current) return;
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") return;
@@ -128,7 +127,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   };
 
   const handleRecenterRouteBounds = () => {
-    if (!cameraRef.current || !isMapReady) return;
+    if (!cameraRef.current) return;
     if (pickupLat != null && pickupLon != null && dropoffLat != null && dropoffLon != null) {
       const pad = 0.005;
       const west = Math.min(pickupLon, dropoffLon) - pad;
@@ -148,20 +147,20 @@ export function BikeMapPreRideScreen({ navigation, route }) {
 
 
   useEffect(() => {
-    if (didFitRef.current || !cameraRef.current || !isMapReady) return;
+    if (didFitRef.current || !cameraRef.current) return;
     didFitRef.current = true;
     handleRecenterRouteBounds();
-  }, [pickupLat, pickupLon, dropoffLat, dropoffLon, sheetHeight, isMapReady]);
+  }, [pickupLat, pickupLon, dropoffLat, dropoffLon, sheetHeight]);
   
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Layer 1: Independent Map Engine Base */}
-      {/* <View style={styles.mapArea}>
+      {/* Layer 1: Map */}
+      <View style={styles.mapArea}>
         <VayyMap
           style={styles.mapBg}
-          mapRef={mapRef}
+          ref={mapRef}
           cameraRef={cameraRef}
           initialViewState={{
             center: initialCenter,
@@ -169,7 +168,6 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           }}
           scrollEnabled={true}
           zoomEnabled={true}
-          onDidFinishLoadingMap={() => setIsMapReady(true)}
         >
           <GeoJSONSource id="routeSource" data={routePath} />
           <Layer
@@ -219,7 +217,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
             </Marker>
           )}
         </VayyMap>
-      </View> */}
+      </View>
 
       {/* Layer 2: Floating Header UI Control Deck */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
@@ -326,7 +324,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
             pickup_stop_id: trip?.pickup_stop?.id,
             pickup: pickup,
             pickupName: pickupName,
-            destination: dropoff,
+            destination: dropoffName,
             dropoffName: dropoffName,
             fare: route?.params?.fare,
           });

@@ -12,28 +12,20 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
-import { acceptDispatch, rejectDispatch } from "../../store/slices/dispatchSlice";
+import * as Location from "expo-location";
+import * as Notifications from "expo-notifications";
+import { AUTH } from "../../constants";
+import { acceptBroadcast, rejectBroadcast, acceptDispatch, rejectDispatch } from "../../store/slices/dispatchSlice";
+import { getAssignedVehicle } from "../services/driverService";
+import useDriverLocationPush from "../hooks/useDriverLocationPush";
+import api from "../../shared/lib/api";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
-// import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
+import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
 const { width, height } = Dimensions.get("window");
-
-const INITIAL_REGION = {
-  latitude: 26.8467,
-  longitude: 80.9462,
-  latitudeDelta: 0.05,
-  longitudeDelta: 0.05,
-};
-
-const CHECKS = [
-  { key: "network", label: "Network", icon: "wifi" },
-  { key: "gps", label: "GPS Signal", icon: "navigate" },
-  { key: "location", label: "Location", icon: "location" },
-  { key: "device", label: "Device Status", icon: "phone-portrait" },
-];
 
 export default function BikeFindPassengerScreen({ navigation, route: navRoute }) {
   const insets = useSafeAreaInsets();
@@ -41,49 +33,85 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   const { user } = useSelector((state) => state.auth);
   const userId = user?.id;
   const [showVerify, setShowVerify] = useState(true);
-  const [checks, setChecks] = useState(CHECKS.map((c) => ({ ...c, status: "pending" })));
-  const [allPassed, setAllPassed] = useState(false);
   const [phase, setPhase] = useState("scanning");
   const [online, setOnline] = useState(false);
   const [currentBuddy, setCurrentBuddy] = useState(null);
-  const [bikePos, setBikePos] = useState({
-    latitude: INITIAL_REGION.latitude,
-    longitude: INITIAL_REGION.longitude,
-  });
+  const [notification, setNotification] = useState(null);
+  const notifSlide = useRef(new Animated.Value(-100)).current;
+  const [bikePos, setBikePos] = useState(null);
   const mapRef = useRef(null);
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
 
   const handleWsMessage = useCallback((data) => {
+    // New broadcast dispatch request from a passenger
     if (data.type === "new_dispatch_request" && data.dispatch) {
       const req = data.dispatch;
       const realBuddy = {
-        id: req.id || req.trip_id || "ws_req",
-        dispatchId: req.id || req.trip_id,
+        id: req.request_id || req.id || req.trip_id || "ws_req",
+        requestId: req.request_id || null,
+        dispatchId: req.request_id || req.id || req.trip_id,
         name: req.passenger_name || req.user_name || "Passenger",
-        rating: req.passenger_rating || 4.5,
+        rating: req.passenger_rating || null,
         trips: req.passenger_trips || 0,
-        pickup: (() => { const p = req.pickup_name || req.pickup; return typeof p === "string" ? p : p?.name || p?.display_name || "Unknown"; })(),
-        drop: (() => { const d = req.drop_name || req.drop; return typeof d === "string" ? d : d?.name || d?.display_name || "Unknown"; })(),
+        pickup: (() => { const p = req.pickup_name || req.pickup; return typeof p === "string" ? p : p?.name || p?.display_name || "Pickup"; })(),
+        drop: (() => { const d = req.drop_name || req.drop; return typeof d === "string" ? d : d?.name || d?.display_name || "Destination"; })(),
         pickupLat: req.pickup_lat || req.pickup_latitude || null,
         pickupLng: req.pickup_lng || req.pickup_longitude || null,
         dropLat: req.drop_lat || req.drop_latitude || null,
         dropLng: req.drop_lng || req.drop_longitude || null,
-        distance: req.distance ? `${req.distance}` : "500 m",
-        fare: req.fare ? `₹${req.fare}` : "₹30",
-        fareAmount: req.fare || 30,
-        eta: req.eta ? `${req.eta} min` : "3 min",
+        distance: req.distance_km ? `${req.distance_km} km` : "—",
+        fare: req.fare ? `₹${req.fare}` : "—",
+        fareAmount: req.fare || 0,
+        eta: req.eta ? `${req.eta} min` : "—",
         otp: req.otp || null,
         route_id: req.route_id || null,
+        route_name: req.route_name || null,
         avatar: (req.passenger_name || "P").split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase() || "P",
       };
       setCurrentBuddy(realBuddy);
       setPhase("found");
+      if (!online) setOnline(true);
+      // Slide up the bottom sheet popup
+      Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 60, useNativeDriver: true }).start();
+      // Show notification banner
+      const pickupName = realBuddy.pickup || "nearby";
+      setNotification(`Passenger waiting at ${pickupName}`);
+      Animated.spring(notifSlide, { toValue: 0, friction: 10, tension: 50, useNativeDriver: true }).start();
+      setTimeout(() => {
+        Animated.timing(notifSlide, { toValue: -100, duration: 300, useNativeDriver: true }).start(() => setNotification(null));
+      }, 3000);
     }
-  }, []);
+
+    // Another driver accepted — dismiss this popup
+    if (data.type === "request_cancelled") {
+      setNotification("Request taken by another driver");
+      Animated.spring(notifSlide, { toValue: 0, friction: 10, tension: 50, useNativeDriver: true }).start();
+      setTimeout(() => {
+        Animated.timing(notifSlide, { toValue: -100, duration: 300, useNativeDriver: true }).start(() => setNotification(null));
+      }, 2500);
+      Animated.timing(slideAnim, { toValue: height, duration: 250, useNativeDriver: true }).start(() => {
+        setCurrentBuddy(null);
+        setPhase("scanning");
+      });
+    }
+
+    // Request expired — dismiss popup
+    if (data.type === "request_expired") {
+      setNotification("Request expired");
+      Animated.spring(notifSlide, { toValue: 0, friction: 10, tension: 50, useNativeDriver: true }).start();
+      setTimeout(() => {
+        Animated.timing(notifSlide, { toValue: -100, duration: 300, useNativeDriver: true }).start(() => setNotification(null));
+      }, 2500);
+      Animated.timing(slideAnim, { toValue: height, duration: 250, useNativeDriver: true }).start(() => {
+        setCurrentBuddy(null);
+        setPhase("scanning");
+      });
+    }
+  }, [slideAnim, notifSlide]);
 
   useWebSocket(userId ? WS.notifications(userId) : null, {
-    enabled: !showVerify && !!userId,
+    enabled: !!userId,
     onMessage: handleWsMessage,
   });
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -103,6 +131,62 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
       setPhase("scanning");
     });
   };
+
+  const vehicleIdRef = useRef(null);
+  const [vehicleReady, setVehicleReady] = useState(false);
+  const [mapCenter, setMapCenter] = useState(null);
+
+  useEffect(() => {
+    let stopped = false;
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted" || stopped) return;
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      if (stopped) return;
+      const { latitude, longitude } = pos.coords;
+      setBikePos({ latitude, longitude });
+      setMapCenter({ latitude, longitude });
+    })();
+    return () => { stopped = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getAssignedVehicle();
+        if (!cancelled) {
+          vehicleIdRef.current = res?.data?.id || res?.id;
+          setVehicleReady(!!vehicleIdRef.current);
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  useEffect(() => {
+    (async () => {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== "granted") return;
+      const tokenData = await Notifications.getExpoPushTokenAsync();
+      const pushToken = tokenData.data || tokenData;
+      if (pushToken) {
+        api.post(AUTH.pushToken, { push_token: pushToken }).catch(() => {});
+      }
+    })();
+  }, [userId]);
+
+  useDriverLocationPush({
+    enabled: online && vehicleReady,
+    vehicleId: vehicleIdRef.current,
+    onLocation: (loc) => setBikePos(loc),
+  });
 
   useEffect(() => {
     if (!online) return;
@@ -128,15 +212,35 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
     };
   }, [online, pulseAnim, sweepAnim]);
 
-  const handleAccept = () => {
-    if (currentBuddy?.dispatchId) {
-      dispatch(acceptDispatch(currentBuddy.dispatchId));
+  const handleAccept = async () => {
+    let otp = null;
+    let activeTripId = null;
+    if (currentBuddy?.requestId) {
+      try {
+        const result = await dispatch(acceptBroadcast(currentBuddy.requestId)).unwrap();
+        const payload = result?.data || result;
+        otp = payload?.otp || null;
+        activeTripId = payload?.trip_id || null;
+      } catch (e) {
+        console.warn("acceptBroadcast failed:", e);
+      }
+    } else if (currentBuddy?.dispatchId) {
+      try {
+        await dispatch(acceptDispatch(currentBuddy.dispatchId)).unwrap();
+      } catch (e) {
+        console.warn("acceptDispatch failed:", e);
+      }
     }
-    navigation.navigate("BikeRideToPickup", { buddy: currentBuddy, dispatchId: currentBuddy?.dispatchId });
+    const tripId = activeTripId || currentBuddy?.dispatchId || currentBuddy?.requestId;
+    const buddyWithOtp = { ...currentBuddy, otp: otp || currentBuddy?.otp, dispatchId: tripId };
+    navigation.navigate("BikeRideToPickup", { buddy: buddyWithOtp, dispatchId: tripId });
   };
 
   const handleIgnore = () => {
-    if (currentBuddy?.dispatchId) {
+    if (currentBuddy?.requestId) {
+      dispatch(rejectBroadcast(currentBuddy.requestId));
+    } else if (currentBuddy?.dispatchId) {
+      // Fallback to direct dispatch reject
       dispatch(rejectDispatch(currentBuddy.dispatchId));
     }
     Animated.timing(slideAnim, { toValue: height, duration: 250, useNativeDriver: true }).start(() => {
@@ -157,35 +261,49 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Real map background */}
-      {/* <VayyMap
+      {!mapCenter ? (
+        <View style={styles.gpsLoadingOverlay}>
+          <Text style={styles.gpsLoadingText}>Getting your location...</Text>
+        </View>
+      ) : (
+      <VayyMap
         ref={mapRef}
-        initialRegion={INITIAL_REGION}
+        initialViewState={{
+          center: [mapCenter.longitude, mapCenter.latitude],
+          zoom: 14,
+        }}
         style={styles.map}
         scrollEnabled={false}
         zoomEnabled={false}
       >
-        {online && PASSENGERS.map((p) => (
-          <ViewAnnotation
-            key={p.id}
-            id={`passenger-${p.id}`}
-            lngLat={[p.lng, p.lat]}
-          >
-            <View style={styles.passengerMarker}>
-              <View style={styles.passengerDot} />
-            </View>
-          </ViewAnnotation>
-        ))}
-        {bikePos && (
-          <ViewAnnotation
-            id="bike"
-            lngLat={[bikePos.longitude, bikePos.latitude]}
-          >
-            <View style={styles.bikeMarker}>
-              <Ionicons name="bicycle" size={22} color="#fff" />
-            </View>
-          </ViewAnnotation>
-        )}
-      </VayyMap> */}
+        <ViewAnnotation
+          id="passenger"
+          lngLat={
+            currentBuddy?.pickupLng && currentBuddy?.pickupLat
+              ? [currentBuddy.pickupLng, currentBuddy.pickupLat]
+              : [0, 0]
+          }
+        >
+          <View style={[
+            styles.passengerMarker,
+            { opacity: currentBuddy?.pickupLng ? 1 : 0 },
+          ]}>
+            <View style={styles.passengerDot} />
+          </View>
+        </ViewAnnotation>
+        <ViewAnnotation
+          id="bike"
+          lngLat={bikePos ? [bikePos.longitude, bikePos.latitude] : [0, 0]}
+        >
+          <View style={[
+            styles.bikeMarker,
+            { opacity: bikePos ? 1 : 0 },
+          ]}>
+            <Ionicons name="bicycle" size={22} color="#fff" />
+          </View>
+        </ViewAnnotation>
+      </VayyMap>
+      )}
 
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
@@ -214,7 +332,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
         </View>
       )}
 
-      {online && phase === "found" && (
+      {((online && phase === "found") || currentBuddy) && (
         <View style={[styles.statusBadge, styles.statusBadgeFound]}>
           <Ionicons name="person" size={14} color={COLORS.primary} />
           <Text style={styles.statusText}>Buddy found!</Text>
@@ -238,6 +356,14 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
           />
         </TouchableOpacity>
       </View>
+
+      {/* Notification banner */}
+      {notification && (
+        <Animated.View style={[styles.notifBanner, { transform: [{ translateY: notifSlide }] }]}>
+          <View style={styles.notifDot} />
+          <Text style={styles.notifText}>{notification}</Text>
+        </Animated.View>
+      )}
 
       {/* Offline state */}
       {!showVerify && !online && (
@@ -357,6 +483,18 @@ const styles = StyleSheet.create({
   },
 
   /* map */
+  gpsLoadingOverlay: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0F2A42",
+  },
+  gpsLoadingText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.6)",
+  },
   map: {
     position: "absolute",
     top: 0, left: 0, right: 0, bottom: 0,
@@ -521,6 +659,39 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#fff",
     letterSpacing: -0.3,
+  },
+
+  /* notification banner */
+  notifBanner: {
+    position: "absolute",
+    top: 0, left: 0, right: 0,
+    paddingTop: 80,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    alignItems: "center",
+    zIndex: 20,
+  },
+  notifDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
+    marginBottom: 8,
+  },
+  notifText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#111827",
+    backgroundColor: "#fff",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+    overflow: "hidden",
   },
 
   /* offline */
