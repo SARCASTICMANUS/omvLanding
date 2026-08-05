@@ -110,15 +110,11 @@ DATABASES = {
 
 # DATABASE_URL=postgis://postgres:postgres@db:5432/vayy
 
-GDAL_LIBRARY_PATH = env(
-    "GDAL_LIBRARY_PATH",
-    default="/usr/lib/aarch64-linux-gnu/libgdal.so"
-)
-
-GEOS_LIBRARY_PATH = env(
-    "GEOS_LIBRARY_PATH",
-    default="/usr/lib/aarch64-linux-gnu/libgeos_c.so"
-)
+# GDAL/GEOS libraries are auto-detected by Django (ctypes.util.find_library).
+# Keep these empty so builds work on both x86_64 and arm64 hosts.
+# Set them explicitly only if auto-detection fails in your environment.
+GDAL_LIBRARY_PATH = env("GDAL_LIBRARY_PATH", default="")
+GEOS_LIBRARY_PATH = env("GEOS_LIBRARY_PATH", default="")
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
