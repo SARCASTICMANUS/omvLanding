@@ -117,6 +117,22 @@ services:
     depends_on:
       - web
 
+  osrm-download:
+    image: alpine:3.20
+    container_name: vayy-osrm-download
+    restart: "no"
+    volumes:
+      - ./osrm:/data
+    command: >
+      sh -c "if [ ! -f /data/map.osm.pbf ]; then
+               echo 'Downloading central-zone map...';
+               wget -q -O /data/map.osm.pbf.tmp https://download.geofabrik.de/asia/india/central-zone-latest.osm.pbf &&
+               mv /data/map.osm.pbf.tmp /data/map.osm.pbf &&
+               echo 'Map downloaded to /data/map.osm.pbf';
+             else
+               echo 'map.osm.pbf already present, skipping download';
+             fi"
+
   osrm:
     image: osrm/osrm-backend:latest
     container_name: vayy-osrm
@@ -124,15 +140,20 @@ services:
       - ./osrm:/data
     ports:
       - "5000:5000"
+    depends_on:
+      osrm-download:
+        condition: service_completed_successfully
     command: >
       sh -c "if [ ! -f /data/map.osrm ]; then
+               echo 'Extracting map (one-time, may take a while)...';
                osrm-extract -p /opt/car.lua /data/map.osm.pbf &&
                osrm-partition /data/map.osrm &&
-               osrm-customize /data/map.osrm;
+               osrm-customize /data/map.osrm &&
+               echo 'Map extracted.';
              fi &&
-             osrm-routed --algorithm mld /data/map.osrm"
+             exec osrm-routed --algorithm mld /data/map.osrm"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/route/v1/driving/0,0;1,1 >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/5000' 2>/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5

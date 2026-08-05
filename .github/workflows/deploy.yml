@@ -67,19 +67,6 @@ jobs:
             admin/ \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:$COMPOSE_DIR/admin/
 
-      # Pre-processed OSRM map data (~1GB) is excluded from regular syncs.
-      - name: One-time OSRM map data sync
-        env:
-          COMPOSE_DIR: /home/azureuser/vayy
-        run: |
-          if ! ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "[ -f $COMPOSE_DIR/backend/vayy/osrm/map.osrm ]"; then
-            echo "OSRM data missing on server, syncing once..."
-            rsync -avz -e "ssh" backend/vayy/osrm/ \
-              ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:$COMPOSE_DIR/backend/vayy/osrm/
-          else
-            echo "OSRM data already present, skipping."
-          fi
-
       # Build and restart containers from the single-stack root compose.
       - name: Build and restart containers
         env:
