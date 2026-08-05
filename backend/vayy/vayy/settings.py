@@ -274,7 +274,12 @@ STATICFILES_STORAGE = (
     "whitenoise.storage.CompressedManifestStaticFilesStorage"
 )
 
-if not DEBUG:
+# HTTPS is opt-in (ENABLE_HTTPS=True) so the stack works over plain HTTP
+# until a TLS certificate is provisioned. Without this gate, SECURE_SSL_REDIRECT
+# 301s every request to https:// even when nothing listens on 443.
+ENABLE_HTTPS = env.bool("ENABLE_HTTPS", default=False)
+
+if ENABLE_HTTPS:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
@@ -283,6 +288,7 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Email — console in dev, SMTP in production
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend"
