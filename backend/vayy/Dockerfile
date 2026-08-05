@@ -1,12 +1,21 @@
+# syntax=docker/dockerfile:1
 FROM python:3.12-slim
+
+# Pass via build ARG for the target architecture.
+# x86_64  -> /usr/lib/x86_64-linux-gnu/libgdal.so
+# arm64   -> /usr/lib/aarch64-linux-gnu/libgdal.so
+ARG TARGETARCH=arm64
+ARG GDAL_SO=/usr/lib/${TARGETARCH}-linux-gnu/libgdal.so
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV GDAL_LIBRARY_PATH=${GDAL_SO}
+ENV GEOS_LIBRARY_PATH=/usr/lib/${TARGETARCH}-linux-gnu/libgeos_c.so
 
 WORKDIR /app
 
-# System dependencies
-RUN apt-get update && apt-get install -y \
+# System dependencies for Django + GDAL/PostGIS
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     g++ \
@@ -18,31 +27,26 @@ RUN apt-get update && apt-get install -y \
     libgdal-dev \
     libgeos-dev \
     libpq-dev \
+    postgresql-client \
     curl \
     netcat-openbsd \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
-# GDAL paths
-ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
-ENV C_INCLUDE_PATH=/usr/include/gdal
-ENV GDAL_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/libgdal.so
-ENV GDAL_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/libgdal.so
-
 COPY requirements.txt .
-
-RUN pip install --upgrade pip
-
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p /app/staticfiles
+RUN mkdir -p /app/staticfiles /app/media
+
+# Non-root runtime user (privileges dropped via gosu in entrypoint)
+RUN useradd --create-home --uid 1000 vayy \
+    && chown -R vayy:vayy /app
+COPY --chown=vayy:vayy entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8000
 
-# CMD ["gunicorn", "vayy.wsgi:application", "--bind", "0.0.0.0:8000"]
-COPY entrypoint.sh /entrypoint.sh
-
-RUN chmod +x /entrypoint.sh
-
+# Daphne: ASGI server (HTTP + WebSockets) - run as non-root
 CMD ["/entrypoint.sh"]

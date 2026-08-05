@@ -501,7 +501,8 @@ python manage.py runserver
 # Run ASGI server (REST + WebSockets) — recommended
 daphne -b 0.0.0.0 -p 8000 vayy.asgi:application
 
-# Run Celery worker (queues: celery, tracking, dispatch, matching)
+# Run Celery worker (as configured in docker-compose; matching-queue tasks
+# are consumed if you add `matching` to -Q)
 celery -A vayy worker -l info -Q celery,tracking,dispatch
 
 # Run Celery beat (periodic tasks)
