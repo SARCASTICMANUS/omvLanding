@@ -24,7 +24,9 @@ from drf_spectacular.views import (
 )
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    # Django admin relocated to /django-admin/ so it does not clash with the
+    # admin SPA (which uses /admin for its dashboard route).
+    path('django-admin/', admin.site.urls),
 
     path("healthz/", lambda _: JsonResponse({"status": "ok"})),
 

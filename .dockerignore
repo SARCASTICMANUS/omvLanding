@@ -1,0 +1,43 @@
+# Root docker build context - keep it small.
+# Ignore unrelated / heavy directories and secrets.
+
+# Unrelated apps - NOT part of this deployment
+vayy_app/
+frontend/
+
+# VCS
+.git
+.github
+.gitignore
+
+# Secrets
+*.env
+# .env
+.env.*
+!.env.example
+
+# Python
+venv/
+.venv/
+env/
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache
+
+# Node
+node_modules/
+dist/
+
+# Backend generated / data
+backend/osrm-data/
+backend/vayy/osrm/
+backend/vayy/staticfiles/
+backend/vayy/media/
+*.pbf
+*.osrm*
+
+# Local tooling / docs
+.DS_Store
+*.md
+*.xml
+vayy.zip

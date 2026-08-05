@@ -10,6 +10,10 @@ vayy.zip
 *.pyc
 /__pycache__/
 
+# Root compose env (DB/RabbitMQ infra creds)
+/.env
+!.env.example
+
 
 # --- Backend (Django) ---
 backend/__pycache__/
@@ -25,8 +29,6 @@ backend/db.sqlite3
 backend/vayy/media/
 backend/vayy/static_root/
 backend/vayy/staticfiles/
-**/migrations/*
-!**/migrations/__init__.py
 
 
 # --- OSRM Data ---
@@ -48,11 +50,6 @@ backend/vayy/osrm/*
 backend/vayy/osrm/*.pbf
 backend/vayy/osrm/*.osrm*
 backend/vayy/osrm/*.lua
-
-# Django migrations
-backend/**/migrations/*.py
-!backend/**/migrations/__init__.py
-backend/**/migrations/*.pyc
 backend/graphify-out
 backend/graphify-out/
 
@@ -84,3 +81,5 @@ admin/dist/*
 admin/node_modules
 admin/node_modules/
 admin/node_modules/*
+admin/.env
+admin/.env.local

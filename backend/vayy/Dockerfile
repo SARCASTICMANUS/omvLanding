@@ -36,7 +36,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && python -c "import django.core.management; assert hasattr(django.core.management, 'execute_from_command_line'); import daphne, celery"
 
 COPY . .
 
