@@ -12,7 +12,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
-import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -57,6 +56,12 @@ export function AutoSearchingScreen({ navigation, route }) {
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
+
+  const handleRecenter = () => {
+    if (pickupLat != null && pickupLon != null) {
+      cameraRef.current?.setStop({ center: [pickupLon, pickupLat], zoom: 15, duration: 500 });
+    }
+  };
 
   useEffect(() => {
     if (didFitRef.current) return;
@@ -239,12 +244,16 @@ export function AutoSearchingScreen({ navigation, route }) {
           )}
         </VayyMap>
 
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={[styles.header, { paddingTop: insets.top + 10, overflow: "hidden" }]}>
+          <View style={styles.headerGradient}>
+            <View style={styles.gradBase} />
+            <View style={styles.gradRay1} />
+            <View style={styles.gradRay2} />
+          </View>
           <View style={styles.headerLeft}>
             {Platform.OS === 'ios' && (
               <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-                <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+                <Ionicons name="chevron-back" size={24} color="#111827" />
               </TouchableOpacity>
             )}
             <Text style={styles.headerTitle}>Finding Auto...</Text>
@@ -266,15 +275,18 @@ export function AutoSearchingScreen({ navigation, route }) {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.recenterBtn} onPress={zoomIn}>
-          <Text style={styles.zoomText}>+</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.recenterBtn} onPress={zoomOut}>
-          <Text style={styles.zoomText}>−</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.recenterBtn}>
-          <MaterialIcons name="my-location" size={24} color="#111827" />
-        </TouchableOpacity>
+        <View style={[styles.floatingContainer, { top: insets.top + 80 }]}>
+          <TouchableOpacity style={styles.floatBtn} onPress={zoomIn}>
+            <Ionicons name="add" size={22} color="#111827" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.floatBtn} onPress={zoomOut}>
+            <Ionicons name="remove" size={22} color="#111827" />
+          </TouchableOpacity>
+          <View style={styles.floatDivider} />
+          <TouchableOpacity style={styles.floatBtn} onPress={handleRecenter}>
+            <MaterialIcons name="my-location" size={22} color="#111827" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 24 }]}>
@@ -416,8 +428,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 24,
     paddingBottom: 12,
-    backgroundColor: "rgba(0,152,73,0.6)",
-    overflow: "hidden",
+  },
+  headerGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  gradBase: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#009849",
+  },
+  gradRay1: {
+    position: "absolute",
+    top: -60,
+    right: -20,
+    width: 260,
+    height: 200,
+    backgroundColor: "#00B857",
+    opacity: 0.25,
+    transform: [{ rotate: "25deg" }],
+  },
+  gradRay2: {
+    position: "absolute",
+    bottom: -90,
+    right: 40,
+    width: 240,
+    height: 180,
+    backgroundColor: "#FFFFFF",
+    opacity: 0.1,
+    transform: [{ rotate: "35deg" }],
   },
   headerLeft: {
     flexDirection: "row",
@@ -492,20 +529,31 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     borderColor: "#FFFFFF",
   },
-  recenterBtn: {
+  floatingContainer: {
     position: "absolute",
-    right: 20,
-    bottom: 30,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    right: 16,
+    alignItems: "center",
+    borderRadius: 18,
     backgroundColor: "#FFFFFF",
+    paddingVertical: 6,
+    zIndex: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  floatBtn: {
+    width: 48,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
+  },
+  floatDivider: {
+    width: 28,
+    height: 1,
+    backgroundColor: "#F0F0F0",
+    alignSelf: "center",
   },
   bottomSheet: {
     position: "absolute",
@@ -630,11 +678,5 @@ const styles = StyleSheet.create({
     color: "#EF4444",
     fontSize: 14,
     fontWeight: "700",
-  },
-  zoomText: {
-    fontSize: 22,
-    fontWeight: "600",
-    color: "#111827",
-    lineHeight: 24,
   },
 });
