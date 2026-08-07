@@ -15,7 +15,7 @@ export default function DriverLoginScreen({ navigation, mode = "auto" }) {
     <AppFrame showBack={false}>
       <ScrollView contentContainerStyle={styles.page}>
         <Logo />
-        <Text style={styles.heroSmall}>{isBike ? "Bike Driver Login" : "Driver Login"}</Text>
+        <Text style={styles.heroSmall}>{isBike ? "Bike Marshal Login" : "Marshal Login"}</Text>
         <View style={styles.inputPanel}>
           <TextInput style={styles.input} placeholder="+91 Phone number" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
           <PrimaryButton label="Send OTP" accent={accent} />

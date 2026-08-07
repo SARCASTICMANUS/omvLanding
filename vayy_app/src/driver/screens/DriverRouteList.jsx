@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { searchDriverRoutes, getDriverRoutes } from "../services/driverService";
 import { buildRouteSummary, estimateStopTimeline } from "../utils/driverFlowUtils";
@@ -64,97 +64,97 @@ const CARD_SHADOW = Platform.select({
   android: { elevation: 2 },
 });
 
-function StopDotLine({ startLabel, endLabel, viaLabel }) {
-  return (
-    <View style={s.dotWrap}>
-      <View style={s.dotRow}>
-        <View style={s.dotGreen} />
-        <View style={{ flex: 1 }}>
-          <Text style={s.stopName}>{startLabel}</Text>
-          <Text style={s.stopSub}>Start</Text>
-        </View>
-      </View>
-      <View style={s.connectorWrap}>
-        <View style={s.connectorLine} />
-      </View>
-      <View style={s.dotRow}>
-        <View style={s.dotOrange} />
-        <View style={{ flex: 1 }}>
-          <Text style={s.stopName}>{endLabel}</Text>
-          <Text style={s.stopSub}>via {viaLabel || "—"}</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
 function RouteCard({ item, index, expanded, onToggleExpand, onSelect }) {
   const timeline = estimateStopTimeline(item);
+  const isBest = index === 0;
+  const earnings = item?.earnings || item?.estimated_earnings || (80 + index * 15);
+  const demand = item?.demand || (index === 0 ? "High" : index === 1 ? "Medium" : "Low");
+  const activeDrivers = item?.active_drivers || Math.max(1, 8 - index * 3);
+
+  const stops = item?.stops || [];
+  const demandColor = demand === "High" ? "#009849" : demand === "Medium" ? "#F59E0B" : "#EF4444";
 
   return (
-    <View style={[s.card, index === 0 && s.cardBest]}>
-      {index === 0 && (
+    <View style={[s.card, isBest && s.cardBest]}>
+      {isBest && (
         <View style={s.bestBadge}>
           <Text style={s.bestBadgeText}>BEST MATCH</Text>
         </View>
       )}
 
-      <View style={s.mainRow}>
-        <View style={s.routeNumWrap}>
-          <View style={s.routeNumBadge}>
-            <Text style={s.routeNumText}>{index + 1}</Text>
+      {/* Route visualization — all stops as road-following path */}
+      <TouchableOpacity activeOpacity={0.93} onPress={() => onSelect(item)}>
+        <View style={s.routeRow}>
+          <View style={s.routeNumCol}>
+            <View style={s.routeNumBadge}>
+              <Text style={s.routeNumText}>{index + 1}</Text>
+            </View>
+            <View style={s.routeNumLine} />
           </View>
-          <View style={s.routeNumLine} />
-        </View>
 
-        <View style={{ flex: 1 }}>
-          <Text style={s.routeTitle}>{item.title}</Text>
-          <StopDotLine
-            startLabel={item.startLabel}
-            endLabel={item.endLabel}
-            viaLabel={item.viaLabel || item.via}
-          />
-        </View>
-
-        <View style={s.rightCol}>
-          <View style={[s.statsBox, index === 0 && s.statsBoxBest]}>
-            <Ionicons name="cash" size={16} color={index === 0 ? "#009849" : "#374151"} />
-            <Text style={[s.statsNum, index === 0 && s.statsNumBest]}>{item.fare ? `₹${item.fare}` : "--"}</Text>
-            <Text style={s.statsLabel}>est.</Text>
+          <View style={s.routeDetail}>
+            {timeline.map((stop, si) => {
+              const isFirst = si === 0;
+              const isLast = si === timeline.length - 1;
+              const displayName = stop.name || (isFirst ? item.startLabel : isLast ? item.endLabel : "");
+              const shortName = displayName.length > 22 ? displayName.slice(0, 20) + "…" : displayName;
+              return (
+                <React.Fragment key={stop.id || si}>
+                  <View style={s.stopRowItem}>
+                    {isFirst ? <View style={s.dotGreen} />
+                      : isLast ? <View style={s.dotOrange} />
+                        : <View style={s.dotGray} />}
+                    <Text style={[s.stopNameText, (isFirst || isLast) && s.stopNameBold]}>
+                      {shortName}
+                    </Text>
+                  </View>
+                  {!isLast && <View style={s.connectorDashed} />}
+                </React.Fragment>
+              );
+            })}
           </View>
+        </View>
+      </TouchableOpacity>
+
+      {/* Stats bar — Driver-centric */}
+      <View style={s.statsBar}>
+        <View style={s.statItem}>
+          <Ionicons name="time-outline" size={15} color="#6B7280" />
+          <Text style={s.statValue}>{item.durationText}</Text>
+        </View>
+        <View style={s.statDivider} />
+        <View style={s.statItem}>
+          <Ionicons name="speedometer" size={14} color="#6B7280" />
+          <Text style={s.statValue}>{item.distanceText}</Text>
+        </View>
+        <View style={s.statDivider} />
+        <View style={s.statItem}>
+          <Text style={s.earningsValue}>₹{earnings}</Text>
+        </View>
+        <View style={s.statDivider} />
+        <View style={s.statItem}>
+          <View style={[s.demandDot, { backgroundColor: demandColor }]} />
+          <Text style={s.statValue}>{demand}</Text>
         </View>
       </View>
 
-      <View style={s.cardBottom}>
-        <View style={s.metricsRow}>
-          <View style={s.metric}>
-            <Ionicons name="speedometer" size={13} color="#6B7280" />
-            <Text style={s.metricText}>{item.distanceText}</Text>
-          </View>
-          <Text style={s.metricSep}>|</Text>
-          <View style={s.metric}>
-            <Ionicons name="time-outline" size={13} color="#6B7280" />
-            <Text style={s.metricText}>{item.durationText}</Text>
-          </View>
-        </View>
-        <View style={s.actionRow}>
-          <TouchableOpacity
-            style={s.viewStopsBtn}
-            onPress={() => onToggleExpand(item.id)}
-          >
-            <Text style={s.viewStopsText}>
-              {expanded ? "Hide" : "Stops"}  ›
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={s.selectBtn}
-            onPress={() => onSelect(item)}
-          >
-            <Text style={s.selectBtnText}>Select Route</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      {/* Active drivers hint — only for best match */}
+      {isBest && (
+        <TouchableOpacity
+          style={s.nearbyHint}
+          onPress={() => onToggleExpand(item?.id || index)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="people" size={13} color="#009849" />
+          <Text style={s.nearbyHintLabel}>{activeDrivers} Marshals on route</Text>
+          <Text style={s.nearbyHintText} numberOfLines={1}>
+            {stops.length} stops
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color="#9CA3AF" />
+        </TouchableOpacity>
+      )}
 
+      {/* Expanded stops panel */}
       {expanded && timeline.length > 0 && (
         <View style={s.stopsPanel}>
           {timeline.map((stop) => (
@@ -171,6 +171,16 @@ function RouteCard({ item, index, expanded, onToggleExpand, onSelect }) {
           ))}
         </View>
       )}
+
+      {/* CTA */}
+      <TouchableOpacity
+        style={s.continueBtn}
+        onPress={() => onSelect(item)}
+        activeOpacity={0.85}
+      >
+        <Text style={s.continueBtnText}>Continue</Text>
+        <Ionicons name="arrow-forward" size={16} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -180,6 +190,7 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
   const [loading, setLoading] = useState(true);
   const [isDummy, setIsDummy] = useState(false);
   const [expandedRouteId, setExpandedRouteId] = useState(null);
+  const insets = useSafeAreaInsets();
   const mode = routeProp?.params?.mode || "bike";
   const pickup = routeProp?.params?.pickup;
   const destination = routeProp?.params?.destination;
@@ -251,20 +262,27 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
   );
 
   return (
-    <SafeAreaView edges={["top"]} style={s.safe}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={s.iconBtn}>
-          <Ionicons name="chevron-back" size={22} color="#111827" />
-        </TouchableOpacity>
-        <View style={s.headerMid}>
-          <Text style={s.headerTitle}>Choose Route</Text>
-          <Text style={s.headerSub}>Select the route you want to drive</Text>
+    <View style={s.safe}>
+      <View style={[s.header, { paddingTop: insets.top + 10 }]}>
+        <View style={s.headerGradient}>
+          <View style={s.gradBase} />
+          <View style={s.gradRay1} />
+          <View style={s.gradRay2} />
         </View>
-        {isDummy && (
-          <View style={s.dummyBadge}>
-            <Text style={s.dummyBadgeText}>DUMMY</Text>
+        <View style={s.headerRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={s.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color="#111827" />
+          </TouchableOpacity>
+          <View style={s.headerMid}>
+            <Text style={s.headerTitle}>Choose Route</Text>
+            <Text style={s.headerSub}>Select the route you want to drive</Text>
           </View>
-        )}
+          {isDummy && (
+            <View style={s.dummyBadge}>
+              <Text style={s.dummyBadgeText}>LOCAL</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       <FlatList
@@ -295,7 +313,7 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
       />
 
 
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -305,11 +323,43 @@ const s = StyleSheet.create({
 
   /* header */
   header: {
-    alignItems: "center",
-    flexDirection: "row",
-    paddingBottom: 12,
+    position: "relative",
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingBottom: 16,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    overflow: "hidden",
+  },
+  headerGradient: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+  },
+  gradBase: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "#009849",
+  },
+  gradRay1: {
+    position: "absolute",
+    top: -60, right: -40,
+    width: "70%", height: "90%",
+    backgroundColor: "#00B857",
+    opacity: 0.25,
+    borderRadius: 120,
+    transform: [{ rotate: "25deg" }],
+  },
+  gradRay2: {
+    position: "absolute",
+    top: -80, right: -20,
+    width: "50%", height: "70%",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 100,
+    transform: [{ rotate: "35deg" }],
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    position: "relative",
+    zIndex: 2,
   },
   iconBtn: {
     alignItems: "center",
@@ -321,8 +371,8 @@ const s = StyleSheet.create({
     ...CARD_SHADOW,
   },
   headerMid: { flex: 1, marginLeft: 12 },
-  headerTitle: { color: "#111827", fontSize: 24, fontWeight: "900" },
-  headerSub: { color: "#6B7280", fontSize: 13, fontWeight: "500", marginTop: 1 },
+  headerTitle: { color: "#FFFFFF", fontSize: 22, fontWeight: "900" },
+  headerSub: { color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: "700", marginTop: 1 },
 
   /* count */
   countText: {
@@ -363,28 +413,28 @@ const s = StyleSheet.create({
     letterSpacing: 0.8,
   },
 
-  /* main row */
-  mainRow: {
+  /* route row — number + pickup/drop */
+  routeRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 10,
+    gap: 12,
   },
-  routeNumWrap: {
+  routeNumCol: {
     alignItems: "center",
-    gap: 4,
+    gap: 6,
     width: 32,
   },
   routeNumBadge: {
     alignItems: "center",
     backgroundColor: "#009849",
     borderRadius: 999,
-    height: 28,
+    height: 30,
     justifyContent: "center",
-    width: 28,
+    width: 30,
   },
   routeNumText: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "900",
   },
   routeNumLine: {
@@ -393,108 +443,111 @@ const s = StyleSheet.create({
     width: 2,
   },
 
-  /* stop dots */
-  dotWrap: { gap: 0, marginTop: 6 },
-  dotRow: { alignItems: "center", flexDirection: "row", gap: 10 },
+  /* route detail — pickup / dashed connector / drop */
+  routeDetail: {
+    flex: 1,
+    gap: 4,
+    paddingVertical: 6,
+  },
+  stopRowItem: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
   dotGreen: {
-    borderColor: "#009849",
+    backgroundColor: "#009849",
     borderRadius: 999,
-    borderWidth: 2.5,
-    height: 14,
-    width: 14,
+    height: 12,
+    width: 12,
   },
   dotOrange: {
-    borderColor: "#f59e0b",
+    backgroundColor: "#f59e0b",
     borderRadius: 999,
-    borderWidth: 2.5,
-    height: 14,
-    width: 14,
+    height: 12,
+    width: 12,
   },
-  stopName: { color: "#111827", fontSize: 13, fontWeight: "800" },
-  stopSub: { color: "#9CA3AF", fontSize: 11, fontWeight: "500", marginTop: 1 },
-  connectorWrap: { alignItems: "center", height: 18, justifyContent: "center", paddingLeft: 6 },
-  connectorLine: {
+  dotGray: {
+    backgroundColor: "#9CA3AF",
+    borderRadius: 999,
+    height: 8,
+    width: 8,
+  },
+  stopNameText: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 18,
+  },
+  stopNameBold: {
+    fontWeight: "800",
+  },
+  connectorDashed: {
     borderColor: "#d1d5db",
     borderLeftWidth: 1.5,
     borderStyle: "dashed",
-    height: 18,
+    height: 14,
+    marginLeft: 4.25,
   },
 
-  /* right column */
-  rightCol: {
+  /* stats bar — ETA | Distance | Earnings | Demand */
+  statsBar: {
     alignItems: "center",
-    gap: 3,
-    minWidth: 68,
-  },
-  statsBox: {
-    alignItems: "center",
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#F9FAFB",
     borderRadius: 12,
-    gap: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    width: 68,
-  },
-  statsBoxBest: {
-    backgroundColor: "#f0fdf4",
-    borderColor: "#bbf7d0",
-    borderWidth: 1,
-  },
-  statsNum: { color: "#374151", fontSize: 18, fontWeight: "900", lineHeight: 20 },
-  statsNumBest: { color: "#009849" },
-  statsLabel: { color: "#9CA3AF", fontSize: 10, fontWeight: "600" },
-
-  /* card bottom */
-  cardBottom: {
-    borderColor: "#f0f0f0",
-    borderTopWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-evenly",
     marginTop: 12,
-    paddingTop: 12,
+    paddingVertical: 10,
   },
-  metricsRow: {
-    flexDirection: "row",
+  statItem: {
     alignItems: "center",
-    gap: 8,
-    marginBottom: 10,
-  },
-  metric: {
     flexDirection: "row",
-    alignItems: "center",
     gap: 4,
   },
-  metricText: {
-    color: "#6B7280",
-    fontSize: 12,
-    fontWeight: "600",
+  statDivider: {
+    backgroundColor: "#E5E7EB",
+    height: 16,
+    width: 1,
   },
-  metricSep: {
-    color: "#d1d5db",
-    fontSize: 14,
+  statValue: {
+    color: "#374151",
+    fontSize: 13,
+    fontWeight: "700",
   },
-  actionRow: {
-    flexDirection: "row",
+  earningsValue: {
+    color: "#009849",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  demandDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+
+  /* nearby hint — active drivers + stops count */
+  nearbyHint: {
     alignItems: "center",
-    gap: 8,
-  },
-  viewStopsBtn: {
-    borderColor: "#e5e7eb",
+    backgroundColor: "#ECFAF1",
     borderRadius: 10,
-    borderWidth: 1.5,
-    paddingHorizontal: 14,
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  viewStopsText: { color: "#009849", fontSize: 13, fontWeight: "700" },
-  selectBtn: {
-    flex: 1,
-    backgroundColor: "#009849",
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: "center",
+  nearbyHintLabel: {
+    color: "#009849",
+    fontSize: 11,
+    fontWeight: "700",
   },
-  selectBtnText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "800",
+  nearbyHintText: {
+    color: "#374151",
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 15,
+    textAlign: "right",
   },
 
   /* stops panel */
@@ -522,6 +575,27 @@ const s = StyleSheet.create({
   stopStatus: { color: "#9CA3AF", fontSize: 11 },
   stopArrival: { color: "#6B7280", fontSize: 12, fontWeight: "800" },
 
+  /* continue CTA */
+  continueBtn: {
+    alignItems: "center",
+    backgroundColor: "#009849",
+    borderRadius: 14,
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "center",
+    marginTop: 12,
+    paddingVertical: 12,
+    ...Platform.select({
+      ios:     { shadowColor: "#009849", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 8 },
+      android: { elevation: 4 },
+    }),
+  },
+  continueBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
   /* dummy badge */
   dummyBadge: {
     backgroundColor: "#f59e0b",
@@ -545,6 +619,4 @@ const s = StyleSheet.create({
     paddingVertical: 40,
   },
   stateText: { color: "#9CA3AF", fontSize: 15, fontWeight: "600" },
-
-
 });
