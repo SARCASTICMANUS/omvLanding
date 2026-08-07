@@ -282,6 +282,14 @@ Integrate all backend APIs into the vayy_app frontend according to the mobile ap
 - Fixed `data.path` extraction in 3 route geometry loads: `data.path.coordinates || data.path` (backend returns GeoJSON geometry object, not raw array)
 - Fixed `style` → `paint` on `Layer` components in `RideStatsScreen`, `BikeRideToDestinationScreen`, `RiderPopupScreen` (fixes `style` is deprecated warning)
 - Fixed `initialDistance` → `totalDistanceRef.current` ref bug in `BikeRideToDestinationScreen.handleEndRide`
+- Rewired `DriverNavigator.jsx` to a 4-tab layout: Home (DriverModeSelect) | My Trips (`DriverTripHistoryScreen` with `initialParams={{ list: true }}`) | Wallet (new `MarshalWalletScreen`) | Profile; `DriverRouteList` now a stack screen `DriverRouteSearch`
+- Created `MarshalWalletScreen.jsx` (driver wallet): zip layout, real data via `fetchWallet` (balance + today/week/month earnings from credit txs + recent 10 txs + delegate to DriverTripHistoryScreen for history)
+- Rewired `DriverBikeHomeScreen.jsx`/`DriverAutoHomeScreen.jsx` `handleNext` → `navigate("DriverRouteSearch", { pickup, destination, mode })`
+- Rewired `DriverRouteList.jsx` `onSelectRoute` → `navigate("AutoFindPassenger"/"BikeFindPassenger", { route })` (was legacy `DriverFindPassengers`)
+- Added role-driven `DriverHomeTab` wrapper in `DriverNavigator.jsx`: renders `DriverAutoHomeScreen` when `role === ROLE.AUTO_DRIVER`, `DriverBikeHomeScreen` when `ROLE.BIKE_DRIVER`, else falls back to `DriverModeSelectScreen` (tab name kept as `DriverModeSelect`)
+- Fixed `DriverBikeHomeScreen.jsx` card scroll: added `useWindowDimensions`; inner card ScrollView capped at `maxHeight: windowHeight - 210` so recent searches are reachable/selectable
+- Redesigned `DriverRouteList.jsx`: stops hidden by default (collapsed card shows only user-chosen start + end, falling back to first/last stop names); added green "View N stops / Hide stops" toggle (`stopsToggle`/`stopsToggleText`); new `stopNameFlex` truncation style; route selection navigates to registered `"FindPassenger"` (bike radar) / `"AutoFindPassenger"`
+- Ported the zip "Pre-Ride Check" verification overlay into prod `BikeFindPassengerScreen.jsx` (bike radar): `VEHICLE_IMAGES` hero cycling `vayyWithoutPassengerBike{1..4}.png`, 6 `CHECKS` (System: network/gps/location; Safety: helmet/stand/device), `scaleIn`/`floatAnim`/`spinAnim`/`sweepAnim` animations, animated progress track + `x/6` + "All Clear" badges, "Go Live" button appears only after all checks pass; zip `LinearGradient`/`MapView` imports skipped (not installed / prod uses `VayyMap`); `showVerify`/`checks`/`handleStart` wiring preserved (calls `setOnline(true)` + `setPhase("scanning")`)
 
 ### In Progress
 - (none)

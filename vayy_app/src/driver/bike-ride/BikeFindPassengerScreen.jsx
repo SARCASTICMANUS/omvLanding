@@ -3,6 +3,8 @@ import {
   Animated,
   Dimensions,
   Easing,
+  Image,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -14,18 +16,33 @@ import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
-import { AUTH } from "../../constants";
+import { AUTH, WS } from "../../constants";
 import { acceptBroadcast, rejectBroadcast, acceptDispatch, rejectDispatch } from "../../store/slices/dispatchSlice";
 import { getAssignedVehicle } from "../services/driverService";
 import useDriverLocationPush from "../hooks/useDriverLocationPush";
 import api from "../../shared/lib/api";
 import useWebSocket from "../../shared/hooks/useWebSocket";
-import { WS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
 import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
-const { width, height } = Dimensions.get("window");
+const { height } = Dimensions.get("window");
+
+const VEHICLE_IMAGES = [
+  require("../../../assets/vayyWithoutPassengerBike.png"),
+  require("../../../assets/vayyWithoutPassengerBike2.png"),
+  require("../../../assets/vayyWithoutPassengerBike3.png"),
+  require("../../../assets/vayyWithoutPassengerBike4.png"),
+];
+
+const CHECKS = [
+  { key: "network", label: "Network", icon: "wifi" },
+  { key: "gps", label: "GPS", icon: "navigate" },
+  { key: "location", label: "Location", icon: "location" },
+  { key: "helmet", label: "Wear Helmet", icon: "shield-checkmark" },
+  { key: "stand", label: "Kickstand Up", icon: "footsteps" },
+  { key: "device", label: "Bike Ready", icon: "bicycle" },
+];
 
 export default function BikeFindPassengerScreen({ navigation, route: navRoute }) {
   const insets = useSafeAreaInsets();
@@ -33,6 +50,9 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   const { user } = useSelector((state) => state.auth);
   const userId = user?.id;
   const [showVerify, setShowVerify] = useState(true);
+  const [checks, setChecks] = useState(CHECKS.map((c) => ({ ...c, status: "pending" })));
+  const [allPassed, setAllPassed] = useState(false);
+  const [vehicleIdx, setVehicleIdx] = useState(0);
   const [phase, setPhase] = useState("scanning");
   const [online, setOnline] = useState(false);
   const [currentBuddy, setCurrentBuddy] = useState(null);
@@ -117,15 +137,75 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   });
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const verifySlide = useRef(new Animated.Value(0)).current;
+  const verifyOpacity = useRef(new Animated.Value(0)).current;
+  const scaleIn = useRef(new Animated.Value(0.9)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  const spinAnim = useRef(new Animated.Value(0)).current;
   const sweepAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!showVerify) return;
-    Animated.spring(verifySlide, { toValue: 1, friction: 8, tension: 60, useNativeDriver: true }).start();
-  }, [showVerify, verifySlide]);
+    verifyOpacity.setValue(0);
+    verifySlide.setValue(0);
+    Animated.parallel([
+      Animated.timing(verifySlide, { toValue: 1, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(verifyOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.spring(scaleIn, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }),
+    ]).start();
+  }, [showVerify, verifySlide, scaleIn, verifyOpacity]);
+
+  useEffect(() => {
+    if (!showVerify) return;
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [showVerify, floatAnim]);
+
+  useEffect(() => {
+    if (!showVerify) return;
+    const iv = setInterval(() => {
+      setVehicleIdx((p) => (p + 1) % VEHICLE_IMAGES.length);
+    }, 3000);
+    return () => clearInterval(iv);
+  }, [showVerify]);
+
+  useEffect(() => {
+    if (!showVerify) return;
+    let cancelled = false;
+    const run = async () => {
+      const updated = CHECKS.map((c) => ({ ...c, status: "pending" }));
+      for (let i = 0; i < updated.length; i++) {
+        if (cancelled) return;
+        updated[i] = { ...updated[i], status: "checking" };
+        setChecks([...updated]);
+        await new Promise((r) => setTimeout(r, 700 + Math.random() * 600));
+        if (cancelled) return;
+        updated[i] = { ...updated[i], status: "passed" };
+        setChecks([...updated]);
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      if (!cancelled) setAllPassed(true);
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [showVerify]);
+
+  useEffect(() => {
+    if (!allPassed) return;
+    Animated.loop(
+      Animated.timing(spinAnim, { toValue: 1, duration: 2000, easing: Easing.linear, useNativeDriver: true }),
+    ).start();
+  }, [allPassed, spinAnim]);
 
   const handleStart = () => {
-    Animated.timing(verifySlide, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
+    if (!allPassed) return;
+    Animated.parallel([
+      Animated.timing(verifySlide, { toValue: 0, duration: 350, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+      Animated.timing(verifyOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+    ]).start(() => {
       setShowVerify(false);
       setOnline(true);
       setPhase("scanning");
@@ -250,11 +330,46 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   };
 
   const sweepRotate = sweepAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+  const spinRotate = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
 
   const verifyTranslate = verifySlide.interpolate({
     inputRange: [0, 1],
-    outputRange: [height, 0],
+    outputRange: [-height, 0],
   });
+
+  const renderCheckRow = (check) => (
+    <View key={check.key} style={styles.vRow}>
+      <View style={[styles.vRowIcon, check.status === "passed" && styles.vRowIconPassed]}>
+        {check.status === "checking" ? (
+          <Animated.View style={{ transform: [{ rotate: spinRotate }] }}>
+            <Ionicons name="sync" size={16} color="#F59E0B" />
+          </Animated.View>
+        ) : check.status === "passed" ? (
+          <Ionicons name="checkmark" size={16} color="#fff" />
+        ) : (
+          <Ionicons name="ellipse" size={8} color="rgba(255,255,255,0.5)" />
+        )}
+      </View>
+      <Text style={[styles.vRowLabel, check.status === "checking" && styles.vRowLabelActive]}>
+        {check.label}
+      </Text>
+      {check.status === "pending" && (
+        <View style={styles.vRowStatus}>
+          <Text style={styles.vRowStatusText}>Pending</Text>
+        </View>
+      )}
+      {check.status === "checking" && (
+        <View style={[styles.vRowStatus, styles.vRowStatusChecking]}>
+          <Text style={[styles.vRowStatusText, styles.vRowStatusCheckingText]}>Checking</Text>
+        </View>
+      )}
+      {check.status === "passed" && (
+        <View style={[styles.vRowStatus, styles.vRowStatusPassed]}>
+          <Text style={[styles.vRowStatusText, styles.vRowStatusPassedText]}>Ready</Text>
+        </View>
+      )}
+    </View>
+  );
 
   return (
     <View style={styles.root}>
@@ -444,32 +559,78 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
 
       {/* Verification overlay */}
       {showVerify && (
-        <Animated.View style={[styles.verifyOverlay, { transform: [{ translateY: verifyTranslate }] }]}>
-          <View style={[styles.verifyCard, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 24 }]}>
-            <View style={styles.verifyIcon}>
-              <Ionicons name="bicycle" size={36} color={COLORS.primary} />
+        <Animated.View style={[styles.verifyOverlay, { transform: [{ translateY: verifyTranslate }], opacity: verifyOpacity }]}>
+          <View style={[styles.verifyCard, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
+            <View style={styles.vCardHeader}>
+              <Image source={require("../../../assets/vayyFrontBike.png")} style={{ width: 16, height: 16, opacity: 0.5 }} resizeMode="contain" />
+              <Text style={styles.vCardHeaderText}>Pre-Ride Check</Text>
             </View>
-            <Text style={styles.verifyTitle}>Ready to Ride</Text>
-            <Text style={styles.verifySub}>Enable your radar to find nearby buddies</Text>
 
-            <View style={styles.verifyChecks}>
-              {[
-                { key: "network", label: "Network", icon: "wifi" },
-                { key: "gps", label: "GPS Signal", icon: "navigate" },
-                { key: "location", label: "Location", icon: "location" },
-              ].map((check) => (
-                <View key={check.key} style={styles.verifyRow}>
-                  <Ionicons name={check.icon} size={16} color="rgba(255,255,255,0.35)" />
-                  <Text style={styles.verifyLabel}>{check.label}</Text>
-                  <Ionicons name="checkmark-circle" size={18} color={COLORS.primary} />
+            <ScrollView bounces={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.vScrollContent}>
+              <Animated.View style={{ transform: [{ scale: scaleIn }], alignItems: "center" }}>
+                <View style={styles.vHero}>
+                  <View style={styles.vTrackWrap}>
+                    <Animated.Image
+                      source={VEHICLE_IMAGES[vehicleIdx]}
+                      style={{
+                        width: 80, height: 80, resizeMode: "contain",
+                        marginBottom: -10,
+                        transform: [{
+                          translateX: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [-14, 14] }),
+                        }],
+                      }}
+                    />
+                    <View style={styles.vProgressTrack}>
+                      <View
+                        style={[
+                          styles.vProgressFill,
+                          { width: `${(checks.filter((c) => c.status === "passed").length / checks.length) * 100}%` },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.vBadgeRow}>
+                    <View style={styles.vBadge}>
+                      <Text style={styles.vBadgeText}>
+                        {checks.filter((c) => c.status === "passed").length}/{checks.length}
+                      </Text>
+                    </View>
+                    {allPassed && (
+                      <View style={[styles.vBadge, styles.vBadgeAllClear]}>
+                        <Ionicons name="checkmark" size={12} color="#fff" />
+                        <Text style={[styles.vBadgeText, { color: "#fff" }]}>All Clear</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              ))}
-            </View>
 
-            <TouchableOpacity style={styles.startBtn} onPress={handleStart} activeOpacity={0.85}>
-              <Ionicons name="radio" size={20} color="#fff" />
-              <Text style={styles.startBtnText}>Start Radar</Text>
-            </TouchableOpacity>
+                <Text style={styles.verifyTitle}>Ready to Ride</Text>
+                <Text style={styles.verifySub}>Verifying your setup</Text>
+              </Animated.View>
+
+              <View style={styles.vSectionHeader}>
+                <Ionicons name="cog" size={13} color="rgba(255,255,255,0.5)" />
+                <Text style={styles.vSectionLabel}>System</Text>
+              </View>
+              {checks.slice(0, 3).map(renderCheckRow)}
+
+              <View style={[styles.vSectionHeader, { marginTop: 12 }]}>
+                <Ionicons name="shield" size={13} color="rgba(255,255,255,0.5)" />
+                <Text style={styles.vSectionLabel}>Safety</Text>
+              </View>
+              {checks.slice(3).map(renderCheckRow)}
+            </ScrollView>
+
+            {allPassed && (
+              <TouchableOpacity style={styles.vStartBtn} onPress={handleStart} activeOpacity={0.85}>
+                <View style={styles.vStartBtnInner}>
+                  <Ionicons name="radio" size={20} color={COLORS.primary} />
+                  <Text style={styles.vStartBtnText}>Go Live</Text>
+                  <Ionicons name="arrow-forward" size={18} color={COLORS.primary} />
+                </View>
+              </TouchableOpacity>
+            )}
+            <View style={styles.vBottomDash} />
           </View>
         </Animated.View>
       )}
@@ -932,77 +1093,193 @@ const styles = StyleSheet.create({
   verifyOverlay: {
     position: "absolute",
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "#0F2A42",
+    backgroundColor: "rgba(0,0,0,0.6)",
     zIndex: 40,
-  },
-  verifyCard: {
-    flex: 1,
-    paddingHorizontal: 28,
+    justifyContent: "flex-start",
     alignItems: "center",
-    justifyContent: "center",
   },
-  verifyIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(255,255,255,0.06)",
+  vCardHeader: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 20,
-  },
-  verifyTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#fff",
-    letterSpacing: -0.5,
+    gap: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
     marginBottom: 8,
   },
-  verifySub: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "rgba(255,255,255,0.45)",
-    textAlign: "center",
-    marginBottom: 36,
-    lineHeight: 20,
+  vCardHeaderText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.6)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  verifyChecks: {
+  verifyCard: {
     width: "100%",
-    gap: 8,
-    marginBottom: 36,
+    height: height * 0.9,
+    backgroundColor: COLORS.primary,
+    borderRadius: 28,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    justifyContent: "space-between",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    elevation: 15,
   },
-  verifyRow: {
+  vScrollContent: {
+    paddingBottom: 16,
+  },
+  vBottomDash: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.3)",
+    alignSelf: "center",
+    marginTop: 12,
+    marginBottom: -4,
+  },
+
+  /* hero */
+  vHero: { alignItems: "center", marginBottom: 12 },
+  vTrackWrap: {
+    alignItems: "center",
+    width: "80%",
+    maxWidth: 200,
+    marginBottom: 4,
+  },
+  vProgressTrack: {
+    width: "100%",
+    height: 5,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  vProgressFill: {
+    height: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 2,
+  },
+  vBadgeRow: { flexDirection: "row", gap: 8 },
+  vBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.15)",
+  },
+  vBadgeText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  vBadgeAllClear: {
+    backgroundColor: "rgba(0,0,0,0.3)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+
+  verifyTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    textAlign: "center",
+    letterSpacing: -0.4,
+    marginBottom: 4,
+  },
+  verifySub: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "rgba(255,255,255,0.55)",
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+
+  /* sections */
+  vSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    marginBottom: 4,
+    marginLeft: 2,
+  },
+  vSectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+
+  /* check rows */
+  vRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    marginBottom: 8,
+    width: "100%",
   },
-  verifyLabel: {
+  vRowIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  vRowIconPassed: { backgroundColor: "rgba(255,255,255,0.35)" },
+  vRowLabel: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
-    color: "rgba(255,255,255,0.5)",
+    color: "#FFFFFF",
   },
-  startBtn: {
+  vRowLabelActive: { color: "#FFFFFF", fontWeight: "700" },
+  vRowStatus: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  vRowStatusText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.6)",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  vRowStatusChecking: {
+    backgroundColor: "rgba(245,158,11,0.2)",
+  },
+  vRowStatusCheckingText: {
+    color: "#F59E0B",
+  },
+  vRowStatusPassed: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  vRowStatusPassedText: {
+    color: "#FFFFFF",
+  },
+
+  /* start button */
+  vStartBtn: { width: "100%", borderRadius: 16, overflow: "hidden", marginTop: 12 },
+  vStartBtnInner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: COLORS.primary,
-    borderRadius: 18,
-    height: 56,
-    width: "100%",
-    shadowColor: COLORS.primary,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5,
   },
-  startBtnText: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#fff",
-  },
+  vStartBtnText: { fontSize: 16, fontWeight: "800", color: COLORS.primary },
 });

@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -134,6 +135,7 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 11
 }
 
 export default function DriverBikeHomeScreen({ navigation }) {
+  const { height: windowHeight } = useWindowDimensions();
   const [pickup, setPickup] = useState(null);
   const [destination, setDestination] = useState(null);
   const [greeting, setGreeting] = useState("");
@@ -297,6 +299,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
               bounces={false}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              style={{ maxHeight: windowHeight - 210 }}
               contentContainerStyle={styles.cardScroll}
             >
               <LocationSearch

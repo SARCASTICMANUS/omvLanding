@@ -64,7 +64,7 @@ const CARD_SHADOW = Platform.select({
   android: { elevation: 2 },
 });
 
-function RouteCard({ item, index, expanded, onToggleExpand, onSelect }) {
+function RouteCard({ item, index, pickup, destination, expanded, onToggleExpand, onSelect }) {
   const timeline = estimateStopTimeline(item);
   const isBest = index === 0;
   const earnings = item?.earnings || item?.estimated_earnings || (80 + index * 15);
@@ -74,6 +74,22 @@ function RouteCard({ item, index, expanded, onToggleExpand, onSelect }) {
   const stops = item?.stops || [];
   const demandColor = demand === "High" ? "#009849" : demand === "Medium" ? "#F59E0B" : "#EF4444";
 
+  const firstStop = timeline[0];
+  const lastStop = timeline[timeline.length - 1];
+  const startLabel =
+    pickup?.name ||
+    pickup?.display_name?.split(",")?.[0]?.trim() ||
+    firstStop?.name ||
+    item.startLabel ||
+    "--";
+  const endLabel =
+    destination?.name ||
+    destination?.display_name?.split(",")?.[0]?.trim() ||
+    lastStop?.name ||
+    item.endLabel ||
+    "--";
+  const hiddenStopCount = Math.max(0, timeline.length - 2);
+
   return (
     <View style={[s.card, isBest && s.cardBest]}>
       {isBest && (
@@ -82,7 +98,7 @@ function RouteCard({ item, index, expanded, onToggleExpand, onSelect }) {
         </View>
       )}
 
-      {/* Route visualization — all stops as road-following path */}
+      {/* Route visualization — start & end (user-chosen, matched to route stops) */}
       <TouchableOpacity activeOpacity={0.93} onPress={() => onSelect(item)}>
         <View style={s.routeRow}>
           <View style={s.routeNumCol}>
@@ -93,25 +109,19 @@ function RouteCard({ item, index, expanded, onToggleExpand, onSelect }) {
           </View>
 
           <View style={s.routeDetail}>
-            {timeline.map((stop, si) => {
-              const isFirst = si === 0;
-              const isLast = si === timeline.length - 1;
-              const displayName = stop.name || (isFirst ? item.startLabel : isLast ? item.endLabel : "");
-              const shortName = displayName.length > 22 ? displayName.slice(0, 20) + "…" : displayName;
-              return (
-                <React.Fragment key={stop.id || si}>
-                  <View style={s.stopRowItem}>
-                    {isFirst ? <View style={s.dotGreen} />
-                      : isLast ? <View style={s.dotOrange} />
-                        : <View style={s.dotGray} />}
-                    <Text style={[s.stopNameText, (isFirst || isLast) && s.stopNameBold]}>
-                      {shortName}
-                    </Text>
-                  </View>
-                  {!isLast && <View style={s.connectorDashed} />}
-                </React.Fragment>
-              );
-            })}
+            <View style={s.stopRowItem}>
+              <View style={s.dotGreen} />
+              <Text numberOfLines={1} style={[s.stopNameText, s.stopNameBold, s.stopNameFlex]}>
+                {startLabel}
+              </Text>
+            </View>
+            <View style={s.connectorDashed} />
+            <View style={s.stopRowItem}>
+              <View style={s.dotOrange} />
+              <Text numberOfLines={1} style={[s.stopNameText, s.stopNameBold, s.stopNameFlex]}>
+                {endLabel}
+              </Text>
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -151,6 +161,20 @@ function RouteCard({ item, index, expanded, onToggleExpand, onSelect }) {
             {stops.length} stops
           </Text>
           <Ionicons name="chevron-forward" size={14} color="#9CA3AF" />
+        </TouchableOpacity>
+      )}
+
+      {/* View / Hide stops toggle */}
+      {hiddenStopCount > 0 && (
+        <TouchableOpacity
+          style={s.stopsToggle}
+          onPress={() => onToggleExpand(item?.id || index)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={14} color="#009849" />
+          <Text style={s.stopsToggleText}>
+            {expanded ? "Hide stops" : `View ${hiddenStopCount} stop${hiddenStopCount > 1 ? "s" : ""}`}
+          </Text>
         </TouchableOpacity>
       )}
 
@@ -246,11 +270,12 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
       pickup,
       destination,
     };
-    navigation.navigate(mode === "auto" ? "AutoFindPassenger" : "BikeFindPassenger", { route: routeData });
+    navigation.navigate(mode === "auto" ? "AutoFindPassenger" : "FindPassenger", { route: routeData });
   };
 
   const renderItem = ({ item, index }) => (
     <RouteCard
+      destination={destination}
       expanded={String(expandedRouteId) === String(item.id)}
       index={index}
       item={item}
@@ -258,6 +283,7 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
       onToggleExpand={(id) =>
         setExpandedRouteId((cur) => (String(cur) === String(id) ? null : id))
       }
+      pickup={pickup}
     />
   );
 
@@ -478,6 +504,9 @@ const s = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 18,
   },
+  stopNameFlex: {
+    flex: 1,
+  },
   stopNameBold: {
     fontWeight: "800",
   },
@@ -487,6 +516,22 @@ const s = StyleSheet.create({
     borderStyle: "dashed",
     height: 14,
     marginLeft: 4.25,
+  },
+
+  /* view / hide stops toggle */
+  stopsToggle: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    gap: 5,
+    marginTop: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  stopsToggleText: {
+    color: "#009849",
+    fontSize: 12,
+    fontWeight: "800",
   },
 
   /* stats bar — ETA | Distance | Earnings | Demand */

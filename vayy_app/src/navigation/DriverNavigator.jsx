@@ -1,8 +1,10 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
+import { useSelector } from "react-redux";
 
 import COLORS from "../shared/constants/colors";
+import { ROLE } from "../constants";
 import DriverModeSelectScreen from "../driver/screens/DriverModeSelectScreen";
 import DriverBikeHomeScreen from "../driver/bike-ride/DriverBikeHomeScreen";
 import DriverRouteList from "../driver/screens/DriverRouteList";
@@ -40,6 +42,21 @@ import TripEndSummary from "../routes/screens/TripEndSummary";
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
+function DriverHomeTab({ navigation }) {
+  const { user } = useSelector((state) => state.auth);
+  const role = user?.role;
+
+  if (role === ROLE.AUTO_DRIVER) {
+    return <DriverAutoHomeScreen navigation={navigation} />;
+  }
+
+  if (role === ROLE.BIKE_DRIVER) {
+    return <DriverBikeHomeScreen navigation={navigation} />;
+  }
+
+  return <DriverModeSelectScreen navigation={navigation} />;
+}
+
 
 function DriverTabs() {
   return (
@@ -64,7 +81,7 @@ function DriverTabs() {
         },
       }}
     >
-      <Tab.Screen name="DriverModeSelect" component={DriverModeSelectScreen} options={{ title: "Home", tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} /> }} />
+      <Tab.Screen name="DriverModeSelect" component={DriverHomeTab} options={{ title: "Home", tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} /> }} />
       <Tab.Screen name="DriverRoutes" component={DriverTripHistoryScreen} initialParams={{ list: true }} options={{ title: "My Trips", tabBarIcon: ({ color, size }) => <History size={size} color={color} /> }} />
       <Tab.Screen name="DriverWallet" component={MarshalWalletScreen} options={{ title: "Wallet", tabBarIcon: ({ color, size }) => <Wallet size={size} color={color} /> }} />
       <Tab.Screen name="ProfileScreen" component={ProfileScreen} options={{ title: "Profile", tabBarIcon: ({ color, size }) => <User size={size} color={color} /> }} />
