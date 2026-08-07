@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { fetchRouteGeometry } from "../../routes/services/routeService";
 
-const ARRIVAL_THRESHOLD = 200;
+const ARRIVAL_THRESHOLD = 500;
 
 function haversine(a, b) {
   const R = 6371e3;
