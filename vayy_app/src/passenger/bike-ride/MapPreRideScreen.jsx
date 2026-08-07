@@ -16,6 +16,20 @@ import { fetchRouteGeometry } from "../../routes/services/routeService";
 
 const ARRIVAL_THRESHOLD = 200;
 
+function haversine(a, b) {
+  const R = 6371e3;
+  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
+  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos((a.latitude * Math.PI) / 180) * Math.cos((b.latitude * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+function formatDistance(meters) {
+  if (meters == null) return "—";
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
 export function BikeMapPreRideScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const [showConfirm, setShowConfirm] = useState(false);
@@ -24,6 +38,8 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   const [routeStops, setRouteStops] = useState([]);
   const [currentZoomLevel, setCurrentZoomLevel] = useState(14);
   const [followMode, setFollowMode] = useState(true);
+  const [userLocation, setUserLocation] = useState(null);
+  const [walkingPath, setWalkingPath] = useState(null);
 
   // Dedicated refs for Map and Camera instances
   const mapRef = useRef(null);
@@ -53,7 +69,10 @@ export function BikeMapPreRideScreen({ navigation, route }) {
     : null;
 
   const hasDistance = stopDistance !== "-" && Number.isFinite(Number(stopDistance));
-  const distNum = hasDistance ? Number(stopDistance) : null;
+  const liveWalkDistance = userLocation && pickupLat != null && pickupLon != null
+    ? haversine(userLocation, { latitude: pickupLat, longitude: pickupLon })
+    : null;
+  const distNum = liveWalkDistance != null ? liveWalkDistance : (hasDistance ? Number(stopDistance) : null);
   const isNearby = distNum == null ? true : distNum <= ARRIVAL_THRESHOLD;
 
   // Fetch route geometry on mount
@@ -74,6 +93,60 @@ export function BikeMapPreRideScreen({ navigation, route }) {
     };
     loadRoute();
   }, [routeId]);
+
+  // Fetch the rider's actual location to compute walking distance + walking line
+  useEffect(() => {
+    let cancelled = false;
+    const locateUser = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted" || cancelled) return;
+        let loc = null;
+        try {
+          loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+            timeout: 4000,
+          });
+        } catch {
+          loc = await Location.getLastKnownPositionAsync();
+        }
+        if (loc?.coords && !cancelled) {
+          setUserLocation({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to locate user for walking distance", e);
+      }
+    };
+    locateUser();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Walking line path from the rider's actual location to the nearest pickup stop
+  useEffect(() => {
+    if (userLocation && pickupLat != null && pickupLon != null) {
+      setWalkingPath({
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            properties: {},
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [userLocation.longitude, userLocation.latitude],
+                [pickupLon, pickupLat],
+              ],
+            },
+          },
+        ],
+      });
+    }
+  }, [userLocation, pickupLat, pickupLon]);
 
   // 2. WORKING ZOOM & LOCATION INTERFACE (V11 SPEC)
   const handleZoom = async (zoomIn) => {
@@ -114,6 +187,10 @@ export function BikeMapPreRideScreen({ navigation, route }) {
       }
 
       if (loc?.coords) {
+        setUserLocation({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
         cameraRef.current.setStop({
           center: [loc.coords.longitude, loc.coords.latitude],
           zoom: 16,
@@ -173,6 +250,19 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           scrollEnabled={true}
           zoomEnabled={true}
         >
+          <GeoJSONSource id="walkSource" data={walkingPath} />
+          <Layer
+            id="walkLayer"
+            type="line"
+            source="walkSource"
+            paint={{
+              "line-color": "#009849",
+              "line-width": 2.5,
+              "line-dasharray": [2, 1],
+              "line-join": "round",
+              "line-cap": "round",
+            }}
+          />
           <GeoJSONSource id="routeSource" data={routePath} />
           <Layer
             id="routeLayer"
@@ -249,7 +339,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           <View style={{ flex: 1 }}>
             <Text style={styles.cardLabel}>Nearest stop</Text>
             <Text style={styles.cardDistance}>
-              <Text style={styles.greenText}>{distNum ?? "—"}</Text> m away
+              <Text style={styles.greenText}>{formatDistance(distNum)}</Text> away
             </Text>
           </View>
           <View style={styles.etaBadge}>
@@ -319,7 +409,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
                 : "You're not at the pickup stop. Get closer to get notified."}
             </Text>
             <Text style={[styles.sheetStatusDist, isNearby ? styles.sheetStatusDistReady : styles.sheetStatusDistAway]}>
-              {distNum ?? "—"} m away
+              {formatDistance(distNum)} away
             </Text>
           </View>
         </View>
