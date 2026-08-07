@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Animated,
-  Dimensions,
   Easing,
+  Modal,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -21,9 +21,6 @@ import COLORS from "../../shared/constants/colors";
 import VayyMap, { UserLocation, Marker, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 import { fetchRouteGeometry, getRoadDistance } from "../../routes/services/routeService";
-import { useCallback } from "react";
-
-const { width } = Dimensions.get("window");
 
 function distanceToSegment(px, py, ax, ay, bx, by) {
   const dx = bx - ax;
@@ -108,6 +105,8 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
   const [routeBearing, setRouteBearing] = useState(null);
   const [mapCenter, setMapCenter] = useState(null);
   const [vehicleReady, setVehicleReady] = useState(false);
+  const [showEndModal, setShowEndModal] = useState(false);
+  const [showEarlyEndWarning, setShowEarlyEndWarning] = useState(false);
   const startTime = useRef(Date.now());
   const dotAnim = useRef(new Animated.Value(0)).current;
   const totalDistanceRef = useRef(null);
@@ -260,7 +259,20 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
 
-  const handleEndRide = async () => {
+  const handleEndRide = () => setShowEndModal(true);
+
+  const confirmArrived = () => {
+    setShowEndModal(false);
+    finishRide(false);
+  };
+
+  const confirmEarlyEnd = () => {
+    setShowEndModal(false);
+    setShowEarlyEndWarning(false);
+    finishRide(true);
+  };
+
+  const finishRide = async (earlyEnd) => {
     if (dispatchId) {
       try {
         await dispatchRedux(completeDispatch(dispatchId)).unwrap();
@@ -273,6 +285,7 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
     navigation.navigate("BikeTripComplete", {
       buddy,
       dispatchId,
+      earlyEnd,
       tripData: {
         dispatch_id: dispatchId,
         pickup: buddy?.pickup || "Pickup",
@@ -361,7 +374,7 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
 
         <View style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}>
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back" size={22} color="#111827" />
+            <Ionicons name="chevron-back" size={22} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>On Ride</Text>
           <View style={{ width: 40 }} />
@@ -371,6 +384,9 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
       <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16 }]}>
+        <View style={styles.rideCheckSpacer} />
+        <Text style={styles.rideCheckLabel}>Ride Check</Text>
+
         <View style={styles.handle} />
 
         <View style={styles.buddySection}>
@@ -425,6 +441,53 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
           <Text style={styles.endRideText}>End Ride</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal visible={showEndModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalIconWrap}>
+              <Ionicons name="flag" size={28} color={COLORS.primary} />
+            </View>
+            <Text style={styles.modalTitle}>End Ride</Text>
+            <Text style={styles.modalSub}>Have you reached the destination?</Text>
+
+            <TouchableOpacity style={styles.modalPrimaryBtn} onPress={confirmArrived} activeOpacity={0.9}>
+              <Ionicons name="checkmark-circle" size={20} color="#fff" />
+              <Text style={styles.modalPrimaryBtnText}>  Arrived at Destination</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalSecondaryBtn} onPress={() => { setShowEndModal(false); setShowEarlyEndWarning(true); }} activeOpacity={0.8}>
+              <Ionicons name="warning-outline" size={20} color="#EF4444" />
+              <Text style={styles.modalSecondaryBtnText}>  End Ride Early</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowEndModal(false)} activeOpacity={0.7}>
+              <Text style={styles.modalCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showEarlyEndWarning} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={[styles.modalIconWrap, { backgroundColor: "#FEF2F2" }]}>
+              <Ionicons name="warning" size={28} color="#EF4444" />
+            </View>
+            <Text style={styles.modalTitle}>End Ride Early?</Text>
+            <Text style={styles.modalSub}>You haven&apos;t reached the destination yet. The passenger may not be charged the full fare and your rating could be affected.</Text>
+
+            <TouchableOpacity style={[styles.modalPrimaryBtn, { backgroundColor: "#EF4444" }]} onPress={confirmEarlyEnd} activeOpacity={0.9}>
+              <Ionicons name="stop-circle" size={20} color="#fff" />
+              <Text style={styles.modalPrimaryBtnText}>  End Anyway</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowEarlyEndWarning(false)} activeOpacity={0.7}>
+              <Text style={styles.modalCancelBtnText}>Continue Ride</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -464,29 +527,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingBottom: 20,
+    backgroundColor: "rgba(10,22,60,0.9)",
     zIndex: 10,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#fff",
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 3,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#111827",
+    color: "#fff",
     letterSpacing: -0.3,
   },
   bottomSheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 30,
     backgroundColor: "#fff",
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
@@ -497,6 +561,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 20,
     elevation: 15,
+  },
+  rideCheckSpacer: {
+    height: 8,
+  },
+  rideCheckLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.primary,
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+    marginBottom: 8,
+    marginTop: 4,
   },
   handle: {
     width: 40,
@@ -649,5 +725,84 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "800",
     color: "#fff",
+  },
+
+  /* modal */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
+  },
+  modalContent: {
+    width: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    padding: 28,
+    alignItems: "center",
+  },
+  modalIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#ECFDF5",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 6,
+  },
+  modalSub: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  modalPrimaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.primary,
+    borderRadius: 18,
+    height: 52,
+    width: "100%",
+    marginBottom: 10,
+  },
+  modalPrimaryBtnText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#fff",
+  },
+  modalSecondaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    height: 52,
+    width: "100%",
+    borderWidth: 1.5,
+    borderColor: "#EF4444",
+    marginBottom: 10,
+  },
+  modalSecondaryBtnText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#EF4444",
+  },
+  modalCancelBtn: {
+    paddingVertical: 10,
+  },
+  modalCancelBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#9CA3AF",
   },
 });

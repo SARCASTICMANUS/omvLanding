@@ -37,6 +37,9 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
     if (digit && index < 3) {
       inputs.current[index + 1]?.focus();
     }
+    if (digit && index === 3) {
+      Keyboard.dismiss();
+    }
   };
 
   const handleKeyPress = (e, index) => {
@@ -46,6 +49,7 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
   };
 
   const handleVerify = async () => {
+    Keyboard.dismiss();
     const code = otp.join("");
     if (code.length < 4) {
       setOtpError("");
@@ -62,7 +66,7 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
     if (dispatchId) {
       try {
         await dispatchRedux(startDispatchTrip({ tripId: dispatchId, otp: code })).unwrap();
-      } catch (e) {
+      } catch {
         setOtpError("Invalid code. Please try again.");
         Animated.sequence([
           Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
@@ -105,13 +109,36 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
       </View>
 
       <View style={styles.body}>
-        <View style={styles.buddyBadge}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{buddy?.avatar || "RK"}</Text>
+        <View style={styles.buddyCard}>
+          <View style={styles.buddyRow}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{buddy?.avatar || "RK"}</Text>
+            </View>
+            <View style={styles.buddyInfo}>
+              <Text style={styles.buddyName}>{buddy?.name || "Passenger"}</Text>
+              <View style={styles.buddyRoute}>
+                <View style={[styles.routeDot, { backgroundColor: COLORS.primary }]} />
+                <Text style={styles.buddyDetail}>{buddy?.pickup || "Pickup"}</Text>
+              </View>
+              <View style={styles.buddyRoute}>
+                <View style={[styles.routeDot, { backgroundColor: "#EF4444" }]} />
+                <Text style={styles.buddyDetail}>{buddy?.drop || "Destination"}</Text>
+              </View>
+            </View>
           </View>
-          <View>
-            <Text style={styles.buddyName}>{buddy?.name || "Passenger"}</Text>
-            <Text style={styles.buddyDetail}>{buddy?.pickup || "Pickup"}</Text>
+          <View style={styles.buddyMeta}>
+            <View style={styles.metaItem}>
+              <Ionicons name="star" size={12} color="#F59E0B" />
+              <Text style={styles.metaText}>{buddy?.rating || "4.5"}</Text>
+            </View>
+            <View style={styles.metaItem}>
+              <Ionicons name="cash" size={12} color={COLORS.primary} />
+              <Text style={styles.metaText}>₹{buddy?.fare || "45"}</Text>
+            </View>
+            <View style={styles.metaItem}>
+              <Ionicons name="map" size={12} color="#6B7280" />
+              <Text style={styles.metaText}>{buddy?.distance || "1.2"} km</Text>
+            </View>
           </View>
         </View>
 
@@ -199,11 +226,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  /* buddy badge */
-  buddyBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+  /* buddy card */
+  buddyCard: {
     backgroundColor: "#fff",
     borderRadius: 20,
     paddingHorizontal: 16,
@@ -211,10 +235,15 @@ const styles = StyleSheet.create({
     width: "100%",
     marginBottom: 24,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  buddyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   avatar: {
     width: 48,
@@ -229,16 +258,48 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900",
   },
+  buddyInfo: {
+    flex: 1,
+  },
   buddyName: {
     fontSize: 16,
     fontWeight: "800",
     color: "#111827",
+    marginBottom: 4,
+  },
+  buddyRoute: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+  },
+  routeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   buddyDetail: {
     fontSize: 12,
     fontWeight: "500",
     color: "#6B7280",
-    marginTop: 1,
+  },
+  buddyMeta: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  metaText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#374151",
   },
 
   /* instruction */
