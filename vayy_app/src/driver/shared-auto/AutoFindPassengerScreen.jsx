@@ -21,7 +21,7 @@ import { WS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
 import VayyMap from "../../shared/components/VayyMap";
 
-const { width, height } = Dimensions.get("window");
+const { height } = Dimensions.get("window");
 
 const CHECKS = [
   { key: "network", label: "Network", icon: "wifi" },
@@ -42,9 +42,9 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
   const [showMenu, setShowMenu] = useState(false);
   const [notification, setNotification] = useState(null);
   const [speed, setSpeed] = useState(0);
-  const [eta, setEta] = useState("--");
-  const [nextStop, setNextStop] = useState("--");
-  const [progress, setProgress] = useState(0);
+  const [eta] = useState("--");
+  const [nextStop] = useState("--");
+  const [progress] = useState(0);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
@@ -764,6 +764,11 @@ const styles = StyleSheet.create({
 
   /* bottom sheet */
   bottomSheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 30,
     backgroundColor: "#fff",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,

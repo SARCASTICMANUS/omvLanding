@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Dimensions,
   Easing,
   Modal,
   StyleSheet,
@@ -16,13 +15,11 @@ import VayyMap from "../../shared/components/VayyMap";
 import AutoCancelRideModal from "./AutoCancelRideModal";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
-const { width } = Dimensions.get("window");
-
 export default function AutoRideToPickupScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const buddy = route.params?.buddy;
   const initialDist = buddy?.distance_km || null;
-  const [distance, setDistance] = useState(initialDist);
+  const [distance] = useState(initialDist);
   const [eta, setEta] = useState(buddy?.eta ? `${buddy.eta} min` : "—");
   const [showArrivedModal, setShowArrivedModal] = useState(false);
   const mapRef = useRef(null);
@@ -202,7 +199,7 @@ export default function AutoRideToPickupScreen({ navigation, route }) {
         >
           <Animated.View style={[styles.arriveBtnInner, { opacity: isInRange ? arrivePulse : 0.5 }]}>
             <Ionicons name="flag" size={20} color="#fff" />
-            <Text style={styles.arrivedBtnText}>I've Arrived at Pickup</Text>
+            <Text style={styles.arrivedBtnText}>I&apos;ve Arrived at Pickup</Text>
           </Animated.View>
         </TouchableOpacity>
       </View>
@@ -230,7 +227,7 @@ export default function AutoRideToPickupScreen({ navigation, route }) {
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalConfirm} onPress={confirmArrival}>
                 <Ionicons name="checkmark" size={18} color="#fff" />
-                <Text style={styles.modalConfirmText}>Yes, I'm Here</Text>
+                <Text style={styles.modalConfirmText}>Yes, I&apos;m Here</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -381,6 +378,11 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   bottomSheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 30,
     backgroundColor: "#fff",
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
