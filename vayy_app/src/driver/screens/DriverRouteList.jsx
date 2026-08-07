@@ -246,7 +246,7 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
       pickup,
       destination,
     };
-    navigation.navigate("DriverFindPassengers", { route: routeData });
+    navigation.navigate(mode === "auto" ? "AutoFindPassenger" : "BikeFindPassenger", { route: routeData });
   };
 
   const renderItem = ({ item, index }) => (

@@ -20,7 +20,8 @@ import AutoFindPassengerScreen from "../driver/shared-auto/AutoFindPassengerScre
 import AutoRideToPickupScreen from "../driver/shared-auto/AutoRideToPickupScreen";
 import AutoRideToDestinationScreen from "../driver/shared-auto/AutoRideToDestinationScreen";
 import AutoTripCompleteScreen from "../driver/shared-auto/AutoTripCompleteScreen";
-import { LayoutDashboard, Map, User } from "lucide-react-native";
+import MarshalWalletScreen from "../driver/bike-ride/MarshalWalletScreen";
+import { LayoutDashboard, History, User, Wallet } from "lucide-react-native";
 
 // Auto Flow Screens (for future)
 import AutoAheadAlertScreen from "../driver/shared-auto/AutoAheadAlertScreen";
@@ -64,7 +65,8 @@ function DriverTabs() {
       }}
     >
       <Tab.Screen name="DriverModeSelect" component={DriverModeSelectScreen} options={{ title: "Home", tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} /> }} />
-      <Tab.Screen name="DriverRoutes" component={DriverRouteList} options={{ title: "Routes", tabBarIcon: ({ color, size }) => <Map size={size} color={color} /> }} />
+      <Tab.Screen name="DriverRoutes" component={DriverTripHistoryScreen} initialParams={{ list: true }} options={{ title: "My Trips", tabBarIcon: ({ color, size }) => <History size={size} color={color} /> }} />
+      <Tab.Screen name="DriverWallet" component={MarshalWalletScreen} options={{ title: "Wallet", tabBarIcon: ({ color, size }) => <Wallet size={size} color={color} /> }} />
       <Tab.Screen name="ProfileScreen" component={ProfileScreen} options={{ title: "Profile", tabBarIcon: ({ color, size }) => <User size={size} color={color} /> }} />
     </Tab.Navigator>
   );
@@ -74,6 +76,7 @@ export default function DriverNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="DriverTabs" component={DriverTabs} />
+      <Stack.Screen name="DriverRouteSearch" component={DriverRouteList} />
       <Stack.Screen name="DriverBikeHome" component={DriverBikeHomeScreen} />
       <Stack.Screen name="DriverTripReview" component={DriverTripReview} />
       <Stack.Screen name="DriverLiveTracking" component={DriverLiveTracking} />

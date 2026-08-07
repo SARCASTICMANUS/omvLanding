@@ -245,7 +245,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
   const handleNext = () => {
     if (!canProceed) return;
     saveRecentSearch(pickup, destination);
-    navigation.navigate("DriverRoutes", { pickup, destination });
+    navigation.navigate("DriverRouteSearch", { pickup, destination, mode: "bike" });
   };
 
   const handleSwap = () => {
