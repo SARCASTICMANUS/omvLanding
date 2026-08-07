@@ -786,7 +786,6 @@ import {
 } from "react-native";
 import * as Location from "expo-location";
 import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
-import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Ionicons,
@@ -1038,12 +1037,16 @@ export function AutoPreRideScreen({ navigation, route }) {
       </View>
 
       {/* FIXED LAYER 2: Overlay Controls & Context Elements */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+      <View style={[styles.header, { paddingTop: insets.top + 10, overflow: "hidden" }]}>
+        <View style={styles.headerGradient}>
+          <View style={styles.gradBase} />
+          <View style={styles.gradRay1} />
+          <View style={styles.gradRay2} />
+        </View>
         <View style={styles.headerLeft}>
           {Platform.OS === 'ios' && (
             <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-back" size={24} color="#111827" />
             </TouchableOpacity>
           )}
           <Text style={styles.headerTitle}>Pre-Ride</Text>
@@ -1070,13 +1073,14 @@ export function AutoPreRideScreen({ navigation, route }) {
       {/* Floating map action configurations */}
       <View style={[styles.floatingContainer, { bottom: sheetHeight + 20 }]}>
         <TouchableOpacity style={styles.floatBtn} onPress={zoomIn}>
-          <Text style={styles.zoomText}>+</Text>
+          <Ionicons name="add" size={22} color="#111827" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.floatBtn} onPress={zoomOut}>
-          <Text style={styles.zoomText}>−</Text>
+          <Ionicons name="remove" size={22} color="#111827" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.floatBtn}>
-          <MaterialIcons name="my-location" size={24} color="#111827" />
+        <View style={styles.floatDivider} />
+        <TouchableOpacity style={styles.floatBtn} onPress={handleGetCurrentLocation}>
+          <MaterialIcons name="my-location" size={22} color="#111827" />
         </TouchableOpacity>
       </View>
 
@@ -1202,8 +1206,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 24,
     paddingBottom: 12,
-    backgroundColor: "rgba(0,152,73,0.6)",
-    overflow: "hidden",
+  },
+  headerGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  gradBase: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#009849",
+  },
+  gradRay1: {
+    position: "absolute",
+    top: -60,
+    right: -20,
+    width: 260,
+    height: 200,
+    backgroundColor: "#00B857",
+    opacity: 0.25,
+    transform: [{ rotate: "25deg" }],
+  },
+  gradRay2: {
+    position: "absolute",
+    bottom: -90,
+    right: 40,
+    width: 240,
+    height: 180,
+    backgroundColor: "#FFFFFF",
+    opacity: 0.1,
+    transform: [{ rotate: "35deg" }],
   },
   iconBtn: {
     width: 44,
@@ -1211,6 +1240,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
   },
   headerLeft: {
     flexDirection: "row",
@@ -1303,20 +1333,28 @@ const styles = StyleSheet.create({
   floatingContainer: {
     position: "absolute",
     right: 20,
-    gap: 12,
+    alignItems: "center",
+    borderRadius: 32,
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 8,
     zIndex: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
   floatBtn: {
     width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#FFFFFF",
+    height: 48,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
+  },
+  floatDivider: {
+    width: 28,
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    alignSelf: "center",
   },
   bottomSheet: {
     position: "absolute",
@@ -1333,12 +1371,6 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 15,
     zIndex: 20,
-  },
-  zoomText: {
-    fontSize: 22,
-    fontWeight: "600",
-    color: "#111827",
-    lineHeight: 24,
   },
   handle: {
     width: 40,
