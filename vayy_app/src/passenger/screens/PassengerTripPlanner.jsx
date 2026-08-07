@@ -350,7 +350,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
     }
   };
 
-  const searchPanelContent = (
+  const searchPanelContent = isBike ? (
     <>
       <LocationSearch
         key={`pickup-${pickup?.display_name || pickup?.name || "empty"}`}
@@ -398,6 +398,16 @@ export default function PassengerTripPlanner({ navigation, route }) {
         ))}
       </View>
     </>
+  ) : (
+    <View style={styles.comingSoonCard}>
+      <View style={styles.comingSoonIconWrap}>
+        <MaterialIcons name="construction" size={36} color="#009849" />
+      </View>
+      <Text style={styles.comingSoonTitle}>Coming Soon</Text>
+      <Text style={styles.comingSoonText}>
+        Shared Auto ride booking is coming soon. Please try Bike Ride for now.
+      </Text>
+    </View>
   );
 
   return (
@@ -695,6 +705,37 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 20,
     paddingBottom: 40,
+  },
+  comingSoonCard: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E7EB",
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingHorizontal: 28,
+    paddingVertical: 40,
+    gap: 12,
+    ...SHADOW.sm,
+  },
+  comingSoonIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: "#ECFAF1",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  comingSoonTitle: {
+    color: "#111827",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  comingSoonText: {
+    color: "#6B7280",
+    fontSize: 14,
+    fontWeight: "500",
+    lineHeight: 20,
+    textAlign: "center",
   },
   recentHeading: {
     color: "#9CA3AF",

@@ -235,24 +235,24 @@ export default function PassengerHomeScreen({ navigation }) {
           <Text style={styles.sectionTitle}>Choose your ride</Text>
 
           <ModeCard
-            title="Shared Auto"
-            subtitle="Jo auto already aapke route par hai."
-            badgeText="Live route matching"
-            badgeIcon={<View style={styles.liveDot} />}
-            onPress={handleAutoSearch}
-            image={AUTO_IMG}
-            cta="Ride Now"
-          />
-
-          <View style={styles.modeSpacer} />
-
-          <ModeCard
             title="Bike Ride"
             subtitle="Fast point-to-point ride."
             badgeText="Quick booking"
             badgeIcon={<MaterialIcons name="bolt" size={12} color="#F5A623" />}
             onPress={handleBikeBook}
             image={BIKE_IMG}
+            cta="Ride Now"
+          />
+
+          <View style={styles.modeSpacer} />
+
+          <ModeCard
+            title="Shared Auto"
+            subtitle="Jo auto already aapke route par hai."
+            badgeText="Live route matching"
+            badgeIcon={<View style={styles.liveDot} />}
+            onPress={handleAutoSearch}
+            image={AUTO_IMG}
             cta="Ride Now"
           />
         </ScrollView>
