@@ -38,6 +38,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   const [currentBuddy, setCurrentBuddy] = useState(null);
   const [notification, setNotification] = useState(null);
   const notifSlide = useRef(new Animated.Value(-100)).current;
+  const slideAnim = useRef(new Animated.Value(height)).current;
   const [bikePos, setBikePos] = useState(null);
   const mapRef = useRef(null);
   const zoomIn = () => mapRef.current?.zoomIn();
@@ -115,7 +116,6 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
     onMessage: handleWsMessage,
   });
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(height)).current;
   const verifySlide = useRef(new Animated.Value(0)).current;
   const sweepAnim = useRef(new Animated.Value(0)).current;
 

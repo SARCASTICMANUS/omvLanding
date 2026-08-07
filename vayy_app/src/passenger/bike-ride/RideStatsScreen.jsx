@@ -189,7 +189,6 @@ export function RideStatsScreen({ navigation, route }) {
 
   function handleConfirmEndRide() {
     setShowEndConfirm(false);
-    setEndRideLoading(true);
     const tripId = tripData.trip_id || dispatchId;
     (async () => {
       try {
