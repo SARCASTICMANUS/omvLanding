@@ -74,6 +74,10 @@ vayy_app/npm-debug.log*
 vayy_app/yarn-debug.log*
 vayy_app/yarn-error.log*
 vayy_app/android/
+vayy_app/metro.log
+vayy_app/vayyNewUi.zip
+vayy_app/newui/
+vayy_app/.expo-export-check/
 
 admin/dist
 admin/dist/

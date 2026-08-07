@@ -3,9 +3,7 @@ import {
   Animated,
   Dimensions,
   Easing,
-  FlatList,
   Image,
-  ImageBackground,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,29 +15,34 @@ import {
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { getRecentSearches, saveRecentSearch, searchRoutesByLocation } from "../services/passengerService";
 
 import COLORS from "../../shared/constants/colors";
 import { NOMINATIM_SEARCH, USER_AGENT } from "../../constants";
-import RADIUS from "../../shared/constants/radius";
 import SHADOW from "../../shared/constants/shadow";
-import SPACING from "../../shared/constants/spacing";
-import { useSelector } from "react-redux";
 
 const { width } = Dimensions.get("window");
 
-const heroImage = require("../../../assets/trip.png");
+const heroImage = require("../../../assets/vayynewbg.png");
+const heroBikeBg = require("../../../assets/vayynewbg2.png");
 
-const heroImages = [
-  require("../../../assets/vayyBike.png"),
-  require("../../../assets/vayyScoty.png"),
-  require("../../../assets/vayySportBike.png"),
+const AUTO_VARIANTS = [
+  require("../../../assets/vayyWithPassengerAuto.png"),
+  require("../../../assets/vayyWithoutPassengerAuto.png"),
 ];
 
-const DUMMY_RECENT = [];
+const passengerBikeImages = [
+  require("../../../assets/vayyWithPassengerbike.png"),
+  require("../../../assets/vayyWithPassengerbike2.png"),
+  require("../../../assets/vayyWithPassengerbike3.png"),
+  require("../../../assets/vayyWithoutPassengerBike.png"),
+  require("../../../assets/vayyWithoutPassengerBike2.png"),
+  require("../../../assets/vayyWithoutPassengerBike3.png"),
+  require("../../../assets/vayyWithoutPassengerBike4.png"),
+];
 
-function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90 }) {
+function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90, isPickup }) {
   const [query, setQuery] = useState(value?.name || value?.display_name || "");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -117,22 +120,37 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
         showResults && { marginBottom: dropdownHeight + 20, zIndex: 9999 },
       ]}
     >
-      <View style={styles.labelRow}>
-        <View style={styles.pinIcon} />
-        <Text style={styles.fieldLabel}>{label}</Text>
-      </View>
-
       <View style={styles.searchInputWrap}>
-        <Text style={styles.searchIcon}>o</Text>
-        <TextInput
-          autoCapitalize="none"
-          onChangeText={handleChangeText}
-          placeholder={placeholder}
-          placeholderTextColor="#9AA8BE"
-          style={styles.searchInput}
-          value={query}
-        />
-        <Text style={styles.locationIcon}>+</Text>
+        <View style={[styles.inputIconBox, isPickup ? styles.inputIconPickup : styles.inputIconDest]}>
+          {isPickup ? (
+            <Ionicons name="location" size={16} color="#fff" />
+          ) : (
+            <Ionicons name="flag" size={14} color="#fff" />
+          )}
+        </View>
+        <View style={styles.inputCol}>
+          <Text style={styles.fieldLabel}>{label}</Text>
+          <TextInput
+            autoCapitalize="none"
+            onChangeText={handleChangeText}
+            placeholder={placeholder}
+            placeholderTextColor="#9CA3AF"
+            style={styles.searchInput}
+            value={query}
+          />
+        </View>
+        {query.length > 0 && !hasSelection && (
+          <TouchableOpacity
+            onPress={() => {
+              setQuery("");
+              setHasSelection(false);
+              setResults([]);
+            }}
+            style={styles.clearBtn}
+          >
+            <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+          </TouchableOpacity>
+        )}
       </View>
 
       {showResults ? (
@@ -140,22 +158,21 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
           onLayout={(e) => setDropdownHeight(e.nativeEvent.layout.height)}
           style={[styles.dropdown, { top: dropdownLift }]}
         >
-          <FlatList
-            data={results}
-            keyboardShouldPersistTaps="handled"
-            keyExtractor={(item) => String(item.place_id)}
-            scrollEnabled={false}
-            renderItem={({ item }) => (
-              <Pressable onPress={() => handleSelect(item)} style={styles.resultRow}>
+          {results.map((item) => (
+            <Pressable key={String(item.place_id)} onPress={() => handleSelect(item)} style={styles.resultRow}>
+              <View style={styles.resultIcon}>
+                <Ionicons name="location-outline" size={16} color="#009849" />
+              </View>
+              <View style={styles.resultCol}>
                 <Text numberOfLines={1} style={styles.resultTitle}>
                   {item.name || item.display_name?.split(",")?.[0]}
                 </Text>
                 <Text numberOfLines={2} style={styles.resultSubtitle}>
                   {item.display_name}
                 </Text>
-              </Pressable>
-            )}
-          />
+              </View>
+            </Pressable>
+          ))}
         </View>
       ) : loading ? (
         <Text style={styles.searchingText}>Searching...</Text>
@@ -171,7 +188,7 @@ function RecentRow({ item, onPress }) {
   return (
     <TouchableOpacity activeOpacity={0.82} onPress={onPress} style={styles.recentRow}>
       <View style={styles.clockCircle}>
-        <Text style={styles.clockText}>C</Text>
+        <Ionicons name="time-outline" size={18} color="#6B7280" />
       </View>
       <View style={styles.recentCopy}>
         <Text numberOfLines={1} style={styles.recentFrom}>
@@ -181,6 +198,7 @@ function RecentRow({ item, onPress }) {
           To: {toName}
         </Text>
       </View>
+      <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
     </TouchableOpacity>
   );
 }
@@ -195,64 +213,11 @@ export default function PassengerTripPlanner({ navigation, route }) {
   const mode = route?.params?.mode || "auto";
   const isBike = mode === "bike";
   const [imgIndex, setImgIndex] = useState(0);
-  const [greeting, setGreeting] = useState("");
-  const [subLine, setSubLine] = useState("");
-  const [showName, setShowName] = useState(false);
-  const cursorRef = useRef(new Animated.Value(1)).current;
+  const [autoImgIndex, setAutoImgIndex] = useState(0);
   const bikeX = useRef(new Animated.Value(0)).current;
   const bikeOpacity = useRef(new Animated.Value(1)).current;
-  const { user } = useSelector((state) => state.auth);
-  const passengerName = user?.full_name || user?.name || user?.first_name || "there";
-
-  useEffect(() => {
-    const fullGreeting = "Namaste,";
-    const fullSub = "Aaj aap kahan jaana chahte hain?";
-    let t = 0;
-    let s = 0;
-    let phase = "greeting";
-
-    const cursorAnim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(cursorRef, { toValue: 0, duration: 400, useNativeDriver: true }),
-        Animated.timing(cursorRef, { toValue: 1, duration: 400, useNativeDriver: true }),
-      ]),
-    );
-    cursorAnim.start();
-
-    const tick = () => {
-      if (phase === "greeting") {
-        if (t < fullGreeting.length) {
-          setGreeting(fullGreeting.slice(0, t + 1));
-          t++;
-          setTimeout(tick, 60);
-        } else {
-          phase = "namaste_pause";
-          setTimeout(tick, 400);
-        }
-      } else if (phase === "namaste_pause") {
-        setShowName(true);
-        phase = "sub_pause";
-        setTimeout(tick, 500);
-      } else if (phase === "sub_pause") {
-        phase = "sub";
-        setTimeout(tick, 30);
-      } else if (phase === "sub") {
-        if (s < fullSub.length) {
-          setSubLine(fullSub.slice(0, s + 1));
-          s++;
-          setTimeout(tick, 40);
-        } else {
-          cursorAnim.stop();
-          cursorRef.setValue(0);
-        }
-      }
-    };
-    tick();
-
-    return () => {
-      cursorAnim.stop();
-    };
-  }, []);
+  const autoX = useRef(new Animated.Value(0)).current;
+  const autoOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     const runCycle = () => {
@@ -271,7 +236,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
           useNativeDriver: true,
         }).start(() => {
           bikeX.setValue(0);
-          setImgIndex((prev) => (prev + 1) % heroImages.length);
+          setImgIndex((prev) => (prev + 1) % passengerBikeImages.length);
           Animated.timing(bikeOpacity, {
             toValue: 1,
             duration: 60,
@@ -288,6 +253,41 @@ export default function PassengerTripPlanner({ navigation, route }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (isBike) return undefined;
+    const runAutoCycle = () => {
+      autoX.setValue(0);
+      autoOpacity.setValue(1);
+      Animated.timing(autoX, {
+        toValue: 1,
+        duration: 7000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (!finished) return;
+        Animated.timing(autoOpacity, {
+          toValue: 0,
+          duration: 60,
+          useNativeDriver: true,
+        }).start(() => {
+          autoX.setValue(0);
+          setAutoImgIndex((prev) => (prev + 1) % AUTO_VARIANTS.length);
+          Animated.timing(autoOpacity, {
+            toValue: 1,
+            duration: 60,
+            useNativeDriver: true,
+          }).start();
+          runAutoCycle();
+        });
+      });
+    };
+    runAutoCycle();
+    return () => {
+      autoX.stopAnimation();
+      autoOpacity.stopAnimation();
+    };
+  }, [isBike]);
+
   const fetchRecentSearches = async () => {
     try {
       setFetchingRecent(true);
@@ -295,7 +295,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
       setRecentSearches(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to fetch recent searches:", error);
-      setRecentSearches(DUMMY_RECENT);
+      setRecentSearches([]);
     } finally {
       setFetchingRecent(false);
     }
@@ -350,460 +350,391 @@ export default function PassengerTripPlanner({ navigation, route }) {
     }
   };
 
+  const searchPanelContent = (
+    <>
+      <LocationSearch
+        key={`pickup-${pickup?.display_name || pickup?.name || "empty"}`}
+        isPickup
+        label="Pickup Stop"
+        onSelect={setPickup}
+        placeholder="Search pickup location"
+        value={pickup}
+      />
+
+      <TouchableOpacity activeOpacity={0.8} onPress={handleSwap} style={styles.swapButton}>
+        <Ionicons name="swap-vertical" size={20} color="#009849" />
+      </TouchableOpacity>
+
+      <LocationSearch
+        key={`destination-${destination?.display_name || destination?.name || "empty"}`}
+        dropdownLift={90}
+        isPickup={false}
+        label="Destination"
+        onSelect={setDestination}
+        placeholder="Enter your destination"
+        value={destination}
+      />
+
+      <TouchableOpacity
+        activeOpacity={0.86}
+        disabled={!canProceed || loading || searching}
+        onPress={handleNext}
+        style={[
+          styles.searchButton,
+          isBike && { backgroundColor: COLORS.primary },
+          (!canProceed || loading || searching) && styles.searchDisabled,
+        ]}
+      >
+        <MaterialIcons name="search" size={18} color={COLORS.white} />
+        <Text style={styles.searchButtonText}>
+          {searching || loading ? "Searching..." : isBike ? "Search Bike Rides" : "Search Vayy Rides"}
+        </Text>
+      </TouchableOpacity>
+
+      <View style={styles.recentSection}>
+        <Text style={styles.recentHeading}>RECENT SEARCHES</Text>
+        {recentSearches.map((item, index) => (
+          <RecentRow key={index} item={item} onPress={() => applyRecent(item)} />
+        ))}
+      </View>
+    </>
+  );
+
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+    <View style={styles.safeArea}>
       <StatusBar backgroundColor="#F7F8F8" style="dark" />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboard}
       >
-        <ScrollView
-          bounces={false}
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          nestedScrollEnabled={true}
-        >
-          {isBike ? (
-            <View style={styles.bikeHero}>
-              <Animated.Image
-                source={heroImages[imgIndex]}
-                style={[
-                  styles.runningBike,
-                  { opacity: bikeOpacity },
-                  {
-                    transform: [
-                      {
-                        translateX: bikeX.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [-width * 0.35, width + 80],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-                resizeMode="contain"
-              />
-              <View style={styles.heroOverlay} />
-              <View style={styles.road}>
-                {Array.from({ length: 14 }).map((_, i) => (
-                  <View key={i} style={[styles.roadDash, { left: i * (width / 14) + 8 }]} />
-                ))}
-              </View>
-              <View style={styles.heroText}>
-                <View style={styles.greetingRow}>
-                  <Image source={require("../../../assets/vayyNamaste.png")} style={styles.namasteIcon} />
-                </View>
-                <View style={styles.greetingRow}>
-                  <Text style={styles.heroTitle}>{greeting}</Text>
-                  {greeting.length < 8 && <Animated.View style={[styles.typeCursor, { opacity: cursorRef }]} />}
-                </View>
-                {showName && <Text style={styles.heroAccent}>{passengerName}</Text>}
-                <View style={styles.subRow}>
-                  {subLine ? <Text style={styles.heroSub}>{subLine}</Text> : null}
-                  {subLine.length > 0 && subLine.length < 32 && <Animated.View style={[styles.typeCursor, { height: 20 }, { opacity: cursorRef }]} />}
-                </View>
-              </View>
-            </View>
-          ) : (
-            <ImageBackground
-              imageStyle={styles.heroImage}
-              resizeMode="cover"
-              source={heroImage}
-              style={styles.hero}
-            >
-              <View style={styles.heroOverlayAuto} />
-              <View style={styles.heroCopy}>
-                <Text style={styles.heroTitle}>Choose Your</Text>
-                <Text style={styles.heroTitleGreen}>Route</Text>
-                <Text style={styles.heroSubtitle}>
-                  Enter your pickup and drop locations{"\n"}
-                  to find the best routes{"\n"}
-                  and track in real-time.
-                </Text>
-              </View>
-            </ImageBackground>
-          )}
-
-          <View style={styles.searchPanel}>
-            <LocationSearch
-              key={`pickup-${pickup?.display_name || pickup?.name || "empty"}`}
-              label="Pickup Point"
-              onSelect={setPickup}
-              placeholder="Search pickup location"
-              value={pickup}
-            />
-
-            <TouchableOpacity activeOpacity={0.8} onPress={handleSwap} style={styles.swapButton}>
-              <Text style={styles.swapText}>S</Text>
-            </TouchableOpacity>
-
-            <LocationSearch
-              key={`destination-${destination?.display_name || destination?.name || "empty"}`}
-              dropdownLift={90}
-              label="Drop Location"
-              onSelect={setDestination}
-              placeholder="Enter your destination"
-              value={destination}
-            />
-
-            <TouchableOpacity
-              activeOpacity={0.1}
-              disabled={!canProceed || loading || searching}
-              onPress={handleNext}
-              style={[
-                styles.searchButton,
-                isBike && { backgroundColor: COLORS.primary },
-                (!canProceed || loading || searching) && styles.searchDisabled,
-              ]}
-            >
-              <Text style={styles.searchButtonIcon}>o</Text>
-              <Text style={styles.searchButtonText}>
-                {searching || loading ? "Searching..." : isBike ? "Search Bike Rides" : "Search Vayy Rides"}
-              </Text>
-            </TouchableOpacity>
-
-            <View style={styles.recentSection}>
-              <Text style={styles.recentHeading}>RECENT SEARCHES</Text>
-              {recentSearches.map((item, index) => (
-                <RecentRow key={index} item={item} onPress={() => applyRecent(item)} />
-              ))}
-            </View>
+        <View style={styles.bikeContainer}>
+          <View style={isBike ? styles.bikeHero : styles.autoHero}>
+            {isBike ? (
+              <>
+                <Image source={heroBikeBg} style={styles.bikeHeroBg} resizeMode="cover" />
+                <Animated.Image
+                  source={passengerBikeImages[imgIndex]}
+                  style={[
+                    styles.runningBike,
+                    { opacity: bikeOpacity },
+                    {
+                      transform: [
+                        {
+                          translateX: bikeX.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [-width * 0.35, width + 80],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                  resizeMode="contain"
+                />
+                <View style={styles.bikeShadow} />
+              </>
+            ) : (
+              <>
+                <Image source={heroImage} style={styles.autoHeroBg} resizeMode="cover" />
+                <Animated.Image
+                  source={AUTO_VARIANTS[autoImgIndex]}
+                  style={[
+                    styles.autoVehicle,
+                    { opacity: autoOpacity },
+                    {
+                      transform: [
+                        {
+                          translateX: autoX.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [-width * 0.5, width + 80],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                  resizeMode="contain"
+                />
+              </>
+            )}
           </View>
-        </ScrollView>
+          <ScrollView
+            bounces={false}
+            style={styles.bikeScrollCard}
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+          >
+            {searchPanelContent}
+          </ScrollView>
+        </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F7F8F8",
+    backgroundColor: "#ffffffff",
   },
   keyboard: {
     flex: 1,
   },
   content: {
-    backgroundColor: "#F7F8F8",
+    backgroundColor: "#ffffffff",
     paddingBottom: 24,
     flexGrow: 1,
   },
-  hero: {
-    backgroundColor: "#F7F8F8",
-    height: "35%",
-    // width:"100%"
-    overflow: "hidden",
-  },
-  heroImage: {
-    // left: -35,
-    width: "100%",
-    height: "100%"
-    // imageStyle:"contain"
-  },
-  heroOverlay: {
-    backgroundColor: "rgba(247, 248, 248, 0.68)",
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-    top: 0,
-    width: "54%",
-  },
-  heroCopy: {
-    left: 16,
-    position: "absolute",
-    top: 32,
-    zIndex: 4,
-  },
-  heroTitle: {
-    color: "#03111F",
-    fontSize: 32,
-    fontWeight: "900",
-    lineHeight: 36,
-  },
-  heroTitleGreen: {
-    color: COLORS.primary,
-    fontSize: 28,
-    fontWeight: "900",
-    lineHeight: 31,
-  },
-  heroSubtitle: {
-    color: "#0F2A42",
-    fontSize: 11.5,
-    fontWeight: "500",
-    lineHeight: 20,
-    marginTop: 12,
-  },
-  heroText: {
-    position: "absolute",
-    top: 20,
-    left: 20,
-    zIndex: 4,
-    maxWidth: "75%",
-  },
-  greetingRow: {
-    flexDirection: "row",
-    alignItems: "start",
-  },
-  namasteIcon: {
-    width: 40,
-    height: 50,
-    resizeMode: "contain",
-    marginBottom: 2,
-  },
-  typeCursor: {
-    width: 2,
-    height: 32,
-    backgroundColor: COLORS.primary,
-    marginLeft: 2,
-  },
-  heroAccent: {
-    fontSize: 32,
-    fontWeight: "900",
-    color: COLORS.primary,
-    lineHeight: 36,
-  },
-  heroSub: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#4B5563",
-    lineHeight: 24,
-    marginTop: 16,
-  },
-  subRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-  heroOverlayAuto: {
-    backgroundColor: "rgba(247, 248, 248, 0.68)",
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-    top: 0,
-    width: "54%",
-  },
-  bikeHero: {
-    height: 280,
-    backgroundColor: "#F7F8F8",
+  autoHero: {
+    height: 300,
     position: "relative",
     overflow: "hidden",
   },
-  runningBike: {
+  autoHeroBg: {
     position: "absolute",
-    bottom: 0,
-    top: 135,
-    width: width * 0.55,
-    height: "70%",
-    zIndex: 2,
-  },
-  road: {
-    position: "absolute",
-    bottom: 0,
-    top: 250,
+    top: 0,
     left: 0,
-    right: 0,
-    height: 40,
-    backgroundColor: "#2D2D2D",
-    zIndex: 1,
+    width: "100%",
+    height: "100%",
   },
-  roadDash: {
+  autoVehicle: {
     position: "absolute",
-    top: "50%",
-    width: 20,
-    height: 2.5,
-    backgroundColor: "#FCD34D",
-    marginTop: -1.25,
-    borderRadius: 1,
+    bottom: 30,
+    width: 140,
+    height: 100,
+    zIndex: 3,
   },
-  searchPanel: {
-    backgroundColor: "#F2F4F7",
+  bikeContainer: {
+    flex: 1,
+  },
+  bikeHero: {
+    height: 300,
+    position: "relative",
+    overflow: "hidden",
+  },
+  bikeHeroBg: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+  },
+  bikeScrollCard: {
+    backgroundColor: COLORS.white,
     borderTopLeftRadius: 35,
     borderTopRightRadius: 35,
+    marginTop: -20,
     flex: 1,
-    // marginTop: 10,
     paddingHorizontal: 20,
     paddingTop: 20,
-    zIndex: 5,
+    zIndex: 10,
     ...SHADOW.md,
   },
+  bikeShadow: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+    backgroundColor: "rgba(0,0,0,0)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 3,
+  },
+  runningBike: {
+    position: "absolute",
+    bottom: 15,
+    width: width * 0.5,
+    height: 120,
+    zIndex: 2,
+  },
   locationField: {
-    marginBottom: 20,
+    marginBottom: 16,
     zIndex: 10,
-  },
-  labelRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    marginBottom: 10,
-  },
-  pinIcon: {
-    backgroundColor: COLORS.primary,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    height: 13,
-    marginRight: 10,
-    transform: [{ rotate: "45deg" }],
-    width: 13,
-  },
-  fieldLabel: {
-    color: "#061320",
-    fontSize: 13.5,
-    fontWeight: "900",
   },
   searchInputWrap: {
     alignItems: "center",
-    borderColor: "#D8E1EA",
-    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E7EB",
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
-    minHeight: 54,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    minHeight: 56,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 12,
+    ...SHADOW.sm,
   },
-  searchIcon: {
-    color: "#8A99AE",
-    fontSize: 14,
-    marginRight: 8,
+  inputIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  locationIcon: {
-    color: "#7F90A8",
-    fontSize: 15,
-    marginLeft: 6,
+  inputIconPickup: {
+    backgroundColor: "#009849",
+  },
+  inputIconDest: {
+    backgroundColor: "#f59e0b",
+  },
+  inputCol: {
+    flex: 1,
+    gap: 2,
+  },
+  fieldLabel: {
+    color: "#6B7280",
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
   },
   searchInput: {
-    color: "#102033",
-    flex: 1,
-    fontSize: 12.5,
-    minHeight: 40,
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "600",
+    minHeight: 22,
     paddingVertical: 0,
+    margin: 0,
+  },
+  clearBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
   },
   dropdown: {
-    backgroundColor: COLORS.white,
-    borderColor: "#D8E1EA",
-    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
     borderWidth: 1,
     left: 0,
-    maxHeight: 190,
+    maxHeight: 200,
     position: "absolute",
     right: 0,
-    ...SHADOW.sm,
+    ...SHADOW.md,
     zIndex: 9999,
     elevation: 20,
+    overflow: "hidden",
   },
   resultRow: {
-    borderBottomColor: COLORS.border,
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomColor: "#F3F4F6",
     borderBottomWidth: 1,
-    padding: SPACING.md,
+  },
+  resultIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#ECFAF1",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  resultCol: {
+    flex: 1,
   },
   resultTitle: {
-    color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "800",
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "700",
   },
   resultSubtitle: {
-    color: COLORS.textMuted,
+    color: "#9CA3AF",
     fontSize: 11,
+    fontWeight: "500",
     marginTop: 2,
+    lineHeight: 15,
   },
   searchingText: {
-    color: COLORS.textMuted,
-    fontSize: 11,
-    marginTop: SPACING.xs,
+    color: "#9CA3AF",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 8,
   },
   swapButton: {
     alignItems: "center",
     alignSelf: "center",
-    backgroundColor: COLORS.white,
-    borderColor: "#E6EDF2",
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    height: 28,
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E5E7EB",
+    borderRadius: 999,
+    borderWidth: 1.5,
+    height: 32,
     justifyContent: "center",
-    marginBottom: 15,
-    marginTop: -3,
-    width: 28,
+    marginBottom: 14,
+    marginTop: -6,
+    width: 32,
     ...SHADOW.sm,
-  },
-  swapText: {
-    color: "#344255",
-    fontSize: 17,
-    fontWeight: "900",
+    zIndex: 5,
   },
   searchButton: {
     alignItems: "center",
-    backgroundColor: "#7DCE9F",
-    borderRadius: 9,
+    backgroundColor: "#009849",
+    borderRadius: 16,
     flexDirection: "row",
-    height: 46,
+    gap: 8,
+    height: 52,
     justifyContent: "center",
-    marginTop: 4,
-    ...SHADOW.sm,
+    marginTop: 8,
+    ...SHADOW.md,
   },
   searchDisabled: {
-    backgroundColor: "#C4CDD6",
-    opacity: 0.7,
-  },
-  searchButtonIcon: {
-    color: COLORS.white,
-    fontSize: 19,
-    fontWeight: "900",
-    marginRight: 10,
+    opacity: 0.5,
   },
   searchButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: "900",
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
   },
   recentSection: {
-    backgroundColor: "#F2F4F7",
     flex: 1,
     paddingTop: 20,
     paddingBottom: 40,
   },
   recentHeading: {
-    color: "#93A0B3",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0,
-    marginBottom: 10,
+    color: "#9CA3AF",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    marginBottom: 12,
   },
   recentRow: {
     alignItems: "center",
-    backgroundColor: COLORS.white,
-    borderColor: "#EDF1F4",
-    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    borderColor: "#F3F4F6",
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
-    height: 47,
+    gap: 12,
     marginBottom: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   clockCircle: {
     alignItems: "center",
-    backgroundColor: "#F1F5F9",
-    borderRadius: 14,
-    height: 28,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 12,
+    height: 36,
     justifyContent: "center",
-    marginRight: 11,
-    width: 28,
-  },
-  clockText: {
-    color: "#8EA0B6",
-    fontSize: 15,
-    fontWeight: "900",
+    width: 36,
   },
   recentCopy: {
     flex: 1,
+    gap: 2,
   },
   recentFrom: {
-    color: "#0F2032",
-    fontSize: 9.5,
+    color: "#111827",
+    fontSize: 12,
     fontWeight: "900",
   },
   recentTo: {
-    color: "#5D7086",
-    fontSize: 8.6,
-    marginTop: 3,
+    color: "#6B7280",
+    fontSize: 12,
+    fontWeight: "500",
   },
 });
