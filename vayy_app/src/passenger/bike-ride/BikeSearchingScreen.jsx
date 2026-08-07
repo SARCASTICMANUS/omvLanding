@@ -237,7 +237,6 @@ export function BikeSearchingScreen({ navigation, route }) {
     setSearchStatus("searching");
     clearTimeout(timerRef.current);
     clearTimeout(timeoutRef.current);
-    searchStartedRef.current = false;
     setActiveTripId(null);
     setActiveRequestId(null);
 
