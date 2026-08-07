@@ -6,14 +6,15 @@ import {
   StyleSheet,
   StatusBar,
   Platform,
+  Image,
 } from "react-native";
 import * as Location from "expo-location";
 import VayyMap, { GeoJSONSource, Layer, UserLocation, Marker } from "../../shared/components/VayyMap";
-import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons";
-import { ConfirmPopup } from "./ConfirmPopup";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { fetchRouteGeometry } from "../../routes/services/routeService";
+
+const ARRIVAL_THRESHOLD = 200;
 
 export function BikeMapPreRideScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -22,7 +23,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   const [routePath, setRoutePath] = useState(null);
   const [routeStops, setRouteStops] = useState([]);
   const [currentZoomLevel, setCurrentZoomLevel] = useState(14);
-
+  const [followMode, setFollowMode] = useState(true);
 
   // Dedicated refs for Map and Camera instances
   const mapRef = useRef(null);
@@ -50,6 +51,10 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   const initialCenter = pickupLat != null && pickupLon != null
     ? [pickupLon, pickupLat]
     : null;
+
+  const hasDistance = stopDistance !== "-" && Number.isFinite(Number(stopDistance));
+  const distNum = hasDistance ? Number(stopDistance) : null;
+  const isNearby = distNum == null ? true : distNum <= ARRIVAL_THRESHOLD;
 
   // Fetch route geometry on mount
   useEffect(() => {
@@ -145,13 +150,12 @@ export function BikeMapPreRideScreen({ navigation, route }) {
     }
   };
 
-
   useEffect(() => {
     if (didFitRef.current || !cameraRef.current) return;
     didFitRef.current = true;
     handleRecenterRouteBounds();
   }, [pickupLat, pickupLon, dropoffLat, dropoffLon, sheetHeight]);
-  
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -221,18 +225,19 @@ export function BikeMapPreRideScreen({ navigation, route }) {
 
       {/* Layer 2: Floating Header UI Control Deck */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-        <View style={styles.headerLeft}>
-          {Platform.OS === 'ios' && (
+        <View style={styles.headerGradient}>
+          <View style={styles.gradBase} />
+          <View style={styles.gradRay1} />
+          <View style={styles.gradRay2} />
+        </View>
+        <View style={styles.headerRow}>
+          {Platform.OS === "ios" && (
             <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-back" size={24} color="#111827" />
             </TouchableOpacity>
           )}
-          <Text style={styles.headerTitle}>{route?.params?.title || "Bike pickup"}</Text>
+          <Text style={styles.headerTitle}>Hand Raise</Text>
         </View>
-        <TouchableOpacity style={styles.iconBtn}>
-          <MaterialIcons name="more-vert" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
       </View>
 
       {/* Layer 3: Dynamic Context Cards */}
@@ -244,7 +249,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           <View style={{ flex: 1 }}>
             <Text style={styles.cardLabel}>Nearest stop</Text>
             <Text style={styles.cardDistance}>
-              <Text style={styles.greenText}>{stopDistance} m</Text> away
+              <Text style={styles.greenText}>{distNum ?? "—"}</Text> m away
             </Text>
           </View>
           <View style={styles.etaBadge}>
@@ -262,17 +267,21 @@ export function BikeMapPreRideScreen({ navigation, route }) {
 
       {/* Layer 4: Floating Action Interface Controls */}
       <View style={[styles.floatingContainer, { bottom: sheetHeight + 20 }]}>
-        <TouchableOpacity style={styles.floatBtn} onPress={() => handleZoom(true)}>
-          <Text style={styles.zoomText}>+</Text>
+        <TouchableOpacity style={styles.floatBtn} onPress={() => { handleZoom(true); setFollowMode(false); }}>
+          <Ionicons name="add" size={22} color="#111827" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.floatBtn} onPress={() => handleZoom(false)}>
-          <Text style={styles.zoomText}>−</Text>
+        <TouchableOpacity style={styles.floatBtn} onPress={() => { handleZoom(false); setFollowMode(false); }}>
+          <Ionicons name="remove" size={22} color="#111827" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.floatBtn} onPress={handleGetCurrentLocation}>
-          <MaterialIcons name="my-location" size={22} color="#111827" />
+        <View style={styles.floatDivider} />
+        <TouchableOpacity
+          style={[styles.floatBtn, followMode && styles.floatBtnActive]}
+          onPress={() => { handleGetCurrentLocation(); setFollowMode(true); }}
+        >
+          <MaterialIcons name="my-location" size={22} color={followMode ? "#FFFFFF" : "#111827"} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.floatBtn} onPress={handleGetCurrentLocation}>
-          <Feather name="navigation" size={22} color="#009849" />
+        <TouchableOpacity style={styles.floatBtn} onPress={() => { handleRecenterRouteBounds(); setFollowMode(false); }}>
+          <Ionicons name="scan-outline" size={20} color="#111827" />
         </TouchableOpacity>
       </View>
 
@@ -286,51 +295,88 @@ export function BikeMapPreRideScreen({ navigation, route }) {
       >
         <View style={styles.handle} />
 
-        <View style={styles.statsRow}>
-          <View style={styles.statCol}>
-            <Ionicons name="location" size={24} color="#009849" />
-            <Text style={styles.statLabel}>Nearest stop</Text>
-            <Text style={styles.statMainBold}>{pickupName}</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statCol}>
-            <Ionicons name="walk" size={24} color="#009849" />
-            <Text style={styles.statLabel}>Distance</Text>
-            <Text style={styles.statValueGreen}>{stopDistance} <Text style={styles.smallUnit}>m</Text></Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statCol}>
-            <Ionicons name="time-outline" size={24} color="#009849" />
-            <Text style={styles.statLabel}>ETA</Text>
-            <Text style={styles.statValueGreen}>{eta_sec} <Text style={styles.smallUnit}>min</Text></Text>
+        <View style={styles.sheetSection}>
+          <Text style={styles.sheetLabel}>Selected Route</Text>
+          <View style={styles.sheetRouteRow}>
+            <View style={styles.sheetRouteDot} />
+            <Text style={styles.sheetRouteText} numberOfLines={1}>
+              {pickupName} → {dropoffName}
+            </Text>
           </View>
         </View>
 
-        <TouchableOpacity activeOpacity={0.9} style={styles.raiseBtn} onPress={() => setShowConfirm(true)}>
-          <Text style={styles.raiseText}>✋ Raise Hand at Stop</Text>
+        <View style={styles.sheetSection}>
+          <Text style={styles.sheetLabel}>Nearest Pickup Stop</Text>
+          <Text style={styles.sheetStopName}>{pickupName}</Text>
+        </View>
+
+        <View style={[styles.sheetStatusCard, isNearby ? styles.sheetStatusReady : styles.sheetStatusAway]}>
+          <View style={[styles.sheetStatusDot, isNearby ? styles.sheetStatusDotReady : styles.sheetStatusDotAway]} />
+          <View style={styles.sheetStatusCol}>
+            <Text style={[styles.sheetStatusText, isNearby ? styles.sheetStatusTextReady : styles.sheetStatusTextAway]}>
+              {isNearby
+                ? "You're at the pickup stop. Nearby Marshals are ready to be notified."
+                : "You're not at the pickup stop. Get closer to get notified."}
+            </Text>
+            <Text style={[styles.sheetStatusDist, isNearby ? styles.sheetStatusDistReady : styles.sheetStatusDistAway]}>
+              {distNum ?? "—"} m away
+            </Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={[styles.raiseBtn, !isNearby && styles.raiseBtnDisabled]}
+          onPress={() => { if (isNearby) setShowConfirm(true); }}
+          disabled={!isNearby}
+        >
+          <Text style={[styles.raiseText, !isNearby && styles.raiseTextDisabled]}>✋ Raise Hand</Text>
         </TouchableOpacity>
       </View>
 
-      <ConfirmPopup
-        visible={showConfirm}
-        title="Raise Hand at Stop?"
-        message={`Are you at ${pickupName}? Nearby riders will be notified.`}
-        confirmLabel="Yes, Raise Hand"
-        icon="hand-left-outline"
-        onConfirm={() => {
-          setShowConfirm(false);
-          navigation.navigate('BikeSearching', {
-            route_id: routeId,
-            pickup_stop_id: trip?.pickup_stop?.id,
-            pickup: pickup,
-            pickupName: pickupName,
-            destination: dropoffName,
-            dropoffName: dropoffName,
-            fare: route?.params?.fare,
-          });
-        }}
-        onCancel={() => setShowConfirm(false)}
-      />
+      {/* Raise Hand Confirmation Modal */}
+      {showConfirm && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalIconWrap}>
+              <Image
+                source={require("../../../assets/VayyHandRaise.png")}
+                style={{ width: 120, height: 120 }}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={styles.modalTitle}>Raise Hand?</Text>
+            <Text style={styles.modalMessage}>
+              Nearby{"\n"}Marshals will be notified that you are waiting at the stop.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalBtnSecondary}
+                onPress={() => setShowConfirm(false)}
+              >
+                <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalBtnPrimary}
+                onPress={() => {
+                  setShowConfirm(false);
+                  navigation.navigate("BikeSearching", {
+                    route_id: routeId,
+                    pickup_stop_id: trip?.pickup_stop?.id,
+                    pickup: pickup,
+                    pickupName: pickupName,
+                    destination: dropoffName,
+                    dropoffName: dropoffName,
+                    fare: route?.params?.fare,
+                  });
+                }}
+              >
+                <Text style={styles.modalBtnPrimaryText}>Raise Hand</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -353,28 +399,59 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    overflow: "hidden",
+  },
+  headerGradient: {
+    ...StyleSheet.absoluteFill,
+  },
+  gradBase: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "#009849",
+  },
+  gradRay1: {
+    position: "absolute",
+    top: -60,
+    right: -40,
+    width: "70%",
+    height: "90%",
+    backgroundColor: "#00B857",
+    opacity: 0.25,
+    borderRadius: 120,
+    transform: [{ rotate: "25deg" }],
+  },
+  gradRay2: {
+    position: "absolute",
+    top: -80,
+    right: -20,
+    width: "50%",
+    height: "70%",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 100,
+    transform: [{ rotate: "35deg" }],
+  },
+  headerRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 24,
-    paddingBottom: 12,
-    backgroundColor: "rgba(0,152,73,0.6)",
+    gap: 12,
   },
   iconBtn: {
     width: 44,
     height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
+    shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, elevation: 3,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "800",
     color: "#FFFFFF",
+    letterSpacing: -0.3,
   },
   topOverlaysContainer: {
     position: "absolute",
@@ -459,19 +536,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#4B5563",
   },
-  poiLabel: {
-    alignItems: "center",
-    gap: 4,
-  },
-  poiText: {
-    fontSize: 13,
-    color: "#4B5563",
-    fontWeight: "600",
-    backgroundColor: "rgba(255,255,255,0.9)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
   stopMarkerGroup: {
     alignItems: "center",
     marginTop: -40,
@@ -550,27 +614,30 @@ const styles = StyleSheet.create({
   },
   floatingContainer: {
     position: "absolute",
-    right: 20,
-    gap: 12,
+    right: 16,
+    gap: 2,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    paddingVertical: 6,
+    shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
     zIndex: 20,
   },
   floatBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#FFFFFF",
+    width: 48,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
   },
-  zoomText: {
-    fontSize: 24,
-    fontWeight: "600",
-    color: "#111827",
-    lineHeight: 24,
+  floatBtnActive: {
+    backgroundColor: "#009849",
+    borderRadius: 12,
+    marginHorizontal: 4,
+  },
+  floatDivider: {
+    height: 1,
+    backgroundColor: "#F0F0F0",
+    marginHorizontal: 12,
   },
   bottomSheet: {
     position: "absolute",
@@ -578,8 +645,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: 20,
     paddingTop: 12,
     shadowColor: "#000",
@@ -594,62 +661,186 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "#E5E7EB",
     alignSelf: "center",
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  statsRow: {
+  sheetSection: {
+    marginBottom: 12,
+  },
+  sheetLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#9CA3AF",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  sheetRouteRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sheetRouteDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#009849",
+  },
+  sheetRouteText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+    flex: 1,
+  },
+  sheetStopName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  sheetStatusCard: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 24,
+    gap: 10,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
   },
-  statCol: {
+  sheetStatusAway: {
+    backgroundColor: "#FEF2F2",
+  },
+  sheetStatusReady: {
+    backgroundColor: "#ECFAF1",
+  },
+  sheetStatusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 3,
+  },
+  sheetStatusDotAway: {
+    backgroundColor: "#EF4444",
+  },
+  sheetStatusDotReady: {
+    backgroundColor: "#009849",
+  },
+  sheetStatusCol: {
     flex: 1,
-    alignItems: "center",
-    gap: 6,
+    gap: 4,
   },
-  statDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: "#F3F4F6",
-    marginHorizontal: 4,
-  },
-  statLabel: {
-    color: "#888888",
+  sheetStatusText: {
     fontSize: 13,
-    fontWeight: "500",
-    textAlign: 'center',
+    fontWeight: "600",
+    lineHeight: 18,
   },
-  statMainBold: {
-    fontSize: 15,
-    fontWeight: "800",
-    textAlign: "center",
-    color: "#111827",
-    lineHeight: 20,
+  sheetStatusTextAway: {
+    color: "#991B1B",
   },
-  statValueGreen: {
-    fontSize: 22,
-    fontWeight: "800",
+  sheetStatusTextReady: {
+    color: "#065F46",
+  },
+  sheetStatusDist: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  sheetStatusDistAway: {
+    color: "#DC2626",
+  },
+  sheetStatusDistReady: {
     color: "#009849",
   },
-  smallUnit: {
-    fontSize: 12,
-    color: "#111827",
-    fontWeight: "600",
-  },
   raiseBtn: {
-    height: 60,
-    borderRadius: 20,
+    height: 56,
+    borderRadius: 18,
     backgroundColor: "#009849",
-    flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#009849",
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowColor: "#009849", shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
+  },
+  raiseBtnDisabled: {
+    backgroundColor: "rgba(0,152,73,0.3)",
+    shadowOpacity: 0,
+    elevation: 0,
   },
   raiseText: {
     color: "#FFFFFF",
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
+  },
+  raiseTextDisabled: {
+    color: "rgba(255,255,255,0.5)",
+  },
+  modalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 100,
+    paddingHorizontal: 24,
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 24,
+    width: "100%",
+    maxWidth: 340,
+    alignItems: "center",
+  },
+  modalIconWrap: {
+    width: 102,
+    height: 102,
+    borderRadius: 36,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  modalBtnSecondary: {
+    flex: 1,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBtnSecondaryText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  modalBtnPrimary: {
+    flex: 1,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "#009849",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBtnPrimaryText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
 });
