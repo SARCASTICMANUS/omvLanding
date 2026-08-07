@@ -4,10 +4,10 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   StatusBar,
   ScrollView,
   Platform,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -16,8 +16,6 @@ import {
 } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import { submitRating } from "../../store/slices/rideSlice";
-
-const { width } = Dimensions.get("window");
 
 const RATING_LABELS = {
   1: "Poor",
@@ -31,6 +29,7 @@ export function AutoRideCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const [rating, setRating] = useState(0);
+  const [showThankYou, setShowThankYou] = useState(false);
   const { ratingLoading } = useSelector((state) => state.ride);
   const tripId = route?.params?.tripId;
   const boardedAt = route?.params?.boardedAt || "";
@@ -50,6 +49,11 @@ export function AutoRideCompleteScreen({ navigation, route }) {
     : rating === 4
     ? "Glad you enjoyed the ride"
     : "Amazing! Thank you";
+
+  const handleStarPress = (star) => {
+    setRating(star);
+    setShowThankYou(true);
+  };
 
   return (
     <View style={styles.container}>
@@ -143,7 +147,7 @@ export function AutoRideCompleteScreen({ navigation, route }) {
           <Text style={styles.sectionTitle}>Rate Your Trip</Text>
           <View style={styles.starRow}>
             {[1, 2, 3, 4, 5].map((star) => (
-              <TouchableOpacity key={star} onPress={() => setRating(star)} activeOpacity={0.7}>
+              <TouchableOpacity key={star} onPress={() => handleStarPress(star)} activeOpacity={0.7}>
                 <View style={styles.starItem}>
                   <Ionicons
                     name={star <= rating ? "star" : "star-outline"}
@@ -195,6 +199,27 @@ export function AutoRideCompleteScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <Modal visible={showThankYou} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.thankYouModal}>
+            <View style={styles.thankYouIcon}>
+              <Ionicons name="heart" size={36} color="#FFFFFF" />
+            </View>
+            <Text style={styles.thankYouTitle}>Thank You!</Text>
+            <Text style={styles.thankYouMsg}>
+              Your feedback helps us improve the experience for everyone.
+            </Text>
+            <TouchableOpacity
+              style={styles.thankYouBtn}
+              activeOpacity={0.9}
+              onPress={() => setShowThankYou(false)}
+            >
+              <Text style={styles.thankYouBtnText}>Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -447,5 +472,56 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontSize: 15,
     fontWeight: "700",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  thankYouModal: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 32,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 320,
+  },
+  thankYouIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#009849",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  thankYouTitle: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  thankYouMsg: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  thankYouBtn: {
+    height: 52,
+    borderRadius: 18,
+    backgroundColor: "#009849",
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
+  },
+  thankYouBtnText: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "800",
   },
 });
