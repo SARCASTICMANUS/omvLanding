@@ -400,9 +400,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
     </>
   ) : (
     <View style={styles.comingSoonCard}>
-      <View style={styles.comingSoonIconWrap}>
-        <MaterialIcons name="construction" size={36} color="#009849" />
-      </View>
+      <Image source={require("../../../assets/vayyAutoBoarding.png")} style={styles.comingSoonImage} resizeMode="contain" />
       <Text style={styles.comingSoonTitle}>Coming Soon</Text>
       <Text style={styles.comingSoonText}>
         Shared Auto ride booking is coming soon. Please try Bike Ride for now.
@@ -709,21 +707,14 @@ const styles = StyleSheet.create({
   comingSoonCard: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderColor: "#E5E7EB",
     borderRadius: 22,
-    borderWidth: 1,
     paddingHorizontal: 28,
-    paddingVertical: 40,
+    paddingVertical: 32,
     gap: 12,
-    ...SHADOW.sm,
   },
-  comingSoonIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: "#ECFAF1",
-    justifyContent: "center",
-    alignItems: "center",
+  comingSoonImage: {
+    width: 160,
+    height: 120,
   },
   comingSoonTitle: {
     color: "#111827",
