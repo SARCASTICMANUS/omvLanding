@@ -7,9 +7,11 @@ import {
   StatusBar,
   Platform,
   Image,
+  Animated,
+  Easing,
 } from "react-native";
 import * as Location from "expo-location";
-import VayyMap, { GeoJSONSource, Layer, UserLocation, Marker } from "../../shared/components/VayyMap";
+import VayyMap, { GeoJSONSource, Layer, UserLocation, Marker, ViewAnnotation } from "../../shared/components/VayyMap";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { fetchRouteGeometry } from "../../routes/services/routeService";
@@ -45,6 +47,11 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
   const didFitRef = useRef(false);
+
+  // Search ring pulse animation
+  const waveAnim1 = useRef(new Animated.Value(0)).current;
+  const waveAnim2 = useRef(new Animated.Value(0)).current;
+  const waveAnim3 = useRef(new Animated.Value(0)).current;
 
   // --- 1. REALTIME API / PARAMS INTEGRATION DATA ---
   const trip = route?.params?.trip || {};
@@ -147,6 +154,42 @@ export function BikeMapPreRideScreen({ navigation, route }) {
       });
     }
   }, [userLocation, pickupLat, pickupLon]);
+
+  // Continuous search ring pulse around the buddy location
+  useEffect(() => {
+    const makeWave = (anim, delay) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.parallel([
+            Animated.timing(anim, {
+              toValue: 1,
+              duration: 2000,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+
+    const w1 = makeWave(waveAnim1, 0);
+    const w2 = makeWave(waveAnim2, 660);
+    const w3 = makeWave(waveAnim3, 1320);
+    w1.start();
+    w2.start();
+    w3.start();
+
+    return () => {
+      w1.stop();
+      w2.stop();
+      w3.stop();
+    };
+  }, [waveAnim1, waveAnim2, waveAnim3]);
 
   // 2. WORKING ZOOM & LOCATION INTERFACE (V11 SPEC)
   const handleZoom = async (zoomIn) => {
@@ -295,6 +338,42 @@ export function BikeMapPreRideScreen({ navigation, route }) {
             );
           })}
           <UserLocation />
+          {userLocation && (
+            <ViewAnnotation id="user-pulse" lngLat={[userLocation.longitude, userLocation.latitude]}>
+              <View style={styles.pulseOnMap}>
+                <Animated.View
+                  style={[
+                    styles.waveRing,
+                    {
+                      transform: [{ scale: waveAnim1.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.8] }) }],
+                      opacity: waveAnim1.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                    },
+                  ]}
+                />
+                <Animated.View
+                  style={[
+                    styles.waveRing,
+                    {
+                      transform: [{ scale: waveAnim2.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.8] }) }],
+                      opacity: waveAnim2.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                    },
+                  ]}
+                />
+                <Animated.View
+                  style={[
+                    styles.waveRing,
+                    {
+                      transform: [{ scale: waveAnim3.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.8] }) }],
+                      opacity: waveAnim3.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                    },
+                  ]}
+                />
+                <View style={styles.userDot}>
+                  <Ionicons name="person" size={20} color="#FFFFFF" />
+                </View>
+              </View>
+            </ViewAnnotation>
+          )}
           {pickupLon != null && pickupLat != null && (
             <Marker lngLat={[pickupLon, pickupLat]}>
               <View style={styles.stopMarkerGroup}>
@@ -701,6 +780,35 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#374151",
     maxWidth: 70,
+  },
+  pulseOnMap: {
+    width: 100,
+    height: 100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  waveRing: {
+    position: "absolute",
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: "#009849",
+    backgroundColor: "rgba(0, 152, 73, 0.08)",
+  },
+  userDot: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#009849",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
+    borderWidth: 4,
+    borderColor: "#FFFFFF",
   },
   floatingContainer: {
     position: "absolute",
