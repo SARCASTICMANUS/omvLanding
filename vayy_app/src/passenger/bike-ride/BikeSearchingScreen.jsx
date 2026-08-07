@@ -210,14 +210,14 @@ export function BikeSearchingScreen({ navigation, route }) {
         if (tripId) {
           setActiveTripId(tripId);
         }
-        // 90s timeout: if no driver responds, cancel and show retry
+        // 60s timeout: if no driver responds, cancel and show retry
         timeoutRef.current = setTimeout(() => {
           if (requestId) dispatch(cancelBroadcast(requestId));
           setShowNoRide(true);
           setSearchStatus("failed");
           setActiveRequestId(null);
           setActiveTripId(null);
-        }, 90000);
+        }, 60000);
       } catch (err) {
         console.warn("Dispatch request failed:", err);
         setShowNoRide(true);
@@ -270,7 +270,7 @@ export function BikeSearchingScreen({ navigation, route }) {
           setSearchStatus("failed");
           setActiveRequestId(null);
           setActiveTripId(null);
-        }, 90000);
+        }, 60000);
       } catch (err) {
         console.warn("Dispatch request failed:", err);
         setShowNoRide(true);
