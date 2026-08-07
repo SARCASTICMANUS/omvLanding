@@ -16,7 +16,7 @@ export default function PassengerActionsScreen({ navigation }) {
     { title: "Splash Onboarding", screen: "SplashCarousel" },
     { title: "Bike Search State", screen: "BikeSearching" },
     { title: "Bike Map Pre-Ride", screen: "BikeMapPreRide" },
-    { title: "Rider Popup (Accepted)", screen: "RiderPopup" },
+    { title: "Marshal Popup (Accepted)", screen: "RiderPopup" },
     { title: "Ride Stats (In-Ride)", screen: "RideStats" },
     { title: "Trip Planner", screen: "PassengerTripPlanner" },
     { title: "Routes", screen: "PassengerRoutes" },

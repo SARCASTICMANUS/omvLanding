@@ -5,11 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Modal,
-  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-
-const { width } = Dimensions.get("window");
 
 export function NoRideFoundPopup({ visible, onTryAgain, onCancel }) {
   return (
@@ -25,9 +22,9 @@ export function NoRideFoundPopup({ visible, onTryAgain, onCancel }) {
             <Ionicons name="search-outline" size={40} color="#009849" />
           </View>
 
-          <Text style={styles.title}>No Riders Found</Text>
+          <Text style={styles.title}>No Marshals Found</Text>
           <Text style={styles.subtitle}>
-            We couldn't find any nearby riders. Please try again.
+            We couldn't find any nearby Marshals. Please try again.
           </Text>
 
           <TouchableOpacity
