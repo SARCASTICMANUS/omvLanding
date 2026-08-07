@@ -4,12 +4,11 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   StatusBar,
   Platform,
+  Image,
 } from "react-native";
 import VayyMap, { UserLocation, Marker, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
-import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
@@ -20,8 +19,6 @@ import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import { ConfirmPopup } from "./ConfirmPopup";
 import SmoothMarker from "../../shared/components/common/SmoothMarker";
-
-const { width } = Dimensions.get("window");
 
 export function RiderPopupScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -172,6 +169,16 @@ export function RiderPopupScreen({ navigation, route }) {
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
 
+  const handleRecenter = () => {
+    if (cameraRef.current && passengerPos) {
+      cameraRef.current.setStop({
+        center: [passengerPos.longitude, passengerPos.latitude],
+        zoom: 16,
+        duration: 800,
+      });
+    }
+  };
+
   const handleCancel = async () => {
     if (navigatingRef.current) return;
     navigatingRef.current = true;
@@ -208,6 +215,11 @@ export function RiderPopupScreen({ navigation, route }) {
           zoomEnabled={true}
         >
           <UserLocation visible={true} showsUserHeadingIndicator={true} />
+          {passengerPos && (
+            <Marker lngLat={[passengerPos.longitude, passengerPos.latitude]}>
+              <Image source={require("../../../assets/VayyUserTop.png")} style={styles.userMarker} resizeMode="contain" />
+            </Marker>
+          )}
           {driverPos && (
             <SmoothMarker id="driver" targetLat={driverPos.latitude} targetLng={driverPos.longitude}>
               <View style={styles.driverMarker}>
@@ -238,12 +250,16 @@ export function RiderPopupScreen({ navigation, route }) {
         </VayyMap>
         )}
 
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={[styles.header, { paddingTop: insets.top + 10, overflow: "hidden" }]}>
+          <View style={styles.headerGradient}>
+            <View style={styles.gradBase} />
+            <View style={styles.gradRay1} />
+            <View style={styles.gradRay2} />
+          </View>
           <View style={styles.headerLeft}>
             {Platform.OS === 'ios' && (
               <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-                <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+                <Ionicons name="chevron-back" size={24} color="#111827" />
               </TouchableOpacity>
             )}
             <Text style={styles.headerTitle}>Ride Accepted!</Text>
@@ -254,11 +270,14 @@ export function RiderPopupScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.zoomBtnTop} onPress={zoomIn}>
-          <Text style={styles.zoomText}>+</Text>
+        <TouchableOpacity style={[styles.recenterBtn, { bottom: 140 }]} onPress={zoomIn}>
+          <Ionicons name="add" size={22} color="#111827" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.zoomBtnBottom} onPress={zoomOut}>
-          <Text style={styles.zoomText}>−</Text>
+        <TouchableOpacity style={[styles.recenterBtn, { bottom: 86 }]} onPress={zoomOut}>
+          <Ionicons name="remove" size={22} color="#111827" />
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.recenterBtn, { bottom: 32 }]} onPress={handleRecenter}>
+          <MaterialIcons name="my-location" size={24} color="#111827" />
         </TouchableOpacity>
       </View>
 
@@ -271,7 +290,7 @@ export function RiderPopupScreen({ navigation, route }) {
           </View>
           <View style={styles.acceptedInfo}>
             <Text style={styles.acceptedTitle}>Ride Accepted!</Text>
-            <Text style={styles.acceptedSubtitle}>Your driver is on the way to you</Text>
+            <Text style={styles.acceptedSubtitle}>Your Marshal is on the way to you</Text>
           </View>
           <Text style={styles.timestamp}>Just now</Text>
         </View>
@@ -303,7 +322,7 @@ export function RiderPopupScreen({ navigation, route }) {
         <View style={styles.otpContainer}>
           <View>
             <Text style={styles.otpLabel}>Handshake OTP</Text>
-            <Text style={styles.otpSub}>Share with driver to start ride</Text>
+            <Text style={styles.otpSub}>Share with Marshal to start ride</Text>
           </View>
           <View style={styles.otpRow}>
             {otpDigits.map((d, i) => (
@@ -317,8 +336,8 @@ export function RiderPopupScreen({ navigation, route }) {
         <View style={styles.arrivalNote}>
           <Text style={styles.arrivalNoteText}>
             {eta === "Arriving"
-              ? "Driver has arrived. Share OTP to start ride."
-              : `Driver is ${distance} away • Arriving in ${eta}`}
+              ? "Your Marshal has arrived. Share OTP to start ride."
+              : `Your Marshal is ${distance} away • Arriving in ${eta}`}
           </Text>
         </View>
       </View>
@@ -344,6 +363,38 @@ const styles = StyleSheet.create({
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     paddingHorizontal: 24, paddingBottom: 12, overflow: "hidden",
   },
+  headerGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  gradBase: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "#009849",
+  },
+  gradRay1: {
+    position: "absolute",
+    top: -60,
+    right: -40,
+    width: "70%",
+    height: "90%",
+    backgroundColor: "#00B857",
+    opacity: 0.25,
+    borderRadius: 120,
+    transform: [{ rotate: "25deg" }],
+  },
+  gradRay2: {
+    position: "absolute",
+    top: -80,
+    right: -20,
+    width: "50%",
+    height: "70%",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 100,
+    transform: [{ rotate: "35deg" }],
+  },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 16 },
   headerTitle: { fontSize: 22, fontWeight: "800", color: "#FFFFFF", letterSpacing: -0.5 },
   iconBtn: {
@@ -362,17 +413,21 @@ const styles = StyleSheet.create({
   gpsLoading: { flex: 1, alignItems: "center", justifyContent: "center" },
   gpsLoadingText: { fontSize: 15, fontWeight: "600", color: "#6B7280" },
   driverMarker: { alignItems: "center", justifyContent: "center" },
-  zoomBtnTop: {
-    position: "absolute", right: 20, bottom: 100, width: 56, height: 56,
-    borderRadius: 28, backgroundColor: "#FFFFFF", justifyContent: "center",
-    alignItems: "center", shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 4,
+  userMarker: { width: 35, height: 35 },
+  recenterBtn: {
+    position: "absolute",
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  zoomBtnBottom: {
-    position: "absolute", right: 20, bottom: 36, width: 56, height: 56,
-    borderRadius: 28, backgroundColor: "#FFFFFF", justifyContent: "center",
-    alignItems: "center", shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 4,
-  },
-  zoomText: { fontSize: 22, fontWeight: "600", color: "#111827", lineHeight: 24 },
   bottomSheet: {
     backgroundColor: "#FFFFFF", borderTopLeftRadius: 32, borderTopRightRadius: 32,
     paddingHorizontal: 24, paddingTop: 12,
