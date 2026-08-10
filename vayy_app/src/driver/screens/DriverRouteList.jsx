@@ -12,48 +12,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { searchDriverRoutes, getDriverRoutes } from "../services/driverService";
 import { buildRouteSummary, estimateStopTimeline } from "../utils/driverFlowUtils";
 
-const DUMMY_ROUTES = [
-  {
-    id: 101, route_id: 101, name: "Gomti Nagar → IT City", route_name: "Gomti Nagar → IT City",
-    code: "VAYY-101", route_code: "VAYY-101", source_name: "Gomti Nagar, Lucknow",
-    destination_name: "IT City, Lucknow", start_name: "Gomti Nagar, Lucknow",
-    end_name: "IT City, Lucknow", total_distance: 4200, distance_meters: 4200,
-    duration_minutes: 18, eta_minutes: 18,
-    stops: [
-      { name: "Gomti Nagar", order: 0, lat: 26.8513, lon: 80.9860, arrival_time: "8:00 AM" },
-      { name: "Hazratganj", order: 1, lat: 26.8525, lon: 80.9489, is_boarding_point: true },
-      { name: "Lalbagh", order: 2, lat: 26.8611, lon: 80.9228, is_boarding_point: true },
-      { name: "IT City", order: 3, lat: 26.8857, lon: 80.8955, arrival_time: "8:20 AM" },
-    ],
-  },
-  {
-    id: 102, route_id: 102, name: "Alambagh → SGPGI", route_name: "Alambagh → SGPGI",
-    code: "VAYY-102", route_code: "VAYY-102", source_name: "Alambagh, Lucknow",
-    destination_name: "SGPGI, Lucknow", start_name: "Alambagh, Lucknow",
-    end_name: "SGPGI, Lucknow", total_distance: 8500, distance_meters: 8500,
-    duration_minutes: 25, eta_minutes: 25,
-    stops: [
-      { name: "Alambagh", order: 0, lat: 26.7880, lon: 80.9030, arrival_time: "7:30 AM" },
-      { name: "Singar Nagar", order: 1, lat: 26.8020, lon: 80.9170, is_boarding_point: true },
-      { name: "Mahanagar", order: 2, lat: 26.8300, lon: 80.9280, is_boarding_point: true },
-      { name: "SGPGI", order: 3, lat: 26.8620, lon: 80.9440, arrival_time: "7:55 AM" },
-    ],
-  },
-  {
-    id: 103, route_id: 103, name: "Charbagh → Indira Nagar", route_name: "Charbagh → Indira Nagar",
-    code: "VAYY-103", route_code: "VAYY-103", source_name: "Charbagh, Lucknow",
-    destination_name: "Indira Nagar, Lucknow", start_name: "Charbagh, Lucknow",
-    end_name: "Indira Nagar, Lucknow", total_distance: 6200, distance_meters: 6200,
-    duration_minutes: 15, eta_minutes: 15,
-    stops: [
-      { name: "Charbagh", order: 0, lat: 26.8300, lon: 80.9200, arrival_time: "9:00 AM" },
-      { name: "Aminabad", order: 1, lat: 26.8450, lon: 80.9350, is_boarding_point: true },
-      { name: "Kapoorthala", order: 2, lat: 26.8700, lon: 80.9550, is_boarding_point: true },
-      { name: "Indira Nagar", order: 3, lat: 26.8980, lon: 80.9760, arrival_time: "9:15 AM" },
-    ],
-  },
-];
-
 const CARD_SHADOW = Platform.select({
   ios: {
     shadowColor: "#000",
@@ -178,7 +136,6 @@ function RouteCard({ item, index, expanded, onToggleExpand, onSelect }) {
 export default function DriverRouteList({ navigation, route: routeProp }) {
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isDummy, setIsDummy] = useState(false);
   const [expandedRouteId, setExpandedRouteId] = useState(null);
   const mode = routeProp?.params?.mode || "bike";
   const pickup = routeProp?.params?.pickup;
@@ -191,26 +148,16 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
       if (pickup?.lat && pickup?.lon && destination?.lat && destination?.lon) {
         const data = await searchDriverRoutes(pickup.lat, pickup.lon, destination.lat, destination.lon);
         const routes = data?.data ?? (Array.isArray(data) ? data : []);
-        if (routes.length > 0) {
-          setRoutes(routes);
-          setIsDummy(false);
-          return;
-        }
+        setRoutes(routes);
+        return;
       }
 
       const data = await getDriverRoutes();
       const routes = data?.data ?? (Array.isArray(data) ? data : []);
-      if (routes.length > 0) {
-        setRoutes(routes);
-        setIsDummy(false);
-      } else {
-        setRoutes(DUMMY_ROUTES);
-        setIsDummy(true);
-      }
+      setRoutes(routes);
     } catch (error) {
-      console.error("Failed to fetch routes, using dummy:", error);
-      setRoutes(DUMMY_ROUTES);
-      setIsDummy(true);
+      console.error("Failed to fetch routes:", error);
+      setRoutes([]);
     } finally {
       setLoading(false);
     }
@@ -260,11 +207,6 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
           <Text style={s.headerTitle}>Choose Route</Text>
           <Text style={s.headerSub}>Select the route you want to drive</Text>
         </View>
-        {isDummy && (
-          <View style={s.dummyBadge}>
-            <Text style={s.dummyBadgeText}>DUMMY</Text>
-          </View>
-        )}
       </View>
 
       <FlatList
@@ -521,20 +463,6 @@ const s = StyleSheet.create({
   stopName: { color: "#111827", fontSize: 13, fontWeight: "800" },
   stopStatus: { color: "#9CA3AF", fontSize: 11 },
   stopArrival: { color: "#6B7280", fontSize: 12, fontWeight: "800" },
-
-  /* dummy badge */
-  dummyBadge: {
-    backgroundColor: "#f59e0b",
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  dummyBadgeText: {
-    color: "#fff",
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 0.5,
-  },
 
   /* state cards */
   stateCard: {

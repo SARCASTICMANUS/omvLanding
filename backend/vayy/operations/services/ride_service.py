@@ -21,20 +21,21 @@ class RideService:
         pickup_point = Point(pickup_lng, pickup_lat, srid=4326)
         drop_point = Point(drop_lng, drop_lat, srid=4326)
         
-        # Use OSRM for actual road distance/time
+        # Use OSRM for actual road distance/time (single cached call)
         from transport.services.osrm_service import OSRMService
-        distance_m = OSRMService.get_road_distance_m(
-            (pickup_lng, pickup_lat), (drop_lng, drop_lat)
-        )
-        duration_s = OSRMService.get_road_duration_s(
+        metrics = OSRMService.get_road_metrics(
             (pickup_lng, pickup_lat), (drop_lng, drop_lat)
         )
 
-        if distance_m is not None and duration_s is not None:
-            distance_km = distance_m / 1000.0
-            duration_minutes = duration_s / 60.0
+        if metrics:
+            distance_km = metrics["distance"] / 1000.0
+            duration_minutes = metrics["duration"] / 60.0
         else:
-            distance_km = pickup_point.distance(drop_point) * 100 * 1.3
+            from tracking.services.geo_service import GeoService
+            distance_km = (
+                GeoService.haversine_m(pickup_lat, pickup_lng, drop_lat, drop_lng)
+                / 1000.0 * 1.3
+            )
             duration_minutes = (distance_km / 25) * 60 + 5
         
         # Base fare calculation

@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from django.utils import timezone
 from django.db import transaction
 from django.contrib.gis.geos import Point
+from django.core.cache import cache
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
@@ -165,7 +166,6 @@ class LocationService:
     # ── main entry point ─────────────────────────────────────
 
     @staticmethod
-    @transaction.atomic
     def process_location_update(payload: Dict[str, Any]) -> Optional[VehicleState]:
         vehicle_id = payload.get("vehicle_id")
         lat = payload.get("lat")
@@ -184,167 +184,180 @@ class LocationService:
             gps_tuple = (lng, lat)
             speed_mps = speed * 1000 / 3600  # km/h → m/s
 
-            # ── 1. Update VehicleState (always) ──────────────
-            state, _ = VehicleState.objects.get_or_create(vehicle=vehicle)
-            state.speed_kmph = speed
-            state.heading = heading
-            state.current_location = point
-            state.last_updated = timezone.now()
+            state: Optional[VehicleState] = None
 
-            # ── 2. Resolve active trip ───────────────────────
-            active_trip = None
-            if trip_id:
+            with transaction.atomic():
+                # ── 1. Update VehicleState (always) ──────────────
+                state, _ = VehicleState.objects.get_or_create(vehicle=vehicle)
+                state.speed_kmph = speed
+                state.heading = heading
+                state.current_location = point
+                state.last_updated = timezone.now()
+
+                # ── 2. Resolve active trip ───────────────────────
+                active_trip = None
+                if trip_id:
+                    try:
+                        active_trip = ActiveTrip.objects.get(id=trip_id, status__in=["accepted", "arrived", "active"])
+                    except ActiveTrip.DoesNotExist:
+                        logger.warning(f"ActiveTrip {trip_id} not found")
+
+                if not active_trip:
+                    active_trip = ActiveTrip.objects.filter(vehicle=vehicle, status__in=["accepted", "arrived", "active"]).first()
+
+                # ── 3. Store HybridLog for persistence ───────────
                 try:
-                    active_trip = ActiveTrip.objects.get(id=trip_id, status__in=["accepted", "arrived", "active"])
-                except ActiveTrip.DoesNotExist:
-                    logger.warning(f"ActiveTrip {trip_id} not found")
-
-            if not active_trip:
-                active_trip = ActiveTrip.objects.filter(vehicle=vehicle, status__in=["accepted", "arrived", "active"]).first()
-
-            # ── 3. Store HybridLog for persistence ───────────
-            try:
-                from accounts.models import User
-                driver = vehicle.driver if hasattr(vehicle, "driver") and vehicle.driver else None
-                HybridLog.objects.create(
-                    user=driver,
-                    vehicle=vehicle,
-                    trip=active_trip,
-                    location=point,
-                    speed=speed,
-                    heading=heading,
-                    timestamp=timezone.now(),
-                )
-            except Exception as e:
-                logger.warning(f"Failed to store HybridLog: {e}")
-
-            # ── 4. Route-based processing ────────────────────
-            next_stop_eta_list = []
-            if active_trip:
-                route_stops = list(
-                    active_trip.route.stops.select_related("route").order_by("order")
-                )
-
-                if route_stops:
-                    route_coords = LocationService._build_route_coords(route_stops)
-
-                    # 4a. Snap GPS to route
-                    snapped, seg_idx, dist_to_route, dist_along = _snap_to_route(gps_tuple, route_coords)
-                    state.snapped_location = Point(snapped[0], snapped[1], srid=4326)
-                    state.distance_along_route_m = dist_along
-
-                    # 4b. Determine direction
-                    direction = _determine_direction(
-                        route_stops,
-                        _point_to_tuple(route_stops[0].location),
-                        _point_to_tuple(route_stops[-1].location),
-                        gps_tuple,
-                        dist_along,
-                        route_stops[-1].cumulative_distance_m,
+                    driver = vehicle.driver if hasattr(vehicle, "driver") and vehicle.driver else None
+                    HybridLog.objects.create(
+                        user=driver,
+                        vehicle=vehicle,
+                        trip=active_trip,
+                        location=point,
+                        speed=speed,
+                        heading=heading,
+                        timestamp=timezone.now(),
                     )
-                    active_trip.direction = direction
+                except Exception as e:
+                    logger.warning(f"Failed to store HybridLog: {e}")
 
-                    # 4c. Determine current stop & segment
-                    stop_idx, segment_idx = LocationService._find_current_stop(
-                        route_stops, direction, dist_along
-                    )
-                    current_stop = route_stops[stop_idx] if stop_idx < len(route_stops) else route_stops[-1]
-                    state.current_stop_index = current_stop.order
-                    state.current_segment_index = segment_idx
-                    state.active_trip = active_trip
-
-                    active_trip.current_stop = current_stop
-                    active_trip.current_segment_index = segment_idx
-                    active_trip.current_location = point
-                    active_trip.last_updated = timezone.now()
-                    active_trip.save(update_fields=[
-                        "current_location", "last_updated",
-                        "direction", "current_stop", "current_segment_index",
-                    ])
-
-                    # 4d. Compute downstream ETAs
-                    etas = _compute_downstream_etas(
-                        route_stops, current_stop.order, direction, dist_along, speed_mps
-                    )
-                    next_stop_eta_list = LocationService._build_eta_list(etas, route_stops, direction)
-
-                    # 4e. Cache route state in Redis
-                    RedisRouteService.set_vehicle_route_state(
-                        vehicle_id=str(vehicle_id),
-                        route_id=str(active_trip.route_id),
-                        direction=direction,
-                        current_stop_index=current_stop.order,
-                        current_segment_index=segment_idx,
-                        distance_along_route_m=dist_along,
-                        last_stop_id=str(current_stop.id),
-                        eta_to_next_stop_s=list(etas.values())[0] if etas else None,
-                        snapped_lat=snapped[1],
-                        snapped_lng=snapped[0],
-                    )
-                    RedisRouteService.set_vehicle_etas(str(vehicle_id), etas)
-                    RedisRouteService.add_vehicle_to_route(
-                        str(active_trip.route_id), str(vehicle_id),
-                        current_stop.order, direction,
+                # ── 4. Route-based processing ────────────────────
+                next_stop_eta_list = []
+                etas = {}
+                dist_along = None
+                snapped = None
+                remaining_distance_km = None
+                remaining_duration_min = None
+                direction = None
+                if active_trip:
+                    route_stops = list(
+                        active_trip.route.stops.select_related("route").order_by("order")
                     )
 
-            state.save()
+                    if route_stops:
+                        route_coords = LocationService._get_route_coords(route_stops)
 
-            # ── 5. Sync location to Redis GEO (existing nearby) ─
-            try:
-                RedisGeoService.add_vehicle(
-                    vehicle_id=str(vehicle_id),
-                    lat=lat,
-                    lng=lng,
-                    vehicle_type=vehicle.vehicle_type,
-                    driver_id=str(vehicle.driver_id) if vehicle.driver_id else None,
-                    vehicle_number=vehicle.vehicle_number,
-                    trip_id=str(active_trip.id) if active_trip else None,
-                )
-            except Exception as e:
-                logger.warning(f"Failed to sync to Redis GEO: {e}")
+                        # 4a. Snap GPS to route
+                        snapped, seg_idx, dist_to_route, dist_along = _snap_to_route(gps_tuple, route_coords)
+                        state.snapped_location = Point(snapped[0], snapped[1], srid=4326)
+                        state.distance_along_route_m = dist_along
 
-            # ── Compute remaining distance & ETA ─────────────
-            remaining_distance_km = None
-            remaining_duration_min = None
-            if route_stops and dist_along is not None:
-                total_route_m = max(
-                    (s.cumulative_distance_m for s in route_stops if s.cumulative_distance_m),
-                    default=0
-                )
-                remaining_m = max(0, total_route_m - dist_along)
-                remaining_distance_km = round(remaining_m / 1000, 2)
-                if etas:
-                    max_eta_s = max(etas.values())
-                    remaining_duration_min = round(max_eta_s / 60, 1)
+                        # 4b. Determine direction
+                        direction = _determine_direction(
+                            route_stops,
+                            _point_to_tuple(route_stops[0].location),
+                            _point_to_tuple(route_stops[-1].location),
+                            gps_tuple,
+                            dist_along,
+                            route_stops[-1].cumulative_distance_m,
+                        )
+                        active_trip.direction = direction
 
-            # ── 6. Broadcast via WebSocket ───────────────────
-            ws_payload = {
-                "type": "vehicle_update",
-                "lat": lat,
-                "lng": lng,
-                "speed": speed,
-                "heading": heading,
-                "vehicle_id": str(vehicle_id),
-                "trip_id": str(active_trip.id) if active_trip else None,
-                "route_id": str(active_trip.route_id) if active_trip else None,
-                "direction": active_trip.direction if active_trip else None,
-                "current_stop_index": state.current_stop_index,
-                "remaining_distance_km": remaining_distance_km,
-                "remaining_duration_min": remaining_duration_min,
-                "next_stop_eta": next_stop_eta_list,
-                "snapped_lat": state.snapped_location.y if state.snapped_location else None,
-                "snapped_lng": state.snapped_location.x if state.snapped_location else None,
-                "timestamp": state.last_updated.isoformat(),
-            }
+                        # 4c. Determine current stop & segment
+                        stop_idx, segment_idx = LocationService._find_current_stop(
+                            route_stops, direction, dist_along
+                        )
+                        current_stop = route_stops[stop_idx] if stop_idx < len(route_stops) else route_stops[-1]
+                        state.current_stop_index = current_stop.order
+                        state.current_segment_index = segment_idx
+                        state.active_trip = active_trip
 
-            LocationService._notify_ws(f"vehicle_{vehicle_id}", "vehicle_update", ws_payload)
-            if active_trip:
-                LocationService._notify_ws(f"trip_{active_trip.id}", "trip_update", ws_payload)
-                LocationService._notify_ws(
-                    f"route_{active_trip.route_id}",
-                    "route_vehicle_update",
-                    ws_payload,
-                )
+                        active_trip.current_stop = current_stop
+                        active_trip.current_segment_index = segment_idx
+                        active_trip.current_location = point
+                        active_trip.last_updated = timezone.now()
+                        active_trip.save(update_fields=[
+                            "current_location", "last_updated",
+                            "direction", "current_stop", "current_segment_index",
+                        ])
+
+                        # 4d. Compute downstream ETAs
+                        etas = _compute_downstream_etas(
+                            route_stops, current_stop.order, direction, dist_along, speed_mps
+                        )
+                        next_stop_eta_list = LocationService._build_eta_list(etas, route_stops, direction)
+
+                state.save()
+
+                def _post_commit():
+                    # ── 5. Cache route state + WS broadcast (after commit) ──
+                    try:
+                        if active_trip and route_stops and snapped is not None and direction:
+                            RedisRouteService.set_vehicle_route_state(
+                                vehicle_id=str(vehicle_id),
+                                route_id=str(active_trip.route_id),
+                                direction=direction,
+                                current_stop_index=current_stop.order,
+                                current_segment_index=segment_idx,
+                                distance_along_route_m=dist_along,
+                                last_stop_id=str(current_stop.id),
+                                eta_to_next_stop_s=list(etas.values())[0] if etas else None,
+                                snapped_lat=snapped[1],
+                                snapped_lng=snapped[0],
+                            )
+                            RedisRouteService.set_vehicle_etas(str(vehicle_id), etas)
+                            RedisRouteService.add_vehicle_to_route(
+                                str(active_trip.route_id), str(vehicle_id),
+                                current_stop.order, direction,
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to cache route state in Redis: {e}")
+
+                    # ── 6. Sync location to Redis GEO ─────────────
+                    try:
+                        RedisGeoService.add_vehicle(
+                            vehicle_id=str(vehicle_id),
+                            lat=lat,
+                            lng=lng,
+                            vehicle_type=vehicle.vehicle_type,
+                            driver_id=str(vehicle.driver_id) if vehicle.driver_id else None,
+                            vehicle_number=vehicle.vehicle_number,
+                            trip_id=str(active_trip.id) if active_trip else None,
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to sync to Redis GEO: {e}")
+
+                    # ── 7. Broadcast via WebSocket ────────────────
+                    total_route_m = 0
+                    if route_stops:
+                        total_route_m = max(
+                            (s.cumulative_distance_m for s in route_stops if s.cumulative_distance_m),
+                            default=0
+                        )
+                    remaining_m = max(0, total_route_m - (dist_along or 0))
+                    remaining_distance_km = round(remaining_m / 1000, 2)
+                    remaining_duration_min = None
+                    if etas:
+                        remaining_duration_min = round(max(etas.values()) / 60, 1)
+
+                    ws_payload = {
+                        "type": "vehicle_update",
+                        "lat": lat,
+                        "lng": lng,
+                        "speed": speed,
+                        "heading": heading,
+                        "vehicle_id": str(vehicle_id),
+                        "trip_id": str(active_trip.id) if active_trip else None,
+                        "route_id": str(active_trip.route_id) if active_trip else None,
+                        "direction": active_trip.direction if active_trip else None,
+                        "current_stop_index": state.current_stop_index,
+                        "remaining_distance_km": remaining_distance_km,
+                        "remaining_duration_min": remaining_duration_min,
+                        "next_stop_eta": next_stop_eta_list,
+                        "snapped_lat": state.snapped_location.y if state.snapped_location else None,
+                        "snapped_lng": state.snapped_location.x if state.snapped_location else None,
+                        "timestamp": state.last_updated.isoformat(),
+                    }
+
+                    LocationService._notify_ws(f"vehicle_{vehicle_id}", "vehicle_update", ws_payload)
+                    if active_trip:
+                        LocationService._notify_ws(f"trip_{active_trip.id}", "trip_update", ws_payload)
+                        LocationService._notify_ws(
+                            f"route_{active_trip.route_id}",
+                            "route_vehicle_update",
+                            ws_payload,
+                        )
+
+                transaction.on_commit(_post_commit)
 
             logger.info(
                 f"Updated vehicle {vehicle_id}: stop={state.current_stop_index} "
@@ -360,6 +373,25 @@ class LocationService:
             raise
 
     # ── internal helpers ─────────────────────────────────────
+
+    @staticmethod
+    def _get_route_coords(stops: list) -> List[Tuple[float, float]]:
+        """
+        Build a full coordinate list from stop locations, cached in Redis
+        per route so the polyline is not rebuilt on every GPS ping.
+        Stops must belong to a single route.
+        """
+        if not stops:
+            return []
+        route_id = stops[0].route_id
+        cache_key = f"route_coords_{route_id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        coords = LocationService._build_route_coords(stops)
+        cache.set(cache_key, coords, timeout=3600)
+        return coords
 
     @staticmethod
     def _build_route_coords(stops: list) -> List[Tuple[float, float]]:

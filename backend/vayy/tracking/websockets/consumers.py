@@ -1,5 +1,6 @@
 import json
 import logging
+from asgiref.sync import sync_to_async
 from common.websockets.auth import BaseAuthenticatedConsumer
 from tracking.tasks import process_location_update
 
@@ -47,7 +48,9 @@ class VehicleTrackingConsumer(BaseAuthenticatedConsumer):
                     "speed": data.get("speed", 0),
                     "heading": data.get("heading", 0),
                 }
-                process_location_update.delay(payload)
+                # Celery .delay() does a blocking AMQP publish; run it on a
+                # thread so high-frequency pings don't stall the event loop.
+                await sync_to_async(process_location_update.delay)(payload)
                 logger.debug(f"Dispatched location for vehicle {self.vehicle_id}")
             else:
                 logger.debug(f"Unknown message type from driver: {msg_type}")

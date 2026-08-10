@@ -61,10 +61,7 @@ services:
   celery:
     build: .
     container_name: vayy-celery
-    command: >
-      sh -c "celery -A vayy worker -l info -Q celery,tracking,dispatch,matching,notifications &
-             python manage.py consume_boarding &
-             python manage.py consume_location"
+    command: sh -c "celery -A vayy worker -l info -Q celery,dispatch,matching,notifications"
     volumes:
       - static_volume:/app/staticfiles
     env_file:
@@ -76,6 +73,77 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  celery-beat:
+    build: .
+    container_name: vayy-celery-beat
+    command: sh -c "celery -A vayy beat -l info"
+    volumes:
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-tracking:
+    build: .
+    container_name: vayy-celery-tracking
+    command: sh -c "celery -A vayy worker -l info -Q tracking --concurrency=4 --prefetch-multiplier=1 -Ofair --max-tasks-per-child=100"
+    volumes:
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Replicated RabbitMQ consumers - scale with `docker compose up --scale consume-location=3`
+  consume-location:
+    build: .
+    container_name: vayy-consume-location
+    command: python manage.py consume_location
+    restart: always
+    volumes:
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+
+  consume-boarding:
+    build: .
+    container_name: vayy-consume-boarding
+    command: python manage.py consume_boarding
+    restart: always
+    volumes:
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
 
   redis:
     image: redis:7-alpine

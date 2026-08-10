@@ -16,7 +16,7 @@ class OSRMService:
 
     BASE_URL = getattr(settings, "OSRM_URL", "http://osrm:5000")
     DEFAULT_PROFILE = "driving"
-    CACHE_TTL = getattr(settings, "OSRM_CACHE_TTL", 60)
+    CACHE_TTL = getattr(settings, "OSRM_CACHE_TTL", 600)
 
     @classmethod
     def _coord_str(cls, coords: List[Tuple[float, float]]) -> str:
@@ -221,6 +221,32 @@ class OSRMService:
             return None
 
     @classmethod
+    def get_road_metrics(
+        cls,
+        origin: Tuple[float, float],
+        destination: Tuple[float, float],
+    ) -> Optional[Dict[str, float]]:
+        """Return road distance + duration for an origin/destination pair.
+
+        Uses a single /route call; results are cached for ``CACHE_TTL``.
+        """
+        cache_key = f"osrm_metrics_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        result = cls.route(origin, destination, overview="false")
+        if not result or not result.get("routes"):
+            return None
+        route = result["routes"][0]
+        metrics = {
+            "distance": route["distance"],
+            "duration": route["duration"],
+        }
+        cache.set(cache_key, metrics, cls.CACHE_TTL)
+        return metrics
+
+    @classmethod
     def get_road_distance_m(
         cls,
         origin: Tuple[float, float],
@@ -231,11 +257,10 @@ class OSRMService:
         if cached is not None:
             return cached
 
-        result = cls.route(origin, destination, overview="false")
-        if result and result.get("routes"):
-            distance = result["routes"][0]["distance"]
-            cache.set(cache_key, distance, cls.CACHE_TTL)
-            return distance
+        metrics = cls.get_road_metrics(origin, destination)
+        if metrics is not None:
+            cache.set(cache_key, metrics["distance"], cls.CACHE_TTL)
+            return metrics["distance"]
         return None
 
     @classmethod
@@ -249,12 +274,34 @@ class OSRMService:
         if cached is not None:
             return cached
 
-        result = cls.route(origin, destination, overview="false")
-        if result and result.get("routes"):
-            duration = result["routes"][0]["duration"]
-            cache.set(cache_key, duration, cls.CACHE_TTL)
-            return duration
+        metrics = cls.get_road_metrics(origin, destination)
+        if metrics is not None:
+            cache.set(cache_key, metrics["duration"], cls.CACHE_TTL)
+            return metrics["duration"]
         return None
+
+    @classmethod
+    def get_cached_road_duration_s(
+        cls,
+        origin: Tuple[float, float],
+        destination: Tuple[float, float],
+    ) -> Optional[float]:
+        """Return cached road duration without issuing a network request.
+
+        Used inside serializers to avoid blocking HTTP calls in request hot paths.
+        """
+        cache_key = f"osrm_dur_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        return cache.get(cache_key)
+
+    @classmethod
+    def get_cached_road_metrics(
+        cls,
+        origin: Tuple[float, float],
+        destination: Tuple[float, float],
+    ) -> Optional[Dict[str, float]]:
+        """Return cached road metrics without issuing a network request."""
+        cache_key = f"osrm_metrics_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        return cache.get(cache_key)
 
     @classmethod
     def get_route_geometry(

@@ -19,26 +19,23 @@ class OSRMProvider(BaseETAProvider):
     def calculate(self, origin, destination):
         """
         OSRM-based road distance/time estimation.
-        Falls back to great-circle estimation if OSRM is unavailable.
+        Single cached /route call; falls back to great-circle estimation.
         """
         from transport.services.osrm_service import OSRMService
-        duration_s = OSRMService.get_road_duration_s(
+        metrics = OSRMService.get_road_metrics(
             (origin.x, origin.y), (destination.x, destination.y)
         )
-        distance_m = OSRMService.get_road_distance_m(
-            (origin.x, origin.y), (destination.x, destination.y)
-        )
-
-        if duration_s is not None and distance_m is not None:
+        if metrics:
             return {
-                "distance_km": round(distance_m / 1000.0, 2),
-                "duration_minutes": round(duration_s / 60.0, 1),
+                "distance_km": round(metrics["distance"] / 1000.0, 2),
+                "duration_minutes": round(metrics["duration"] / 60.0, 1),
             }
 
-        distance_km = origin.distance(destination) * 100
-        eta_minutes = (distance_km / 20) * 60
+        from tracking.services.geo_service import GeoService
+        distance_m = GeoService.haversine_m(origin.y, origin.x, destination.y, destination.x)
+        eta_minutes = (distance_m / 1000 / 20) * 60
         return {
-            "distance_km": round(distance_km, 2),
+            "distance_km": round(distance_m / 1000, 2),
             "duration_minutes": round(eta_minutes, 1),
         }
 

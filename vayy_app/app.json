@@ -24,7 +24,6 @@
         "backgroundColor": "#F8FAF9"
       },
       "package": "com.vayy.autos",
-      "usesCleartextTraffic": true,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
@@ -39,10 +38,21 @@
         }
       ],
       "expo-notifications",
-      "@maplibre/maplibre-react-native"
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "extra": {
-      "apiUrl": "https://guise-bunt-doorway.ngrok-free.dev"
+      "apiUrl": "http://20.115.40.100",
+      "extra": {
+        "projectId": "39291bcc-1448-439e-936f-d9357f29b40f"
+      }
     }
   }
 }

@@ -18,6 +18,31 @@ logger = logging.getLogger(__name__)
     acks_late=True,
     reject_on_worker_lost=True,
 )
+def prune_hybrid_logs(self, days=7, batch=5000):
+    """
+    Retention job: keep the high-write HybridLog table bounded.
+    Called daily via Celery Beat; also runnable ad-hoc.
+    """
+    from datetime import timedelta
+
+    from django.core.management import call_command
+
+    try:
+        call_command("prune_hybrid_logs", days=days, batch=batch)
+    except Exception as exc:
+        logger.error(f"Error pruning hybrid logs: {exc}")
+        raise self.retry(exc=exc)
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=5,
+    queue="tracking",
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
 def process_location_update(self, payload):
     """
     Celery task to process location updates.
@@ -67,7 +92,7 @@ def process_passenger_location(self, payload):
         from asgiref.sync import async_to_sync
         from channels.layers import get_channel_layer
         from django.contrib.gis.geos import Point
-        from django.contrib.gis.measure import D
+        from django.contrib.gis.db.models.functions import Distance
         from transport.models import Stop
 
         user_id = payload.get("user_id")
@@ -84,9 +109,15 @@ def process_passenger_location(self, payload):
         channel_layer = get_channel_layer()
 
         # Find routes this passenger is near by checking stops within 2km
-        stops_near = Stop.objects.filter(
-            location__distance_lte=(point, D(m=2000))
-        ).select_related("route").order_by("route_id").distinct("route")
+        stops_near = list(
+            Stop.objects.filter(
+                location__distance_lte=(point, D(m=2000))
+            )
+            .annotate(distance_m=Distance("location", point))
+            .select_related("route")
+            .order_by("route_id")
+            .distinct("route")
+        )
 
         broadcast_route_ids = set()
         for stop in stops_near:
@@ -99,11 +130,11 @@ def process_passenger_location(self, payload):
         if not broadcast_route_ids:
             return
 
-        # Find nearest stop for display
+        # Find nearest stop for display (PostGIS geography distance → meters)
         nearest_stop_name = ""
         nearest_dist = float("inf")
         for stop in stops_near:
-            d = point.distance(stop.location) * 111000
+            d = float(stop.distance_m)
             if d < nearest_dist:
                 nearest_dist = d
                 nearest_stop_name = stop.name

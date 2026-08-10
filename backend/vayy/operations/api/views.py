@@ -444,7 +444,7 @@ class VehicleListAPIView(APIView):
             )
 
         serializer = VehicleSerializer(
-            vehicles,
+            vehicles[:200],
             many=True,
         )
 
@@ -568,7 +568,7 @@ class ActiveTripListAPIView(APIView):
             )
 
         serializer = ActiveTripSerializer(
-            trips,
+            trips[:200],
             many=True,
         )
 

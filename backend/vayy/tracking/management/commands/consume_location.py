@@ -42,6 +42,7 @@ class Command(BaseCommand):
             parameters = pika.URLParameters(settings.RABBITMQ_URL)
             connection = pika.BlockingConnection(parameters)
             channel = connection.channel()
+            channel.basic_qos(prefetch_count=10)
 
             for queue in QUEUES:
                 channel.queue_declare(
@@ -52,7 +53,6 @@ class Command(BaseCommand):
                         'x-dead-letter-routing-key': 'dead.letter'
                     }
                 )
-                channel.basic_qos(prefetch_count=1)
                 channel.basic_consume(
                     queue=queue,
                     on_message_callback=self._callback,

@@ -41,7 +41,7 @@ export const getAssignedVehicle = async () => {
   }
 };
 
-export const searchDriverRoutes = async (originLat, originLng, destLat, destLng, radius = 1000) => {
+export const searchDriverRoutes = async (originLat, originLng, destLat, destLng, radius = 5000) => {
   try {
     const params = `origin_lat=${originLat}&origin_lng=${originLng}&dest_lat=${destLat}&dest_lng=${destLng}&radius=${radius}`;
     const response = await api.get(`${TRANSPORT.routesSearchByLocation}?${params}`);

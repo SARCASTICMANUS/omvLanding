@@ -171,7 +171,8 @@ class RedisRouteService:
             if not all_members:
                 return []
 
-            results = []
+            # Pre-filter by direction / stop_index before fetching state
+            candidates = []
             for member, score in all_members:
                 vid = cls._decode(member)
                 decoded_score = int(score)
@@ -184,8 +185,27 @@ class RedisRouteService:
                     continue
                 if max_stop_index is not None and v_stop_index > max_stop_index:
                     continue
+                candidates.append((vid, v_stop_index, v_direction))
 
-                state = cls.get_vehicle_route_state(vid)
+            if not candidates:
+                return []
+
+            # Fetch all route-state hashes in a single pipeline (avoids N round-trips)
+            state_keys = [cls._state_key(vid) for vid, _, _ in candidates]
+            with client.pipeline(transaction=False) as pipe:
+                for sk in state_keys:
+                    pipe.hgetall(sk)
+                state_raw_list = pipe.execute()
+
+            results = []
+            for (vid, v_stop_index, v_direction), state_raw in zip(
+                candidates, state_raw_list
+            ):
+                state = (
+                    {cls._decode(k): cls._decode(v) for k, v in state_raw.items()}
+                    if state_raw
+                    else None
+                )
                 results.append({
                     "vehicle_id": vid,
                     "stop_index": v_stop_index,
@@ -317,12 +337,24 @@ class RedisRouteService:
             key = cls._ride_requests_key(trip_id)
             client = cls._client()
             raw = client.zrange(key, 0, -1, withscores=True)
+            if not raw:
+                return []
+
+            # Fetch all request-metadata hashes in a single pipeline
+            meta_keys = [f"{key}:{cls._decode(request_id)}" for request_id, _ in raw]
+            with client.pipeline(transaction=False) as pipe:
+                for mk in meta_keys:
+                    pipe.hgetall(mk)
+                meta_raw_list = pipe.execute()
+
             results = []
-            for request_id, score in raw:
+            for (request_id, score), meta_raw in zip(raw, meta_raw_list):
                 rid = cls._decode(request_id)
-                meta_key = f"{key}:{rid}"
-                meta = client.hgetall(meta_key)
-                meta = {cls._decode(k): cls._decode(v) for k, v in meta.items()}
+                meta = (
+                    {cls._decode(k): cls._decode(v) for k, v in meta_raw.items()}
+                    if meta_raw
+                    else {}
+                )
                 results.append({
                     "request_id": rid,
                     "created_at_ts": score,

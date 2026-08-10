@@ -108,6 +108,14 @@ DATABASES = {
     'default': env.db("DATABASE_URL",engine="django.contrib.gis.db.backends.postgis")
 }
 
+# Reuse DB connections across requests to reduce connection churn
+# (helps under bursty sync request loads).
+DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=300)
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = env.bool("DB_CONN_HEALTH_CHECKS", default=True)
+DATABASES["default"].setdefault("OPTIONS", {}).setdefault(
+    "connect_timeout", env.int("DB_CONNECT_TIMEOUT", default=5)
+)
+
 # DATABASE_URL=postgis://postgres:postgres@db:5432/vayy
 
 # GDAL/GEOS libraries are auto-detected by Django (ctypes.util.find_library).
@@ -155,7 +163,13 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_THROTTLE_RATES": {
         "anon": "100/day",
-        "user": "1000/day"
+        # Raised from 1000/day - the old cap silently killed GPS ingestion
+        # (a driver pinging every 5s for 8h needs ~5,700 requests/day);
+        # the SCOPED rates below govern the high-volume real-time endpoints.
+        "user": "10000/day",
+        "gps": "1000/min",
+        "search": "60/min",
+        "dispatch": "120/min",
     }
 }
 
@@ -222,7 +236,7 @@ RABBITMQ_URL = env(
 
 CELERY_RESULT_BACKEND = env(
     "CELERY_RESULT_BACKEND",
-    default="rpc://"
+    default=env("REDIS_URL", default="redis://redis:6379/2"),
 )
 
 CELERY_ACCEPT_CONTENT = ["json"]
@@ -231,6 +245,22 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_RESULT_EXPIRES = 60
 
 CELERY_TIMEZONE = "Asia/Kolkata"
+
+# Worker policies: look-ahead prefetch off + ack-late keep GPS tasks hot
+# and retry-safe; per-queue concurrency is set on the command line
+# (celery-tracking pool is isolated in docker-compose).
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 4
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 200
+
+# Periodic maintenance tasks.
+CELERY_BEAT_SCHEDULE = {
+    "prune-hybrid-logs": {
+        "task": "tracking.tasks.prune_hybrid_logs",
+        "schedule": 24 * 3600,  # daily
+    },
+}
 
 # RABBITMQ
 RABBITMQ_HOST = env(

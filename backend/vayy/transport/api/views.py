@@ -22,6 +22,7 @@ from transport.api.serializers import (
 )
 from transport.models import City, Stop, Route, TripSchedule, StopTime
 from tracking.services.eta_service import ETAService
+from tracking.services.geo_service import GeoService
 from transport.selectors.city_selector import CitySelector
 from transport.selectors.route_selector import RouteSelector
 from transport.selectors.driver_route_selector import DriverRouteSelector
@@ -436,45 +437,42 @@ class RouteSearchByLocationAPIView(APIView):
             if not stops:
                 continue
 
-            pickup_stop = None
-            pickup_dist_m = None
-            dropoff_stop = None
-            dropoff_dist_m = None
+            pickup_stop = min(
+                stops, key=lambda s: origin_point.distance(s.location)
+            )
+            pickup_dist_m = GeoService.haversine_m(
+                origin_point.y, origin_point.x, pickup_stop.location.y, pickup_stop.location.x
+            )
 
-            for stop in stops:
-                d = origin_point.distance(stop.location) * 100000
-                if pickup_dist_m is None or d < pickup_dist_m:
-                    pickup_dist_m = d
-                    pickup_stop = stop
-
-            for stop in stops:
-                if stop.order <= pickup_stop.order:
-                    continue
-                d = dest_point.distance(stop.location) * 100000
-                if dropoff_dist_m is None or d < dropoff_dist_m:
-                    dropoff_dist_m = d
-                    dropoff_stop = stop
-
-            if not dropoff_stop:
+            later_stops = [s for s in stops if s.order > pickup_stop.order]
+            if later_stops:
+                dropoff_stop = min(
+                    later_stops, key=lambda s: dest_point.distance(s.location)
+                )
+                dropoff_dist_m = GeoService.haversine_m(
+                    dest_point.y, dest_point.x, dropoff_stop.location.y, dropoff_stop.location.x
+                )
+            else:
                 dropoff_stop = stops[-1]
-                dropoff_dist_m = dest_point.distance(dropoff_stop.location) * 100000
+                dropoff_dist_m = GeoService.haversine_m(
+                    dest_point.y, dest_point.x, dropoff_stop.location.y, dropoff_stop.location.x
+                )
 
             from transport.services.osrm_service import OSRMService
-            stop_duration_s = OSRMService.get_road_duration_s(
+            metrics = OSRMService.get_road_metrics(
                 (pickup_stop.location.x, pickup_stop.location.y),
                 (dropoff_stop.location.x, dropoff_stop.location.y),
             )
-            stop_distance_m = OSRMService.get_road_distance_m(
-                (pickup_stop.location.x, pickup_stop.location.y),
-                (dropoff_stop.location.x, dropoff_stop.location.y),
-            )
+            stop_duration_s = metrics["duration"] if metrics else None
+            stop_distance_m = metrics["distance"] if metrics else None
 
             if stop_distance_m is not None and stop_distance_m > 0:
                 stop_distance_km = round(stop_distance_m / 1000, 1)
             else:
-                stop_distance_m = pickup_stop.location.distance(
-                    dropoff_stop.location
-                ) * 100000
+                stop_distance_m = GeoService.haversine_m(
+                    pickup_stop.location.y, pickup_stop.location.x,
+                    dropoff_stop.location.y, dropoff_stop.location.x,
+                )
                 stop_distance_km = round(stop_distance_m / 1000, 1)
 
             if stop_duration_s is not None and stop_duration_s > 0:
@@ -620,6 +618,7 @@ class PassengersAlongRouteAPIView(APIView):
         from transport.models import Route
         from accounts.models import PublicPassengerProfile
         from django.contrib.gis.geos import MultiPoint
+        from tracking.services.geo_service import GeoService
         from django.contrib.gis.measure import D
         from django.utils import timezone
         from datetime import timedelta
@@ -659,8 +658,11 @@ class PassengersAlongRouteAPIView(APIView):
         for profile in profiles:
             nearest_stop = None
             nearest_dist = float("inf")
+            p_lat, p_lng = profile.current_location.y, profile.current_location.x
             for stop in stops:
-                d = profile.current_location.distance(stop.location) * 111000
+                d = GeoService.haversine_m(
+                    p_lat, p_lng, stop.location.y, stop.location.x
+                )
                 if d < nearest_dist:
                     nearest_dist = d
                     nearest_stop = stop

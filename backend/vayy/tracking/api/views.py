@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.throttling import ScopedRateThrottle
 
 from accounts.permissions import IsDriver, IsPassenger
 from operations.models import VehicleState, Vehicle, ActiveTrip, BoardingRequest
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 class VehicleTrackingAPIView(APIView):
     """
     GET /tracking/vehicle/{id}
-    Returns location history for a vehicle.
+    Returns location history for a vehicle (capped to latest 100 logs).
     """
     permission_classes = [IsAuthenticated]
 
@@ -48,7 +49,7 @@ class VehicleTrackingAPIView(APIView):
 class TripTrackingAPIView(APIView):
     """
     GET /tracking/trip/{id}
-    Returns location history for a trip.
+    Returns location history for a trip (capped to latest 100 logs).
     """
     permission_classes = [IsAuthenticated]
 
@@ -61,7 +62,10 @@ class GPSIngestAPIView(APIView):
     """
     POST /tracking/gps
     Raw GPS ingestion endpoint for drivers.
+    High-volume real-time endpoint - uses scoped rate (gps: 1000/min).
     """
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "gps"
     # permission_classes = [IsAuthenticated, IsDriver]
     # permission_classes = [IsAuthenticated]
 
@@ -711,6 +715,8 @@ class NearbyRoutesView(APIView):
 
         from django.contrib.gis.geos import Point
         from django.contrib.gis.measure import D
+        from django.db.models import Count, Q
+        from tracking.services.geo_service import GeoService
 
         point = Point(lng, lat, srid=4326)
         stops_near = Stop.objects.filter(
@@ -729,9 +735,10 @@ class NearbyRoutesView(APIView):
                     "end_name": stop.route.end_name,
                     "nearest_stop": None,
                     "nearest_distance_m": float("inf"),
-                    "active_trips": 0,
                 }
-            dist_m = point.distance(stop.location) * 111000
+            dist_m = GeoService.haversine_m(
+                lat, lng, stop.location.y, stop.location.x
+            )
             if dist_m < route_map[rid]["nearest_distance_m"]:
                 route_map[rid]["nearest_distance_m"] = round(dist_m, 1)
                 route_map[rid]["nearest_stop"] = {
@@ -740,12 +747,18 @@ class NearbyRoutesView(APIView):
                     "order": stop.order,
                 }
 
-        # Add active trip counts
-        for rid, info in route_map.items():
-            info["active_trips"] = ActiveTrip.objects.filter(
-                route_id=rid, status="active"
-            ).count()
-            info["nearest_distance_m"] = round(info["nearest_distance_m"], 1)
+        # Add active trip counts in a single query (no N+1)
+        if route_map:
+            counts = (
+                ActiveTrip.objects.filter(
+                    route_id__in=route_map.keys(), status="active"
+                )
+                .values("route_id")
+                .annotate(n=Count("id"))
+            )
+            count_by_route = {str(c["route_id"]): c["n"] for c in counts}
+            for rid in route_map:
+                route_map[rid]["active_trips"] = count_by_route.get(rid, 0)
 
         routes = sorted(route_map.values(), key=lambda r: r["nearest_distance_m"])
 

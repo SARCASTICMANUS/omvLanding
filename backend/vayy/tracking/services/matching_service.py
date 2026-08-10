@@ -88,9 +88,9 @@ class MatchingService:
 
             if v_lat and v_lng:
                 from tracking.services.geo_service import GeoService
-                dist = GeoService.create_point(float(v_lat), float(v_lng)).distance(
-                    GeoService.create_point(passenger_lat, passenger_lng)
-                ) * 111000  # rough degrees → metres
+                dist = GeoService.haversine_m(
+                    float(v_lat), float(v_lng), passenger_lat, passenger_lng
+                )
                 if dist > cls.MAX_PROXIMITY_RADIUS_M:
                     continue
             else:

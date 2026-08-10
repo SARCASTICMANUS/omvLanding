@@ -107,14 +107,18 @@ class RedisGeoService:
             if not raw:
                 return []
 
+            # Fetch metadata hashes in a single pipeline (avoids N round-trips)
+            with client.pipeline(transaction=False) as pipe:
+                for item in raw:
+                    pipe.hgetall(cls._meta_key(cls._decode(item[0])))
+                meta_list = pipe.execute()
+
             results = []
-            for item in raw:
+            for (item, meta) in zip(raw, meta_list):
                 member = cls._decode(item[0])
                 distance = item[1]
                 coord = item[2]  # [lng, lat]
 
-                # Fetch metadata from hash
-                meta = client.hgetall(cls._meta_key(member))
                 if not meta:
                     continue
 

@@ -257,10 +257,15 @@ class DriverRouteSerializer(serializers.ModelSerializer):
             stops = list(obj.stops.all().order_by("order"))
             if len(stops) >= 2:
                 from transport.services.osrm_service import OSRMService
-                duration_s = OSRMService.get_road_duration_s(
+                duration_s = OSRMService.get_cached_road_duration_s(
                     (stops[0].location.x, stops[0].location.y),
                     (stops[-1].location.x, stops[-1].location.y),
                 )
+                if duration_s is None:
+                    duration_s = OSRMService.get_road_duration_s(
+                        (stops[0].location.x, stops[0].location.y),
+                        (stops[-1].location.x, stops[-1].location.y),
+                    )
                 if duration_s is not None and duration_s > 0:
                     return max(1, round(duration_s / 60))
             return max(1, round(obj.total_distance_meters / 1000 / 25 * 60))
