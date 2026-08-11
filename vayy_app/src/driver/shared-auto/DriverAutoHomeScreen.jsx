@@ -26,7 +26,7 @@ import { useSelector } from "react-redux";
 const { width } = Dimensions.get("window");
 
 const heroImages = [
-  require("../../../assets/vayyAuto.png"),
+  require("../../../assets-webp/vayyAuto.webp"),
 ];
 
 function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90 }) {

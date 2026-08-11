@@ -249,7 +249,7 @@ export function RiderPopupScreen({ navigation, route }) {
           <UserLocation visible={true} showsUserHeadingIndicator={true} />
           {passengerPos && (
             <Marker lngLat={[passengerPos.longitude, passengerPos.latitude]}>
-              <Image source={require("../../../assets/VayyUserTop.png")} style={styles.userMarker} resizeMode="contain" />
+              <Image source={require("../../../assets-webp/VayyUserTop.webp")} style={styles.userMarker} resizeMode="contain" />
             </Marker>
           )}
           {driverPos && (
@@ -382,7 +382,7 @@ export function RiderPopupScreen({ navigation, route }) {
                 <View style={styles.waitingIconWrap}>
                   <Animated.View style={[styles.pulseRing, { opacity: pulseAnim }]} />
                   <View style={styles.waitingIconInner}>
-                    <Image source={require("../../../assets/vayyFrontBike.png")} style={{ width: 36, height: 36 }} resizeMode="contain" />
+                    <Image source={require("../../../assets-webp/vayyFrontBike.webp")} style={{ width: 36, height: 36 }} resizeMode="contain" />
                   </View>
                 </View>
                 <Text style={styles.arrivedTitle}>Your Marshal Has Arrived</Text>

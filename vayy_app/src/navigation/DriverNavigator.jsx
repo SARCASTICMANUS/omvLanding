@@ -14,6 +14,8 @@ import DriverTripReview from "../driver/screens/DriverTripReview";
 import DriverTripHistoryScreen from "../driver/screens/DriverTripHistoryScreen";
 import ProfileScreen from "../shared/screens/ProfileScreen";
 import EditProfileScreen from "../shared/screens/EditProfileScreen";
+import PrivacyPolicyScreen from "../shared/screens/PrivacyPolicyScreen";
+import HelpSupportScreen from "../shared/screens/HelpSupportScreen";
 import BikeFindPassengerScreen from "../driver/bike-ride/BikeFindPassengerScreen";
 
 // Auto Flow Screens
@@ -74,8 +76,8 @@ function DriverTabs() {
           borderTopColor: COLORS.border,
           borderTopLeftRadius: 12,
           borderTopRightRadius: 12,
-          height: 58,
-          paddingBottom: 8,
+          height: 62,
+          paddingBottom: 14,
           paddingTop: 4,
           position: "absolute",
         },
@@ -100,6 +102,8 @@ export default function DriverNavigator() {
       <Stack.Screen name="DriverTripHistoryScreen" component={DriverTripHistoryScreen} />
       <Stack.Screen name="VehicleSelectionScreen" component={VehicleSelectionScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+      <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
       <Stack.Screen name="FindPassenger" component={BikeFindPassengerScreen} />
       <Stack.Screen name="DriverFindPassengers" component={DriverFindPassengersScreen} />
       <Stack.Screen name="AheadAlert" component={AutoAheadAlertScreen} />

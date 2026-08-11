@@ -25,6 +25,8 @@ import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import locationService from "../../shared/lib/locationService";
 
+const USER_TOP_IMAGE = require("../../../assets-webp/VayyUserTop.webp");
+
 
 export function BikeSearchingScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -410,7 +412,7 @@ export function BikeSearchingScreen({ navigation, route }) {
                   ]}
                 />
                 <View style={styles.userDot}>
-                  <Ionicons name="person" size={20} color="#FFFFFF" />
+                  <Image source={USER_TOP_IMAGE} style={styles.userDotImage} resizeMode="contain" />
                 </View>
               </View>
             </ViewAnnotation>
@@ -460,7 +462,7 @@ export function BikeSearchingScreen({ navigation, route }) {
 
         <View style={styles.availabilityRow}>
           <View style={styles.availItem}>
-            <Image source={require("../../../assets/vayyFrontBike.png")} style={{ width: 18, height: 18 }} resizeMode="contain" />
+            <Image source={require("../../../assets-webp/vayyFrontBike.webp")} style={{ width: 18, height: 18 }} resizeMode="contain" />
             <Text style={styles.availText}><Text style={styles.availBold}>{driversNotified ?? "—"}</Text> Marshals nearby</Text>
           </View>
           <View style={styles.availDivider} />
@@ -667,7 +669,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#009849',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -676,6 +678,11 @@ const styles = StyleSheet.create({
     elevation: 5,
     borderWidth: 4,
     borderColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  userDotImage: {
+    width: 56,
+    height: 56,
   },
   floatingContainer: {
     position: "absolute",

@@ -16,10 +16,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { loginUser } from "../authSlice";
-import { Lock, Mail, Eye, EyeOff, User, LogIn, ChevronRight, Navigation } from "lucide-react-native";
+import { Lock, Mail, Eye, EyeOff, User, Navigation } from "lucide-react-native";
 
-import COLORS from "../../shared/constants/colors";
-import SPACING from "../../shared/constants/spacing";
 import { ROLE } from "../../constants";
 
 const { height } = Dimensions.get("window");
@@ -58,7 +56,7 @@ const LoginPage = ({ navigation }) => {
   };
 
   const handleCreateAccount = () => {
-    navigation.navigate("RegisterPage");
+    navigation.navigate("RoleSelection");
   };
 
   return (
@@ -77,10 +75,14 @@ const LoginPage = ({ navigation }) => {
         {/* Hero Image */}
         <View style={styles.heroContainer}>
           <Image
-            source={require("../../../assets/LoginAuto.png")}
+            source={require("../../../assets-webp/LoginAuto.webp")}
             style={styles.heroImage}
             resizeMode="cover"
           />
+          <View style={styles.heroOverlay}>
+            <Text style={styles.heroTitle}>VAYY</Text>
+            <Text style={styles.heroTagline}>Your Ride. Your Route.</Text>
+          </View>
         </View>
 
         {/* Bottom Sheet */}
@@ -88,7 +90,7 @@ const LoginPage = ({ navigation }) => {
           <View style={styles.dragHandle} />
 
           <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to continue to your account</Text>
+          <Text style={styles.subtitle}>Sign in to your VAYY account</Text>
 
           <View style={styles.roleToggle}>
             <TouchableOpacity
@@ -206,7 +208,7 @@ const LoginPage = ({ navigation }) => {
           </View>
 
           <View style={styles.createRow}>
-            <Text style={styles.createText}>Don't have an account? </Text>
+            <Text style={styles.createText}>{"Don't have an account? "}</Text>
             <TouchableOpacity onPress={handleCreateAccount} activeOpacity={0.7}>
               <Text style={styles.createLink}>Create free account</Text>
             </TouchableOpacity>
@@ -223,19 +225,36 @@ const styles = StyleSheet.create({
     backgroundColor: "#0d1f0f",
   },
   heroContainer: {
-    height: height * 0.3,
+    height: height * 0.35,
     backgroundColor: "#053D24",
   },
   heroImage: {
     width: "100%",
     height: "100%",
+    position: "absolute",
+  },
+  heroOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroTitle: {
+    fontSize: 36,
+    fontWeight: "900",
+    color: "#ffffff",
+    letterSpacing: -1,
+  },
+  heroTagline: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.7)",
+    marginTop: 4,
   },
   bottomSheet: {
     backgroundColor: "#ffffff",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
-    paddingTop: 30,
+    paddingTop: 24,
     flex: 1,
   },
   dragHandle: {
@@ -256,7 +275,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 13,
     color: "#888888",
-    marginBottom: 18,
+    marginBottom: 24,
     fontWeight: "400",
   },
   roleToggle: {
@@ -294,7 +313,7 @@ const styles = StyleSheet.create({
   errorBox: {
     backgroundColor: "#fef2f2",
     borderColor: "#fecaca",
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     marginBottom: 16,
     padding: 12,
@@ -312,11 +331,12 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
     borderWidth: 1.5,
     borderColor: "#e5e5e5",
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: Platform.OS === "ios" ? 13 : 9,
+    height: 52,
     marginBottom: 14,
     backgroundColor: "#fafafa",
   },
@@ -377,8 +397,8 @@ const styles = StyleSheet.create({
   },
   signInButton: {
     backgroundColor: "#1a8a2e",
-    borderRadius: 14,
-    paddingVertical: 15,
+    borderRadius: 18,
+    height: 54,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
@@ -425,9 +445,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1.5,
     borderColor: "#e5e5e5",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    borderRadius: 14,
+    height: 50,
     backgroundColor: "#ffffff",
     gap: 8,
   },

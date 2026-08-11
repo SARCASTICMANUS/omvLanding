@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Animated,
   FlatList,
+  Image,
   Keyboard,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -14,13 +16,18 @@ import {
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import VayyMap from "../../shared/components/VayyMap";
+import * as Location from "expo-location";
+import VayyMap, { Marker } from "../../shared/components/VayyMap";
 import COLORS from "../../shared/constants/colors";
 import SHADOW from "../../shared/constants/shadow";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NOMINATIM_SEARCH, USER_AGENT, STORAGE_KEYS } from "../../constants";
 import { useSelector } from "react-redux";
+
+const SHEET_COMPACT = 240;
+const BIKE_TOP_IMAGE = require("../../../assets-webp/vayyTopBike1.webp");
 
 function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 110 }) {
   const [query, setQuery] = useState(value?.name || value?.display_name || "");
@@ -144,6 +151,61 @@ export default function DriverBikeHomeScreen({ navigation }) {
   const cursorRef = useRef(new Animated.Value(1)).current;
   const cardAnim = useRef(new Animated.Value(0)).current;
   const keyboardHeight = useRef(new Animated.Value(0)).current;
+  const mapRef = useRef(null);
+  const [currentPos, setCurrentPos] = useState(null);
+
+  const locateUser = useCallback(async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const { latitude, longitude } = pos.coords;
+      setCurrentPos({ latitude, longitude });
+      mapRef.current?.setCamera({
+        center: [longitude, latitude],
+        zoom: 15,
+        duration: 800,
+      });
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    locateUser();
+  }, [locateUser]);
+
+  const SHEET_EXPANDED = Math.round(windowHeight - 120);
+  const sheetHeight = useRef(new Animated.Value(SHEET_COMPACT)).current;
+  const sheetStartRef = useRef(SHEET_COMPACT);
+
+  const sheetPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5,
+      onPanResponderGrant: () => {
+        sheetStartRef.current = sheetHeight.__getValue();
+      },
+      onPanResponderMove: (_, g) => {
+        const next = Math.min(
+          SHEET_EXPANDED,
+          Math.max(SHEET_COMPACT, sheetStartRef.current - g.dy),
+        );
+        sheetHeight.setValue(next);
+      },
+      onPanResponderRelease: (_, g) => {
+        const next = sheetStartRef.current - g.dy;
+        const target = next >= (SHEET_COMPACT + SHEET_EXPANDED) / 2 ? SHEET_EXPANDED : SHEET_COMPACT;
+        Animated.spring(sheetHeight, {
+          toValue: target,
+          friction: 9,
+          tension: 80,
+          useNativeDriver: false,
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(sheetHeight, { toValue: SHEET_COMPACT, friction: 9, useNativeDriver: false }).start();
+      },
+    }),
+  ).current;
 
   const canProceed = useMemo(
     () => Boolean(pickup?.lat && pickup?.lon && destination?.lat && destination?.lon),
@@ -200,9 +262,12 @@ export default function DriverBikeHomeScreen({ navigation }) {
   useEffect(() => {
     const fullGreeting = "Namaste,";
     const fullSub = "Aaj aap kahan jaana chahte hain?";
-    let t = 0;
-    let s = 0;
-    let phase = "greeting";
+    let alive = true;
+    const timers = [];
+    const later = (fn, ms) => {
+      if (!alive) return;
+      timers.push(setTimeout(fn, ms));
+    };
 
     const cursorAnim = Animated.loop(
       Animated.sequence([
@@ -212,28 +277,33 @@ export default function DriverBikeHomeScreen({ navigation }) {
     );
     cursorAnim.start();
 
+    let t = 0;
+    let s = 0;
+    let phase = "greeting";
+
     const tick = () => {
+      if (!alive) return;
       if (phase === "greeting") {
         if (t < fullGreeting.length) {
           setGreeting(fullGreeting.slice(0, t + 1));
           t++;
-          setTimeout(tick, 60);
+          later(tick, 70);
         } else {
           phase = "namaste_pause";
-          setTimeout(tick, 400);
+          later(tick, 400);
         }
       } else if (phase === "namaste_pause") {
         setShowName(true);
         phase = "sub_pause";
-        setTimeout(tick, 500);
+        later(tick, 500);
       } else if (phase === "sub_pause") {
         phase = "sub";
-        setTimeout(tick, 30);
+        later(tick, 30);
       } else if (phase === "sub") {
         if (s < fullSub.length) {
           setSubLine(fullSub.slice(0, s + 1));
           s++;
-          setTimeout(tick, 40);
+          later(tick, 40);
         } else {
           cursorAnim.stop();
           cursorRef.setValue(0);
@@ -241,7 +311,12 @@ export default function DriverBikeHomeScreen({ navigation }) {
       }
     };
     tick();
-    return () => { cursorAnim.stop(); };
+
+    return () => {
+      alive = false;
+      timers.forEach(clearTimeout);
+      cursorAnim.stop();
+    };
   }, [cursorRef]);
 
   const handleNext = () => {
@@ -266,15 +341,45 @@ export default function DriverBikeHomeScreen({ navigation }) {
 
       {/* Map background */}
       <VayyMap
+        ref={mapRef}
         style={StyleSheet.absoluteFillObject}
+        grayscale
         initialViewState={{
           center: [80.9462, 26.8467],
           zoom: 12,
         }}
-      />
+      >
+        {currentPos && (
+          <Marker lngLat={[currentPos.longitude, currentPos.latitude]} anchor="center">
+            <View style={styles.riderMarker}>
+              <Image
+                source={BIKE_TOP_IMAGE}
+                style={{ width: 46, height: 46 }}
+                resizeMode="contain"
+              />
+            </View>
+          </Marker>
+        )}
+      </VayyMap>
 
-      {/* Greeting — dark overlay */}
-      <View style={styles.greetingGradient} pointerEvents="none">
+      {/* Locate button — floats above the search card */}
+      <Animated.View
+        style={[styles.locateWrap, { bottom: Animated.add(Animated.add(sheetHeight, keyboardHeight), 16) }]}
+        pointerEvents="box-none"
+      >
+        <TouchableOpacity style={styles.locateBtn} onPress={locateUser} activeOpacity={0.85}>
+          <Ionicons name="locate" size={20} color="#111827" />
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* Greeting — blue gradient overlay */}
+      <LinearGradient
+        colors={["rgba(10, 22, 60, 0.94)", "rgba(10, 22, 62, 0.0010)"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.greetingGradient}
+        pointerEvents="none"
+      >
         <View style={styles.greetingContent}>
           <View style={styles.greetingRow}>
             <Text style={styles.namasteIcon}>🙏</Text>
@@ -289,17 +394,21 @@ export default function DriverBikeHomeScreen({ navigation }) {
             )}
           </View>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* Floating bottom card */}
-      <Animated.View style={[styles.cardKeyboard, { bottom: keyboardHeight }]}>
+      <Animated.View style={[styles.cardKeyboard, { height: sheetHeight, bottom: keyboardHeight }]}>
         <Animated.View style={[styles.cardWrap, { transform: [{ translateY: cardTranslateY }] }]}>
           <View style={styles.cardBg}>
+            <View style={styles.dragHandleWrap} {...sheetPan.panHandlers}>
+              <View style={styles.sheetHandle} />
+              <Text style={styles.dragHint}>Drag up for recent searches</Text>
+            </View>
             <ScrollView
               bounces={false}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
-              style={{ maxHeight: windowHeight - 210 }}
+              style={styles.sheetScroll}
               contentContainerStyle={styles.cardScroll}
             >
               <LocationSearch
@@ -378,17 +487,42 @@ export default function DriverBikeHomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
+  /* rider marker */
+  riderMarker: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  /* locate button — wrapper keeps it floating above the search card */
+  locateWrap: {
+    position: "absolute",
+    right: 16,
+    zIndex: 12,
+  },
+  locateBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+
   /* Greeting */
   greetingGradient: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    height: 200,
+    height: 240,
     zIndex: 10,
     paddingTop: 30,
     paddingHorizontal: 20,
-    backgroundColor: "rgba(10, 22, 60, 0.94)",
   },
   greetingContent: {
     top: 40,
@@ -440,6 +574,7 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   cardWrap: {
+    flex: 1,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     overflow: "hidden",
@@ -451,14 +586,35 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   cardBg: {
+    flex: 1,
     backgroundColor: "#ffffffff",
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 0,
     paddingBottom: 0,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
   },
-  cardScroll: { flexGrow: 1 },
+  cardScroll: { flexGrow: 1, paddingBottom: 20 },
+
+  /* drag handle */
+  dragHandleWrap: {
+    alignItems: "center",
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  sheetHandle: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(0,0,0,0.18)",
+  },
+  dragHint: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#9CA3AF",
+    marginTop: 6,
+  },
+  sheetScroll: { flex: 1 },
 
   /* Fields */
   fieldWrap: { marginBottom: 14, zIndex: 10 },

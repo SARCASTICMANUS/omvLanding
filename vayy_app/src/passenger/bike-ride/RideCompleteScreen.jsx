@@ -216,7 +216,7 @@ export function RideCompleteScreen({ navigation, route }) {
               navigation.navigate('BikeMapPreRide');
             }}
           >
-            <Image source={require("../../../assets/vayyFrontBike.png")} style={{ width: 20, height: 20 }} resizeMode="contain" />
+            <Image source={require("../../../assets-webp/vayyFrontBike.webp")} style={{ width: 20, height: 20 }} resizeMode="contain" />
             <Text style={styles.primaryBtnText}>  Book Another Ride</Text>
           </TouchableOpacity>
 

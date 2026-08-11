@@ -18,6 +18,8 @@ import { fetchRouteGeometry } from "../../routes/services/routeService";
 
 const ARRIVAL_THRESHOLD = 500;
 
+const USER_TOP_IMAGE = require("../../../assets-webp/VayyUserTop.webp");
+
 function haversine(a, b) {
   const R = 6371e3;
   const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
@@ -369,7 +371,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
                   ]}
                 />
                 <View style={styles.userDot}>
-                  <Ionicons name="person" size={20} color="#FFFFFF" />
+                  <Image source={USER_TOP_IMAGE} style={styles.userDotImage} resizeMode="contain" />
                 </View>
               </View>
             </ViewAnnotation>
@@ -509,7 +511,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           <View style={styles.modalContent}>
             <View style={styles.modalIconWrap}>
               <Image
-                source={require("../../../assets/VayyHandRaise.png")}
+                source={require("../../../assets-webp/VayyHandRaise.webp")}
                 style={{ width: 120, height: 120 }}
                 resizeMode="contain"
               />
@@ -800,7 +802,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "#009849",
+    backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -809,6 +811,11 @@ const styles = StyleSheet.create({
     elevation: 5,
     borderWidth: 4,
     borderColor: "#FFFFFF",
+    overflow: "hidden",
+  },
+  userDotImage: {
+    width: 56,
+    height: 56,
   },
   floatingContainer: {
     position: "absolute",

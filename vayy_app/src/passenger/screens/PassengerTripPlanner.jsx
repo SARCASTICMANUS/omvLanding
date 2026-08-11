@@ -24,22 +24,22 @@ import SHADOW from "../../shared/constants/shadow";
 
 const { width } = Dimensions.get("window");
 
-const heroImage = require("../../../assets/vayynewbg.png");
-const heroBikeBg = require("../../../assets/vayynewbg2.png");
+const heroImage = require("../../../assets-webp/vayynewbg.webp");
+const heroBikeBg = require("../../../assets-webp/vayynewbg2.webp");
 
 const AUTO_VARIANTS = [
-  require("../../../assets/vayyWithPassengerAuto.png"),
-  require("../../../assets/vayyWithoutPassengerAuto.png"),
+  require("../../../assets-webp/vayyWithPassengerAuto.webp"),
+  require("../../../assets-webp/vayyWithoutPassengerAuto.webp"),
 ];
 
 const passengerBikeImages = [
-  require("../../../assets/vayyWithPassengerbike.png"),
-  require("../../../assets/vayyWithPassengerbike2.png"),
-  require("../../../assets/vayyWithPassengerbike3.png"),
-  require("../../../assets/vayyWithoutPassengerBike.png"),
-  require("../../../assets/vayyWithoutPassengerBike2.png"),
-  require("../../../assets/vayyWithoutPassengerBike3.png"),
-  require("../../../assets/vayyWithoutPassengerBike4.png"),
+  require("../../../assets-webp/vayyWithPassengerbike.webp"),
+  require("../../../assets-webp/vayyWithPassengerbike2.webp"),
+  require("../../../assets-webp/vayyWithPassengerbike3.webp"),
+  require("../../../assets-webp/vayyWithoutPassengerBike.webp"),
+  require("../../../assets-webp/vayyWithoutPassengerBike2.webp"),
+  require("../../../assets-webp/vayyWithoutPassengerBike3.webp"),
+  require("../../../assets-webp/vayyWithoutPassengerBike4.webp"),
 ];
 
 function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90, isPickup }) {
@@ -400,7 +400,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
     </>
   ) : (
     <View style={styles.comingSoonCard}>
-      <Image source={require("../../../assets/vayyAutoBoarding.png")} style={styles.comingSoonImage} resizeMode="contain" />
+      <Image source={require("../../../assets-webp/vayyAutoBoarding.webp")} style={styles.comingSoonImage} resizeMode="contain" />
       <Text style={styles.comingSoonTitle}>Coming Soon</Text>
       <Text style={styles.comingSoonText}>
         Shared Auto ride booking is coming soon. Please try Bike Ride for now.

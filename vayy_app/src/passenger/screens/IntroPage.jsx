@@ -13,10 +13,11 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { setVehicleMode } from "../../store/slices/vehicleModeSlice";
 import { MaterialIcons } from "@expo/vector-icons";
+import { NOMINATIM_REVERSE, USER_AGENT } from "../../constants";
 
-const AUTO_IMG = require("../../../assets/vayySideAuto.png");
-const BIKE_IMG = require("../../../assets/vayyPulsureBike.png");
-const NAMASTE_ICON = require("../../../assets/vayyNamaste.png");
+const AUTO_IMG = require("../../../assets-webp/vayySideAuto.webp");
+const BIKE_IMG = require("../../../assets-webp/vayyPulsureBike.webp");
+const NAMASTE_ICON = require("../../../assets-webp/vayyNamaste.webp");
 
 const GREEN = "#009849";
 const GREEN_DARK = "#007a3a";
@@ -155,10 +156,6 @@ export default function PassengerHomeScreen({ navigation }) {
     navigation.navigate("PassengerTripPlanner");
   }, [dispatch, navigation]);
 
-  const handleBrowseRoutes = useCallback(() => {
-    navigation.navigate("PassengerRoutes");
-  }, [navigation]);
-
   const handleBikeBook = useCallback(() => {
     dispatch(setVehicleMode("BIKE"));
     navigation.navigate("PassengerTripPlanner", { mode: "bike" });
@@ -170,9 +167,28 @@ export default function PassengerHomeScreen({ navigation }) {
       if (status !== "granted") return;
       const loc = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = loc.coords;
+      try {
+        const url = NOMINATIM_REVERSE(latitude, longitude);
+        const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+        const data = await res.json();
+        const placeName =
+          data?.name ||
+          data?.address?.road ||
+          data?.address?.neighbourhood ||
+          data?.display_name?.split(",")?.[0];
+        if (placeName) {
+          setCurrentLoc(placeName);
+          return;
+        }
+      } catch {}
       setCurrentLoc(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
     } catch {}
   }, []);
+
+  const handleSearchBarPress = useCallback(() => {
+    dispatch(setVehicleMode("BIKE"));
+    navigation.navigate("PassengerTripPlanner", { mode: "bike" });
+  }, [dispatch, navigation]);
 
   return (
     <View style={styles.root}>
@@ -219,7 +235,7 @@ export default function PassengerHomeScreen({ navigation }) {
             </View>
           </View>
 
-          <TouchableOpacity activeOpacity={0.92} onPress={handleBrowseRoutes} style={styles.searchBar}>
+          <TouchableOpacity activeOpacity={0.92} onPress={handleSearchBarPress} style={styles.searchBar}>
             <MaterialIcons name="search" size={20} color={TEXT_MUTED} />
             <Text style={styles.searchPlaceholder}>Office, Metro ya College?</Text>
             <MaterialIcons name="mic" size={20} color={TEXT_MUTED} />

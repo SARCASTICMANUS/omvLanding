@@ -290,6 +290,14 @@ Integrate all backend APIs into the vayy_app frontend according to the mobile ap
 - Fixed `DriverBikeHomeScreen.jsx` card scroll: added `useWindowDimensions`; inner card ScrollView capped at `maxHeight: windowHeight - 210` so recent searches are reachable/selectable
 - Redesigned `DriverRouteList.jsx`: stops hidden by default (collapsed card shows only user-chosen start + end, falling back to first/last stop names); added green "View N stops / Hide stops" toggle (`stopsToggle`/`stopsToggleText`); new `stopNameFlex` truncation style; route selection navigates to registered `"FindPassenger"` (bike radar) / `"AutoFindPassenger"`
 - Ported the zip "Pre-Ride Check" verification overlay into prod `BikeFindPassengerScreen.jsx` (bike radar): `VEHICLE_IMAGES` hero cycling `vayyWithoutPassengerBike{1..4}.png`, 6 `CHECKS` (System: network/gps/location; Safety: helmet/stand/device), `scaleIn`/`floatAnim`/`spinAnim`/`sweepAnim` animations, animated progress track + `x/6` + "All Clear" badges, "Go Live" button appears only after all checks pass; zip `LinearGradient`/`MapView` imports skipped (not installed / prod uses `VayyMap`); `showVerify`/`checks`/`handleStart` wiring preserved (calls `setOnline(true)` + `setPhase("scanning")`)
+- Rewired prod registration flow to newui multi-step while preserving real `authSlice` logic:
+  - Created `RoleSelectionScreen.jsx` (Passenger/Marshal cards) and pointed `LoginPage` "Create free account" → `RoleSelection`
+  - Created `PassengerRegistration/` (container + Step1Basic + Step2Permissions + Step3OTP): Step1 dispatches real `registerUser` (role `passenger`), Step3 uses real `verifyOtp`/`resendOtp`
+  - Created `DriverRegistration/` (container + 6 steps: Personal/Vehicle/VehicleInfo/Documents/Bank/OTP): Step2 dispatches real `registerUser` with role from vehicleType (`auto` → `autodriver`, `bike` → `bikedriver`), Step6 uses real `verifyOtp`/`resendOtp`
+  - Created shared auth components (`ProgressBar`, `BottomStickyButton`, `OTPInput`, `PasswordChecklist`, `ImageUploadCard`), `validators.jsx`, `SuccessScreen.jsx`, `ApplicationSubmittedScreen.jsx`
+  - On OTP success both flows land on LoginPage (prod contract: register → OTP → login; tokens only at login)
+  - Legacy `RegisterPage` + `OtpVerification` kept registered in `AuthNavigator`; driver docs/bank/vehicle fields collected locally only (register API takes email/password/role/name)
+- All new registration files lint clean (`npx eslint` EXIT=0)
 
 ### In Progress
 - (none)
@@ -322,7 +330,13 @@ Integrate all backend APIs into the vayy_app frontend according to the mobile ap
 ## Relevant Files
 - `vayy_app/src/auth/authSlice.jsx`: core auth thunks (login, register, verifyOtp, resendOtp, restoreAuth)
 - `vayy_app/src/auth/screens/OtpVerificationPage.jsx`: new OTP verification screen
-- `vayy_app/src/auth/screens/LoginPage.jsx`: now dispatches real loginUser
+- `vayy_app/src/auth/screens/LoginPage.jsx`: now dispatches real loginUser; "Create free account" → RoleSelection
+- `vayy_app/src/auth/screens/RoleSelectionScreen.jsx`: newui role picker (Passenger/Marshal)
+- `vayy_app/src/auth/screens/PassengerRegistration/`: newui 3-step passenger registration (container + Step1Basic + Step2Permissions + Step3OTP) wired to real registerUser/verifyOtp
+- `vayy_app/src/auth/screens/DriverRegistration/`: newui 6-step driver registration (Personal/Vehicle/VehicleInfo/Documents/Bank/OTP) wired to real registerUser (role from vehicleType)/verifyOtp
+- `vayy_app/src/auth/screens/SuccessScreen.jsx` + `ApplicationSubmittedScreen.jsx`: post-registration landing screens
+- `vayy_app/src/auth/components/`: shared auth components (ProgressBar, BottomStickyButton, OTPInput, PasswordChecklist, ImageUploadCard)
+- `vayy_app/src/auth/validators.jsx`: form validators + password rules
 - `vayy_app/src/auth/screens/RegisterPage.jsx`: now navigates to OTP screen
 - `vayy_app/src/auth/screens/PasswordResetPage.jsx`: fixed API path
 - `vayy_app/src/shared/lib/api.jsx`: axios client, token interceptor, normalizeApiError export
