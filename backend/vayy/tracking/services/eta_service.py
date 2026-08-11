@@ -18,7 +18,7 @@ class BaseETAProvider(ABC):
 class OSRMProvider(BaseETAProvider):
     def calculate(self, origin, destination):
         """
-        OSRM-based road distance/time estimation.
+        OSRM basis road distance/time estimation.
         Single cached /route call; falls back to great-circle estimation.
         """
         from transport.services.osrm_service import OSRMService
