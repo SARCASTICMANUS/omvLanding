@@ -228,6 +228,7 @@ class LocationService:
                 remaining_distance_km = None
                 remaining_duration_min = None
                 direction = None
+                route_stops = []
                 if active_trip:
                     route_stops = list(
                         active_trip.route.stops.select_related("route").order_by("order")
