@@ -1,0 +1,252 @@
+<mxfile host="app.diagrams.net" modified="2026-06-16T00:00:00.000Z" agent="Claude" version="24.0.0" type="device">
+  <diagram name="Vayy Architecture" id="vayy-architecture-1">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1650" pageHeight="1600" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ============ MOBILE APP LAYER ============ -->
+        <mxCell id="mobileApp" value="Vayy Mobile App (React Native / Flutter)" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fontSize=14;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="1520" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="UI" value="UI Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="mobileApp">
+          <mxGeometry x="40" y="40" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="APIClient" value="REST API Client" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="mobileApp">
+          <mxGeometry x="260" y="40" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="MQClient" value="RabbitMQ Client (AMQP / MQTT Bridge)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="mobileApp">
+          <mxGeometry x="520" y="40" width="420" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ============ API GATEWAY LAYER (Django REST) ============ -->
+        <mxCell id="apiLayer" value="Django REST Layer" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fontSize=14;fontStyle=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="200" width="1520" height="400" as="geometry" />
+        </mxCell>
+        <!-- Controllers row -->
+        <mxCell id="AuthController" value="AuthController" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="40" y="40" width="220" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="RideController" value="RideController" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="300" y="40" width="220" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="LocationController" value="LocationController" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="560" y="40" width="240" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="DispatchController" value="DispatchController" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="840" y="40" width="240" height="55" as="geometry" />
+        </mxCell>
+        <!-- DTOs row -->
+        <mxCell id="AuthDTO" value="AuthDTO" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;dashed=1;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="40" y="120" width="220" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="RideDTO" value="RideDTO" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;dashed=1;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="300" y="120" width="220" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="LocationDTO" value="LocationDTO" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;dashed=1;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="560" y="120" width="240" height="55" as="geometry" />
+        </mxCell>
+        <!-- Services row -->
+        <mxCell id="AuthService" value="AuthService" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="40" y="200" width="220" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="RideService" value="RideService" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="300" y="200" width="220" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="LocationService" value="LocationService" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="560" y="200" width="240" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="DispatchService" value="DispatchService" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="840" y="200" width="240" height="55" as="geometry" />
+        </mxCell>
+        <!-- Repos row -->
+        <mxCell id="AuthRepo" value="AuthRepo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="40" y="280" width="220" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="RideRepo" value="RideRepo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="300" y="280" width="220" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="VehicleRepo" value="VehicleRepo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="560" y="280" width="220" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="UserRepo" value="UserRepo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="apiLayer">
+          <mxGeometry x="800" y="280" width="220" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- ============ RABBITMQ MESSAGE BROKER ============ -->
+        <mxCell id="rabbitMQ" value="RabbitMQ Message Broker" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fontSize=14;fontStyle=1;fillColor=#ffe6cc;strokeColor=#d79b00;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="620" width="1520" height="260" as="geometry" />
+        </mxCell>
+        <!-- Exchanges -->
+        <mxCell id="EX_Location" value="Exchange: location.topic (Topic)" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="rabbitMQ">
+          <mxGeometry x="40" y="40" width="340" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="EX_Dispatch" value="Exchange: dispatch.direct (Direct)" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="rabbitMQ">
+          <mxGeometry x="420" y="40" width="340" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="EX_Notification" value="Exchange: notification.topic (Topic)" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="rabbitMQ">
+          <mxGeometry x="800" y="40" width="360" height="60" as="geometry" />
+        </mxCell>
+        <!-- Queues -->
+        <mxCell id="Q_Auto_Location" value="Queue: auto.location" style="shape=process;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="rabbitMQ">
+          <mxGeometry x="40" y="150" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Q_Bike_Location" value="Queue: bike.location" style="shape=process;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="rabbitMQ">
+          <mxGeometry x="280" y="150" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Q_Dispatch_Auto" value="Queue: dispatch.auto" style="shape=process;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="rabbitMQ">
+          <mxGeometry x="520" y="150" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Q_Dispatch_Bike" value="Queue: dispatch.bike" style="shape=process;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="rabbitMQ">
+          <mxGeometry x="760" y="150" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Q_User_Notification" value="Queue: user.notification" style="shape=process;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d79b00;fontSize=11;" vertex="1" parent="rabbitMQ">
+          <mxGeometry x="1000" y="150" width="260" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ============ ASYNC WORKERS (CELERY CONSUMERS) ============ -->
+        <mxCell id="workers" value="Async Workers (Celery Consumers)" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fontSize=14;fontStyle=1;fillColor=#e1d5e7;strokeColor=#9673a6;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="900" width="1520" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="LocationConsumer" value="LocationConsumer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="workers">
+          <mxGeometry x="40" y="40" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="DispatchConsumer" value="DispatchConsumer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="workers">
+          <mxGeometry x="320" y="40" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="NotificationConsumer" value="NotificationConsumer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="workers">
+          <mxGeometry x="600" y="40" width="280" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="MatchingService" value="MatchingService" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="workers">
+          <mxGeometry x="40" y="150" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ETAService" value="ETAService" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="workers">
+          <mxGeometry x="300" y="150" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="PricingService" value="PricingService" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="workers">
+          <mxGeometry x="540" y="150" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ============ TRANSPORTATION DOMAIN ============ -->
+        <mxCell id="domain" value="Transportation Domain" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fontSize=14;fontStyle=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1180" width="1520" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="AutoModule" value="Auto Module" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="domain">
+          <mxGeometry x="40" y="40" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="BikeModule" value="Bike Module" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="domain">
+          <mxGeometry x="260" y="40" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="AutoEntity" value="Auto" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="domain">
+          <mxGeometry x="480" y="40" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="BikeEntity" value="Bike" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="domain">
+          <mxGeometry x="660" y="40" width="160" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="DriverEntity" value="Driver" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="domain">
+          <mxGeometry x="840" y="40" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="RideEntity" value="Ride" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="domain">
+          <mxGeometry x="1040" y="40" width="180" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ============ DATABASE LAYER (PostgreSQL + PostGIS) ============ -->
+        <mxCell id="database" value="PostgreSQL + PostGIS" style="swimlane;whiteSpace=wrap;html=1;startSize=30;fontSize=14;fontStyle=1;fillColor=#f5f5f5;strokeColor=#666666;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1350" width="1520" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="Users" value="users" style="shape=cylinder;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="database">
+          <mxGeometry x="40" y="40" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Drivers" value="drivers" style="shape=cylinder;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="database">
+          <mxGeometry x="210" y="40" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Vehicles" value="vehicles" style="shape=cylinder;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="database">
+          <mxGeometry x="380" y="40" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Autos" value="autos" style="shape=cylinder;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="database">
+          <mxGeometry x="550" y="40" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Bikes" value="bikes" style="shape=cylinder;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="database">
+          <mxGeometry x="720" y="40" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Rides" value="rides" style="shape=cylinder;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="database">
+          <mxGeometry x="890" y="40" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="RideEvents" value="ride_events" style="shape=cylinder;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="database">
+          <mxGeometry x="1060" y="40" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Locations" value="vehicle_locations" style="shape=cylinder;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="database">
+          <mxGeometry x="1250" y="40" width="180" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ============ EDGES: CLIENT -> API ============ -->
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="UI" target="APIClient"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="APIClient" target="AuthController"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="APIClient" target="RideController"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="APIClient" target="LocationController"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ============ EDGES: CONTROLLER -> SERVICE -> REPO -> DB ============ -->
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="AuthController" target="AuthService"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="AuthService" target="AuthRepo"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="AuthRepo" target="Users"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="RideController" target="RideService"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="RideService" target="RideRepo"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="RideRepo" target="Rides"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="LocationController" target="LocationService"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="LocationService" target="VehicleRepo"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="VehicleRepo" target="Vehicles"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ============ EDGES: PRODUCER FLOW -> EXCHANGES ============ -->
+        <mxCell id="e14" value="Publish: location.auto / location.bike" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="LocationService" target="EX_Location"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e15" value="Publish / Dispatch Event: dispatch.auto / dispatch.bike" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="RideService" target="EX_Dispatch"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e16" value="Publish: notification.*" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="DispatchService" target="EX_Notification"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ============ EDGES: ROUTING KEYS -> QUEUES ============ -->
+        <mxCell id="e17" value="routing_key: auto.*" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="EX_Location" target="Q_Auto_Location"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e18" value="routing_key: bike.*" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="EX_Location" target="Q_Bike_Location"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e19" value="routing_key: auto" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="EX_Dispatch" target="Q_Dispatch_Auto"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e20" value="routing_key: bike" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="EX_Dispatch" target="Q_Dispatch_Bike"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e21" value="routing_key: user.*" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="EX_Notification" target="Q_User_Notification"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ============ EDGES: QUEUES -> CONSUMERS ============ -->
+        <mxCell id="e22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="Q_Auto_Location" target="LocationConsumer"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="Q_Bike_Location" target="LocationConsumer"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="Q_Dispatch_Auto" target="DispatchConsumer"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="Q_Dispatch_Bike" target="DispatchConsumer"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="Q_User_Notification" target="NotificationConsumer"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ============ EDGES: WORKER PROCESSING ============ -->
+        <mxCell id="e27" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="LocationConsumer" target="MatchingService"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="MatchingService" target="ETAService"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="LocationConsumer" target="ETAService"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="LocationConsumer" target="Locations"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e31" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="LocationConsumer" target="Vehicles"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e32" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="LocationConsumer" target="EX_Notification"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e33" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="DispatchConsumer" target="PricingService"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e34" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="DispatchConsumer" target="RideService"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e35" value="Assign Ride" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="DispatchConsumer" target="Rides"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e36" value="Match Auto/Bike" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="DispatchConsumer" target="MatchingService"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e37" value="Notify User" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="DispatchConsumer" target="EX_Notification"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e38" value="Push via RabbitMQ" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="NotificationConsumer" target="MQClient"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ============ EDGES: REAL-TIME FLOW BACK TO APP ============ -->
+        <mxCell id="e39" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="MQClient" target="UI"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ============ EDGES: DOMAIN / DB RELATIONS ============ -->
+        <mxCell id="e40" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="Vehicles" target="Autos"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e41" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="Vehicles" target="Bikes"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e42" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="Drivers" target="Vehicles"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e43" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="Rides" target="Users"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e44" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="Rides" target="Drivers"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e45" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="Rides" target="Vehicles"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e46" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="MatchingService" target="Drivers"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ============ EDGES: END-TO-END FLOW LABELS ============ -->
+        <mxCell id="e47" value="Ride Request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="UI" target="RideController"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e48" value="Driver Location Update" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="UI" target="LocationController"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e49" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=10;" edge="1" parent="1" source="ETAService" target="Rides"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -13,6 +13,7 @@ import {
 import PassengerRegisterForm from "../features/passenger/components/PassengerRegisterForm";
 import DriverRegisterForm from "../features/driver/components/DriverRegisterForm";
 import api from "../lib/api";
+import { API_PATHS } from "../constants/apiPaths";
 
 const ROLES = [
   {
@@ -80,10 +81,10 @@ export default function RegisterPage() {
 
   const fetchCities = async () => {
     try {
-      const res = await api.get("/api/cities/");
+      const res = await api.get(API_PATHS.cities.list);
       const data = Array.isArray(res.data) ? res.data : res.data.results || [];
       setCities(data);
-    } catch (err) {
+    } catch {
       console.warn("Could not load cities");
     }
   };
@@ -106,12 +107,12 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await api.post("/api/auth/send-otp/", {
+      await api.post(API_PATHS.auth.resendOtp, {
         email: formData.email,
       });
 
       setStep(2);
-    } catch (err) {
+    } catch {
       setError("Failed to send OTP. Please check your email and try again.");
     } finally {
       setLoading(false);
@@ -129,13 +130,13 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await api.post("/api/auth/verify-otp/", {
+      await api.post(API_PATHS.auth.verifyOtp, {
         email: formData.email,
         otp: formData.otp,
       });
 
       setStep(3);
-    } catch (err) {
+    } catch {
       setError("Invalid or expired OTP. Please try again.");
     } finally {
       setLoading(false);
@@ -147,7 +148,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await api.post("/api/auth/register/", {
+      await api.post(API_PATHS.auth.register, {
         email: formData.email,
         password: payload.password,
         role: "passenger",
@@ -203,7 +204,7 @@ export default function RegisterPage() {
         submitData.append("dl_file", payload.dl_file);
       }
 
-      await api.post("/api/auth/register/", submitData, {
+      await api.post(API_PATHS.auth.register, submitData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },

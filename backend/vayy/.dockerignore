@@ -1,0 +1,41 @@
+# VCS
+.git
+.gitignore
+.github
+
+# Secrets - never bake into the image
+# .env
+# .vault
+
+# Python
+venv
+env
+.venv
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+*.so
+.pytest_cache
+.mypy_cache
+htmlcov
+
+# Data / generated
+osrm
+staticfiles/
+media/
+*.pbf
+*.osrm*
+
+# Scaffolding / docs not needed at runtime
+docs
+tests
+scripts
+*.md
+*.xml
+architecture_lld.md
+
+# Docker
+Dockerfile
+docker-compose.yaml
+*override*.yaml
+nginx

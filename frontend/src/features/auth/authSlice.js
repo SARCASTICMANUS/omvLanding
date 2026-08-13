@@ -1,13 +1,12 @@
-// VAYY | src/features/auth/authSlice.js | Status: 🔧 Fixed
-// Reason: Store refreshToken; add JWT exp decode helper array + restoreAuth logic.
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../lib/api";
+import { API_PATHS } from "../../constants/apiPaths";
 
 const getPersistedUser = () => {
   try {
     const userStr = localStorage.getItem("user");
     return userStr ? JSON.parse(userStr) : null;
-  } catch (e) {
+  } catch {
     return null;
   }
 };
@@ -16,9 +15,10 @@ export const loginUser = createAsyncThunk(
   "auth/login",
   async (creds, thunkAPI) => {
     try {
-      const response = await api.post("/api/auth/login/", creds);
+      const response = await api.post(API_PATHS.auth.login, creds);
       const data = response.data;
-      
+      const tokens = data.tokens || data;
+
       const userData = {
         role: data.role,
         name: data.name,
@@ -26,11 +26,11 @@ export const loginUser = createAsyncThunk(
         city: data.city,
       };
 
-      localStorage.setItem("token", data.access);
-      localStorage.setItem("refreshToken", data.refresh);
+      localStorage.setItem("access_token", tokens.access);
+      localStorage.setItem("refresh_token", tokens.refresh);
       localStorage.setItem("user", JSON.stringify(userData));
 
-      return { ...data, user: userData };
+      return { ...data, tokens, user: userData };
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data || { error: "Login failed" },
@@ -43,7 +43,7 @@ export const registerUser = createAsyncThunk(
   "auth/register",
   async (data, thunkAPI) => {
     try {
-      const response = await api.post("/api/auth/register/", data);
+      const response = await api.post(API_PATHS.auth.register, data);
       return response.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(error.response?.data || { error: "Registration failed" });
@@ -55,16 +55,16 @@ const authSlice = createSlice({
   name: "auth",
   initialState: {
     user: getPersistedUser(),
-    token: localStorage.getItem("token"),
-    refreshToken: localStorage.getItem("refreshToken"),
-    isAuthenticated: !!localStorage.getItem("token") && !!getPersistedUser(),
+    token: localStorage.getItem("access_token"),
+    refreshToken: localStorage.getItem("refresh_token"),
+    isAuthenticated: !!localStorage.getItem("access_token") && !!getPersistedUser(),
     loading: false,
     error: null,
   },
   reducers: {
     logout: (state) => {
-      localStorage.removeItem("token");
-      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
       localStorage.removeItem("user");
       state.user = null;
       state.token = null;
@@ -93,8 +93,8 @@ const authSlice = createSlice({
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
         state.isAuthenticated = true;
-        state.token = action.payload.access;
-        state.refreshToken = action.payload.refresh;
+        state.token = action.payload.tokens.access;
+        state.refreshToken = action.payload.tokens.refresh;
         state.user = action.payload.user;
       })
       .addCase(loginUser.rejected, (state, action) => {
@@ -106,21 +106,21 @@ const authSlice = createSlice({
       })
       .addCase(registerUser.fulfilled, (state, action) => {
         state.loading = false;
-        // Optionally auto-login on register
-        if (action.payload.access && action.payload.user) {
+        const tokens = action.payload.tokens || action.payload;
+        if (tokens.access && action.payload.user) {
           state.isAuthenticated = true;
-          state.token = action.payload.access;
-          state.refreshToken = action.payload.refresh;
+          state.token = tokens.access;
+          state.refreshToken = tokens.refresh;
           state.user = action.payload.user;
-          localStorage.setItem("token", action.payload.access);
-          localStorage.setItem("refreshToken", action.payload.refresh);
+          localStorage.setItem("access_token", tokens.access);
+          localStorage.setItem("refresh_token", tokens.refresh);
           localStorage.setItem("user", JSON.stringify(action.payload.user));
         }
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      });
+      })
   },
 });
 

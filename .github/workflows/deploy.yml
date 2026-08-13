@@ -1,0 +1,95 @@
+name: Deploy to Azure VM
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/vayy/**"
+      - "admin/**"
+      - "docker-compose.yaml"
+      - "nginx.conf"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
+
+      # Root compose is the single entrypoint. On the VM it must live at
+      # /home/azureuser/vayy so its relative build contexts (./backend/vayy,
+      # ./admin) resolve exactly like the repo layout.
+      - name: Sync root compose to VM
+        env:
+          COMPOSE_DIR: /home/azureuser/vayy
+        run: |
+          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p $COMPOSE_DIR"
+          rsync -avz -e "ssh" \
+            docker-compose.yaml .dockerignore nginx.conf \
+            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:$COMPOSE_DIR/
+
+      # Sync backend app source into the compose layout.
+      - name: Sync backend/vayy to VM
+        env:
+          COMPOSE_DIR: /home/azureuser/vayy
+        run: |
+          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p $COMPOSE_DIR/backend/vayy"
+          rsync -avz --delete \
+            -e "ssh" \
+            --exclude ".venv" \
+            --exclude "__pycache__" \
+            --exclude "*.pyc" \
+            --exclude "staticfiles" \
+            --exclude ".env" \
+            --exclude "osrm" \
+            backend/vayy/ \
+            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:$COMPOSE_DIR/backend/vayy/
+
+      # Sync the admin SPA source into the compose layout.
+      - name: Sync admin to VM
+        env:
+          COMPOSE_DIR: /home/azureuser/vayy
+        run: |
+          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p $COMPOSE_DIR/admin"
+          rsync -avz --delete \
+            -e "ssh" \
+            --exclude "node_modules" \
+            --exclude "dist" \
+            admin/ \
+            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:$COMPOSE_DIR/admin/
+
+      # Build and restart containers from the single-stack root compose.
+      - name: Build and restart containers
+        env:
+          COMPOSE_DIR: /home/azureuser/vayy
+        run: |
+          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} \
+            COMPOSE_DIR="$COMPOSE_DIR" 'bash -s' << 'EOF'
+            set -e
+            cd "$COMPOSE_DIR"
+
+            # .env files are NOT synced from the repo — the server keeps its own copies.
+            if [ ! -f backend/vayy/.env ]; then
+              echo "ERROR: backend/vayy/.env missing on server. Create it first."
+              exit 1
+            fi
+            if [ ! -f .env ]; then
+              echo "ERROR: .env missing on server (root compose db/rabbitmq creds). Create it first."
+              exit 1
+            fi
+
+            docker compose down || true
+            docker compose up -d --build
+
+            docker compose exec web python manage.py migrate
+            docker compose exec web python manage.py collectstatic --noinput
+          EOF

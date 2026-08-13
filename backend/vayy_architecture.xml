@@ -1,0 +1,104 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Vayy Full LLD">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="10">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- MOBILE -->
+        <mxCell id="mobile_box" value="Mobile App" style="swimlane;fillColor=#dae8fc;" vertex="1" parent="1">
+          <mxGeometry x="20" y="300" width="220" height="220" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ui" value="UI Layer" vertex="1" parent="mobile_box">
+          <mxGeometry x="20" y="40" width="160" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="api_client" value="REST Client" vertex="1" parent="mobile_box">
+          <mxGeometry x="20" y="90" width="160" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="mq_client" value="RabbitMQ Client" vertex="1" parent="mobile_box">
+          <mxGeometry x="20" y="140" width="160" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- API LAYER -->
+        <mxCell id="api_box" value="Django REST Layer" style="swimlane;fillColor=#d5e8d4;" vertex="1" parent="1">
+          <mxGeometry x="260" y="250" width="300" height="300" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="auth_ctrl" value="AuthController" vertex="1" parent="api_box"><mxGeometry x="10" y="40" width="120" height="40" as="geometry"/></mxCell>
+        <mxCell id="ride_ctrl" value="RideController" vertex="1" parent="api_box"><mxGeometry x="150" y="40" width="120" height="40" as="geometry"/></mxCell>
+        <mxCell id="loc_ctrl" value="LocationController" vertex="1" parent="api_box"><mxGeometry x="10" y="90" width="120" height="40" as="geometry"/></mxCell>
+
+        <mxCell id="auth_srv" value="AuthService" vertex="1" parent="api_box"><mxGeometry x="10" y="150" width="120" height="40" as="geometry"/></mxCell>
+        <mxCell id="ride_srv" value="RideService" vertex="1" parent="api_box"><mxGeometry x="150" y="150" width="120" height="40" as="geometry"/></mxCell>
+        <mxCell id="loc_srv" value="LocationService" vertex="1" parent="api_box"><mxGeometry x="10" y="200" width="120" height="40" as="geometry"/></mxCell>
+
+        <mxCell id="repo" value="Repositories" vertex="1" parent="api_box">
+          <mxGeometry x="80" y="250" width="140" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- RABBITMQ -->
+        <mxCell id="mq_box" value="RabbitMQ" style="swimlane;fillColor=#ffe6cc;" vertex="1" parent="1">
+          <mxGeometry x="600" y="150" width="350" height="350" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ex_loc" value="Exchange: location.topic" vertex="1" parent="mq_box">
+          <mxGeometry x="80" y="40" width="180" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="q_auto" value="auto.location" vertex="1" parent="mq_box">
+          <mxGeometry x="20" y="120" width="120" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="q_bike" value="bike.location" vertex="1" parent="mq_box">
+          <mxGeometry x="200" y="120" width="120" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- WORKERS -->
+        <mxCell id="worker_box" value="Workers" style="swimlane;fillColor=#f8cecc;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="250" width="260" height="250" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="loc_consumer" value="LocationConsumer" vertex="1" parent="worker_box">
+          <mxGeometry x="40" y="40" width="160" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="match_srv" value="MatchingService" vertex="1" parent="worker_box">
+          <mxGeometry x="40" y="100" width="160" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="eta_srv" value="ETAService" vertex="1" parent="worker_box">
+          <mxGeometry x="40" y="160" width="160" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- DATABASE -->
+        <mxCell id="db_box" value="Database" style="shape=cylinder;fillColor=#e1d5e7;" vertex="1" parent="1">
+          <mxGeometry x="1350" y="300" width="200" height="200" as="geometry"/>
+        </mxCell>
+
+        <!-- EDGES -->
+        <mxCell id="e1" edge="1" source="ui" target="api_client" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" edge="1" source="api_client" target="auth_ctrl" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e3" edge="1" source="ride_ctrl" target="ride_srv" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" edge="1" source="loc_ctrl" target="loc_srv" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e5" edge="1" source="loc_srv" target="ex_loc" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e6" edge="1" source="ex_loc" target="q_auto" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" edge="1" source="ex_loc" target="q_bike" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e8" edge="1" source="q_auto" target="loc_consumer" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" edge="1" source="q_bike" target="loc_consumer" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e10" edge="1" source="loc_consumer" target="match_srv" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e11" edge="1" source="match_srv" target="eta_srv" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="e12" edge="1" source="eta_srv" target="db_box" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

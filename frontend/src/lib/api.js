@@ -3,6 +3,7 @@
 import axios from "axios";
 import { store } from "../app/store";
 import { logout, refreshTokenSuccess } from "../features/auth/authSlice";
+import { API_PATHS } from "../constants/apiPaths";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
@@ -11,7 +12,7 @@ const api = axios.create({
 // 1. Request Interceptor: Attach Token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("access_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -29,22 +30,22 @@ api.interceptors.response.use(
     // If 401 and we haven't already retried this request
     if (error.response && error.response.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      const refreshToken = localStorage.getItem("refreshToken");
+      const refreshToken = localStorage.getItem("refresh_token");
       
       if (refreshToken) {
         try {
           const res = await axios.post(
-            (import.meta.env.VITE_API_URL || "http://localhost:8000") + "/api/auth/refresh/",
+            (import.meta.env.VITE_API_URL || "http://localhost:8000") + API_PATHS.auth.refresh,
             { refresh: refreshToken }
           );
           
           if (res.data.access) {
-            localStorage.setItem("token", res.data.access);
+            localStorage.setItem("access_token", res.data.access);
             store.dispatch(refreshTokenSuccess({ token: res.data.access }));
             originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
             return api(originalRequest); // retry original
           }
-        } catch (refreshError) {
+        } catch {
           // refresh token invalid/expired -> clear and logout
         }
       }

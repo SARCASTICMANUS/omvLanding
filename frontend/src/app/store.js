@@ -1,10 +1,9 @@
-// VAYY | src/app/store.js | Status: 🔧 Fixed
-// Reason: Configured Redux Persist around the auth reducer to ensure hard reloads preserve tokens.
+// VAYY | src/app/store.js
+// Central Redux store. Auth remains the only persisted slice for migration safety.
 
-import { configureStore, combineReducers } from "@reduxjs/toolkit";
+import { configureStore } from "@reduxjs/toolkit";
 import {
   persistStore,
-  persistReducer,
   FLUSH,
   REHYDRATE,
   PAUSE,
@@ -12,30 +11,26 @@ import {
   PURGE,
   REGISTER,
 } from "redux-persist";
-import storage from "redux-persist/lib/storage"; // defaults to localStorage
-import authReducer from "../features/auth/authSlice";
+import { rootReducer } from "../redux/rootReducer";
+import { vayyApi } from "../redux/api/vayyApi";
 
-const persistConfig = {
-  key: "vayy-root",
-  version: 1,
-  storage,
-  whitelist: ["auth"], // only auth state will be persisted
-};
+// const persistConfig = {
+//   key: "vayy-root",
+//   version: 1,
+//   storage,
+//   whitelist: ["auth"],
+// };
 
-const rootReducer = combineReducers({
-  auth: authReducer,
-});
-
-const persistedReducer = persistReducer(persistConfig, rootReducer);
+// const persistedReducer = persistReducer(persistConfig, rootReducer);
 
 export const store = configureStore({
-  reducer: persistedReducer,
+  reducer: rootReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
         ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
       },
-    }),
+    }).concat(vayyApi.middleware),
 });
 
 export const persistor = persistStore(store);

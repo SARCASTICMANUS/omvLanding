@@ -6,20 +6,40 @@ The platform has recently transitioned to a flexible **City/Passenger/Driver** m
 
 ---
 
-## 🏗 System Architecture
+## 🏗 System Architecture & High Level Design
 
-The project is built to handle high concurrency by offloading geospatial calculations to **OSRM**, real-time state to **Redis**, and heavy tasks to **Celery**.
+Vayy is architected for low-latency geospatial tracking and high concurrency. The system is divided into three primary layers:
 
-| Service         | Technology              | Purpose                                           |
-| :-------------- | :---------------------- | :------------------------------------------------ |
-| **Frontend**    | React 19 + Vite + Tailwind | Modern SPA with MapLibre GL & Redux Toolkit.      |
-| **Backend**     | Django 4.2 + GeoDjango  | REST API, Auth, Database Management.              |
-| **WebSockets**  | Daphne (ASGI)           | Bi-directional live GPS & ETA broadcasting.       |
-| **Database**    | PostgreSQL + PostGIS    | Persistent storage for Routes & Spatial Indexing. |
-| **Cache/PubSub**| Redis 7                 | Real-time GPS storage (GEO) & Celery queues.      |
-| **Workers**     | Celery                  | Async tasks (Location Sync, Stale Cleanup).       |
-| **Routing**     | OSRM (C++ Engine)       | High-speed routing engine for ETA & Distances.    |
-| **Proxy**       | Nginx                   | Unified entry point and request routing.          |
+### 1. Ingestion & Real-Time State (Hot Layer)
+- **WebSockets (Daphne):** Drivers stream GPS coordinates every 1-3 seconds. Passengers stream location and 'hand-raise' status.
+- **Redis GEO:** High-frequency positions are stored in Redis GEO sets for sub-millisecond proximity queries.
+- **Delta Updates:** To minimize bandwidth, the server broadcasts 'delta' payloads (only changed fields like coordinates, heading, and delay) to subscribed clients.
+
+### 2. Processing & Logic (Logic Layer)
+- **Kalman Filtering:** All raw GPS data passes through a Kalman Filter to smooth out noise and provide fluid vehicle movement on the map.
+- **Schedule Adherence:** The system automatically calculates delays by comparing the vehicle's current position to the scheduled arrival times at the nearest stop.
+- **Automated Geofencing:** 
+    - **Arrival Detection:** Detects when a bus is within 50m of a stop for >15 seconds.
+    - **Proximity Alerts:** Automatically notifies passengers when their bus is within 500m of their pickup point.
+- **Hybrid Resolution:** Non-GPS location data (Cell/Wi-Fi) is resolved via Mozilla Location Service (MLS) through a Redis-backed async pipeline.
+
+### 3. Persistence & Analytics (Cold Layer)
+- **PostgreSQL + PostGIS:** Long-term storage for routes, stops, and user profiles. 
+- **Celery Sync:** High-frequency location data is batched and synced from Redis to PostgreSQL every 60 seconds to optimize DB performance.
+
+---
+
+## 🛠 Real-Time Data Flow
+
+1.  **Driver Update:** `GPS Update -> WebSocket -> process_gps_update()`
+2.  **Processing:** 
+    - Update Redis State (GEO & String)
+    - Calculate Schedule Delay
+    - Detect Stop Arrival / Geofence Breach
+3.  **Broadcast:** 
+    - `Trip Group:` Individual tracking info.
+    - `City Group:` Delta updates for all vehicles in the city.
+    - `User Group:` Specific proximity alerts for passengers.
 
 ---
 

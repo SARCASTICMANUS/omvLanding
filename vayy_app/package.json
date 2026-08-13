@@ -1,0 +1,53 @@
+{
+  "name": "vayy-autos",
+  "version": "1.0.0",
+  "private": true,
+  "main": "expo/AppEntry",
+  "scripts": {
+    "start": "npx expo start",
+    "android": "npx expo start --android",
+    "ios": "npx expo start --ios",
+    "web": "npx expo start --web",
+    "lint": "npx expo lint"
+  },
+  "dependencies": {
+    "@expo/metro-config": "~54.0.14",
+    "@maplibre/maplibre-react-native": "^11.3.6",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-masked-view/masked-view": "0.3.2",
+    "@react-navigation/bottom-tabs": "^6.5.20",
+    "@react-navigation/native": "^6.1.17",
+    "@react-navigation/stack": "^6.3.29",
+    "@reduxjs/toolkit": "^2.2.5",
+    "axios": "^1.7.2",
+    "config-eslint": "^1.0.3",
+    "expo": "~54.0.0",
+    "expo-av": "~16.0.8",
+    "expo-blur": "~15.0.8",
+    "expo-build-properties": "~1.0.10",
+    "expo-image-picker": "~17.0.11",
+    "expo-linear-gradient": "~15.0.8",
+    "expo-location": "~19.0.8",
+    "expo-notifications": "~0.32.17",
+    "expo-status-bar": "~3.0.9",
+    "lucide-react-native": "^1.17.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native-maps": "^1.29.0",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-svg": "^15.15.5",
+    "react-native-web": "^0.21.2",
+    "react-redux": "^9.1.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@react-native-community/cli": "^20.2.0",
+    "@types/react": "~19.1.10",
+    "babel-preset-expo": "~54.0.10",
+    "eslint": "^9.39.4",
+    "eslint-config-expo": "~10.0.0"
+  }
+}
