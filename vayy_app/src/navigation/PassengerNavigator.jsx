@@ -10,11 +10,13 @@ import PassengerLiveTracking from "../tracking/screens/PassengerLiveTracking";
 import PassengerTripPlanner from "../passenger/screens/PassengerTripPlanner";
 import ProfileScreen from "../shared/screens/ProfileScreen";
 import EditProfileScreen from "../shared/screens/EditProfileScreen";
+import PrivacyPolicyScreen from "../shared/screens/PrivacyPolicyScreen";
+import HelpSupportScreen from "../shared/screens/HelpSupportScreen";
 import PassengerAlertsScreen from "../handshake/screens/PassengerAlertsScreen";
 import PassengerActionsScreen from "../passenger/screens/PassengerActionsScreen";
 import JourneyHistoryScreen from "../passenger/screens/JourneyHistoryScreen";
 import DestinationSearchScreen from "../passenger/screens/DestinationSearchScreen";
-import { Home, Map, Navigation, Bell, User } from "lucide-react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 
 // Bike Flow Screens
 import { BikeMapPreRideScreen } from "../passenger/bike-ride/MapPreRideScreen";
@@ -51,8 +53,8 @@ function PassengerTabs() {
           borderTopColor: COLORS.border,
           borderTopLeftRadius: 12,
           borderTopRightRadius: 12,
-          height: 58,
-          paddingBottom: 8,
+          height: 62,
+          paddingBottom: 14,
           paddingTop: 4,
           position: "absolute",
         },
@@ -61,27 +63,27 @@ function PassengerTabs() {
       <Tab.Screen
         name="PassengerHome"
         component={IntroPage}
-        options={{ title: "Home", tabBarIcon: ({ color, size }) => <Home size={size} color={color} /> }}
+        options={{ title: "Home", tabBarIcon: ({ color, size }) => <MaterialIcons name="home" size={size} color={color} /> }}
       />
       <Tab.Screen
         name="PassengerRoutes"
         component={MyRoutesScreen}
-        options={{ title: "Routes", tabBarIcon: ({ color, size }) => <Map size={size} color={color} /> }}
+        options={{ title: "My Trips", tabBarIcon: ({ color, size }) => <MaterialIcons name="history" size={size} color={color} /> }}
       />
       <Tab.Screen
         name="PassengerAlerts"
         component={PassengerAlertsScreen}
-        options={{ title: "Alerts", tabBarIcon: ({ color, size }) => <Bell size={size} color={color} /> }}
+        options={{ title: "Alerts", tabBarIcon: ({ color, size }) => <MaterialIcons name="notifications" size={size} color={color} /> }}
       />
       <Tab.Screen
         name="PassengerActions"
         component={PassengerActionsScreen}
-        options={{ title: "Actions", tabBarIcon: ({ color, size }) => <Navigation size={size} color={color} /> }}
+        options={{ title: "Actions", tabBarIcon: ({ color, size }) => <MaterialIcons name="explore" size={size} color={color} /> }}
       />
       <Tab.Screen
         name="ProfileScreen"
         component={ProfileScreen}
-        options={{ title: "Profile", tabBarIcon: ({ color, size }) => <User size={size} color={color} /> }}
+        options={{ title: "Profile", tabBarIcon: ({ color, size }) => <MaterialIcons name="person" size={size} color={color} /> }}
       />
     </Tab.Navigator>
   );
@@ -97,6 +99,8 @@ export default function PassengerNavigator() {
       <Stack.Screen name="DestinationSearchScreen" component={DestinationSearchScreen} />
       <Stack.Screen name="PassengerTripPlanner" component={PassengerTripPlanner} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+      <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
       
       {/* Bike Flow */}
       <Stack.Screen name="BikeMapPreRide" component={BikeMapPreRideScreen} />

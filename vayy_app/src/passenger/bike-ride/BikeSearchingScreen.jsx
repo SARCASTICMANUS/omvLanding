@@ -4,13 +4,13 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   StatusBar,
   Animated,
   Easing,
+  Platform,
+  Image,
 } from "react-native";
 import VayyMap, { ViewAnnotation, UserLocation } from "../../shared/components/VayyMap";
-import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -24,7 +24,8 @@ import { requestDispatch, cancelDispatch, cancelBroadcast, setDispatchStatus, cl
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import locationService from "../../shared/lib/locationService";
-import ZoomControls from "../../shared/components/common/ZoomControls";
+
+const USER_TOP_IMAGE = require("../../../assets-webp/VayyUserTop.webp");
 
 
 export function BikeSearchingScreen({ navigation, route }) {
@@ -46,10 +47,21 @@ export function BikeSearchingScreen({ navigation, route }) {
   const searchStartedRef = useRef(false);
   const [activeTripId, setActiveTripId] = useState(null);
   const [activeRequestId, setActiveRequestId] = useState(null);
+  const [driversNotified, setDriversNotified] = useState(null);
   const timeoutRef = useRef(null);
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
+
+  const recenter = () => {
+    if (cameraRef.current && currentPosition) {
+      cameraRef.current.setStop({
+        center: [currentPosition.longitude, currentPosition.latitude],
+        zoom: 16,
+        duration: 800,
+      });
+    }
+  };
 
   const didFlyRef = useRef(false);
   const navigatedRiderPopupRef = useRef(false);
@@ -135,6 +147,7 @@ export function BikeSearchingScreen({ navigation, route }) {
       setShowNoRide(true);
       setSearchStatus("failed");
       setActiveRequestId(null);
+      setDriversNotified(null);
     }
   }, [dispatch, navigation, route?.params, route_id]);
 
@@ -186,6 +199,7 @@ export function BikeSearchingScreen({ navigation, route }) {
         if (payload.status === "no_drivers_available") {
           setShowNoRide(true);
           setSearchStatus("failed");
+          setDriversNotified(null);
           return;
         }
         // Store request_id for broadcast WS listener
@@ -193,18 +207,19 @@ export function BikeSearchingScreen({ navigation, route }) {
         if (requestId) {
           setActiveRequestId(requestId);
         }
+        setDriversNotified(payload.drivers_notified ?? null);
         const tripId = payload.trip_id || payload.id;
         if (tripId) {
           setActiveTripId(tripId);
         }
-        // 90s timeout: if no driver responds, cancel and show retry
+        // 3min timeout: if no driver responds, cancel and show retry
         timeoutRef.current = setTimeout(() => {
           if (requestId) dispatch(cancelBroadcast(requestId));
           setShowNoRide(true);
           setSearchStatus("failed");
           setActiveRequestId(null);
           setActiveTripId(null);
-        }, 90000);
+        }, 180000);
       } catch (err) {
         console.warn("Dispatch request failed:", err);
         setShowNoRide(true);
@@ -224,7 +239,6 @@ export function BikeSearchingScreen({ navigation, route }) {
     setSearchStatus("searching");
     clearTimeout(timerRef.current);
     clearTimeout(timeoutRef.current);
-    searchStartedRef.current = false;
     setActiveTripId(null);
     setActiveRequestId(null);
 
@@ -239,12 +253,14 @@ export function BikeSearchingScreen({ navigation, route }) {
         if (payload.status === "no_drivers_available") {
           setShowNoRide(true);
           setSearchStatus("failed");
+          setDriversNotified(null);
           return;
         }
         const requestId = payload.request_id;
         if (requestId) {
           setActiveRequestId(requestId);
         }
+        setDriversNotified(payload.drivers_notified ?? null);
         const tripId = payload.trip_id || payload.id;
         if (tripId) {
           setActiveTripId(tripId);
@@ -255,7 +271,7 @@ export function BikeSearchingScreen({ navigation, route }) {
           setSearchStatus("failed");
           setActiveRequestId(null);
           setActiveTripId(null);
-        }, 90000);
+        }, 180000);
       } catch (err) {
         console.warn("Dispatch request failed:", err);
         setShowNoRide(true);
@@ -396,49 +412,65 @@ export function BikeSearchingScreen({ navigation, route }) {
                   ]}
                 />
                 <View style={styles.userDot}>
-                  <Ionicons name="person" size={20} color="#FFFFFF" />
+                  <Image source={USER_TOP_IMAGE} style={styles.userDotImage} resizeMode="contain" />
                 </View>
               </View>
             </ViewAnnotation>
           )}
         </VayyMap>
-        <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
         {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={[styles.header, { paddingTop: insets.top + 10, overflow: "hidden" }]}>
+          <View style={styles.headerGradient}>
+            <View style={styles.gradBase} />
+            <View style={styles.gradRay1} />
+            <View style={styles.gradRay2} />
+          </View>
           <View style={styles.headerLeft}>
-            <TouchableOpacity
-              style={styles.iconBtn}
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
+            {Platform.OS === "ios" && (
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() => navigation.goBack()}
+              >
+                <Ionicons name="chevron-back" size={24} color="#111827" />
+              </TouchableOpacity>
+            )}
             <Text style={styles.headerTitle}>
-              {searchStatus === "locating" ? "Getting Location..." : "Finding Rider..."}
+              {searchStatus === "locating" ? "Getting Location..." : "Finding Marshal..."}
             </Text>
           </View>
-
-          <TouchableOpacity style={styles.iconBtn}>
-            <MaterialIcons name="more-vert" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
         </View>
 
         {/* Floating Buttons */}
-        <TouchableOpacity style={styles.recenterBtn} onPress={zoomIn}>
-          <Text style={styles.zoomText}>+</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.recenterBtn} onPress={zoomOut}>
-          <Text style={styles.zoomText}>−</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.recenterBtn}>
-          <MaterialIcons name="my-location" size={24} color="#111827" />
-        </TouchableOpacity>
+        <View style={styles.floatingContainer}>
+          <TouchableOpacity style={styles.floatBtn} onPress={zoomIn}>
+            <Ionicons name="add" size={22} color="#111827" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.floatBtn} onPress={zoomOut}>
+            <Ionicons name="remove" size={22} color="#111827" />
+          </TouchableOpacity>
+          <View style={styles.floatDivider} />
+          <TouchableOpacity style={styles.floatBtn} onPress={recenter}>
+            <MaterialIcons name="my-location" size={22} color="#111827" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Bottom Sheet */}
       <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.handle} />
+
+        <View style={styles.availabilityRow}>
+          <View style={styles.availItem}>
+            <Image source={require("../../../assets-webp/vayyFrontBike.webp")} style={{ width: 18, height: 18 }} resizeMode="contain" />
+            <Text style={styles.availText}><Text style={styles.availBold}>{driversNotified ?? "—"}</Text> Marshals nearby</Text>
+          </View>
+          <View style={styles.availDivider} />
+          <View style={styles.availItem}>
+            <Ionicons name="time-outline" size={18} color="#009849" />
+            <Text style={styles.availText}><Text style={styles.availBold}>~2 min</Text> avg. wait</Text>
+          </View>
+        </View>
 
         {searchStatus === "locating" && (
           <View style={styles.searchingInfo}>
@@ -450,8 +482,8 @@ export function BikeSearchingScreen({ navigation, route }) {
         {searchStatus === "searching" && (
           <>
             <View style={styles.searchingInfo}>
-              <Text style={styles.searchingTitle}>Searching for nearby bikes...</Text>
-              <Text style={styles.searchingSub}>Your location has been shared with nearby riders</Text>
+              <Text style={styles.searchingTitle}>Searching for nearby Marshals...</Text>
+              <Text style={styles.searchingSub}>Your location has been shared with nearby Marshals</Text>
             </View>
             <TouchableOpacity
               activeOpacity={1}
@@ -466,8 +498,8 @@ export function BikeSearchingScreen({ navigation, route }) {
         {searchStatus === "found" && (
           <>
             <View style={styles.searchingInfo}>
-              <Text style={styles.searchingTitle}>Rider Found!</Text>
-              <Text style={styles.searchingSub}>Connecting you to the nearest rider</Text>
+              <Text style={styles.searchingTitle}>Marshal Found!</Text>
+              <Text style={styles.searchingSub}>Connecting you to the nearest Marshal</Text>
             </View>
             <TouchableOpacity
               activeOpacity={0.9}
@@ -500,7 +532,7 @@ export function BikeSearchingScreen({ navigation, route }) {
               }}
             >
               <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
-              <Text style={styles.foundBtnText}>  Rider Found! Tap to view</Text>
+              <Text style={styles.foundBtnText}>  Marshal Found! Tap to view</Text>
             </TouchableOpacity>
           </>
         )}
@@ -524,7 +556,7 @@ export function BikeSearchingScreen({ navigation, route }) {
       <ConfirmPopup
         visible={showCancelConfirm}
         title="Cancel Request?"
-        message="Your hand raise request will be cancelled and riders won't be notified."
+        message="Your hand raise request will be cancelled and Marshals won't be notified."
         confirmLabel="Yes, Cancel"
         confirmColor="#EF4444"
         icon="close-circle-outline"
@@ -552,8 +584,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 24,
     paddingBottom: 12,
-    backgroundColor: "rgba(0,152,73,0.6)",
     overflow: "hidden",
+  },
+  headerGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  gradBase: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "#009849",
+  },
+  gradRay1: {
+    position: "absolute",
+    top: -60,
+    right: -40,
+    width: "70%",
+    height: "90%",
+    backgroundColor: "#00B857",
+    opacity: 0.25,
+    borderRadius: 120,
+    transform: [{ rotate: "25deg" }],
+  },
+  gradRay2: {
+    position: "absolute",
+    top: -80,
+    right: -20,
+    width: "50%",
+    height: "70%",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 100,
+    transform: [{ rotate: "35deg" }],
   },
   headerLeft: {
     flexDirection: "row",
@@ -606,7 +669,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#009849',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -615,21 +678,30 @@ const styles = StyleSheet.create({
     elevation: 5,
     borderWidth: 4,
     borderColor: '#FFFFFF',
+    overflow: 'hidden',
   },
-  recenterBtn: {
-    position: "absolute",
-    right: 20,
-    bottom: 30,
+  userDotImage: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+  },
+  floatingContainer: {
+    position: "absolute",
+    right: 16,
+    gap: 2,
     backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
+    borderRadius: 18,
+    paddingVertical: 6,
+    shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+    zIndex: 20,
+    bottom: 200,
+  },
+  floatBtn: {
+    width: 48, height: 44,
+    justifyContent: "center", alignItems: "center",
+  },
+  floatDivider: {
+    height: 1, backgroundColor: "#F0F0F0", marginHorizontal: 12,
   },
   bottomSheet: {
     position: "absolute",
@@ -737,11 +809,5 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontSize: 14,
     fontWeight: '700',
-  },
-  zoomText: {
-    fontSize: 22,
-    fontWeight: "600",
-    color: "#111827",
-    lineHeight: 24,
   },
 });

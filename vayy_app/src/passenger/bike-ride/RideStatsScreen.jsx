@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   StatusBar,
   Platform,
   Modal,
@@ -13,7 +12,6 @@ import {
 } from "react-native";
 import VayyMap, { UserLocation, Marker, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import SmoothMarker from "../../shared/components/common/SmoothMarker";
-import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Ionicons,
@@ -28,7 +26,6 @@ import { useDispatch } from "react-redux";
 import { completeDispatch } from "../../store/slices/dispatchSlice";
 import { fetchRouteGeometry } from "../../routes/services/routeService";
 
-const { width } = Dimensions.get("window");
 const DESTINATION_THRESHOLD = 100;
 
 function haversine(a, b) {
@@ -83,6 +80,23 @@ export function RideStatsScreen({ navigation, route }) {
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
+
+  const handleRecenter = () => {
+    if (!cameraRef.current) return;
+    if (passengerPos) {
+      cameraRef.current.setStop({
+        center: [passengerPos.longitude, passengerPos.latitude],
+        zoom: 15,
+        duration: 800,
+      });
+    } else if (mapCenter) {
+      cameraRef.current.setStop({
+        center: [mapCenter.longitude, mapCenter.latitude],
+        zoom: 15,
+        duration: 800,
+      });
+    }
+  };
 
   const handleWsMessage = useCallback((data) => {
     if (navigatingRef.current) return;
@@ -189,7 +203,6 @@ export function RideStatsScreen({ navigation, route }) {
 
   function handleConfirmEndRide() {
     setShowEndConfirm(false);
-    setEndRideLoading(true);
     const tripId = tripData.trip_id || dispatchId;
     (async () => {
       try {
@@ -294,12 +307,16 @@ export function RideStatsScreen({ navigation, route }) {
         </VayyMap>
         )}
 
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={[styles.header, { paddingTop: insets.top + 10, overflow: "hidden" }]}>
+          <View style={styles.headerGradient}>
+            <View style={styles.gradBase} />
+            <View style={styles.gradRay1} />
+            <View style={styles.gradRay2} />
+          </View>
           <View style={styles.headerLeft}>
             {Platform.OS === "ios" && (
               <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-                <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+                <Ionicons name="chevron-back" size={24} color="#111827" />
               </TouchableOpacity>
             )}
             <View style={styles.statusContainer}>
@@ -318,15 +335,24 @@ export function RideStatsScreen({ navigation, route }) {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.zoomBtnTop} onPress={zoomIn}>
-          <Text style={styles.zoomText}>+</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.zoomBtnBottom} onPress={zoomOut}>
-          <Text style={styles.zoomText}>−</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.recenterBtn}>
-          <MaterialIcons name="my-location" size={24} color="#111827" />
-        </TouchableOpacity>
+        <View style={styles.distanceCallout}>
+          <Text style={styles.distanceCalloutValue}>{destinationLabel}</Text>
+          <Text style={styles.distanceCalloutLabel}>to destination</Text>
+          <View style={styles.calloutArrow} />
+        </View>
+
+        <View style={styles.floatingContainer}>
+          <TouchableOpacity style={styles.floatBtn} onPress={zoomIn}>
+            <Ionicons name="add" size={22} color="#111827" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.floatBtn} onPress={zoomOut}>
+            <Ionicons name="remove" size={22} color="#111827" />
+          </TouchableOpacity>
+          <View style={styles.floatDivider} />
+          <TouchableOpacity style={styles.floatBtn} onPress={handleRecenter}>
+            <MaterialIcons name="my-location" size={22} color="#111827" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16 }]}>
@@ -483,6 +509,38 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     overflow: "hidden",
   },
+  headerGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  gradBase: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "#009849",
+  },
+  gradRay1: {
+    position: "absolute",
+    top: -60,
+    right: -40,
+    width: "70%",
+    height: "90%",
+    backgroundColor: "#00B857",
+    opacity: 0.25,
+    borderRadius: 120,
+    transform: [{ rotate: "25deg" }],
+  },
+  gradRay2: {
+    position: "absolute",
+    top: -80,
+    right: -20,
+    width: "50%",
+    height: "70%",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 100,
+    transform: [{ rotate: "35deg" }],
+  },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
@@ -553,36 +611,62 @@ const styles = StyleSheet.create({
   driverEmoji: {
     fontSize: 28,
   },
-  zoomBtnTop: {
-    position: "absolute", right: 20, bottom: 120, width: 56, height: 56,
-    borderRadius: 28, backgroundColor: "#FFFFFF", justifyContent: "center",
-    alignItems: "center", shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 4,
-  },
-  zoomBtnBottom: {
-    position: "absolute", right: 20, bottom: 56, width: 56, height: 56,
-    borderRadius: 28, backgroundColor: "#FFFFFF", justifyContent: "center",
-    alignItems: "center", shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 4,
-  },
-  zoomText: {
-    fontSize: 22,
-    fontWeight: "600",
-    color: "#111827",
-    lineHeight: 24,
-  },
-  recenterBtn: {
+  distanceCallout: {
     position: "absolute",
-    right: 20,
-    bottom: 36,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    bottom: 300,
+    left: 20,
     backgroundColor: "#FFFFFF",
-    justifyContent: "center",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1.5,
+    borderColor: "#009849",
     alignItems: "center",
     shadowColor: "#000",
     shadowOpacity: 0.1,
     shadowRadius: 10,
-    elevation: 4,
+    elevation: 5,
+  },
+  distanceCalloutValue: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#009849",
+  },
+  distanceCalloutLabel: {
+    fontSize: 12,
+    color: "#111827",
+    fontWeight: "600",
+  },
+  calloutArrow: {
+    position: "absolute",
+    bottom: -8,
+    left: "30%",
+    width: 14,
+    height: 14,
+    backgroundColor: "#FFFFFF",
+    borderRightWidth: 1.5,
+    borderBottomWidth: 1.5,
+    borderColor: "#009849",
+    transform: [{ rotate: "45deg" }],
+  },
+  floatingContainer: {
+    position: "absolute",
+    right: 16,
+    gap: 2,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    paddingVertical: 6,
+    shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+    zIndex: 20,
+    bottom: 200,
+  },
+  floatBtn: {
+    width: 48, height: 44,
+    justifyContent: "center", alignItems: "center",
+  },
+  floatDivider: {
+    height: 1, backgroundColor: "#F0F0F0", marginHorizontal: 12,
   },
   bottomSheet: {
     backgroundColor: "#FFFFFF",

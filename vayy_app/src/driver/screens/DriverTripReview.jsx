@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import VehicleIconBadge from "../../shared/components/common/VehicleIconBadge";
@@ -19,6 +19,25 @@ export default function DriverTripReview({ navigation, route: navRoute }) {
   const [starting, setStarting] = useState(false);
   const summary = buildRouteSummary(route || {});
   const rows = useMemo(() => estimateStopTimeline(route || {}), [route]);
+
+  const dropAnim = useRef(new Animated.Value(60)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(dropAnim, {
+        toValue: 0,
+        tension: 40,
+        friction: 6,
+        useNativeDriver: true,
+      }),
+      Animated.timing(contentOpacity, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [dropAnim, contentOpacity]);
 
   const onBack = () => navigation.goBack();
 
@@ -43,104 +62,122 @@ export default function DriverTripReview({ navigation, route: navRoute }) {
         title="Trip Review"
       />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <VayyCard style={styles.overview}>
-          <View style={styles.overviewHead}>
-            <VehicleIconBadge size={42} vehicleType={route?.vehicle_type || "auto"} />
-            <Text style={styles.sectionTitle}>Route Overview</Text>
-          </View>
-          <RouteLine progress={50} />
-          <View style={styles.fromTo}>
-            <View style={styles.placeCol}>
-              <Text style={styles.place}>{summary.startLabel}</Text>
-              <Text style={styles.time}>{summary.startTimeLabel}</Text>
+      <Animated.View
+        style={[
+          styles.panel,
+          {
+            transform: [{ translateY: dropAnim }],
+            opacity: contentOpacity,
+          },
+        ]}
+      >
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <VayyCard style={styles.overview}>
+            <View style={styles.overviewHead}>
+              <VehicleIconBadge size={42} vehicleType={route?.vehicle_type || "auto"} />
+              <Text style={styles.sectionTitle}>Route Overview</Text>
             </View>
-            <Text style={styles.arrow}>{"->"}</Text>
-            <View style={[styles.placeCol, styles.placeRight]}>
-              <Text style={styles.place}>{summary.endLabel}</Text>
-              <Text style={styles.time}>{summary.endTimeLabel}</Text>
-            </View>
-          </View>
-          <View style={styles.metricRow}>
-            <MetricChip value={summary.durationText} label="ETA" green />
-            <MetricChip value={summary.distanceText} label="Distance" green />
-            <MetricChip value={summary.routeCode || summary.vehicleNumber || "--"} label="Vehicle" green />
-          </View>
-        </VayyCard>
-
-        <VayyCard style={styles.stopsCard}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.sectionTitle}>Route Stops</Text>
-            <VayyButton label="View on Map" onPress={() => navigation.navigate("DriverLiveTracking", { route })} size="sm" variant="outline" />
-          </View>
-
-          <View style={styles.columnHeader}>
-            <Text style={styles.columnText}>Arrival</Text>
-            <Text style={styles.columnText}>Stop Details</Text>
-            <Text style={styles.columnText}>Departure</Text>
-          </View>
-
-          {rows.map((stop, index) => {
-            const isFirst = index === 0;
-            const isLast = index === rows.length - 1;
-
-            return (
-              <View key={stop.id} style={[styles.stopRow, isFirst && styles.activeStop]}>
-                <Text style={styles.stopArrival}>{stop.arrivalLabel}</Text>
-                <View style={styles.stopTimeline}>
-                  <View
-                    style={[
-                      styles.stopDot,
-                      isFirst && styles.greenDot,
-                      isLast && styles.redDot,
-                    ]}
-                  />
-                </View>
-                <View style={styles.stopInfo}>
-                  <Text style={[styles.stopName, isFirst && styles.activeStopName]}>{stop.name}</Text>
-                  <Text style={styles.stopSub}>{stop.status}</Text>
-                </View>
-                <Text style={styles.stopDeparture}>{stop.departure_time || "--"}</Text>
+            <RouteLine progress={50} />
+            <View style={styles.fromTo}>
+              <View style={styles.placeCol}>
+                <Text style={styles.place}>{summary.startLabel}</Text>
+                <Text style={styles.time}>{summary.startTimeLabel}</Text>
               </View>
-            );
-          })}
-        </VayyCard>
-
-        <VayyCard style={styles.summaryCard}>
-          <View style={styles.ready}>
-            <VehicleIconBadge size={64} vehicleType={route?.vehicle_type || "auto"} />
-            <Text style={styles.readyTitle}>Ready to Start?</Text>
-            <Text style={styles.readyText}>
-              Please review all stops and trip details before starting your journey.
-            </Text>
-          </View>
-          {[
-            ["Total Stops", summary.stopsCount || 0],
-            ["Distance", summary.distanceText || "--"],
-            ["Estimated Time", summary.durationText || "--"],
-            ["Vehicle Number", summary.routeCode || summary.vehicleNumber || "--"],
-            ["Route", `${summary.startLabel} -> ${summary.endLabel}`],
-          ].map(([label, value]) => (
-            <View key={label} style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>{label}</Text>
-              <Text style={styles.summaryValue}>{value}</Text>
+              <Text style={styles.arrow}>{"->"}</Text>
+              <View style={[styles.placeCol, styles.placeRight]}>
+                <Text style={styles.place}>{summary.endLabel}</Text>
+                <Text style={styles.time}>{summary.endTimeLabel}</Text>
+              </View>
             </View>
-          ))}
-          <VayyButton
-            fullWidth
-            label={starting ? "Starting Trip..." : "Confirm & Start Trip"}
-            loading={starting}
-            onPress={onStartTrip}
-            size="lg"
-          />
-        </VayyCard>
-      </ScrollView>
+            <View style={styles.metricRow}>
+              <MetricChip value={summary.durationText} label="ETA" green />
+              <MetricChip value={summary.distanceText} label="Distance" green />
+              <MetricChip value={summary.routeCode || summary.vehicleNumber || "--"} label="Vehicle" green />
+            </View>
+          </VayyCard>
+
+          <VayyCard style={styles.stopsCard}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.sectionTitle}>Route Stops</Text>
+              <VayyButton label="View on Map" onPress={() => navigation.navigate("DriverLiveTracking", { route })} size="sm" variant="outline" />
+            </View>
+
+            <View style={styles.columnHeader}>
+              <Text style={styles.columnText}>Arrival</Text>
+              <Text style={styles.columnText}>Stop Details</Text>
+              <Text style={styles.columnText}>Departure</Text>
+            </View>
+
+            {rows.map((stop, index) => {
+              const isFirst = index === 0;
+              const isLast = index === rows.length - 1;
+
+              return (
+                <View key={stop.id} style={[styles.stopRow, isFirst && styles.activeStop]}>
+                  <Text style={styles.stopArrival}>{stop.arrivalLabel}</Text>
+                  <View style={styles.stopTimeline}>
+                    <View
+                      style={[
+                        styles.stopDot,
+                        isFirst && styles.greenDot,
+                        isLast && styles.redDot,
+                      ]}
+                    />
+                  </View>
+                  <View style={styles.stopInfo}>
+                    <Text style={[styles.stopName, isFirst && styles.activeStopName]}>{stop.name}</Text>
+                    <Text style={styles.stopSub}>{stop.status}</Text>
+                  </View>
+                  <Text style={styles.stopDeparture}>{stop.departure_time || "--"}</Text>
+                </View>
+              );
+            })}
+          </VayyCard>
+
+          <VayyCard style={styles.summaryCard}>
+            <View style={styles.ready}>
+              <VehicleIconBadge size={64} vehicleType={route?.vehicle_type || "auto"} />
+              <Text style={styles.readyTitle}>Ready to Start?</Text>
+              <Text style={styles.readyText}>
+                Please review all stops and trip details before starting your journey.
+              </Text>
+            </View>
+            {[
+              ["Total Stops", summary.stopsCount || 0],
+              ["Distance", summary.distanceText || "--"],
+              ["Estimated Time", summary.durationText || "--"],
+              ["Vehicle Number", summary.routeCode || summary.vehicleNumber || "--"],
+              ["Route", `${summary.startLabel} -> ${summary.endLabel}`],
+            ].map(([label, value]) => (
+              <View key={label} style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{label}</Text>
+                <Text style={styles.summaryValue}>{value}</Text>
+              </View>
+            ))}
+            <VayyButton
+              fullWidth
+              label={starting ? "Starting Trip..." : "Confirm & Start Trip"}
+              loading={starting}
+              onPress={onStartTrip}
+              size="lg"
+            />
+          </VayyCard>
+        </ScrollView>
+      </Animated.View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.background },
+  panel: {
+    flex: 1,
+    marginTop: -SPACING.base,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    backgroundColor: COLORS.background,
+    overflow: "hidden",
+  },
   content: { gap: SPACING.base, padding: SPACING.base, paddingBottom: SPACING.xxl },
   overview: { gap: SPACING.md },
   overviewHead: { alignItems: "center", flexDirection: "row", gap: SPACING.md },

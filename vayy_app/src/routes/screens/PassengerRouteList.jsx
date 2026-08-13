@@ -277,22 +277,6 @@ export default function PassengerRouteList({ navigation, route }) {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* ── MATCHING BANNER ── */}
-      {bestTrip && !loading && routeCount > 0 && (
-        <View style={s.matchingBanner}>
-          <View style={s.matchingBannerContent}>
-            <Text style={s.matchingIcon}>🔍</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={s.matchingTitle}>{isBike ? "Bike found" : "Auto found"} on your route</Text>
-              <Text style={s.matchingSub}>Select a route or wait for best match</Text>
-            </View>
-            <View style={s.matchingBarSmall}>
-              <View style={s.matchingBarFill} />
-            </View>
-          </View>
-        </View>
-      )}
-
     </SafeAreaView>
   );
 }
@@ -314,7 +298,7 @@ const s = StyleSheet.create({
 
   /* layout */
   safe:        { backgroundColor: "#F4F6F4", flex: 1 },
-  listContent: { paddingBottom: 140, paddingHorizontal: 16, paddingTop: 4 },
+  listContent: { paddingBottom: 24, paddingHorizontal: 16, paddingTop: 4 },
 
   /* header */
   header: {
@@ -598,46 +582,5 @@ const s = StyleSheet.create({
   },
   continueTxt:   { color: "#fff", fontSize: 17, fontWeight: "900" },
   continueArrow: { color: "#fff", fontSize: 20, fontWeight: "900" },
-
-  /* matching banner */
-  matchingBanner: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === "ios" ? 34 : 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 15,
-    zIndex: 100,
-  },
-  matchingBannerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  matchingIcon: { fontSize: 24 },
-  matchingTitle: { fontSize: 14, fontWeight: "800", color: "#111827" },
-  matchingSub: { fontSize: 12, color: "#6B7280", fontWeight: "500", marginTop: 1 },
-  matchingBarSmall: {
-    width: 4,
-    height: 32,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 2,
-    overflow: "hidden",
-    alignSelf: "center",
-  },
-  matchingBarFill: {
-    width: "100%",
-    height: "60%",
-    backgroundColor: "#009849",
-    borderRadius: 2,
-  },
 
 });

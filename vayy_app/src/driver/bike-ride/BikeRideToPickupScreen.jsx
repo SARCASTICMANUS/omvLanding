@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Animated,
-  Dimensions,
   Easing,
   Modal,
   StyleSheet,
@@ -22,8 +21,6 @@ import { WS, OPERATIONS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
 import VayyMap, { UserLocation, Marker } from "../../shared/components/VayyMap";
 import ZoomControls from "../../shared/components/common/ZoomControls";
-
-const { width } = Dimensions.get("window");
 
 export default function BikeRideToPickupScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -199,7 +196,7 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
 
         <View style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}>
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back" size={22} color="#111827" />
+            <Ionicons name="chevron-back" size={22} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Ride to Pickup</Text>
           <View style={{ width: 40 }} />
@@ -278,7 +275,7 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
         >
           <Animated.View style={[styles.arriveBtnInner, { opacity: isInRange ? arrivePulse : 0.5 }]}>
             <Ionicons name="flag" size={20} color="#fff" />
-            <Text style={styles.arrivedBtnText}>I've Arrived at Pickup</Text>
+            <Text style={styles.arrivedBtnText}>I&apos;ve Arrived at Pickup</Text>
           </Animated.View>
         </TouchableOpacity>
       </View>
@@ -300,7 +297,7 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalConfirm} onPress={confirmArrival}>
                 <Ionicons name="checkmark" size={18} color="#fff" />
-                <Text style={styles.modalConfirmText}>Yes, I'm Here</Text>
+                <Text style={styles.modalConfirmText}>Yes, I&apos;m Here</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -373,31 +370,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingBottom: 20,
+    backgroundColor: "rgba(10,22,60,0.9)",
     zIndex: 10,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#fff",
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 3,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#111827",
+    color: "#fff",
     letterSpacing: -0.3,
   },
 
   /* bottom sheet */
   bottomSheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 30,
     backgroundColor: "#fff",
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,

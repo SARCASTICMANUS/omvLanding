@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Dimensions,
   Easing,
   StyleSheet,
   Text,
@@ -14,8 +13,6 @@ import COLORS from "../../shared/constants/colors";
 import VayyMap from "../../shared/components/VayyMap";
 import AutoCancelRideModal from "./AutoCancelRideModal";
 import ZoomControls from "../../shared/components/common/ZoomControls";
-
-const { width } = Dimensions.get("window");
 
 export default function AutoRideToDestinationScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -36,7 +33,6 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
     let sub = null;
     import("../../shared/lib/locationService").then(({ default: locationService }) => {
       if (removed) return;
-      let prevPos = null;
       const destLat = buddy?.dest_lat || null;
       const destLon = buddy?.dest_lon || null;
       locationService.startTracking((coords) => {
@@ -52,7 +48,6 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
           else if (distKm < 1) setEta("3 min");
           else setEta(`${Math.max(1, Math.round(distKm * 3))} min`);
         }
-        prevPos = { latitude: coords.latitude, longitude: coords.longitude };
       }, { distanceInterval: 25, timeInterval: 5000 }).then((s) => { sub = s; });
     });
     return () => { removed = true; if (sub?.remove) sub.remove(); };
@@ -137,7 +132,7 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
 
         <View style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}>
           <TouchableOpacity style={styles.backBtn} onPress={() => setShowCancel(true)}>
-            <Ionicons name="chevron-back" size={22} color="#111827" />
+            <Ionicons name="chevron-back" size={22} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>On Ride</Text>
           <View style={{ width: 40 }} />
@@ -339,29 +334,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingBottom: 20,
+    backgroundColor: "rgba(10,22,60,0.9)",
     zIndex: 10,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#fff",
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 3,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#111827",
+    color: "#fff",
     letterSpacing: -0.3,
   },
   bottomSheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 30,
     backgroundColor: "#fff",
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,

@@ -4,7 +4,6 @@ import {
   Dimensions,
   Easing,
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -20,7 +19,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
 import SHADOW from "../../shared/constants/shadow";
-import SPACING from "../../shared/constants/spacing";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NOMINATIM_SEARCH, USER_AGENT, STORAGE_KEYS } from "../../constants";
 import { useSelector } from "react-redux";
@@ -28,7 +26,7 @@ import { useSelector } from "react-redux";
 const { width } = Dimensions.get("window");
 
 const heroImages = [
-  require("../../../assets/vayyAuto.png"),
+  require("../../../assets-webp/vayyAuto.webp"),
 ];
 
 function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90 }) {
@@ -272,7 +270,7 @@ export default function DriverAutoHomeScreen({ navigation }) {
   const handleNext = () => {
     if (!canProceed) return;
     saveRecentSearch(pickup, destination);
-    navigation.navigate("DriverRoutes", { pickup, destination, mode: "auto" });
+    navigation.navigate("DriverRouteSearch", { pickup, destination, mode: "auto" });
   };
 
   const handleSwap = () => {

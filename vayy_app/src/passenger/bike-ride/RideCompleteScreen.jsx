@@ -4,10 +4,11 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   StatusBar,
   ScrollView,
   Platform,
+  Modal,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -19,12 +20,11 @@ import { submitRating } from "../../store/slices/rideSlice";
 import { RIDE } from "../../constants";
 import api from "../../shared/lib/api";
 
-const { width } = Dimensions.get("window");
-
 export function RideCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const [rating, setRating] = useState(0);
+  const [showThankYou, setShowThankYou] = useState(false);
   const [fareData, setFareData] = useState(null);
   const { ratingLoading } = useSelector((state) => state.ride);
   const tripId = route?.params?.tripId;
@@ -47,6 +47,11 @@ export function RideCompleteScreen({ navigation, route }) {
       if (d) setFareData(d);
     }).catch(() => {});
   }, [tripId]);
+
+  const handleStarPress = (star) => {
+    setRating(star);
+    setShowThankYou(true);
+  };
 
   const now = new Date();
   const timeStr = `${now.toLocaleDateString("en-IN", { weekday: "short" })}, ${now.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`;
@@ -159,9 +164,9 @@ export function RideCompleteScreen({ navigation, route }) {
           </View>
           <View style={styles.fareDivider} />
 
-          <View style={styles.fareTotalRow}>
-            <Text style={styles.fareTotalLabel}>Total</Text>
-            <Text style={styles.fareTotalValue}>₹{totalFare}</Text>
+          <View style={styles.fareRow}>
+            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalValue}>₹{totalFare}</Text>
           </View>
         </View>
 
@@ -181,7 +186,7 @@ export function RideCompleteScreen({ navigation, route }) {
             {[1, 2, 3, 4, 5].map((star) => (
               <TouchableOpacity
                 key={star}
-                onPress={() => setRating(star)}
+                onPress={() => handleStarPress(star)}
                 activeOpacity={0.7}
               >
                 <Ionicons
@@ -211,7 +216,7 @@ export function RideCompleteScreen({ navigation, route }) {
               navigation.navigate('BikeMapPreRide');
             }}
           >
-            <Ionicons name="bicycle-outline" size={20} color="#FFFFFF" />
+            <Image source={require("../../../assets-webp/vayyFrontBike.webp")} style={{ width: 20, height: 20 }} resizeMode="contain" />
             <Text style={styles.primaryBtnText}>  Book Another Ride</Text>
           </TouchableOpacity>
 
@@ -229,6 +234,27 @@ export function RideCompleteScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <Modal visible={showThankYou} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.thankYouModal}>
+            <View style={styles.thankYouIcon}>
+              <Ionicons name="heart" size={36} color="#FFFFFF" />
+            </View>
+            <Text style={styles.thankYouTitle}>Thank You!</Text>
+            <Text style={styles.thankYouMsg}>
+              Your feedback helps us improve the experience for everyone.
+            </Text>
+            <TouchableOpacity
+              style={styles.thankYouBtn}
+              activeOpacity={0.9}
+              onPress={() => setShowThankYou(false)}
+            >
+              <Text style={styles.thankYouBtnText}>Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -449,22 +475,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#E5E7EB",
     marginVertical: 8,
   },
-  fareTotalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  fareTotalLabel: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  fareTotalValue: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#009849",
-  },
   totalLabel: {
     fontSize: 16,
     fontWeight: "800",
@@ -545,5 +555,56 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontSize: 15,
     fontWeight: "700",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  thankYouModal: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 32,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 320,
+  },
+  thankYouIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#009849",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  thankYouTitle: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  thankYouMsg: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  thankYouBtn: {
+    height: 52,
+    borderRadius: 18,
+    backgroundColor: "#009849",
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
+  },
+  thankYouBtnText: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "800",
   },
 });

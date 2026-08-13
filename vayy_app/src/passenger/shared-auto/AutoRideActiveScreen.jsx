@@ -4,12 +4,9 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   StatusBar,
-  Platform,
 } from "react-native";
 import VayyMap from "../../shared/components/VayyMap";
-import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
@@ -17,7 +14,6 @@ import { completeDispatch } from "../../store/slices/dispatchSlice";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 
-const { width } = Dimensions.get("window");
 const DESTINATION_THRESHOLD = 100;
 
 function haversine(a, b) {
@@ -33,6 +29,7 @@ export function AutoRideActiveScreen({ navigation, route }) {
   const dispatchRedux = useDispatch();
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
+  const lastCoordsRef = useRef(null);
   const [speed, setSpeed] = useState(null);
   const [remainingDistance, setRemainingDistance] = useState(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
@@ -57,6 +54,15 @@ export function AutoRideActiveScreen({ navigation, route }) {
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
+
+  const handleRecenter = () => {
+    if (!lastCoordsRef.current) return;
+    mapRef.current?.setCamera({
+      center: [lastCoordsRef.current.longitude, lastCoordsRef.current.latitude],
+      zoom: 17,
+      duration: 1200,
+    });
+  };
 
   const handleWsMessage = useCallback((data) => {
     if (data?.type === "trip_completed") {
@@ -86,6 +92,7 @@ export function AutoRideActiveScreen({ navigation, route }) {
       locationService.startTracking((coords) => {
         if (removed) return;
         const pos = { latitude: coords.latitude, longitude: coords.longitude };
+        lastCoordsRef.current = pos;
         if (prevPos) {
           const dist = haversine(prevPos, pos);
           setRemainingDistance((d) => d != null ? Math.max(0, d - dist) : null);
@@ -163,25 +170,30 @@ export function AutoRideActiveScreen({ navigation, route }) {
           zoomControlEnabled={true}
         />
 
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={[styles.header, { paddingTop: insets.top + 10, overflow: "hidden" }]}>
+          <View style={styles.headerGradient}>
+            <View style={styles.gradBase} />
+            <View style={styles.gradRay1} />
+            <View style={styles.gradRay2} />
+          </View>
           <View style={styles.headerLeft}>
             <View style={styles.statusContainer}>
               <View style={styles.statusDot} />
-              <Text style={styles.statusText}>On the way</Text>
+              <Text style={styles.statusText}>Ride Active</Text>
             </View>
           </View>
         </View>
 
         <View style={styles.floatingContainer}>
           <TouchableOpacity style={styles.floatBtn} onPress={zoomIn}>
-            <Text style={styles.zoomText}>+</Text>
+            <Ionicons name="add" size={22} color="#111827" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.floatBtn} onPress={zoomOut}>
-            <Text style={styles.zoomText}>−</Text>
+            <Ionicons name="remove" size={22} color="#111827" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.floatBtn}>
-            <MaterialIcons name="my-location" size={24} color="#111827" />
+          <View style={styles.floatDivider} />
+          <TouchableOpacity style={styles.floatBtn} onPress={handleRecenter}>
+            <MaterialIcons name="my-location" size={22} color="#111827" />
           </TouchableOpacity>
         </View>
 
@@ -303,7 +315,18 @@ const styles = StyleSheet.create({
     position: "absolute", top: 0, left: 0, right: 0, zIndex: 10,
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     paddingHorizontal: 20, paddingBottom: 12,
-    backgroundColor: "rgba(0,152,73,0.6)", overflow: "hidden",
+  },
+  headerGradient: { ...StyleSheet.absoluteFillObject },
+  gradBase: { ...StyleSheet.absoluteFillObject, backgroundColor: "#009849" },
+  gradRay1: {
+    position: "absolute", top: -60, right: -20,
+    width: 260, height: 200, backgroundColor: "#00B857",
+    opacity: 0.25, transform: [{ rotate: "25deg" }],
+  },
+  gradRay2: {
+    position: "absolute", bottom: -90, right: 40,
+    width: 240, height: 180, backgroundColor: "#FFFFFF",
+    opacity: 0.1, transform: [{ rotate: "35deg" }],
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   statusContainer: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -316,13 +339,19 @@ const styles = StyleSheet.create({
   },
   mapArea: { ...StyleSheet.absoluteFillObject, backgroundColor: "#F9FAFB" },
   mapBg: { ...StyleSheet.absoluteFillObject },
-  floatingContainer: { position: "absolute", right: 20, bottom: 30, gap: 12 },
-  floatBtn: {
-    width: 56, height: 56, borderRadius: 28, backgroundColor: "#FFFFFF",
-    justifyContent: "center", alignItems: "center",
-    shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, elevation: 4,
+  floatingContainer: {
+    position: "absolute", right: 20, bottom: 30, alignItems: "center",
+    borderRadius: 32, backgroundColor: "#FFFFFF", paddingVertical: 8,
+    zIndex: 10,
+    shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 }, elevation: 5,
   },
-  zoomText: { fontSize: 22, fontWeight: "600", color: "#111827", lineHeight: 24 },
+  floatBtn: {
+    width: 56, height: 48, justifyContent: "center", alignItems: "center",
+  },
+  floatDivider: {
+    width: 28, height: 1, backgroundColor: "#E5E7EB", alignSelf: "center",
+  },
   destLabel: {
     position: "absolute", bottom: 120, left: 20,
     flexDirection: "row", alignItems: "center", gap: 6,

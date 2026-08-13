@@ -4,12 +4,9 @@ import {
   FlatList,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
-  Platform,
-  StatusBar,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
 import SPACING from "../../shared/constants/spacing";
@@ -96,6 +93,7 @@ function RouteCard({ item }) {
 }
 
 export default function MyRoutesScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -115,9 +113,14 @@ export default function MyRoutesScreen({ navigation }) {
   }, []);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Text style={styles.title}>My Routes</Text>
+    <View style={styles.safeArea}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.headerGradient}>
+          <View style={styles.gradBase} />
+          <View style={styles.gradRay1} />
+          <View style={styles.gradRay2} />
+        </View>
+        <Text style={styles.title}>My Trips</Text>
         <Text style={styles.subtitle}>Your completed journeys</Text>
       </View>
 
@@ -142,7 +145,7 @@ export default function MyRoutesScreen({ navigation }) {
           renderItem={({ item }) => <RouteCard item={item} />}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -152,22 +155,51 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
-    backgroundColor: COLORS.white,
-    borderBottomColor: COLORS.border,
-    borderBottomWidth: 1,
-    paddingHorizontal: SPACING.base,
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight + SPACING.base : SPACING.base,
-    paddingBottom: SPACING.base,
+    position: "relative",
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    overflow: "hidden",
+  },
+  headerGradient: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+  },
+  gradBase: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "#009849",
+  },
+  gradRay1: {
+    position: "absolute",
+    top: -60, right: -40,
+    width: "70%", height: "90%",
+    backgroundColor: "#00B857",
+    opacity: 0.25,
+    borderRadius: 120,
+    transform: [{ rotate: "25deg" }],
+  },
+  gradRay2: {
+    position: "absolute",
+    top: -80, right: -20,
+    width: "50%", height: "70%",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 100,
+    transform: [{ rotate: "35deg" }],
   },
   title: {
     fontSize: 26,
     fontWeight: "900",
-    color: COLORS.text,
+    color: "#FFFFFF",
+    position: "relative",
+    zIndex: 2,
   },
   subtitle: {
     fontSize: 13,
-    color: COLORS.textMuted,
+    color: "rgba(255,255,255,0.7)",
     marginTop: 4,
+    position: "relative",
+    zIndex: 2,
   },
   listContent: {
     padding: SPACING.base,

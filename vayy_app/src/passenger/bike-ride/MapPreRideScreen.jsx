@@ -6,14 +6,33 @@ import {
   StyleSheet,
   StatusBar,
   Platform,
+  Image,
+  Animated,
+  Easing,
 } from "react-native";
 import * as Location from "expo-location";
-import VayyMap, { GeoJSONSource, Layer, UserLocation, Marker } from "../../shared/components/VayyMap";
-import { BlurView } from "expo-blur";
+import VayyMap, { GeoJSONSource, Layer, UserLocation, Marker, ViewAnnotation } from "../../shared/components/VayyMap";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons";
-import { ConfirmPopup } from "./ConfirmPopup";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { fetchRouteGeometry } from "../../routes/services/routeService";
+
+const ARRIVAL_THRESHOLD = 500;
+
+const USER_TOP_IMAGE = require("../../../assets-webp/VayyUserTop.webp");
+
+function haversine(a, b) {
+  const R = 6371e3;
+  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
+  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos((a.latitude * Math.PI) / 180) * Math.cos((b.latitude * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+function formatDistance(meters) {
+  if (meters == null) return "—";
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
+}
 
 export function BikeMapPreRideScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -22,12 +41,19 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   const [routePath, setRoutePath] = useState(null);
   const [routeStops, setRouteStops] = useState([]);
   const [currentZoomLevel, setCurrentZoomLevel] = useState(14);
-
+  const [followMode, setFollowMode] = useState(true);
+  const [userLocation, setUserLocation] = useState(null);
+  const [walkingPath, setWalkingPath] = useState(null);
 
   // Dedicated refs for Map and Camera instances
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
   const didFitRef = useRef(false);
+
+  // Search ring pulse animation
+  const waveAnim1 = useRef(new Animated.Value(0)).current;
+  const waveAnim2 = useRef(new Animated.Value(0)).current;
+  const waveAnim3 = useRef(new Animated.Value(0)).current;
 
   // --- 1. REALTIME API / PARAMS INTEGRATION DATA ---
   const trip = route?.params?.trip || {};
@@ -51,6 +77,13 @@ export function BikeMapPreRideScreen({ navigation, route }) {
     ? [pickupLon, pickupLat]
     : null;
 
+  const hasDistance = stopDistance !== "-" && Number.isFinite(Number(stopDistance));
+  const liveWalkDistance = userLocation && pickupLat != null && pickupLon != null
+    ? haversine(userLocation, { latitude: pickupLat, longitude: pickupLon })
+    : null;
+  const distNum = liveWalkDistance != null ? liveWalkDistance : (hasDistance ? Number(stopDistance) : null);
+  const isNearby = distNum == null ? true : distNum <= ARRIVAL_THRESHOLD;
+
   // Fetch route geometry on mount
   useEffect(() => {
     const loadRoute = async () => {
@@ -69,6 +102,96 @@ export function BikeMapPreRideScreen({ navigation, route }) {
     };
     loadRoute();
   }, [routeId]);
+
+  // Fetch the rider's actual location to compute walking distance + walking line
+  useEffect(() => {
+    let cancelled = false;
+    const locateUser = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted" || cancelled) return;
+        let loc = null;
+        try {
+          loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+            timeout: 4000,
+          });
+        } catch {
+          loc = await Location.getLastKnownPositionAsync();
+        }
+        if (loc?.coords && !cancelled) {
+          setUserLocation({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to locate user for walking distance", e);
+      }
+    };
+    locateUser();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Walking line path from the rider's actual location to the nearest pickup stop
+  useEffect(() => {
+    if (userLocation && pickupLat != null && pickupLon != null) {
+      setWalkingPath({
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            properties: {},
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [userLocation.longitude, userLocation.latitude],
+                [pickupLon, pickupLat],
+              ],
+            },
+          },
+        ],
+      });
+    }
+  }, [userLocation, pickupLat, pickupLon]);
+
+  // Continuous search ring pulse around the buddy location
+  useEffect(() => {
+    const makeWave = (anim, delay) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.parallel([
+            Animated.timing(anim, {
+              toValue: 1,
+              duration: 2000,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+
+    const w1 = makeWave(waveAnim1, 0);
+    const w2 = makeWave(waveAnim2, 660);
+    const w3 = makeWave(waveAnim3, 1320);
+    w1.start();
+    w2.start();
+    w3.start();
+
+    return () => {
+      w1.stop();
+      w2.stop();
+      w3.stop();
+    };
+  }, [waveAnim1, waveAnim2, waveAnim3]);
 
   // 2. WORKING ZOOM & LOCATION INTERFACE (V11 SPEC)
   const handleZoom = async (zoomIn) => {
@@ -109,6 +232,10 @@ export function BikeMapPreRideScreen({ navigation, route }) {
       }
 
       if (loc?.coords) {
+        setUserLocation({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
         cameraRef.current.setStop({
           center: [loc.coords.longitude, loc.coords.latitude],
           zoom: 16,
@@ -145,13 +272,12 @@ export function BikeMapPreRideScreen({ navigation, route }) {
     }
   };
 
-
   useEffect(() => {
     if (didFitRef.current || !cameraRef.current) return;
     didFitRef.current = true;
     handleRecenterRouteBounds();
   }, [pickupLat, pickupLon, dropoffLat, dropoffLon, sheetHeight]);
-  
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -169,6 +295,19 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           scrollEnabled={true}
           zoomEnabled={true}
         >
+          <GeoJSONSource id="walkSource" data={walkingPath} />
+          <Layer
+            id="walkLayer"
+            type="line"
+            source="walkSource"
+            paint={{
+              "line-color": "#009849",
+              "line-width": 2.5,
+              "line-dasharray": [2, 1],
+              "line-join": "round",
+              "line-cap": "round",
+            }}
+          />
           <GeoJSONSource id="routeSource" data={routePath} />
           <Layer
             id="routeLayer"
@@ -201,6 +340,42 @@ export function BikeMapPreRideScreen({ navigation, route }) {
             );
           })}
           <UserLocation />
+          {userLocation && (
+            <ViewAnnotation id="user-pulse" lngLat={[userLocation.longitude, userLocation.latitude]}>
+              <View style={styles.pulseOnMap}>
+                <Animated.View
+                  style={[
+                    styles.waveRing,
+                    {
+                      transform: [{ scale: waveAnim1.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.8] }) }],
+                      opacity: waveAnim1.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                    },
+                  ]}
+                />
+                <Animated.View
+                  style={[
+                    styles.waveRing,
+                    {
+                      transform: [{ scale: waveAnim2.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.8] }) }],
+                      opacity: waveAnim2.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                    },
+                  ]}
+                />
+                <Animated.View
+                  style={[
+                    styles.waveRing,
+                    {
+                      transform: [{ scale: waveAnim3.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.8] }) }],
+                      opacity: waveAnim3.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                    },
+                  ]}
+                />
+                <View style={styles.userDot}>
+                  <Image source={USER_TOP_IMAGE} style={styles.userDotImage} resizeMode="contain" />
+                </View>
+              </View>
+            </ViewAnnotation>
+          )}
           {pickupLon != null && pickupLat != null && (
             <Marker lngLat={[pickupLon, pickupLat]}>
               <View style={styles.stopMarkerGroup}>
@@ -221,18 +396,19 @@ export function BikeMapPreRideScreen({ navigation, route }) {
 
       {/* Layer 2: Floating Header UI Control Deck */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-        <View style={styles.headerLeft}>
-          {Platform.OS === 'ios' && (
+        <View style={styles.headerGradient}>
+          <View style={styles.gradBase} />
+          <View style={styles.gradRay1} />
+          <View style={styles.gradRay2} />
+        </View>
+        <View style={styles.headerRow}>
+          {Platform.OS === "ios" && (
             <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-back" size={24} color="#111827" />
             </TouchableOpacity>
           )}
-          <Text style={styles.headerTitle}>{route?.params?.title || "Bike pickup"}</Text>
+          <Text style={styles.headerTitle}>Hand Raise</Text>
         </View>
-        <TouchableOpacity style={styles.iconBtn}>
-          <MaterialIcons name="more-vert" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
       </View>
 
       {/* Layer 3: Dynamic Context Cards */}
@@ -244,7 +420,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           <View style={{ flex: 1 }}>
             <Text style={styles.cardLabel}>Nearest stop</Text>
             <Text style={styles.cardDistance}>
-              <Text style={styles.greenText}>{stopDistance} m</Text> away
+              <Text style={styles.greenText}>{formatDistance(distNum)}</Text> away
             </Text>
           </View>
           <View style={styles.etaBadge}>
@@ -262,17 +438,21 @@ export function BikeMapPreRideScreen({ navigation, route }) {
 
       {/* Layer 4: Floating Action Interface Controls */}
       <View style={[styles.floatingContainer, { bottom: sheetHeight + 20 }]}>
-        <TouchableOpacity style={styles.floatBtn} onPress={() => handleZoom(true)}>
-          <Text style={styles.zoomText}>+</Text>
+        <TouchableOpacity style={styles.floatBtn} onPress={() => { handleZoom(true); setFollowMode(false); }}>
+          <Ionicons name="add" size={22} color="#111827" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.floatBtn} onPress={() => handleZoom(false)}>
-          <Text style={styles.zoomText}>−</Text>
+        <TouchableOpacity style={styles.floatBtn} onPress={() => { handleZoom(false); setFollowMode(false); }}>
+          <Ionicons name="remove" size={22} color="#111827" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.floatBtn} onPress={handleGetCurrentLocation}>
-          <MaterialIcons name="my-location" size={22} color="#111827" />
+        <View style={styles.floatDivider} />
+        <TouchableOpacity
+          style={[styles.floatBtn, followMode && styles.floatBtnActive]}
+          onPress={() => { handleGetCurrentLocation(); setFollowMode(true); }}
+        >
+          <MaterialIcons name="my-location" size={22} color={followMode ? "#FFFFFF" : "#111827"} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.floatBtn} onPress={handleGetCurrentLocation}>
-          <Feather name="navigation" size={22} color="#009849" />
+        <TouchableOpacity style={styles.floatBtn} onPress={() => { handleRecenterRouteBounds(); setFollowMode(false); }}>
+          <Ionicons name="scan-outline" size={20} color="#111827" />
         </TouchableOpacity>
       </View>
 
@@ -286,51 +466,88 @@ export function BikeMapPreRideScreen({ navigation, route }) {
       >
         <View style={styles.handle} />
 
-        <View style={styles.statsRow}>
-          <View style={styles.statCol}>
-            <Ionicons name="location" size={24} color="#009849" />
-            <Text style={styles.statLabel}>Nearest stop</Text>
-            <Text style={styles.statMainBold}>{pickupName}</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statCol}>
-            <Ionicons name="walk" size={24} color="#009849" />
-            <Text style={styles.statLabel}>Distance</Text>
-            <Text style={styles.statValueGreen}>{stopDistance} <Text style={styles.smallUnit}>m</Text></Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statCol}>
-            <Ionicons name="time-outline" size={24} color="#009849" />
-            <Text style={styles.statLabel}>ETA</Text>
-            <Text style={styles.statValueGreen}>{eta_sec} <Text style={styles.smallUnit}>min</Text></Text>
+        <View style={styles.sheetSection}>
+          <Text style={styles.sheetLabel}>Selected Route</Text>
+          <View style={styles.sheetRouteRow}>
+            <View style={styles.sheetRouteDot} />
+            <Text style={styles.sheetRouteText} numberOfLines={1}>
+              {pickupName} → {dropoffName}
+            </Text>
           </View>
         </View>
 
-        <TouchableOpacity activeOpacity={0.9} style={styles.raiseBtn} onPress={() => setShowConfirm(true)}>
-          <Text style={styles.raiseText}>✋ Raise Hand at Stop</Text>
+        <View style={styles.sheetSection}>
+          <Text style={styles.sheetLabel}>Nearest Pickup Stop</Text>
+          <Text style={styles.sheetStopName}>{pickupName}</Text>
+        </View>
+
+        <View style={[styles.sheetStatusCard, isNearby ? styles.sheetStatusReady : styles.sheetStatusAway]}>
+          <View style={[styles.sheetStatusDot, isNearby ? styles.sheetStatusDotReady : styles.sheetStatusDotAway]} />
+          <View style={styles.sheetStatusCol}>
+            <Text style={[styles.sheetStatusText, isNearby ? styles.sheetStatusTextReady : styles.sheetStatusTextAway]}>
+              {isNearby
+                ? "You're at the pickup stop. Nearby Marshals are ready to be notified."
+                : "You're not at the pickup stop. Get closer to get notified."}
+            </Text>
+            <Text style={[styles.sheetStatusDist, isNearby ? styles.sheetStatusDistReady : styles.sheetStatusDistAway]}>
+              {formatDistance(distNum)} away
+            </Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={[styles.raiseBtn, !isNearby && styles.raiseBtnDisabled]}
+          onPress={() => { if (isNearby) setShowConfirm(true); }}
+          disabled={!isNearby}
+        >
+          <Text style={[styles.raiseText, !isNearby && styles.raiseTextDisabled]}>✋ Raise Hand</Text>
         </TouchableOpacity>
       </View>
 
-      <ConfirmPopup
-        visible={showConfirm}
-        title="Raise Hand at Stop?"
-        message={`Are you at ${pickupName}? Nearby riders will be notified.`}
-        confirmLabel="Yes, Raise Hand"
-        icon="hand-left-outline"
-        onConfirm={() => {
-          setShowConfirm(false);
-          navigation.navigate('BikeSearching', {
-            route_id: routeId,
-            pickup_stop_id: trip?.pickup_stop?.id,
-            pickup: pickup,
-            pickupName: pickupName,
-            destination: dropoffName,
-            dropoffName: dropoffName,
-            fare: route?.params?.fare,
-          });
-        }}
-        onCancel={() => setShowConfirm(false)}
-      />
+      {/* Raise Hand Confirmation Modal */}
+      {showConfirm && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalIconWrap}>
+              <Image
+                source={require("../../../assets-webp/VayyHandRaise.webp")}
+                style={{ width: 120, height: 120 }}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={styles.modalTitle}>Raise Hand?</Text>
+            <Text style={styles.modalMessage}>
+              Nearby{"\n"}Marshals will be notified that you are waiting at the stop.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalBtnSecondary}
+                onPress={() => setShowConfirm(false)}
+              >
+                <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalBtnPrimary}
+                onPress={() => {
+                  setShowConfirm(false);
+                  navigation.navigate("BikeSearching", {
+                    route_id: routeId,
+                    pickup_stop_id: trip?.pickup_stop?.id,
+                    pickup: pickup,
+                    pickupName: pickupName,
+                    destination: dropoffName,
+                    dropoffName: dropoffName,
+                    fare: route?.params?.fare,
+                  });
+                }}
+              >
+                <Text style={styles.modalBtnPrimaryText}>Raise Hand</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -353,28 +570,59 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    overflow: "hidden",
+  },
+  headerGradient: {
+    ...StyleSheet.absoluteFill,
+  },
+  gradBase: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "#009849",
+  },
+  gradRay1: {
+    position: "absolute",
+    top: -60,
+    right: -40,
+    width: "70%",
+    height: "90%",
+    backgroundColor: "#00B857",
+    opacity: 0.25,
+    borderRadius: 120,
+    transform: [{ rotate: "25deg" }],
+  },
+  gradRay2: {
+    position: "absolute",
+    top: -80,
+    right: -20,
+    width: "50%",
+    height: "70%",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 100,
+    transform: [{ rotate: "35deg" }],
+  },
+  headerRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 24,
-    paddingBottom: 12,
-    backgroundColor: "rgba(0,152,73,0.6)",
+    gap: 12,
   },
   iconBtn: {
     width: 44,
     height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
+    shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, elevation: 3,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "800",
     color: "#FFFFFF",
+    letterSpacing: -0.3,
   },
   topOverlaysContainer: {
     position: "absolute",
@@ -459,19 +707,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#4B5563",
   },
-  poiLabel: {
-    alignItems: "center",
-    gap: 4,
-  },
-  poiText: {
-    fontSize: 13,
-    color: "#4B5563",
-    fontWeight: "600",
-    backgroundColor: "rgba(255,255,255,0.9)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
   stopMarkerGroup: {
     alignItems: "center",
     marginTop: -40,
@@ -548,13 +783,22 @@ const styles = StyleSheet.create({
     color: "#374151",
     maxWidth: 70,
   },
-  floatingContainer: {
-    position: "absolute",
-    right: 20,
-    gap: 12,
-    zIndex: 20,
+  pulseOnMap: {
+    width: 100,
+    height: 100,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  floatBtn: {
+  waveRing: {
+    position: "absolute",
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: "#009849",
+    backgroundColor: "rgba(0, 152, 73, 0.08)",
+  },
+  userDot: {
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -562,15 +806,43 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 10,
-    elevation: 4,
+    elevation: 5,
+    borderWidth: 4,
+    borderColor: "#FFFFFF",
+    overflow: "hidden",
   },
-  zoomText: {
-    fontSize: 24,
-    fontWeight: "600",
-    color: "#111827",
-    lineHeight: 24,
+  userDotImage: {
+    width: 56,
+    height: 56,
+  },
+  floatingContainer: {
+    position: "absolute",
+    right: 16,
+    gap: 2,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    paddingVertical: 6,
+    shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+    zIndex: 20,
+  },
+  floatBtn: {
+    width: 48,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  floatBtnActive: {
+    backgroundColor: "#009849",
+    borderRadius: 12,
+    marginHorizontal: 4,
+  },
+  floatDivider: {
+    height: 1,
+    backgroundColor: "#F0F0F0",
+    marginHorizontal: 12,
   },
   bottomSheet: {
     position: "absolute",
@@ -578,8 +850,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: 20,
     paddingTop: 12,
     shadowColor: "#000",
@@ -594,62 +866,186 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "#E5E7EB",
     alignSelf: "center",
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  statsRow: {
+  sheetSection: {
+    marginBottom: 12,
+  },
+  sheetLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#9CA3AF",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  sheetRouteRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sheetRouteDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#009849",
+  },
+  sheetRouteText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+    flex: 1,
+  },
+  sheetStopName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  sheetStatusCard: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 24,
+    gap: 10,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
   },
-  statCol: {
+  sheetStatusAway: {
+    backgroundColor: "#FEF2F2",
+  },
+  sheetStatusReady: {
+    backgroundColor: "#ECFAF1",
+  },
+  sheetStatusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 3,
+  },
+  sheetStatusDotAway: {
+    backgroundColor: "#EF4444",
+  },
+  sheetStatusDotReady: {
+    backgroundColor: "#009849",
+  },
+  sheetStatusCol: {
     flex: 1,
-    alignItems: "center",
-    gap: 6,
+    gap: 4,
   },
-  statDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: "#F3F4F6",
-    marginHorizontal: 4,
-  },
-  statLabel: {
-    color: "#888888",
+  sheetStatusText: {
     fontSize: 13,
-    fontWeight: "500",
-    textAlign: 'center',
+    fontWeight: "600",
+    lineHeight: 18,
   },
-  statMainBold: {
-    fontSize: 15,
-    fontWeight: "800",
-    textAlign: "center",
-    color: "#111827",
-    lineHeight: 20,
+  sheetStatusTextAway: {
+    color: "#991B1B",
   },
-  statValueGreen: {
-    fontSize: 22,
-    fontWeight: "800",
+  sheetStatusTextReady: {
+    color: "#065F46",
+  },
+  sheetStatusDist: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  sheetStatusDistAway: {
+    color: "#DC2626",
+  },
+  sheetStatusDistReady: {
     color: "#009849",
   },
-  smallUnit: {
-    fontSize: 12,
-    color: "#111827",
-    fontWeight: "600",
-  },
   raiseBtn: {
-    height: 60,
-    borderRadius: 20,
+    height: 56,
+    borderRadius: 18,
     backgroundColor: "#009849",
-    flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#009849",
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowColor: "#009849", shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
+  },
+  raiseBtnDisabled: {
+    backgroundColor: "rgba(0,152,73,0.3)",
+    shadowOpacity: 0,
+    elevation: 0,
   },
   raiseText: {
     color: "#FFFFFF",
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
+  },
+  raiseTextDisabled: {
+    color: "rgba(255,255,255,0.5)",
+  },
+  modalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 100,
+    paddingHorizontal: 24,
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 24,
+    width: "100%",
+    maxWidth: 340,
+    alignItems: "center",
+  },
+  modalIconWrap: {
+    width: 102,
+    height: 102,
+    borderRadius: 36,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  modalBtnSecondary: {
+    flex: 1,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBtnSecondaryText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  modalBtnPrimary: {
+    flex: 1,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "#009849",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBtnPrimaryText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
 });
