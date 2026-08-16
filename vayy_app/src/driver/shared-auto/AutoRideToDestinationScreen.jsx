@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import COLORS from "../../shared/constants/colors";
 import VayyMap from "../../shared/components/VayyMap";
 import AutoCancelRideModal from "./AutoCancelRideModal";
@@ -130,13 +131,18 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
           ))}
         </View>
 
-        <View style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}>
+        <LinearGradient
+          colors={["rgba(10, 22, 60, 0.94)", "rgba(10, 22, 62, 0.0010)"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}
+        >
           <TouchableOpacity style={styles.backBtn} onPress={() => setShowCancel(true)}>
             <Ionicons name="chevron-back" size={22} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>On Ride</Text>
           <View style={{ width: 40 }} />
-        </View>
+        </LinearGradient>
       </View>
 
       <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16 }]}>
@@ -335,7 +341,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingBottom: 20,
-    backgroundColor: "rgba(10,22,60,0.9)",
     zIndex: 10,
   },
   backBtn: {

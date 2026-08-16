@@ -8,7 +8,8 @@ from django.core.cache import cache
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
-from operations.models import Vehicle, ActiveTrip, VehicleState
+from operations.models import Vehicle, ActiveTrip, VehicleState, BoardingRequest
+from operations.constants import BOARDING_PENDING, BOARDING_APPROACHING
 from tracking.models import HybridLog
 from tracking.services.geo_service import GeoService
 from tracking.services.redis_geo_service import RedisGeoService
@@ -330,6 +331,34 @@ class LocationService:
                     if etas:
                         remaining_duration_min = round(max(etas.values()) / 60, 1)
 
+                    # Distance from the vehicle to the passenger's pickup stop
+                    # (NOT remaining route distance) so passengers see the real
+                    # "marshal is N m away" value even when the marshal is
+                    # mid-route or already at their stop.
+                    pickup_distance_km = None
+                    pickup_duration_min = None
+                    if active_trip:
+                        try:
+                            pickup_req = (
+                                BoardingRequest.objects.filter(
+                                    trip=active_trip,
+                                    status__in=[BOARDING_PENDING, BOARDING_APPROACHING],
+                                )
+                                .select_related("pickup_stop")
+                                .first()
+                            )
+                            if pickup_req and pickup_req.pickup_stop_id:
+                                stop_point = pickup_req.pickup_stop.location
+                                pickup_dist_m = _haversine_m(
+                                    (lng, lat),
+                                    (stop_point.x, stop_point.y),
+                                )
+                                pickup_distance_km = round(pickup_dist_m / 1000.0, 2)
+                                if speed_mps and speed_mps > 0:
+                                    pickup_duration_min = round(pickup_dist_m / speed_mps / 60.0, 1)
+                        except Exception as e:
+                            logger.warning(f"Failed to compute pickup distance for trip {active_trip.id}: {e}")
+
                     ws_payload = {
                         "type": "vehicle_update",
                         "lat": lat,
@@ -343,6 +372,8 @@ class LocationService:
                         "current_stop_index": state.current_stop_index,
                         "remaining_distance_km": remaining_distance_km,
                         "remaining_duration_min": remaining_duration_min,
+                        "pickup_distance_km": pickup_distance_km,
+                        "pickup_duration_min": pickup_duration_min,
                         "next_stop_eta": next_stop_eta_list,
                         "snapped_lat": state.snapped_location.y if state.snapped_location else None,
                         "snapped_lng": state.snapped_location.x if state.snapped_location else None,

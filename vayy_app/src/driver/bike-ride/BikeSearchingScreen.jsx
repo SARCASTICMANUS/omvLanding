@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import VayyMap, { UserLocation } from "../../shared/components/VayyMap";
 import COLORS from "../../shared/constants/colors";
 
@@ -24,13 +25,18 @@ export default function BikeSearchingScreen({ navigation, route }) {
       </View>
 
       <SafeAreaView style={styles.overlay} pointerEvents="box-none">
-        <View style={styles.header}>
+        <LinearGradient
+          colors={["rgba(10, 22, 60, 0.94)", "rgba(10, 22, 62, 0.0010)"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.header}
+        >
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Finding Passengers</Text>
           <View style={{ width: 44 }} />
-        </View>
+        </LinearGradient>
 
         <View style={styles.content}>
           <View style={styles.searchCard}>
@@ -60,7 +66,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: "rgba(0,152,73,0.85)",
   },
   backBtn: {
     width: 44,

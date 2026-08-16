@@ -170,6 +170,7 @@ REST_FRAMEWORK = {
         "gps": "1000/min",
         "search": "60/min",
         "dispatch": "120/min",
+        "waitlist": "10/hour",
     }
 }
 

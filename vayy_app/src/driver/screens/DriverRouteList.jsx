@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { searchDriverRoutes, getDriverRoutes } from "../services/driverService";
 import { buildRouteSummary, estimateStopTimeline } from "../utils/driverFlowUtils";
+import { LinearGradient } from "expo-linear-gradient";
 
 const CARD_SHADOW = Platform.select({
   ios: {
@@ -22,7 +23,7 @@ const CARD_SHADOW = Platform.select({
   android: { elevation: 2 },
 });
 
-function RouteCard({ item, index, pickup, destination, expanded, onToggleExpand, onSelect }) {
+function RouteCard({ item, index, pickup, destination, onSelect }) {
   const timeline = estimateStopTimeline(item);
   const isBest = index === 0;
   const earnings = item?.earnings || item?.estimated_earnings || (80 + index * 15);
@@ -46,7 +47,6 @@ function RouteCard({ item, index, pickup, destination, expanded, onToggleExpand,
     lastStop?.name ||
     item.endLabel ||
     "--";
-  const hiddenStopCount = Math.max(0, timeline.length - 2);
 
   return (
     <View style={[s.card, isBest && s.cardBest]}>
@@ -106,53 +106,14 @@ function RouteCard({ item, index, pickup, destination, expanded, onToggleExpand,
         </View>
       </View>
 
-      {/* Active drivers hint — only for best match */}
-      {isBest && (
-        <TouchableOpacity
-          style={s.nearbyHint}
-          onPress={() => onToggleExpand(item?.id || index)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="people" size={13} color="#009849" />
-          <Text style={s.nearbyHintLabel}>{activeDrivers} Marshals on route</Text>
-          <Text style={s.nearbyHintText} numberOfLines={1}>
-            {stops.length} stops
-          </Text>
-          <Ionicons name="chevron-forward" size={14} color="#9CA3AF" />
-        </TouchableOpacity>
-      )}
-
-      {/* View / Hide stops toggle */}
-      {hiddenStopCount > 0 && (
-        <TouchableOpacity
-          style={s.stopsToggle}
-          onPress={() => onToggleExpand(item?.id || index)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={14} color="#009849" />
-          <Text style={s.stopsToggleText}>
-            {expanded ? "Hide stops" : `View ${hiddenStopCount} stop${hiddenStopCount > 1 ? "s" : ""}`}
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Expanded stops panel */}
-      {expanded && timeline.length > 0 && (
-        <View style={s.stopsPanel}>
-          {timeline.map((stop) => (
-            <View key={stop.id} style={s.stopRow}>
-              <View style={s.stopSeq}>
-                <Text style={s.stopSeqText}>{stop.sequence}</Text>
-              </View>
-              <View style={s.stopDetail}>
-                <Text style={s.stopName}>{stop.name}</Text>
-                <Text style={s.stopStatus}>{stop.status}</Text>
-              </View>
-              <Text style={s.stopArrival}>{stop.arrivalLabel}</Text>
-            </View>
-          ))}
-        </View>
-      )}
+      {/* Active marshals + stops count */}
+      <View style={s.nearbyHint}>
+        <Ionicons name="people" size={13} color="#009849" />
+        <Text style={s.nearbyHintLabel}>{activeDrivers} Marshals on route</Text>
+        <Text style={s.nearbyHintText} numberOfLines={1}>
+          {stops.length} stops
+        </Text>
+      </View>
 
       {/* CTA */}
       <TouchableOpacity
@@ -170,7 +131,6 @@ function RouteCard({ item, index, pickup, destination, expanded, onToggleExpand,
 export default function DriverRouteList({ navigation, route: routeProp }) {
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [expandedRouteId, setExpandedRouteId] = useState(null);
   const insets = useSafeAreaInsets();
   const mode = routeProp?.params?.mode || "bike";
   const pickup = routeProp?.params?.pickup;
@@ -204,12 +164,6 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
 
   const normalizedRoutes = useMemo(() => routes.map(buildRouteSummary), [routes]);
 
-  useEffect(() => {
-    if (expandedRouteId && !normalizedRoutes.some((r) => String(r.id) === String(expandedRouteId))) {
-      setExpandedRouteId(null);
-    }
-  }, [expandedRouteId, normalizedRoutes]);
-
   const onSelectRoute = (selectedRoute) => {
     const routeData = {
       ...selectedRoute,
@@ -223,13 +177,9 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
   const renderItem = ({ item, index }) => (
     <RouteCard
       destination={destination}
-      expanded={String(expandedRouteId) === String(item.id)}
       index={index}
       item={item}
       onSelect={onSelectRoute}
-      onToggleExpand={(id) =>
-        setExpandedRouteId((cur) => (String(cur) === String(id) ? null : id))
-      }
       pickup={pickup}
     />
   );
@@ -237,11 +187,13 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
   return (
     <View style={s.safe}>
       <View style={[s.header, { paddingTop: insets.top + 10 }]}>
-        <View style={s.headerGradient}>
-          <View style={s.gradBase} />
-          <View style={s.gradRay1} />
-          <View style={s.gradRay2} />
-        </View>
+        <LinearGradient
+          colors={["rgba(10, 22, 60, 0.94)", "rgba(10, 22, 62, 0.0010)"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={s.headerGradient}
+          pointerEvents="none"
+        />
         <View style={s.headerRow}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={s.iconBtn}>
             <Ionicons name="chevron-back" size={22} color="#111827" />
@@ -250,11 +202,6 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
             <Text style={s.headerTitle}>Choose Route</Text>
             <Text style={s.headerSub}>Select the route you want to drive</Text>
           </View>
-          {isDummy && (
-            <View style={s.dummyBadge}>
-              <Text style={s.dummyBadgeText}>LOCAL</Text>
-            </View>
-          )}
         </View>
       </View>
 
@@ -306,27 +253,6 @@ const s = StyleSheet.create({
   headerGradient: {
     position: "absolute",
     top: 0, left: 0, right: 0, bottom: 0,
-  },
-  gradBase: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "#009849",
-  },
-  gradRay1: {
-    position: "absolute",
-    top: -60, right: -40,
-    width: "70%", height: "90%",
-    backgroundColor: "#00B857",
-    opacity: 0.25,
-    borderRadius: 120,
-    transform: [{ rotate: "25deg" }],
-  },
-  gradRay2: {
-    position: "absolute",
-    top: -80, right: -20,
-    width: "50%", height: "70%",
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 100,
-    transform: [{ rotate: "35deg" }],
   },
   headerRow: {
     flexDirection: "row",
@@ -465,22 +391,6 @@ const s = StyleSheet.create({
     marginLeft: 4.25,
   },
 
-  /* view / hide stops toggle */
-  stopsToggle: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    gap: 5,
-    marginTop: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-  },
-  stopsToggleText: {
-    color: "#009849",
-    fontSize: 12,
-    fontWeight: "800",
-  },
-
   /* stats bar — ETA | Distance | Earnings | Demand */
   statsBar: {
     alignItems: "center",
@@ -542,31 +452,6 @@ const s = StyleSheet.create({
     textAlign: "right",
   },
 
-  /* stops panel */
-  stopsPanel: {
-    backgroundColor: "#f9fafb",
-    borderColor: "#e5e7eb",
-    borderRadius: 14,
-    borderWidth: 1,
-    gap: 8,
-    marginTop: 12,
-    padding: 12,
-  },
-  stopRow: { alignItems: "center", flexDirection: "row", gap: 12 },
-  stopSeq: {
-    alignItems: "center",
-    backgroundColor: "#009849",
-    borderRadius: 999,
-    height: 24,
-    justifyContent: "center",
-    width: 24,
-  },
-  stopSeqText: { color: "#fff", fontSize: 11, fontWeight: "900" },
-  stopDetail: { flex: 1 },
-  stopName: { color: "#111827", fontSize: 13, fontWeight: "800" },
-  stopStatus: { color: "#9CA3AF", fontSize: 11 },
-  stopArrival: { color: "#6B7280", fontSize: 12, fontWeight: "800" },
-
   /* continue CTA */
   continueBtn: {
     alignItems: "center",
@@ -586,20 +471,6 @@ const s = StyleSheet.create({
     color: "#fff",
     fontSize: 15,
     fontWeight: "800",
-  },
-
-  /* dummy badge */
-  dummyBadge: {
-    backgroundColor: "#f59e0b",
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  dummyBadgeText: {
-    color: "#fff",
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 0.5,
   },
 
   /* state cards */
