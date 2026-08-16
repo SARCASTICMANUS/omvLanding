@@ -57,6 +57,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   const [online, setOnline] = useState(false);
   const [currentBuddy, setCurrentBuddy] = useState(null);
   const [notification, setNotification] = useState(null);
+  const [scanSeconds, setScanSeconds] = useState(60);
   const notifSlide = useRef(new Animated.Value(-100)).current;
   const slideAnim = useRef(new Animated.Value(height)).current;
   const [bikePos, setBikePos] = useState(null);
@@ -81,7 +82,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
         pickupLng: req.pickup_lng || req.pickup_longitude || null,
         dropLat: req.drop_lat || req.drop_latitude || null,
         dropLng: req.drop_lng || req.drop_longitude || null,
-        distance: req.distance_km ? `${req.distance_km} km` : "—",
+        distance: req.distance_km != null ? `${req.distance_km} km` : "—",
         fare: req.fare ? `₹${req.fare}` : "—",
         fareAmount: req.fare || 0,
         eta: req.eta ? `${req.eta} min` : "—",
@@ -292,6 +293,15 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
     };
   }, [online, pulseAnim, sweepAnim]);
 
+  useEffect(() => {
+    if (!online || phase !== "scanning") return;
+    setScanSeconds(60);
+    const iv = setInterval(() => {
+      setScanSeconds((s) => (s > 0 ? s - 1 : 60));
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [online, phase]);
+
   const handleAccept = async () => {
     let otp = null;
     let activeTripId = null;
@@ -471,6 +481,21 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
           />
         </TouchableOpacity>
       </View>
+
+      {/* Scan timer */}
+      {online && phase === "scanning" && (
+        <View style={[styles.scanTimerWrap, { top: insets.top + 58 }]}>
+          <View style={styles.scanTimerHead}>
+            <Text style={styles.scanTimerTitle}>Scanning for buddies</Text>
+            <Text style={styles.scanTimerSecs}>
+              {scanSeconds > 0 ? `${scanSeconds}s` : "Rescanning..."}
+            </Text>
+          </View>
+          <View style={styles.scanTimerTrack}>
+            <View style={[styles.scanTimerFill, { width: `${(scanSeconds / 60) * 100}%` }]} />
+          </View>
+        </View>
+      )}
 
       {/* Notification banner */}
       {notification && (
@@ -786,6 +811,51 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#111827",
+  },
+
+  /* scan timer */
+  scanTimerWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderRadius: 14,
+    marginHorizontal: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    zIndex: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  scanTimerHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 7,
+  },
+  scanTimerTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#374151",
+  },
+  scanTimerSecs: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: COLORS.primary,
+  },
+  scanTimerTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#E5E7EB",
+    overflow: "hidden",
+  },
+  scanTimerFill: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.primary,
   },
 
   /* header */

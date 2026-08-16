@@ -158,10 +158,14 @@ export function RiderPopupScreen({ navigation, route }) {
       const lat = data.lat;
       const lng = data.lng || data.lon;
       if (lat && lng) setDriverPos({ latitude: lat, longitude: lng });
-      if (data.remaining_distance_km != null) {
+      if (data.pickup_distance_km != null) {
+        setDistance(data.pickup_distance_km <= 1 ? `${Math.round(data.pickup_distance_km * 1000)} m` : `${data.pickup_distance_km} km`);
+      } else if (data.remaining_distance_km != null) {
         setDistance(data.remaining_distance_km <= 1 ? `${Math.round(data.remaining_distance_km * 1000)} m` : `${data.remaining_distance_km} km`);
       }
-      if (data.remaining_duration_min != null) {
+      if (data.pickup_duration_min != null) {
+        setEta(data.pickup_duration_min <= 1 ? "Arriving" : `${data.pickup_duration_min} min`);
+      } else if (data.remaining_duration_min != null) {
         setEta(data.remaining_duration_min <= 1 ? "Arriving" : `${data.remaining_duration_min} min`);
       }
     }

@@ -15,7 +15,7 @@ from rest_framework.exceptions import PermissionDenied
 from datetime import timedelta
 from accounts.models import User, PublicDriverProfile
 from operations.models import Vehicle, ActiveTrip, VehicleState, BoardingRequest, DispatchRequest
-from transport.models import Route, TripSchedule
+from transport.models import Route, TripSchedule, Stop
 from communication.services.rabbitmq_service import RabbitMQService
 from communication.services.notification_service import NotificationService
 from accounts.services.wallet_service import WalletService
@@ -23,6 +23,7 @@ from operations.services.ride_service import RideService
 from tracking.services.redis_geo_service import RedisGeoService
 from communication.constants import EXCHANGE_DISPATCH, RK_DISPATCH_ASSIGN, RK_DISPATCH_CANCEL
 from operations.constants import (
+    BOARDING_PENDING,
     TRIP_STATUS_REQUESTED, TRIP_STATUS_ASSIGNED, TRIP_STATUS_ACCEPTED,
     TRIP_STATUS_REJECTED, TRIP_STATUS_ARRIVED, TRIP_STATUS_ACTIVE,
     TRIP_STATUS_COMPLETED, TRIP_STATUS_CANCELLED
@@ -79,6 +80,19 @@ class DispatchService:
             started_at=timezone.now()
         )
 
+        # Link the passenger to the trip + pickup stop so live tracking can
+        # report the true distance to pickup (not remaining route distance).
+        try:
+            stop = Stop.objects.get(id=pickup_stop_id)
+            BoardingRequest.objects.create(
+                passenger=passenger,
+                trip=trip,
+                pickup_stop=stop,
+                status=BOARDING_PENDING,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to link boarding request for trip {trip.id}: {e}")
+
         payload = {
             "trip_id": str(trip.id),
             "passenger_id": str(passenger.id),
@@ -133,22 +147,65 @@ class DispatchService:
             expires_at=timezone.now() + timedelta(seconds=90),
         )
 
+        # Shared request metadata for all candidate drivers
+        drop_name = route.end_name or route.name
+        drop_lat = drop_lng = None
+        try:
+            if route.path:
+                drop_lng, drop_lat = route.path.coords[-1]
+        except Exception:
+            pass
+
+        passenger_rating = None
+        passenger_trips = 0
+        try:
+            pp = passenger.passenger_profile
+            passenger_rating = round(pp.rating, 1)
+            passenger_trips = pp.total_trips
+        except Exception:
+            pass
+
         # Notify EACH candidate driver via their notification WS
         for candidate in candidates:
             driver = candidate["driver"]
+            vehicle_type = candidate["vehicle"].vehicle_type
+
+            # Fare estimate from pickup stop to route end (vehicle-type specific)
+            fare = None
+            if drop_lat is not None and drop_lng is not None:
+                try:
+                    estimate = RideService.calculate_estimate(
+                        stop.location.y, stop.location.x,
+                        drop_lat, drop_lng,
+                        vehicle_type,
+                    )
+                    fare = round(estimate["estimated_fare"], 2)
+                except Exception as e:
+                    logger.warning(f"Failed to estimate fare for dispatch {dispatch_request.id}: {e}")
+
+            # ETA to pickup (~30 km/h average city speed)
+            eta = max(1, round(candidate["distance"] / 30 * 60))
+
             payload = {
                 "type": "new_dispatch_request",
                 "dispatch": {
                     "request_id": str(dispatch_request.id),
                     "passenger_id": str(passenger.id),
                     "passenger_name": passenger_name,
+                    "passenger_rating": passenger_rating,
+                    "passenger_trips": passenger_trips,
                     "route_id": route_id,
                     "route_name": route.name,
                     "pickup_stop_id": pickup_stop_id,
                     "pickup_name": stop.name,
                     "pickup_lat": stop.location.y,
                     "pickup_lng": stop.location.x,
+                    "drop_name": drop_name,
+                    "drop_lat": drop_lat,
+                    "drop_lng": drop_lng,
                     "distance_km": round(candidate["distance"], 2),
+                    "eta": eta,
+                    "fare": fare,
                     "score": round(candidate["score"], 1),
                 },
             }
@@ -223,6 +280,18 @@ class DispatchService:
             started_at=timezone.now(),
             otp=otp,
         )
+
+        # Link the passenger to the trip + pickup stop so live tracking can
+        # report the true distance to pickup (not remaining route distance).
+        try:
+            BoardingRequest.objects.create(
+                passenger=dispatch_request.passenger,
+                trip=trip,
+                pickup_stop=dispatch_request.pickup_stop,
+                status=BOARDING_PENDING,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to link boarding request for trip {trip.id}: {e}")
 
         # Notify winning driver — you got the ride
         DispatchService._notify_ws(

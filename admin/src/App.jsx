@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import Login from "./pages/Login";
+import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Cities from "./pages/Cities";
 import RoutesPage from "./pages/Routes";
@@ -9,6 +10,8 @@ import TripSchedules from "./pages/TripSchedules";
 import Users from "./pages/Users";
 import Sidebar from "./components/Sidebar";
 import api from "./api/client";
+
+const ADMIN_PATH = "/zxcv";
 
 function AdminLayout({ onLogout }) {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -69,7 +72,7 @@ export default function App() {
 
   const handleLogin = (userData) => {
     setUser(userData);
-    navigate("/admin");
+    navigate(ADMIN_PATH);
   };
 
   const handleLogout = () => {
@@ -89,22 +92,20 @@ export default function App() {
 
   return (
     <Routes>
+      <Route path="/" element={<Landing />} />
       <Route
-        path="/"
-        element={
-          user ? <Navigate to="/admin" replace /> : <Login onLogin={handleLogin} />
-        }
-      />
-      <Route
-        path="/admin"
+        path={ADMIN_PATH}
         element={
           user ? (
             <AdminLayout onLogout={handleLogout} />
           ) : (
-            <Navigate to="/" replace />
+            <Login onLogin={handleLogin} />
           )
         }
       />
+      <Route path="/login" element={<Navigate to="/" replace />} />
+      <Route path="/admin" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

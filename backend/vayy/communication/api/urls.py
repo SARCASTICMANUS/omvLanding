@@ -6,9 +6,15 @@ from communication.api.views import (
     NotificationReadAllAPIView,
     NotificationDeleteAPIView,
     NotificationPreferenceAPIView,
+    WaitlistCreateAPIView,
 )
 
 urlpatterns = [
+    path(
+        "waitlist/",
+        WaitlistCreateAPIView.as_view(),
+        name="waitlist-create",
+    ),
     path(
         "notifications/",
         NotificationListAPIView.as_view(),

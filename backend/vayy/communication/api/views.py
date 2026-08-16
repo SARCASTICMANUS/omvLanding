@@ -4,7 +4,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import (
     IsAuthenticated,
+    AllowAny,
 )
+from rest_framework.throttling import ScopedRateThrottle
 
 from communication.selectors.notification_selector import (
     NotificationSelector,
@@ -13,8 +15,13 @@ from communication.selectors.notification_selector import (
 from communication.api.serializers import (
     NotificationSerializer,
     NotificationPreferenceSerializer,
+    WaitlistSerializer,
 )
-from communication.models import Notification, NotificationPreference
+from communication.models import (
+    Notification,
+    NotificationPreference,
+    WaitlistEntry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -135,3 +142,29 @@ class NotificationPreferenceAPIView(APIView):
             "data": serializer.data
         })
         return resp
+
+
+class WaitlistCreateAPIView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "waitlist"
+
+    def post(self, request):
+        serializer = WaitlistSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"].strip().lower()
+        entry, created = WaitlistEntry.objects.get_or_create(email=email)
+
+        if not created:
+            return Response({
+                "success": False,
+                "message": "This email is already on the waitlist.",
+                "data": {"email": entry.email}
+            }, status=status.HTTP_409_CONFLICT)
+
+        return Response({
+            "success": True,
+            "message": "You're on the waitlist! We'll be in touch soon.",
+            "data": {"email": entry.email}
+        }, status=status.HTTP_201_CREATED)

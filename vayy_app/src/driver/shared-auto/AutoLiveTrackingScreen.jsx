@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState, useCallback } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useDispatch } from "react-redux";
 import { startDispatchTrip, completeDispatch } from "../../store/slices/dispatchSlice";
 import useWebSocket from "../../shared/hooks/useWebSocket";
@@ -73,13 +74,18 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
       />
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+      <LinearGradient
+        colors={["rgba(10, 22, 60, 0.94)", "rgba(10, 22, 62, 0.0010)"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={[styles.header, { paddingTop: insets.top + 10 }]}
+      >
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Ride Active</Text>
         <View style={{ width: 40 }} />
-      </View>
+      </LinearGradient>
 
       <View style={[styles.progressBar, { top: insets.top + 70 }]}>
         <View style={[styles.progressFill, { width: `${liveProgress * 100}%`, backgroundColor: accent }]} />
@@ -140,7 +146,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingBottom: 24,
-    backgroundColor: "rgba(10,22,60,0.9)",
     zIndex: 10,
   },
   backBtn: {
