@@ -33,11 +33,11 @@ api.interceptors.response.use(
         } catch {
           localStorage.removeItem("admin_token");
           localStorage.removeItem("admin_refresh");
-          window.location.href = "/";
+          window.location.href = "/zxcv";
         }
       } else {
         localStorage.removeItem("admin_token");
-        window.location.href = "/";
+        window.location.href = "/zxcv";
       }
     }
     return Promise.reject(err);

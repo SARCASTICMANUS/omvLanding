@@ -3,6 +3,7 @@ from rest_framework import serializers
 from communication.models import (
     Notification,
     NotificationPreference,
+    WaitlistEntry,
 )
 
 
@@ -37,3 +38,9 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
             "dispatch_alerts",
             "marketing_updates",
         )
+
+
+class WaitlistSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WaitlistEntry
+        fields = ("email",)

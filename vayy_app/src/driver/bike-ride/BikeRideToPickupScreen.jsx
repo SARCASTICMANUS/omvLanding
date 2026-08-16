@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
 import * as Location from "expo-location";
+import { LinearGradient } from "expo-linear-gradient";
 import { arrivedDispatch } from "../../store/slices/dispatchSlice";
 import { getRoadDistance } from "../../routes/services/routeService";
 import useWebSocket from "../../shared/hooks/useWebSocket";
@@ -194,13 +195,18 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
         </VayyMap>
         )}
 
-        <View style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}>
+        <LinearGradient
+          colors={["rgba(10, 22, 60, 0.94)", "rgba(10, 22, 62, 0.0010)"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}
+        >
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
             <Ionicons name="chevron-back" size={22} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Ride to Pickup</Text>
           <View style={{ width: 40 }} />
-        </View>
+        </LinearGradient>
       </View>
 
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
@@ -371,7 +377,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingBottom: 20,
-    backgroundColor: "rgba(10,22,60,0.9)",
     zIndex: 10,
   },
   backBtn: {
