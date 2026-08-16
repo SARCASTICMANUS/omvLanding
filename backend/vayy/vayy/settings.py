@@ -192,7 +192,15 @@ CORS_ALLOW_ALL_ORIGINS = env.bool(
     default=True
 )
 
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=[],
+)
+
+CORS_ALLOW_CREDENTIALS = env.bool(
+    "CORS_ALLOW_CREDENTIALS",
+    default=True,
+)
 
 CSRF_TRUSTED_ORIGINS = env.list(
     "CSRF_TRUSTED_ORIGINS",
