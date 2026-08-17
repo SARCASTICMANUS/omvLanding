@@ -88,6 +88,3 @@ admin/node_modules/
 admin/node_modules/*
 admin/.env
 admin/.env.local
-
-# --- SSL certs (never commit private keys) ---
-privkey.pem
