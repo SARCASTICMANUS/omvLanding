@@ -13,7 +13,7 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { setVehicleMode } from "../../store/slices/vehicleModeSlice";
 import { MaterialIcons } from "@expo/vector-icons";
-import { NOMINATIM_REVERSE, USER_AGENT } from "../../constants";
+import { NOMINATIM_REVERSE } from "../../constants";
 
 const AUTO_IMG = require("../../../assets-webp/vayySideAuto.webp");
 const BIKE_IMG = require("../../../assets-webp/vayyPulsureBike.webp");
@@ -168,9 +168,7 @@ export default function PassengerHomeScreen({ navigation }) {
       const loc = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = loc.coords;
       try {
-        const url = NOMINATIM_REVERSE(latitude, longitude);
-        const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-        const data = await res.json();
+        const data = await NOMINATIM_REVERSE(latitude, longitude);
         const placeName =
           data?.name ||
           data?.address?.road ||

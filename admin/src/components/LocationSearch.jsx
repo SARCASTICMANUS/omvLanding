@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Search, Loader2, MapPin } from "lucide-react";
-
-const NOMINATIM_URL = import.meta.env.VITE_NOMINATIM_URL || "https://nominatim.openstreetmap.org";
+import api from "../api/client";
 
 const useDebounce = (value, delay) => {
   const [debounced, setDebounced] = useState(value);
@@ -36,12 +35,11 @@ export default function LocationSearch({ placeholder, onSelect, initialValue = "
     }
     let ignore = false;
     setLoading(true);
-    fetch(
-      `${NOMINATIM_URL}/search?q=${encodeURIComponent(debounced)}&format=json&limit=8&addressdetails=1`
-    )
-      .then((r) => r.json())
-      .then((data) => {
+    api
+      .get(`/transport/geocode/search/?q=${encodeURIComponent(debounced)}&limit=8&countrycodes=in`)
+      .then((res) => {
         if (ignore) return;
+        const data = res.data;
         setResults(Array.isArray(data) ? data : []);
         setOpen(true);
       })
