@@ -88,14 +88,19 @@ jobs:
             fi
 
             docker compose down --remove-orphans || true
-            # Wait for port 80 to be fully released before rebuilding
-            for i in $(seq 1 10); do
-              if ! ss -tlnp 'sport = :80' | grep -q ':80'; then
+
+            # Kill any host-level service holding port 80
+            sudo systemctl stop nginx apache2 httpd caddy 2>/dev/null || true
+
+            # Wait for port 80 to be fully released
+            for i in $(seq 1 15); do
+              if ! sudo ss -tlnp | grep -q ':80 '; then
                 break
               fi
-              echo "Waiting for port 80 to be released... ($i/10)"
+              echo "Waiting for port 80 to be released... ($i/15)"
               sleep 2
             done
+
             docker compose up -d --build
 
             docker compose exec web python manage.py migrate
