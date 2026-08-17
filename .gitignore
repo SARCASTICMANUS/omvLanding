@@ -78,6 +78,7 @@ vayy_app/metro.log
 vayy_app/vayyNewUi.zip
 vayy_app/newui/
 vayy_app/.expo-export-check/
+vayy_app/src/admin/.env
 
 admin/dist
 admin/dist/
@@ -87,3 +88,6 @@ admin/node_modules/
 admin/node_modules/*
 admin/.env
 admin/.env.local
+
+# --- SSL certs (never commit private keys) ---
+privkey.pem
