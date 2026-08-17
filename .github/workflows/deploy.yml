@@ -87,7 +87,15 @@ jobs:
               exit 1
             fi
 
-            docker compose down || true
+            docker compose down --remove-orphans || true
+            # Wait for port 80 to be fully released before rebuilding
+            for i in $(seq 1 10); do
+              if ! ss -tlnp 'sport = :80' | grep -q ':80'; then
+                break
+              fi
+              echo "Waiting for port 80 to be released... ($i/10)"
+              sleep 2
+            done
             docker compose up -d --build
 
             docker compose exec web python manage.py migrate
