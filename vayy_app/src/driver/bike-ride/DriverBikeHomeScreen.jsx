@@ -23,7 +23,7 @@ import VayyMap, { Marker } from "../../shared/components/VayyMap";
 import COLORS from "../../shared/constants/colors";
 import SHADOW from "../../shared/constants/shadow";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { NOMINATIM_SEARCH, USER_AGENT, STORAGE_KEYS } from "../../constants";
+import { NOMINATIM_SEARCH, STORAGE_KEYS } from "../../constants";
 import { useSelector } from "react-redux";
 
 const SHEET_COMPACT = 240;
@@ -49,12 +49,7 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 11
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const url = NOMINATIM_SEARCH(query);
-        const response = await fetch(url, {
-          headers: { "User-Agent": USER_AGENT },
-          signal: controller.signal,
-        });
-        const data = await response.json();
+        const data = await NOMINATIM_SEARCH(query);
         setResults(Array.isArray(data) ? data : []);
       } catch {
         setResults([]);

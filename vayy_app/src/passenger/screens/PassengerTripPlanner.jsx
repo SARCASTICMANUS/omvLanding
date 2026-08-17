@@ -19,7 +19,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { getRecentSearches, saveRecentSearch, searchRoutesByLocation } from "../services/passengerService";
 
 import COLORS from "../../shared/constants/colors";
-import { NOMINATIM_SEARCH, USER_AGENT } from "../../constants";
+import { NOMINATIM_SEARCH } from "../../constants";
 import SHADOW from "../../shared/constants/shadow";
 
 const { width } = Dimensions.get("window");
@@ -65,12 +65,7 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
       setLoading(true);
 
       try {
-        const url = NOMINATIM_SEARCH(query);
-        const response = await fetch(url, {
-          headers: { "User-Agent": USER_AGENT },
-          signal: controller.signal,
-        });
-        const data = await response.json();
+        const data = await NOMINATIM_SEARCH(query);
         setResults(Array.isArray(data) ? data : []);
       } catch {
         setResults([]);

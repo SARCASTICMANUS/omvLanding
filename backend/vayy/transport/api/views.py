@@ -761,3 +761,45 @@ class RoadDistanceAPIView(APIView):
                 "duration_min": max(1, round(duration_s / 60)),
             },
         })
+
+
+class GeocodeSearchAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        if not query:
+            return Response(
+                {"success": False, "message": "Query parameter 'q' is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        limit = min(int(request.query_params.get("limit", 5)), 10)
+        country_codes = request.query_params.get("countrycodes", "in")
+
+        from transport.services.geocoding_service import GeocodingService
+        results = GeocodingService.search(query, limit=limit, country_codes=country_codes)
+        return Response(results, status=status.HTTP_200_OK)
+
+
+class GeocodeReverseAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            lat = float(request.query_params.get("lat", ""))
+            lon = float(request.query_params.get("lon", ""))
+        except (TypeError, ValueError):
+            return Response(
+                {"success": False, "message": "Parameters 'lat' and 'lon' are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from transport.services.geocoding_service import GeocodingService
+        result = GeocodingService.reverse(lat, lon)
+        if not result:
+            return Response(
+                {"success": False, "message": "No results found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(result, status=status.HTTP_200_OK)

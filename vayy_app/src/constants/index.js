@@ -5,5 +5,5 @@ export { ROLE, PASSENGER_ROLES, DRIVER_ROLES, ALL_ROLES, isDriverRole, isPasseng
 export { STORAGE_KEYS } from "./storageKeys";
 export { SCREEN } from "./navigation";
 export { colors, spacing, radius, shadow } from "./theme";
-export { NOMINATIM_SEARCH, NOMINATIM_REVERSE, OSRM_ROUTE, USER_AGENT } from "./geocoding";
+export { NOMINATIM_SEARCH, NOMINATIM_REVERSE, USER_AGENT } from "./geocoding";
 export { API_TIMEOUT, DEFAULT_API_URL, WS_MAX_RECONNECT } from "./config";
