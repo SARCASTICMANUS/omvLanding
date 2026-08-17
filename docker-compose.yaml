@@ -37,8 +37,8 @@ services:
     build: ./backend/vayy
     container_name: vayy-web
     command: sh /app/entrypoint.sh
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
@@ -95,6 +95,8 @@ services:
       dockerfile: Dockerfile
     container_name: vayy-admin
     restart: unless-stopped
+    expose:
+      - "80"
     depends_on:
       - web
 
