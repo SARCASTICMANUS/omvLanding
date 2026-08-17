@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 
 const DEFAULT_CENTER = [78.9629, 20.5937];
-const NOMINATIM_URL = import.meta.env.VITE_NOMINATIM_URL || "https://nominatim.openstreetmap.org";
 const MAP_STYLE_URL = import.meta.env.VITE_MAP_STYLE_URL || "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
 
 const geoJsonify = (coords) => ({
@@ -141,10 +140,10 @@ export default function Routes() {
 
   const reverseGeocode = async (lat, lon, cb) => {
     try {
-      const res = await fetch(
-        `${NOMINATIM_URL}/reverse?lat=${lat}&lon=${lon}&format=json`
+      const res = await api.get(
+        `/transport/geocode/reverse/?lat=${lat}&lon=${lon}`
       );
-      const data = await res.json();
+      const data = res.data;
       if (data.display_name) cb(data.display_name);
     } catch { /* ignore */ }
   };

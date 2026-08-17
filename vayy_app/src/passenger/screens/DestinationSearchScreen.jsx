@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import COLORS from "../../shared/constants/colors";
 import SPACING from "../../shared/constants/spacing";
-import { NOMINATIM_SEARCH, USER_AGENT } from "../../constants";
+import { NOMINATIM_SEARCH } from "../../constants";
 
 export default function DestinationSearchScreen({ navigation }) {
   const [query, setQuery] = useState("");
@@ -21,9 +21,7 @@ export default function DestinationSearchScreen({ navigation }) {
     }
     setLoading(true);
     try {
-      const url = NOMINATIM_SEARCH(text);
-      const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-      const data = await res.json();
+      const data = await NOMINATIM_SEARCH(text);
       setResults(Array.isArray(data) ? data : []);
     } catch {
       setResults([]);

@@ -17,6 +17,8 @@ from transport.api.views import (
     DriverRouteListAPIView,
     PassengersAlongRouteAPIView,
     RoadDistanceAPIView,
+    GeocodeSearchAPIView,
+    GeocodeReverseAPIView,
 )
 
 router = DefaultRouter()
@@ -27,6 +29,16 @@ router.register(r"schedules", TripScheduleViewSet, basename="schedule")
 router.register(r"stop-times", StopTimeViewSet, basename="stop-time")
 
 urlpatterns = [
+    path(
+        "geocode/search/",
+        GeocodeSearchAPIView.as_view(),
+        name="geocode-search",
+    ),
+    path(
+        "geocode/reverse/",
+        GeocodeReverseAPIView.as_view(),
+        name="geocode-reverse",
+    ),
     path(
         "driver/routes/",
         DriverRouteListAPIView.as_view(),
