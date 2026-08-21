@@ -1,17 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import Login from "./pages/Login";
-import Landing from "./pages/Landing";
-import Dashboard from "./pages/Dashboard";
-import Cities from "./pages/Cities";
-import RoutesPage from "./pages/Routes";
-import Stops from "./pages/Stops";
-import TripSchedules from "./pages/TripSchedules";
-import Users from "./pages/Users";
 import Sidebar from "./components/Sidebar";
 import api from "./api/client";
 
+const Landing = lazy(() => import("./pages/Landing"));
+const Login = lazy(() => import("./pages/Login"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Cities = lazy(() => import("./pages/Cities"));
+const RoutesPage = lazy(() => import("./pages/Routes"));
+const Stops = lazy(() => import("./pages/Stops"));
+const TripSchedules = lazy(() => import("./pages/TripSchedules"));
+const Users = lazy(() => import("./pages/Users"));
+const Zones = lazy(() => import("./pages/Zones"));
+
 const ADMIN_PATH = "/zxcv";
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-screen bg-slate-50">
+      <div className="animate-spin rounded-full h-12 w-12 border-4 border-brand-600 border-t-transparent" />
+    </div>
+  );
+}
 
 function AdminLayout({ onLogout }) {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -21,6 +31,7 @@ function AdminLayout({ onLogout }) {
     { id: "cities", label: "Cities" },
     { id: "routes", label: "Routes" },
     { id: "stops", label: "Stops" },
+    { id: "zones", label: "Zone" },
     { id: "schedules", label: "Schedules" },
     { id: "users", label: "Users" },
   ];
@@ -34,12 +45,15 @@ function AdminLayout({ onLogout }) {
         onLogout={onLogout}
       />
       <main className="flex-1 overflow-hidden">
-        {activeTab === "dashboard" && <Dashboard />}
-        {activeTab === "cities" && <Cities />}
-        {activeTab === "routes" && <RoutesPage />}
-        {activeTab === "stops" && <Stops />}
-        {activeTab === "schedules" && <TripSchedules />}
-        {activeTab === "users" && <Users />}
+        <Suspense fallback={<PageLoader />}>
+          {activeTab === "dashboard" && <Dashboard />}
+          {activeTab === "cities" && <Cities />}
+          {activeTab === "routes" && <RoutesPage />}
+          {activeTab === "stops" && <Stops />}
+          {activeTab === "zones" && <Zones />}
+          {activeTab === "schedules" && <TripSchedules />}
+          {activeTab === "users" && <Users />}
+        </Suspense>
       </main>
     </div>
   );
@@ -82,30 +96,26 @@ export default function App() {
     navigate("/");
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-brand-600 border-t-transparent" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoader />;
 
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route
-        path={ADMIN_PATH}
-        element={
-          user ? (
-            <AdminLayout onLogout={handleLogout} />
-          ) : (
-            <Login onLogin={handleLogin} />
-          )
-        }
-      />
-      <Route path="/login" element={<Navigate to="/" replace />} />
-      <Route path="/admin" element={<Navigate to="/" replace />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route
+          path={ADMIN_PATH}
+          element={
+            user ? (
+              <AdminLayout onLogout={handleLogout} />
+            ) : (
+              <Login onLogin={handleLogin} />
+            )
+          }
+        />
+        <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="/admin" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }

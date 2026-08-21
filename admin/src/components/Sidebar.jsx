@@ -5,6 +5,7 @@ import {
   StopCircle,
   CalendarClock,
   Users,
+  Layers,
   LogOut,
 } from "lucide-react";
 
@@ -15,6 +16,7 @@ const iconMap = {
   stops: StopCircle,
   schedules: CalendarClock,
   users: Users,
+  zones: Layers,
 };
 
 export default function Sidebar({ tabs, activeTab, onTabChange, onLogout }) {
