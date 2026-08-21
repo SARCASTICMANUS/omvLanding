@@ -1231,22 +1231,24 @@ class TripFareDetailAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, trip_id):
-        from operations.services.ride_service import RideService
+        from operations.services.fare_service import FareService
 
         try:
             trip = ActiveTrip.objects.get(id=trip_id)
         except ActiveTrip.DoesNotExist:
             return Response({"detail": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        # If trip has stored fare, use it
+        vehicle_type = trip.vehicle.vehicle_type if trip.vehicle else "bike"
+
+        # If trip has stored fare, use it (breakdown derived from stored distance)
         if trip.total_fare is not None:
+            dist_km = round(trip.total_distance_m / 1000, 2) if trip.total_distance_m else 0
+            dur_min = round(trip.total_duration_s / 60, 1) if trip.total_duration_s else None
+            breakdown = FareService.calculate_fare_breakdown(dist_km, vehicle_type, dur_min)
+            breakdown["total_fare"] = float(trip.total_fare)
             return Response({
                 "success": True,
-                "data": {
-                    "distance_km": round(trip.total_distance_m / 1000, 2) if trip.total_distance_m else 0,
-                    "duration_min": round(trip.total_duration_s / 60, 1) if trip.total_duration_s else 0,
-                    "total_fare": float(trip.total_fare),
-                }
+                "data": breakdown,
             })
 
         # Otherwise calculate from route or estimate
@@ -1254,22 +1256,283 @@ class TripFareDetailAPIView(APIView):
         if route and route.total_distance_meters:
             dist_km = route.total_distance_meters / 1000
             dur_min = (dist_km / 25) * 60
-            vehicle_type = trip.vehicle.vehicle_type if trip.vehicle else "bike"
-            base_fare = 20 if vehicle_type == "bike" else 30
-            per_km = 5 if vehicle_type == "bike" else 10
-            total_fare = base_fare + (dist_km * per_km)
+            breakdown = FareService.calculate_fare_breakdown(dist_km, vehicle_type, dur_min)
             return Response({
                 "success": True,
-                "data": {
-                    "distance_km": round(dist_km, 2),
-                    "duration_min": round(dur_min, 1),
-                    "base_fare": base_fare,
-                    "per_km_charge": per_km,
-                    "total_fare": round(total_fare, 2),
-                }
+                "data": breakdown,
             })
 
         return Response(
             {"success": False, "message": "Fare data not available"},
             status=status.HTTP_404_NOT_FOUND,
+        )
+
+
+# ──────────────────────────────────────────────────
+# VEHICLE REGISTRATION (Driver self-registration)
+# ──────────────────────────────────────────────────
+
+class VehicleRegistrationAPIView(APIView):
+    """
+    POST /api/operations/vehicles/register/
+    Allows a driver to register their vehicle during onboarding.
+    Creates Vehicle with status=pending_approval.
+    """
+    permission_classes = [IsAuthenticated, IsDriver]
+
+    def post(self, request):
+        from operations.models import Vehicle
+        from operations.constants import VEHICLE_STATUS_PENDING
+
+        vehicle_number = request.data.get("vehicle_number", "").strip().upper()
+        vehicle_type = request.data.get("vehicle_type", "").strip()
+
+        if not vehicle_number:
+            return Response(
+                {"success": False, "message": "vehicle_number is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if vehicle_type not in ("bike", "auto"):
+            return Response(
+                {"success": False, "message": "vehicle_type must be 'bike' or 'auto'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check if vehicle_number is taken by another driver
+        existing = Vehicle.objects.filter(vehicle_number=vehicle_number).first()
+        if existing and existing.driver != request.user:
+            return Response(
+                {"success": False, "message": "Vehicle with this number already exists"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # If driver already has a vehicle, update it; otherwise create new
+        vehicle, created = Vehicle.objects.update_or_create(
+            driver=request.user,
+            defaults={
+                "vehicle_number": vehicle_number,
+                "vehicle_type": vehicle_type,
+                "status": VEHICLE_STATUS_PENDING,
+                "is_active": False,
+            },
+        )
+
+        # Also update driver profile with vehicle info
+        from accounts.models import PublicDriverProfile
+        profile, _ = PublicDriverProfile.objects.get_or_create(user=request.user)
+        profile.vehicle_number = vehicle_number
+        profile.vehicle_type = vehicle_type
+        profile.save(update_fields=["vehicle_number", "vehicle_type"])
+
+        return Response(
+            {
+                "success": True,
+                "message": "Vehicle registered, pending approval" if created else "Vehicle updated, pending approval",
+                "data": VehicleSerializer(vehicle).data,
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+# ──────────────────────────────────────────────────
+# ADMIN: Driver Verification
+# ──────────────────────────────────────────────────
+
+from accounts.models import DriverDocument, PublicDriverProfile, User
+from accounts.api.serializers import DriverDocumentSerializer
+from rest_framework.permissions import BasePermission
+
+
+class IsAdminUser(BasePermission):
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and (
+            request.user.role == "admin" or request.user.is_staff
+        )
+
+
+class AdminPendingDriversAPIView(APIView):
+    """
+    GET /api/operations/admin/drivers/pending/
+    Returns drivers with pending vehicle approval (pending_approval status).
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        from operations.models import Vehicle
+
+        # Get drivers whose vehicle is pending admin approval
+        pending_vehicles = Vehicle.objects.filter(
+            status="pending_approval",
+        ).select_related("driver", "driver__driver_profile")
+
+        result = []
+        seen_driver_ids = set()
+        for vehicle in pending_vehicles:
+            driver = vehicle.driver
+            if not driver or driver.id in seen_driver_ids:
+                continue
+            seen_driver_ids.add(driver.id)
+
+            profile = getattr(driver, "driver_profile", None)
+            docs = DriverDocument.objects.filter(driver=driver)
+
+            result.append({
+                "id": str(driver.id),
+                "email": driver.email,
+                "first_name": driver.first_name,
+                "last_name": driver.last_name,
+                "role": driver.role,
+                "is_verified": profile.is_verified if profile else False,
+                "date_joined": driver.date_joined.isoformat() if driver.date_joined else None,
+                "profile": {
+                    "display_name": getattr(profile, "display_name", None),
+                    "phone_number": getattr(profile, "phone_number", None),
+                    "license_number": getattr(profile, "license_number", None),
+                    "vehicle_number": getattr(profile, "vehicle_number", None),
+                    "vehicle_type": getattr(profile, "vehicle_type", None),
+                } if profile else None,
+                "vehicle": {
+                    "id": str(vehicle.id),
+                    "vehicle_number": vehicle.vehicle_number,
+                    "vehicle_type": vehicle.vehicle_type,
+                    "status": vehicle.status,
+                } if vehicle else None,
+                "documents": DriverDocumentSerializer(docs, many=True).data,
+            })
+
+        return Response(
+            {
+                "success": True,
+                "data": result,
+            }
+        )
+
+
+class AdminDriverVerifyAPIView(APIView):
+    """
+    PATCH /api/operations/admin/drivers/<uuid:driver_id>/verify/
+    Approve or reject a driver.
+    Body: { "action": "approve" | "reject" }
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def patch(self, request, driver_id):
+        from operations.models import Vehicle
+
+        action = request.data.get("action")
+        if action not in ("approve", "reject"):
+            return Response(
+                {"success": False, "message": "action must be 'approve' or 'reject'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            driver = User.objects.get(id=driver_id)
+        except User.DoesNotExist:
+            return Response(
+                {"success": False, "message": "Driver not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if action == "approve":
+            # Mark driver profile as verified
+            try:
+                profile = driver.driver_profile
+                profile.is_verified = True
+                profile.save(update_fields=["is_verified"])
+            except Exception:
+                pass
+
+            # Approve vehicle too
+            Vehicle.objects.filter(driver=driver).update(
+                status="approved",
+                is_active=True,
+            )
+
+            # Mark all documents as verified
+            DriverDocument.objects.filter(driver=driver, status="pending").update(
+                status="verified",
+                verified_by=request.user,
+                verified_at=timezone.now(),
+            )
+
+            # Send notification
+            try:
+                from communication.services.notification_service import NotificationService
+                NotificationService.create(
+                    user=driver,
+                    title="Account Approved",
+                    message="Congratulations! Your driver account has been verified. You can now start receiving trips.",
+                    metadata={"event": "driver_verified"},
+                )
+            except Exception:
+                pass
+
+            message = "Driver approved"
+        else:
+            # Reject: mark vehicle as rejected
+            Vehicle.objects.filter(driver=driver).update(status="rejected")
+            message = "Driver rejected"
+
+        return Response(
+            {"success": True, "message": message},
+        )
+
+
+class AdminDocumentVerifyAPIView(APIView):
+    """
+    PATCH /api/operations/admin/documents/<uuid:doc_id>/verify/
+    Approve or reject a single document.
+    Body: { "action": "approve" | "reject", "rejection_reason": "..." }
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def patch(self, request, doc_id):
+        action = request.data.get("action")
+        if action not in ("approve", "reject"):
+            return Response(
+                {"success": False, "message": "action must be 'approve' or 'reject'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            doc = DriverDocument.objects.get(id=doc_id)
+        except DriverDocument.DoesNotExist:
+            return Response(
+                {"success": False, "message": "Document not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if action == "approve":
+            doc.status = "verified"
+            doc.verified_by = request.user
+            doc.verified_at = timezone.now()
+            doc.rejection_reason = ""
+            doc.save(update_fields=["status", "rejection_reason", "verified_by", "verified_at"])
+
+            # Auto-verify profile if all required docs are now verified
+            from accounts.services.verification_service import VerificationService
+            VerificationService.check_and_verify_profile(doc.driver)
+        else:
+            doc.status = "rejected"
+            doc.rejection_reason = request.data.get("rejection_reason", "")
+            doc.verified_by = request.user
+            doc.verified_at = timezone.now()
+            doc.save(update_fields=["status", "rejection_reason", "verified_by", "verified_at"])
+
+            # Unverify profile if it was verified
+            try:
+                profile = doc.driver.driver_profile
+                if profile.is_verified:
+                    profile.is_verified = False
+                    profile.save(update_fields=["is_verified"])
+            except Exception:
+                pass
+
+        return Response(
+            {
+                "success": True,
+                "message": f"Document {'approved' if action == 'approve' else 'rejected'}",
+                "data": DriverDocumentSerializer(doc).data,
+            }
         )
