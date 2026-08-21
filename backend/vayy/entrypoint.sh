@@ -25,18 +25,43 @@ python manage.py collectstatic --noinput
 
 # Create admin superuser from env (idempotent, non-interactive)
 if [ -n "$DJANGO_SUPERUSER_USERNAME" ]; then
-  python manage.py shell << EOF
-from django.contrib.auth import get_user_model
+  python manage.py shell << 'EOF'
 import os
+from django.contrib.auth import get_user_model
 User = get_user_model()
 username = os.environ.get("DJANGO_SUPERUSER_USERNAME", "root")
 email = os.environ.get("DJANGO_SUPERUSER_EMAIL", "")
 password = os.environ.get("DJANGO_SUPERUSER_PASSWORD", "")
-if username and password and not User.objects.filter(username=username).exists():
-    User.objects.create_superuser(username=username, email=email, password=password)
-    print("Superuser ready")
+if not username or not password:
+    print("Skipping superuser: missing username or password")
 else:
-    print("Superuser already exists")
+    user, created = User.objects.get_or_create(
+        username=username,
+        defaults={"email": email, "is_staff": True, "is_superuser": True, "role": "admin"},
+    )
+    if created:
+        user.set_password(password)
+        user.save()
+        print(f"Superuser '{username}' created with role=admin")
+    else:
+        changed = False
+        if not user.is_staff:
+            user.is_staff = True
+            changed = True
+        if not user.is_superuser:
+            user.is_superuser = True
+            changed = True
+        if user.role != "admin":
+            user.role = "admin"
+            changed = True
+        if not user.check_password(password):
+            user.set_password(password)
+            changed = True
+        if changed:
+            user.save()
+            print(f"Superuser '{username}' updated: role=admin, is_staff=True")
+        else:
+            print(f"Superuser '{username}' already exists and is correct")
 EOF
 fi
 
