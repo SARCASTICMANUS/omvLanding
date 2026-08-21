@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from typing import Dict, List, Optional
 
 from django.core.cache import cache
@@ -9,6 +10,8 @@ logger = logging.getLogger(__name__)
 # Redis key names
 GEO_KEY = "vayy:vehicles:locations"
 META_PREFIX = "vayy:vehicles:meta"
+LATEST_PREFIX = "vayy:vehicle:latest"
+SNAPSHOT_TTL = 30
 
 
 class RedisGeoService:
@@ -62,6 +65,99 @@ class RedisGeoService:
             logger.debug(f"Redis GEO: added vehicle {vehicle_id} at ({lat}, {lng})")
         except Exception as e:
             logger.warning(f"Redis GEO: failed to add vehicle {vehicle_id}: {e}")
+
+    @classmethod
+    def set_vehicle_meta(
+        cls,
+        vehicle_id: str,
+        vehicle_type: str,
+        driver_id: Optional[str] = None,
+        vehicle_number: Optional[str] = None,
+        trip_id: Optional[str] = None,
+    ) -> None:
+        """
+        Write only the vehicle metadata hash (no GEO update).
+        Used by the hot path so GPS pings avoid DB lookups.
+        """
+        try:
+            client = cache.client.get_client()
+            meta = {
+                "vehicle_type": vehicle_type or "",
+                "driver_id": driver_id or "",
+                "vehicle_number": vehicle_number or "",
+                "trip_id": trip_id or "",
+            }
+            meta_key = cls._meta_key(vehicle_id)
+            client.hset(meta_key, mapping=meta)
+            client.expire(meta_key, 120)
+        except Exception as e:
+            logger.warning(f"Redis GEO: failed to set meta for {vehicle_id}: {e}")
+
+    @classmethod
+    def get_vehicle_meta(cls, vehicle_id: str) -> Optional[Dict]:
+        """Read the cached vehicle metadata hash without touching the DB."""
+        try:
+            client = cache.client.get_client()
+            meta = client.hgetall(cls._meta_key(vehicle_id))
+            if not meta:
+                return None
+            return {cls._decode(k): cls._decode(v) for k, v in meta.items()}
+        except Exception as e:
+            logger.warning(f"Redis GEO: failed to get meta for {vehicle_id}: {e}")
+            return None
+
+    @classmethod
+    def add_vehicle_location(cls, vehicle_id: str, lat: float, lng: float) -> None:
+        """Update only the vehicle's position in the Redis GEO set (hot path)."""
+        try:
+            client = cache.client.get_client()
+            client.geoadd(GEO_KEY, (lng, lat, vehicle_id))
+        except Exception as e:
+            logger.warning(f"Redis GEO: failed to add location for {vehicle_id}: {e}")
+
+    @classmethod
+    def set_vehicle_snapshot(
+        cls,
+        vehicle_id: str,
+        lat: float,
+        lng: float,
+        speed: float = 0,
+        heading: float = 0,
+        trip_id: Optional[str] = None,
+        route_id: Optional[str] = None,
+    ) -> None:
+        """
+        Cache the latest known vehicle position with a short TTL so a passenger
+        that connects mid-trip immediately gets the marker position.
+        """
+        try:
+            client = cache.client.get_client()
+            key = f"{LATEST_PREFIX}:{vehicle_id}"
+            client.hset(key, mapping={
+                "lat": lat,
+                "lng": lng,
+                "speed": speed,
+                "heading": heading,
+                "trip_id": trip_id or "",
+                "route_id": route_id or "",
+                "ts": str(int(time.time())),
+            })
+            client.expire(key, SNAPSHOT_TTL)
+        except Exception as e:
+            logger.warning(f"Redis GEO: failed to set snapshot for {vehicle_id}: {e}")
+
+    @classmethod
+    def get_vehicle_snapshot(cls, vehicle_id: str) -> Optional[Dict]:
+        """Read the latest cached vehicle position snapshot."""
+        try:
+            client = cache.client.get_client()
+            meta = client.hgetall(f"{LATEST_PREFIX}:{vehicle_id}")
+            if not meta:
+                return None
+            return {cls._decode(k): cls._decode(v) for k, v in meta.items()}
+        except Exception as e:
+            logger.warning(f"Redis GEO: failed to get snapshot for {vehicle_id}: {e}")
+            return None
 
     @classmethod
     def remove_vehicle(cls, vehicle_id: str) -> None:

@@ -5,6 +5,7 @@ from django.contrib.gis.measure import D
 from django.contrib.gis.db.models.functions import Distance
 from operations.models import Vehicle, VehicleState
 from operations.api.serializers import RideEstimateResponseSerializer
+from operations.services.fare_service import FareService
 
 logger = logging.getLogger(__name__)
 
@@ -38,21 +39,8 @@ class RideService:
             )
             duration_minutes = (distance_km / 25) * 60 + 5
         
-        # Base fare calculation
-        base_fares = {
-            "auto": 30,
-            "bike": 20,
-        }
-        
-        per_km_rates = {
-            "auto": 10,
-            "bike": 5,
-        }
-        
-        base_fare = base_fares.get(vehicle_type, 50)
-        per_km_rate = per_km_rates.get(vehicle_type, 15)
-        
-        estimated_fare = base_fare + (distance_km * per_km_rate)
+        # Fare from the shared service so estimates always match final fare
+        estimated_fare = FareService.calculate_fare(distance_km, vehicle_type)
         
         # Surge multiplier (mock logic)
         surge_multiplier = 1.0
@@ -76,14 +64,7 @@ class RideService:
             
         vehicle_type = trip.vehicle.vehicle_type
         
-        base_fares = {"auto": 30, "bike": 20}
-        per_km_rates = {"auto": 10, "bike": 5}
-        
-        base_fare = base_fares.get(vehicle_type, 50)
-        per_km_rate = per_km_rates.get(vehicle_type, 15)
-        
-        final_fare = base_fare + (distance_km * per_km_rate)
-        return round(float(final_fare), 2)
+        return FareService.calculate_fare(distance_km, vehicle_type)
 
     @staticmethod
     def get_nearby_vehicles(lat: float, lng: float, radius_m: int, vehicle_type: str = None):

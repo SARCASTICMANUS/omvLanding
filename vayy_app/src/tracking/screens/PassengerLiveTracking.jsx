@@ -6,6 +6,7 @@ import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/comp
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import VehicleIconBadge from "../../shared/components/common/VehicleIconBadge";
+import SmoothMarker from "../../shared/components/common/SmoothMarker";
 import LiveDot from "../../shared/components/common/LiveDot";
 import VayyButton from "../../shared/components/common/VayyButton";
 import api from "../../shared/lib/api";
@@ -31,6 +32,8 @@ export default function PassengerLiveTracking({ navigation, route }) {
   const tripId = route?.params?.tripId;
   const [tripData, setTripIdData] = useState(null);
   const [vehicleData, setVehicleData] = useState({ pos: null, eta: [] });
+  const [vehicleHeading, setVehicleHeading] = useState(null);
+  const [vehicleSpeed, setVehicleSpeed] = useState(null);
   const [loading, setLoading] = useState(true);
   const [wsStatus, setWsStatus] = useState("connecting");
   const [myPos, setMyPos] = useState(null);
@@ -46,6 +49,8 @@ export default function PassengerLiveTracking({ navigation, route }) {
         pos: [data.lat, data.lng || data.lon],
         eta: data.next_stop_eta || [],
       });
+      if (data.speed != null) setVehicleSpeed(Number(data.speed));
+      if (data.heading != null) setVehicleHeading(Number(data.heading));
     }
   }, []);
 
@@ -213,11 +218,17 @@ export default function PassengerLiveTracking({ navigation, route }) {
         ) : null}
 
         {vehicleCoord ? (
-          <ViewAnnotation id="vehicle-marker" lngLat={[vehicleCoord.longitude, vehicleCoord.latitude]} anchor="center">
+          <SmoothMarker
+            id="vehicle-marker"
+            targetLat={vehicleCoord.latitude}
+            targetLng={vehicleCoord.longitude}
+            heading={vehicleHeading}
+            speedKmh={vehicleSpeed}
+          >
             <View style={styles.vehicleMarker}>
               <VehicleIconBadge size={34} vehicleType={tripData?.vehicle_type || "auto"} />
             </View>
-          </ViewAnnotation>
+          </SmoothMarker>
         ) : null}
 
         {myCoord ? (

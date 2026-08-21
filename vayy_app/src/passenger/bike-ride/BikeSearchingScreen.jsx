@@ -78,7 +78,7 @@ export function BikeSearchingScreen({ navigation, route }) {
     return () => {
       clearTimeout(timeoutRef.current);
       // locationService.stopTracking();
-      if (activeRequestId) {
+      if (activeRequestId && !navigatedRiderPopupRef.current) {
         dispatch(cancelBroadcast(activeRequestId));
       }
       dispatch(clearDispatch());
@@ -125,6 +125,18 @@ export function BikeSearchingScreen({ navigation, route }) {
       const distLabels = distMeters ? [distKm, `${Math.round(distMeters * 0.66)}m`, `${Math.round(distMeters * 0.33)}m`, "Arrived"] : [distKm];
       const etaMin = data.eta || 5;
       const etaLabels = [`${etaMin} min`, `${Math.max(1, Math.round(etaMin * 0.6))} min`, `${Math.max(1, Math.round(etaMin * 0.3))} min`, "0 min"];
+      const dropName = data.drop_name
+        || (route?.params?.destination && (route.params.destination.name || route.params.destination.display_name))
+        || "Destination";
+      const tripData = {
+        ...data,
+        pickup_name: data.pickup_name || pickupStr,
+        drop_name: data.drop_name || dropName,
+        pickupLat: data.pickup_lat != null ? Number(data.pickup_lat) : null,
+        pickupLng: data.pickup_lng != null ? Number(data.pickup_lng) : null,
+        dropLat: data.drop_lat != null ? Number(data.drop_lat) : null,
+        dropLng: data.drop_lng != null ? Number(data.drop_lng) : null,
+      };
       navigatedRiderPopupRef.current = true;
       setTimeout(() => navigation.navigate("RiderPopup", {
         driverName: data.driver_name || "Driver",
@@ -136,11 +148,17 @@ export function BikeSearchingScreen({ navigation, route }) {
         destination: route?.params?.destination || "Destination",
         pickup: pickupStr,
         pickupName: route?.params?.pickupName || pickupStr,
+        pickupLat: tripData.pickupLat,
+        pickupLng: tripData.pickupLng,
+        dropLat: tripData.dropLat,
+        dropLng: tripData.dropLng,
+        dropName,
+        route_name: data.route_name || "",
         eta: String(etaMin),
         distance: distMeters ? String(distMeters) : "—",
         fare: route?.params?.fare || "—",
         route_id,
-        tripData: data,
+        tripData,
       }), 600);
     } else if (data.type === "no_drivers_available") {
       clearTimeout(timeoutRef.current);
@@ -293,6 +311,23 @@ export function BikeSearchingScreen({ navigation, route }) {
       const fmtDist = (d) => d == null ? "—" : d > 1000 ? `${(d / 1000).toFixed(1)} km` : `${d} m`;
       const distanceLabels = rawDist != null ? [fmtDist(rawDist), fmtDist(Math.round(rawDist * 0.66)), fmtDist(Math.round(rawDist * 0.33)), "Arrived"] : ["—"];
       const etaLabels = rawEta != null ? [`${rawEta} min`, `${Math.max(1, Math.round(rawEta * 0.6))} min`, `${Math.max(1, Math.round(rawEta * 0.3))} min`, "0 min"] : ["—"];
+      const trip = route?.params?.trip || {};
+      const pickupStop = trip?.pickup_stop || {};
+      const dropoffStop = trip?.dropoff_stop || {};
+      const pickupLat = typeof pickupStop?.lat === "number" ? pickupStop.lat : null;
+      const pickupLng = typeof pickupStop?.lon === "number" ? pickupStop.lon : null;
+      const dropLat = typeof dropoffStop?.lat === "number" ? dropoffStop.lat : null;
+      const dropLng = typeof dropoffStop?.lon === "number" ? dropoffStop.lon : null;
+      const dropName = (route?.params?.destination && (route.params.destination.name || route.params.destination.display_name)) || "Destination";
+      const tripData = {
+        ...driverData,
+        pickup_name: pickupName,
+        drop_name: dropName,
+        pickupLat,
+        pickupLng,
+        dropLat,
+        dropLng,
+      };
       setTimeout(() => navigation.navigate('RiderPopup', {
         driverName: driverData.driver_name || driverData.driver?.full_name || "Driver",
         vehicle: driverData.vehicle_number || driverData.vehicle?.vehicle_number || "",
@@ -303,11 +338,17 @@ export function BikeSearchingScreen({ navigation, route }) {
         destination: route?.params?.destination || "Destination",
         pickup: pickupStr,
         pickupName: pickupName,
+        pickupLat,
+        pickupLng,
+        dropLat,
+        dropLng,
+        dropName,
+        route_name: driverData.route_name || trip?.name || "",
                   eta: driverData.eta || "—",
         distance: driverData.distance || "1200",
                   fare: driverData.fare || route?.params?.fare || "—",
         route_id,
-        tripData: driverData,
+        tripData,
       }), 600);
     }
     if (dispatchStatus === "failed") {

@@ -20,6 +20,7 @@ from communication.services.rabbitmq_service import RabbitMQService
 from communication.services.notification_service import NotificationService
 from accounts.services.wallet_service import WalletService
 from operations.services.ride_service import RideService
+from operations.services.fare_service import FareService
 from tracking.services.redis_geo_service import RedisGeoService
 from communication.constants import EXCHANGE_DISPATCH, RK_DISPATCH_ASSIGN, RK_DISPATCH_CANCEL
 from operations.constants import (
@@ -342,6 +343,24 @@ class DispatchService:
             dist_km = round(geopy_distance(driver_loc, pickup_loc).km, 2)
             eta = max(1, round(dist_km / 30 * 60))  # ~30 km/h avg city speed
 
+        # Compute pickup/drop metadata for the passenger so the map can
+        # render the destination and both screens stay in sync.
+        drop_name = dispatch_request.route.end_name or dispatch_request.route.name
+        drop_lat = drop_lng = None
+        try:
+            if dispatch_request.route.path:
+                drop_lng, drop_lat = dispatch_request.route.path.coords[-1]
+        except Exception:
+            pass
+
+        pickup_stop = dispatch_request.pickup_stop
+        pickup_lat = pickup_lng = None
+        try:
+            pickup_lat = pickup_stop.location.y
+            pickup_lng = pickup_stop.location.x
+        except Exception:
+            pass
+
         # Notify passenger via broadcast WS — driver accepted with OTP
         DispatchService._notify_ws(
             f"broadcast_{dispatch_request.id}",
@@ -349,11 +368,20 @@ class DispatchService:
             {
                 "type": "request_accepted",
                 "trip_id": str(trip.id),
+                "request_id": str(dispatch_request.id),
                 "driver_name": driver.get_full_name(),
                 "vehicle_number": vehicle_state.vehicle.vehicle_number,
                 "otp": otp,
                 "distance_km": dist_km,
                 "eta": eta,
+                "route_id": str(dispatch_request.route_id),
+                "route_name": dispatch_request.route.name,
+                "pickup_name": pickup_stop.name if pickup_stop else None,
+                "pickup_lat": pickup_lat,
+                "pickup_lng": pickup_lng,
+                "drop_name": drop_name,
+                "drop_lat": drop_lat,
+                "drop_lng": drop_lng,
             },
         )
 
@@ -601,9 +629,7 @@ class DispatchService:
                     trip.total_duration_s = dur_s
                     dist_km = dist_m / 1000
                     vtype = trip.vehicle.vehicle_type if trip.vehicle else "bike"
-                    base_fare = 20 if vtype == "bike" else 30
-                    per_km = 5 if vtype == "bike" else 10
-                    trip.total_fare = base_fare + (dist_km * per_km)
+                    trip.total_fare = FareService.calculate_fare(dist_km, vtype)
                     trip.save(update_fields=["total_distance_m", "total_duration_s", "total_fare"])
         # Update driver stats (only when the driver completes)
         is_driver = trip.driver == user

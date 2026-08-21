@@ -13,6 +13,9 @@ import notificationReducer from "./slices/notificationSlice";
 import profileReducer from "./slices/profileSlice";
 import dispatchReducer from "./slices/dispatchSlice";
 import rideReducer from "./slices/rideSlice";
+import autoRideReducer from "./slices/autoRideSlice";
+import bikeRideReducer from "./slices/bikeRideSlice";
+import rideFlowReducer from "./slices/rideFlowSlice";
 import adminReducer from "../admin/adminSlice";
 import { configureAuthHandlers } from "../shared/lib/api";
 
@@ -27,6 +30,9 @@ export const store = configureStore({
     profile: profileReducer,
     dispatch: dispatchReducer,
     ride: rideReducer,
+    autoRide: autoRideReducer,
+    bikeRide: bikeRideReducer,
+    rideFlow: rideFlowReducer,
     admin: adminReducer,
   },
   middleware: (getDefaultMiddleware) =>
