@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import api from "../../shared/lib/api";
 import { RIDE } from "../../constants";
 import COLORS from "../../shared/constants/colors";
+import { buildFareBreakdown } from "../../shared/services/fareEstimationService";
 
 const { width } = Dimensions.get("window");
 
@@ -24,7 +25,6 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
   const dispatchId = route.params?.dispatchId || buddy?.dispatchId || tripData?.dispatch_id;
 
   const distanceNum = Number(buddy.distance) || Number(tripData.distance) || 0;
-  const durationNum = Number(buddy.duration) || Number(tripData.duration) || 0;
   const riderRating = Number(buddy.rating) || Number(tripData.rating) || 0;
 
   const [fareData, setFareData] = useState(null);
@@ -38,9 +38,10 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
   }, [dispatchId]);
 
   const fare = fareData?.total_fare || Number(buddy.fare) || Number(tripData.fare) || 0;
-  const baseFare = fareData?.base_fare ?? Math.round(fare * 0.35);
-  const distanceFare = fareData?.distance_fare ?? Math.round(Number(distanceNum) * 5);
-  const timeFare = fareData?.time_fare ?? Math.round(Number(durationNum) * 2);
+  const breakdown = buildFareBreakdown({ distanceKm: distanceNum, vehicleType: "bike", fareData, totalFare: fare || null });
+  const baseFare = breakdown.baseFare;
+  const distanceFare = breakdown.distanceFare;
+  const perKmRate = breakdown.perKmRate;
 
   const now = new Date();
   const timeStr = `${now.toLocaleDateString("en-IN", { weekday: "short" })}, ${now.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`;
@@ -136,12 +137,8 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
             <Text style={styles.fareValue}>₹{baseFare || "—"}</Text>
           </View>
           <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Distance ({distanceNum ? `${distanceNum} km × ₹5/km` : "—"})</Text>
+            <Text style={styles.fareLabel}>Distance ({distanceNum ? `${distanceNum} km × ₹${perKmRate}/km` : "—"})</Text>
             <Text style={styles.fareValue}>₹{distanceFare || "—"}</Text>
-          </View>
-          <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Time ({durationNum ? `${durationNum} min × ₹2/min` : "—"})</Text>
-            <Text style={styles.fareValue}>₹{timeFare || "—"}</Text>
           </View>
           <View style={styles.fareDivider} />
           <View style={styles.fareRow}>

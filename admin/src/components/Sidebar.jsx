@@ -5,6 +5,7 @@ import {
   StopCircle,
   CalendarClock,
   Users,
+  ShieldCheck,
   LogOut,
 } from "lucide-react";
 
@@ -14,6 +15,7 @@ const iconMap = {
   routes: Route,
   stops: StopCircle,
   schedules: CalendarClock,
+  drivers: ShieldCheck,
   users: Users,
 };
 

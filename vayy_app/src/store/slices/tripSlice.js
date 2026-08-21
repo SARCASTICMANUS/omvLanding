@@ -2,6 +2,8 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../shared/lib/api";
 import { OPERATIONS } from "../../constants";
 
+const unwrap = (payload) => payload?.data ?? payload;
+
 export const fetchVehicles = createAsyncThunk(
   "trip/fetchVehicles",
   async (_, { rejectWithValue }) => {
@@ -73,7 +75,7 @@ const tripSlice = createSlice({
   name: "trip",
   initialState: {
     activeTrip: null,
-    status: "idle", // 'idle' | 'loading' | 'active' | 'error'
+    status: "idle",
     vehicles: [],
     vehiclesLoading: false,
     boardingStatus: "idle",
@@ -98,7 +100,8 @@ const tripSlice = createSlice({
       })
       .addCase(fetchVehicles.fulfilled, (state, action) => {
         state.vehiclesLoading = false;
-        state.vehicles = action.payload;
+        const data = unwrap(action.payload);
+        state.vehicles = Array.isArray(data) ? data : [];
       })
       .addCase(fetchVehicles.rejected, (state, action) => {
         state.vehiclesLoading = false;
@@ -109,7 +112,7 @@ const tripSlice = createSlice({
       })
       .addCase(startTrip.fulfilled, (state, action) => {
         state.status = "active";
-        state.activeTrip = action.payload;
+        state.activeTrip = unwrap(action.payload);
         state.error = null;
       })
       .addCase(startTrip.rejected, (state, action) => {

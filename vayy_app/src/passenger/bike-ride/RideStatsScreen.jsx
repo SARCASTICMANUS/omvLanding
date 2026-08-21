@@ -44,6 +44,8 @@ export function RideStatsScreen({ navigation, route }) {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [passengerPos, setPassengerPos] = useState(null);
   const [driverPos, setDriverPos] = useState(null);
+  const [driverHeading, setDriverHeading] = useState(null);
+  const [driverSpeed, setDriverSpeed] = useState(null);
   const [mapCenter, setMapCenter] = useState(null);
   const destinationRaw = route?.params?.destination || "Destination";
   const destination = typeof destinationRaw === "string" ? destinationRaw : destinationRaw?.name || destinationRaw?.display_name || "Destination";
@@ -55,8 +57,8 @@ export function RideStatsScreen({ navigation, route }) {
   const fare = route?.params?.fare || "—";
   const tripData = route?.params?.tripData || {};
   const route_id = route?.params?.route_id || "";
-  const destLat = tripData?.dropLat || tripData?.dropoff_lat || null;
-  const destLng = tripData?.dropLng || tripData?.dropoff_lng || null;
+  const destLat = tripData?.dropLat ?? tripData?.dropoff_lat ?? route?.params?.dropLat ?? null;
+  const destLng = tripData?.dropLng ?? tripData?.dropoff_lng ?? route?.params?.dropLng ?? null;
   const [routePath, setRoutePath] = useState(null);
   const [endRideCase, setEndRideCase] = useState("arrived");
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
@@ -161,6 +163,8 @@ export function RideStatsScreen({ navigation, route }) {
       if (lat && lng) {
         setDriverPos({ latitude: lat, longitude: lng });
       }
+      if (data.speed != null) setDriverSpeed(Number(data.speed));
+      if (data.heading != null) setDriverHeading(Number(data.heading));
       if (data.remaining_distance_km != null) {
         setRemainingDistance(data.remaining_distance_km * 1000);
       }
@@ -279,7 +283,7 @@ export function RideStatsScreen({ navigation, route }) {
             </Marker>
           )}
           {driverPos && (
-            <SmoothMarker id="driver" targetLat={driverPos.latitude} targetLng={driverPos.longitude}>
+            <SmoothMarker id="driver" targetLat={driverPos.latitude} targetLng={driverPos.longitude} heading={driverHeading} speedKmh={driverSpeed}>
               <View style={styles.driverMarker}>
                 <Text style={styles.driverEmoji}>🏍️</Text>
               </View>

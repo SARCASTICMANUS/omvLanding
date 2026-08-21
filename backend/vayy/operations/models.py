@@ -15,6 +15,8 @@ from transport.models import (
 
 from operations.constants import (
     VEHICLE_TYPE_CHOICES,
+    VEHICLE_STATUS_CHOICES,
+    VEHICLE_STATUS_PENDING,
     TRIP_STATUS_CHOICES,
     TRIP_STATUS_ACTIVE,
     BOARDING_STATUS_CHOICES,
@@ -64,6 +66,12 @@ class Vehicle(models.Model):
     vehicle_type = models.CharField(
         max_length=20,
         choices=VEHICLE_TYPE_CHOICES,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=VEHICLE_STATUS_CHOICES,
+        default=VEHICLE_STATUS_PENDING,
     )
 
     is_active = models.BooleanField(

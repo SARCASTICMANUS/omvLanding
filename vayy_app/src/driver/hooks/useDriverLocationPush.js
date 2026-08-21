@@ -1,44 +1,63 @@
 import { useEffect, useRef, useCallback } from "react";
-import api from "../../shared/lib/api";
 import locationService from "../../shared/lib/locationService";
-import { TRACKING } from "../../constants";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import { WS } from "../../constants";
 
 export default function useDriverLocationPush({ enabled, vehicleId, tripId, onLocation }) {
   const vehicleIdRef = useRef(vehicleId);
   const tripIdRef = useRef(tripId);
   const onLocationRef = useRef(onLocation);
-  const enabledRef = useRef(enabled);
+  const pendingRef = useRef(null);
+  const wasConnectedRef = useRef(false);
 
   vehicleIdRef.current = vehicleId;
   tripIdRef.current = tripId;
   onLocationRef.current = onLocation;
-  enabledRef.current = enabled;
 
-  const handleLocation = useCallback((coords) => {
-    if (!vehicleIdRef.current) return;
+  const wsPath = enabled && vehicleId ? WS.trackingVehicle(vehicleId) : null;
 
-    const payload = {
-      vehicle_id: vehicleIdRef.current,
-      lat: coords.latitude,
-      lng: coords.longitude,
-      speed: coords.speed || 0,
-      heading: coords.heading || 0,
-    };
-    if (tripIdRef.current) {
-      payload.trip_id = tripIdRef.current;
+  const { send, isConnected } = useWebSocket(wsPath, { enabled: !!wsPath });
+
+  // Flush the latest buffered ping as soon as the socket reconnects.
+  useEffect(() => {
+    if (isConnected && !wasConnectedRef.current && pendingRef.current) {
+      send("location_update", pendingRef.current);
+      pendingRef.current = null;
     }
+    wasConnectedRef.current = isConnected;
+  }, [isConnected, send]);
 
-    api.post(TRACKING.driverLocation, payload).catch(() => {});
+  const handleLocation = useCallback(
+    (coords) => {
+      if (!vehicleIdRef.current) return;
 
-    if (onLocationRef.current) {
-      onLocationRef.current({
-        latitude: coords.latitude,
-        longitude: coords.longitude,
+      const payload = {
+        trip_id: tripIdRef.current || undefined,
+        lat: coords.latitude,
+        lng: coords.longitude,
         speed: coords.speed || 0,
         heading: coords.heading || 0,
-      });
-    }
-  }, []);
+      };
+
+      // Stream over the persistent vehicle tracking WebSocket. If the socket
+      // is momentarily down, buffer the latest ping and flush it on reconnect.
+      if (isConnected) {
+        send("location_update", payload);
+      } else {
+        pendingRef.current = payload;
+      }
+
+      if (onLocationRef.current) {
+        onLocationRef.current({
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          speed: coords.speed || 0,
+          heading: coords.heading || 0,
+        });
+      }
+    },
+    [isConnected, send],
+  );
 
   useEffect(() => {
     if (!enabled || !vehicleId) return;

@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import api from "../../shared/lib/api";
-import { TRANSPORT } from "../../constants/apiPaths";
+import { TRANSPORT, ADMIN } from "../../constants/apiPaths";
 import AdminMap from "../components/AdminMap";
 import AdminRouteForm from "../components/AdminRouteForm";
 import AdminStopsList from "../components/AdminStopsList";
@@ -17,11 +17,14 @@ export default function AdminScreen({ navigation }) {
 
   const [routeName, setRouteName] = useState("");
   const [routeData, setRouteData] = useState({ startPoint: null, endPoint: null, stops: [] });
-  const [tab, setTab] = useState("map");
+  const [tab, setTab] = useState("drivers");
   const [cities, setCities] = useState([]);
   const [selectedCity, setSelectedCity] = useState(null);
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
   const [mapKey, setMapKey] = useState(0);
+  const [pendingDrivers, setPendingDrivers] = useState([]);
+  const [driversLoading, setDriversLoading] = useState(false);
+  const [expandedDriver, setExpandedDriver] = useState(null);
 
   useEffect(() => {
     dispatch(fetchRoutes());
@@ -32,6 +35,33 @@ export default function AdminScreen({ navigation }) {
       if (data.length > 0) setSelectedCity(data[0]);
     }).catch(() => {});
   }, [dispatch]);
+
+  useEffect(() => {
+    if (tab === "drivers") fetchPendingDrivers();
+  }, [tab]);
+
+  const fetchPendingDrivers = async () => {
+    setDriversLoading(true);
+    try {
+      const res = await api.get(ADMIN.driversPending);
+      setPendingDrivers(res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch pending drivers:", err);
+    } finally {
+      setDriversLoading(false);
+    }
+  };
+
+  const handleDriverAction = async (driverId, action) => {
+    try {
+      await api.patch(ADMIN.driverVerify(driverId), { action });
+      Alert.alert("Success", `Driver ${action === "approve" ? "approved" : "rejected"}`);
+      setPendingDrivers((prev) => prev.filter((d) => d.id !== driverId));
+      setExpandedDriver(null);
+    } catch (err) {
+      Alert.alert("Error", err?.response?.data?.message || "Action failed");
+    }
+  };
 
   const handleRouteChange = useCallback((data) => {
     setRouteData(data);
@@ -81,18 +111,115 @@ export default function AdminScreen({ navigation }) {
       </View>
 
       <View style={styles.tabs}>
-        {["map", "routes", "stops"].map((t) => (
+        {["drivers", "map", "routes", "stops"].map((t) => (
           <TouchableOpacity
             key={t}
             style={[styles.tab, tab === t && styles.activeTab]}
             onPress={() => setTab(t)}
           >
             <Text style={[styles.tabText, tab === t && styles.activeTabText]}>
-              {t === "map" ? "Create Route" : t === "routes" ? `Routes (${routes?.length || 0})` : `Stops (${stops?.length || 0})`}
+              {t === "drivers" ? `Drivers (${pendingDrivers.length})` : t === "map" ? "Create Route" : t === "routes" ? `Routes (${routes?.length || 0})` : `Stops (${stops?.length || 0})`}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+
+      {tab === "drivers" && (
+        <ScrollView style={styles.listPanel}>
+          {driversLoading ? (
+            <Text style={styles.loadingText}>Loading drivers...</Text>
+          ) : pendingDrivers.length === 0 ? (
+            <Text style={styles.emptyText}>No pending drivers</Text>
+          ) : (
+            pendingDrivers.map((driver) => (
+              <TouchableOpacity
+                key={driver.id}
+                style={styles.driverCard}
+                onPress={() => setExpandedDriver(expandedDriver === driver.id ? null : driver.id)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.driverHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.driverName}>
+                      {driver.first_name} {driver.last_name}
+                    </Text>
+                    <Text style={styles.driverEmail}>{driver.email}</Text>
+                    <Text style={styles.driverRole}>
+                      {driver.role === "bikedriver" ? "Bike Driver" : "Auto Driver"}
+                    </Text>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: "#FEF3C7" }]}>
+                    <Text style={[styles.statusText, { color: "#D97706" }]}>Pending</Text>
+                  </View>
+                </View>
+
+                {expandedDriver === driver.id && (
+                  <View style={styles.driverDetails}>
+                    {driver.profile && (
+                      <View style={styles.detailSection}>
+                        <Text style={styles.detailSectionTitle}>Profile</Text>
+                        {driver.profile.phone_number && (
+                          <Text style={styles.detailLine}>Phone: {driver.profile.phone_number}</Text>
+                        )}
+                        {driver.profile.license_number && (
+                          <Text style={styles.detailLine}>License: {driver.profile.license_number}</Text>
+                        )}
+                        {driver.profile.vehicle_number && (
+                          <Text style={styles.detailLine}>Vehicle: {driver.profile.vehicle_number}</Text>
+                        )}
+                      </View>
+                    )}
+
+                    {driver.vehicle && (
+                      <View style={styles.detailSection}>
+                        <Text style={styles.detailSectionTitle}>Vehicle</Text>
+                        <Text style={styles.detailLine}>Number: {driver.vehicle.vehicle_number}</Text>
+                        <Text style={styles.detailLine}>Type: {driver.vehicle.vehicle_type}</Text>
+                        <Text style={styles.detailLine}>Status: {driver.vehicle.status}</Text>
+                      </View>
+                    )}
+
+                    {driver.documents?.length > 0 && (
+                      <View style={styles.detailSection}>
+                        <Text style={styles.detailSectionTitle}>Documents</Text>
+                        {driver.documents.map((doc) => (
+                          <View key={doc.id} style={styles.docRow}>
+                            <Text style={styles.docType}>{doc.document_type}</Text>
+                            <View style={[styles.docStatus, {
+                              backgroundColor: doc.status === "verified" ? "#D1FAE5" : doc.status === "rejected" ? "#FEE2E2" : "#FEF3C7",
+                            }]}>
+                              <Text style={[styles.docStatusText, {
+                                color: doc.status === "verified" ? "#065F46" : doc.status === "rejected" ? "#991B1B" : "#92400E",
+                              }]}>{doc.status}</Text>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                    <View style={styles.actionRow}>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.approveBtn]}
+                        onPress={() => handleDriverAction(driver.id, "approve")}
+                      >
+                        <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                        <Text style={styles.actionBtnText}>Approve</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.rejectBtn]}
+                        onPress={() => handleDriverAction(driver.id, "reject")}
+                      >
+                        <Ionicons name="close-circle" size={18} color="#fff" />
+                        <Text style={styles.actionBtnText}>Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      )}
 
       {tab === "map" && (
         <View style={styles.mapContainer}>
@@ -292,4 +419,62 @@ const styles = StyleSheet.create({
   cityOptionTextSelected: { color: "#009849", fontWeight: "700" },
   modalClose: { marginTop: 8, paddingVertical: 12, alignItems: "center" },
   modalCloseText: { fontSize: 15, color: "#6B7280", fontWeight: "600" },
+  driverCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  driverHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  driverName: { fontSize: 15, fontWeight: "700", color: "#111827" },
+  driverEmail: { fontSize: 12, color: "#6B7280", marginTop: 2 },
+  driverRole: { fontSize: 12, color: "#9CA3AF", marginTop: 2 },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: { fontSize: 11, fontWeight: "600" },
+  driverDetails: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  detailSection: { marginBottom: 12 },
+  detailSectionTitle: { fontSize: 13, fontWeight: "700", color: "#374151", marginBottom: 4 },
+  detailLine: { fontSize: 13, color: "#6B7280", marginBottom: 2 },
+  docRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  docType: { fontSize: 13, color: "#374151" },
+  docStatus: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  docStatusText: { fontSize: 11, fontWeight: "600" },
+  actionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  approveBtn: { backgroundColor: "#009849" },
+  rejectBtn: { backgroundColor: "#EF4444" },
+  actionBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
 });

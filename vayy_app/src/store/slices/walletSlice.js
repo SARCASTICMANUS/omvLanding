@@ -2,6 +2,8 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../shared/lib/api";
 import { AUTH } from "../../constants";
 
+const unwrap = (payload) => payload?.data ?? payload;
+
 export const fetchWallet = createAsyncThunk(
   "wallet/fetchWallet",
   async (_, { rejectWithValue }) => {
@@ -42,8 +44,9 @@ const walletSlice = createSlice({
       })
       .addCase(fetchWallet.fulfilled, (state, action) => {
         state.loading = false;
-        state.balance = action.payload.wallet.balance;
-        state.transactions = action.payload.transactions;
+        const data = unwrap(action.payload);
+        state.balance = data?.wallet?.balance ?? data?.balance ?? "0.00";
+        state.transactions = data?.transactions ?? [];
       })
       .addCase(fetchWallet.rejected, (state, action) => {
         state.loading = false;
@@ -54,7 +57,10 @@ const walletSlice = createSlice({
       })
       .addCase(addFunds.fulfilled, (state, action) => {
         state.loading = false;
-        state.transactions.unshift(action.payload);
+        const data = unwrap(action.payload);
+        if (data) {
+          state.transactions = [data, ...state.transactions];
+        }
         state.balance = (parseFloat(state.balance) + parseFloat(action.meta.arg)).toFixed(2);
       })
       .addCase(addFunds.rejected, (state, action) => {

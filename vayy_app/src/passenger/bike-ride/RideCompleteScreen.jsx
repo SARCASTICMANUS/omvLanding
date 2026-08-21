@@ -19,6 +19,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { submitRating } from "../../store/slices/rideSlice";
 import { RIDE } from "../../constants";
 import api from "../../shared/lib/api";
+import { buildFareBreakdown } from "../../shared/services/fareEstimationService";
 
 export function RideCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -58,11 +59,16 @@ export function RideCompleteScreen({ navigation, route }) {
 
   const distNum = typeof distance === "string" ? parseFloat(distance) || 0 : distance || 0;
   const distKm = distNum > 1000 ? parseFloat((distNum / 1000).toFixed(1)) : distNum;
-  const durationMin = typeof duration === "string" ? parseInt(duration) || null : duration || null;
-  const totalFare = fareData?.total_fare || fare || "—";
-  const baseFare = fareData?.base_fare ?? Math.round(Number(totalFare) * 0.35);
-  const distanceFare = fareData?.distance_fare ?? (distKm > 0 ? Math.round(Number(distKm) * 5) : 0);
-  const timeFare = fareData?.time_fare ?? (durationMin ? Math.round(Number(durationMin) * 2) : 0);
+  const breakdown = buildFareBreakdown({
+    distanceKm: distKm,
+    vehicleType: "bike",
+    fareData,
+    totalFare: Number(fareData?.total_fare) || Number(fare) || null,
+  });
+  const totalFare = breakdown.totalFare;
+  const baseFare = breakdown.baseFare;
+  const distanceFare = breakdown.distanceFare;
+  const perKmRate = breakdown.perKmRate;
 
   return (
     <View style={styles.container}>
@@ -155,12 +161,8 @@ export function RideCompleteScreen({ navigation, route }) {
             <Text style={styles.fareValue}>₹{baseFare}</Text>
           </View>
           <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Distance ({distKm > 0 ? `${distKm} km × ₹5/km` : "—"})</Text>
+            <Text style={styles.fareLabel}>Distance ({distKm > 0 ? `${distKm} km × ₹${perKmRate}/km` : "—"})</Text>
             <Text style={styles.fareValue}>₹{distanceFare}</Text>
-          </View>
-          <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Time ({durationMin ? `${durationMin} min × ₹2/min` : "—"})</Text>
-            <Text style={styles.fareValue}>₹{timeFare}</Text>
           </View>
           <View style={styles.fareDivider} />
 

@@ -11,6 +11,7 @@ export const AUTH = {
   wallet: "/api/accounts/wallet/",
   walletAddFunds: "/api/accounts/wallet/add-funds/",
   pushToken: "/api/accounts/push-token/",
+  driverDocuments: "/api/accounts/driver/documents/",
 };
 
 export const OPERATIONS = {
@@ -21,6 +22,7 @@ export const OPERATIONS = {
   tripsMeActive: "/api/operations/trips/me/active/",
   vehicles: "/api/operations/vehicles/",
   vehiclesMe: "/api/operations/vehicles/me/",
+  vehicleRegister: "/api/operations/vehicles/register/",
   dispatchRequest: "/api/operations/dispatch/request/",
   dispatchComplete: (id) => `/api/operations/dispatch/${id}/complete/`,
   dispatchAccept: (id) => `/api/operations/dispatch/${id}/accept/`,
@@ -69,6 +71,8 @@ export const COMMUNICATION = {
 export const ADMIN = {
   routes: "/api/admin/routes/",
   stops: "/api/admin/stops/",
+  driversPending: "/api/operations/admin/drivers/pending/",
+  driverVerify: (id) => `/api/operations/admin/drivers/${id}/verify/`,
 };
 
 const API_PATHS = {

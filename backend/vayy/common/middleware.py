@@ -67,33 +67,34 @@ class RequestResponseLoggingMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        self._log_request(request)
-        response = self.get_response(request)
-        self._log_response(request, response)
-        return response
-
-    def _log_request(self, request):
-        body = getattr(request, "body", b"")
-        data = {}
-        if body:
+        # Capture request details up-front (body can only be read once)
+        req_body = getattr(request, "body", b"")
+        req_data = {}
+        if req_body:
             try:
-                data = _sanitize(json.loads(body))
+                req_data = _sanitize(json.loads(req_body))
             except (json.JSONDecodeError, TypeError):
-                data = {"_raw": body[:1000].decode("utf-8", "replace")}
+                req_data = {"_raw": req_body[:1000].decode("utf-8", "replace")}
+        req_query = dict(request.GET) if request.GET else {}
 
-        query_params = dict(request.GET) if request.GET else {}
+        response = self.get_response(request)
 
+        # Log AFTER view execution — DRF auth has resolved request.user by now
+        user_id = getattr(getattr(request, "user", None), "id", "anonymous")
         logger.info(
             "REQUEST  %s %s  [user=%s] [query=%s] [data=%s] [correlation_id=%s]",
             request.method,
             request.path,
-            getattr(getattr(request, "user", None), "id", "anonymous"),
-            json.dumps(query_params, default=str),
-            json.dumps(data, default=str),
+            user_id,
+            json.dumps(req_query, default=str),
+            json.dumps(req_data, default=str),
             getattr(request, "correlation_id", "-"),
         )
 
-    def _log_response(self, request, response):
+        self._log_response(request, response, user_id)
+        return response
+
+    def _log_response(self, request, response, user_id=None):
         resp_body = ""
         ct = response.get("Content-Type", "")
         if "application/json" in ct:
@@ -103,9 +104,10 @@ class RequestResponseLoggingMiddleware:
                 resp_body = str(response.content[:1000])
 
         logger.info(
-            "RESPONSE %s %s  [status=%s] [data=%s] [correlation_id=%s]",
+            "RESPONSE %s %s  [user=%s] [status=%s] [data=%s] [correlation_id=%s]",
             request.method,
             request.path,
+            user_id or getattr(getattr(request, "user", None), "id", "anonymous"),
             response.status_code,
             json.dumps(resp_body, default=str)[:2000],
             getattr(request, "correlation_id", "-"),

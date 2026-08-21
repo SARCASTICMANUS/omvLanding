@@ -103,6 +103,7 @@ services:
   nginx:
     image: nginx:alpine
     container_name: vayy-nginx
+    restart: unless-stopped
     ports:
       - "80:80"
     volumes:

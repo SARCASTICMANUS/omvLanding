@@ -2,6 +2,8 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../shared/lib/api";
 import { RIDE } from "../../constants";
 
+const unwrap = (payload) => payload?.data ?? payload;
+
 export const fetchRideHistory = createAsyncThunk(
   "ride/fetchHistory",
   async ({ status, page } = {}, { rejectWithValue }) => {
@@ -47,8 +49,9 @@ const rideSlice = createSlice({
       })
       .addCase(fetchRideHistory.fulfilled, (state, action) => {
         state.historyLoading = false;
-        state.history = action.payload.results || action.payload.data || [];
-        state.historyCount = action.payload.count || 0;
+        const data = unwrap(action.payload);
+        state.history = data?.results || (Array.isArray(data) ? data : []);
+        state.historyCount = data?.count || 0;
       })
       .addCase(fetchRideHistory.rejected, (state, action) => {
         state.historyLoading = false;
