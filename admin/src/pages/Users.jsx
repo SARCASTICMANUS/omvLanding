@@ -57,10 +57,10 @@ export default function Users() {
 
       let profileData = {};
       if (user.role === "passenger") {
-        const res = await api.get("/accounts/me/passenger-profile/");
+        const res = await api.get(`/accounts/me/passenger-profile/?user_id=${userId}`);
         profileData = res.data?.data || res.data || {};
       } else if (user.role === "bikedriver" || user.role === "autodriver") {
-        const res = await api.get("/accounts/me/driver-profile/");
+        const res = await api.get(`/accounts/me/driver-profile/?user_id=${userId}`);
         profileData = res.data?.data || res.data || {};
       }
 
