@@ -25,7 +25,7 @@ python manage.py collectstatic --noinput
 
 # Create admin superuser from env (idempotent, non-interactive)
 if [ -n "$DJANGO_SUPERUSER_USERNAME" ]; then
-  python manage.py shell << 'EOF'
+  python manage.py shell << 'PYEOF'
 import os
 from django.contrib.auth import get_user_model
 User = get_user_model()
@@ -62,7 +62,7 @@ else:
             print(f"Superuser '{username}' updated: role=admin, is_staff=True")
         else:
             print(f"Superuser '{username}' already exists and is correct")
-EOF
+PYEOF
 fi
 
 echo "Starting Daphne Server..."
