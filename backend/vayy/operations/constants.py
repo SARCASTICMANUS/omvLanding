@@ -8,6 +8,17 @@ VEHICLE_TYPE_CHOICES = (
     (VEHICLE_TYPE_AUTO, "Auto-Rickshaw"),
 )
 
+# Vehicle Registration Status
+VEHICLE_STATUS_PENDING = "pending_approval"
+VEHICLE_STATUS_APPROVED = "approved"
+VEHICLE_STATUS_REJECTED = "rejected"
+
+VEHICLE_STATUS_CHOICES = (
+    (VEHICLE_STATUS_PENDING, "Pending Approval"),
+    (VEHICLE_STATUS_APPROVED, "Approved"),
+    (VEHICLE_STATUS_REJECTED, "Rejected"),
+)
+
 
 # Active Trip Status
 

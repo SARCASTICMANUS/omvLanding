@@ -6,8 +6,6 @@ export default defineConfig(({ mode }) => {
   const apiUrl = (env.VITE_API_URL || "/api").trim();
   const proxyTarget = (env.VITE_API_PROXY_TARGET || "http://localhost:8000").trim();
 
-  // Dev proxy: only needed for same-origin "/api". When VITE_API_URL is an
-  // absolute URL the browser calls it directly and no proxy is required.
   const proxy = apiUrl.startsWith("http")
     ? {}
     : {
@@ -23,6 +21,26 @@ export default defineConfig(({ mode }) => {
       host: true,
       port: 5173,
       proxy,
+    },
+    build: {
+      target: "es2020",
+      minify: "esbuild",
+      cssMinify: "esbuild",
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ["react", "react-dom", "react-router-dom"],
+            maplibre: ["maplibre-gl"],
+            ui: ["lucide-react"],
+          },
+          assetFileNames: "assets/[name]-[hash][extname]",
+          chunkFileNames: "assets/[name]-[hash].js",
+        },
+      },
+      chunkSizeWarningLimit: 500,
+    },
+    css: {
+      devSourcemap: false,
     },
   };
 });

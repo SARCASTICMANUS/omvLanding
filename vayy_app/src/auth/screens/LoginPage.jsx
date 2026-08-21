@@ -33,7 +33,7 @@ const LoginPage = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  const [role, setRole] = useState(ROLE.DRIVER);
+  const [role, setRole] = useState(ROLE.PASSENGER);
 
   const handleSignIn = () => {
     dispatch(loginUser({ email, password, role }));
@@ -94,22 +94,22 @@ const LoginPage = ({ navigation }) => {
 
           <View style={styles.roleToggle}>
             <TouchableOpacity
-              style={[styles.rolePill, role === 'passenger' && styles.rolePillActive]}
-              onPress={() => setRole('passenger')}
+              style={[styles.rolePill, role === ROLE.PASSENGER && styles.rolePillActive]}
+              onPress={() => setRole(ROLE.PASSENGER)}
               activeOpacity={0.7}
             >
-              <User size={16} color={role === 'passenger' ? '#fff' : '#666'} />
-              <Text style={[styles.rolePillText, role === 'passenger' && styles.rolePillTextActive]}>
+              <User size={16} color={role === ROLE.PASSENGER ? '#fff' : '#666'} />
+              <Text style={[styles.rolePillText, role === ROLE.PASSENGER && styles.rolePillTextActive]}>
                 Passenger
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.rolePill, role === 'driver' && styles.rolePillActive]}
-              onPress={() => setRole('driver')}
+              style={[styles.rolePill, role === ROLE.BIKE_DRIVER && styles.rolePillActive]}
+              onPress={() => setRole(ROLE.BIKE_DRIVER)}
               activeOpacity={0.7}
             >
-              <Navigation size={16} color={role === 'driver' ? '#fff' : '#666'} />
-              <Text style={[styles.rolePillText, role === 'driver' && styles.rolePillTextActive]}>
+              <Navigation size={16} color={role === ROLE.BIKE_DRIVER ? '#fff' : '#666'} />
+              <Text style={[styles.rolePillText, role === ROLE.BIKE_DRIVER && styles.rolePillTextActive]}>
                 Driver
               </Text>
             </TouchableOpacity>

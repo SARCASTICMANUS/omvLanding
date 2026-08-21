@@ -43,6 +43,8 @@ export function RiderPopupScreen({ navigation, route }) {
   const [routePath, setRoutePath] = useState(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [driverPos, setDriverPos] = useState(null);
+  const [driverHeading, setDriverHeading] = useState(null);
+  const [driverSpeed, setDriverSpeed] = useState(null);
   const [passengerPos, setPassengerPos] = useState(null);
   const [distance, setDistance] = useState(route?.params?.distance || "—");
   const [eta, setEta] = useState(route?.params?.eta || "—");
@@ -78,7 +80,14 @@ export function RiderPopupScreen({ navigation, route }) {
       distance,
       fare,
       route_id: routeId,
-      tripData: route?.params?.tripData || {},
+      tripData: {
+        ...(route?.params?.tripData || {}),
+        pickupLat: route?.params?.pickupLat ?? null,
+        pickupLng: route?.params?.pickupLng ?? null,
+        dropLat: route?.params?.dropLat ?? null,
+        dropLng: route?.params?.dropLng ?? null,
+        drop_name: route?.params?.dropName || route?.params?.tripData?.drop_name || destination,
+      },
     };
     if (arrivedPhase === "waiting") {
       setArrivedPhase("verified");
@@ -93,11 +102,16 @@ export function RiderPopupScreen({ navigation, route }) {
     } else {
       navigation.navigate("RideStats", params);
     }
-  }, [navigation, driverName, vehicle, dispatchId, destination, eta, distance, fare, routeId, arrivedPhase, checkScale]);
+  }, [navigation, driverName, vehicle, dispatchId, destination, eta, distance, fare, routeId, arrivedPhase, checkScale, route?.params?.pickupLat, route?.params?.pickupLng, route?.params?.dropLat, route?.params?.dropLng, route?.params?.dropName, route?.params?.tripData]);
 
   useEffect(() => {
     if (eta === "Arriving" && arrivedPhase == null) {
       setArrivedPhase("waiting");
+    }
+  }, [eta, arrivedPhase]);
+
+  useEffect(() => {
+    if (arrivedPhase === "waiting") {
       pulseAnim.setValue(1);
       const loop = Animated.loop(
         Animated.sequence([
@@ -118,7 +132,7 @@ export function RiderPopupScreen({ navigation, route }) {
       loop.start();
       return () => loop.stop();
     }
-  }, [eta, arrivedPhase, pulseAnim]);
+  }, [arrivedPhase, pulseAnim]);
 
   const handleWsMessage = useCallback((data) => {
     if (data.type === "vehicle_update") {
@@ -127,12 +141,17 @@ export function RiderPopupScreen({ navigation, route }) {
       if (lat && lng) {
         setDriverPos({ latitude: lat, longitude: lng });
       }
+      if (data.speed != null) setDriverSpeed(Number(data.speed));
+      if (data.heading != null) setDriverHeading(Number(data.heading));
       if (data.distance_km != null) {
         setDistance(data.distance_km <= 1 ? `${Math.round(data.distance_km * 1000)} m` : `${data.distance_km} km`);
       }
       if (data.duration_min != null) {
         setEta(data.duration_min <= 1 ? "Arriving" : `${data.duration_min} min`);
       }
+    }
+    if (data.status === "arrived") {
+      setArrivedPhase("waiting");
     }
     if (data.status === "active" || data.type === "trip_started") {
       goToRideStats();
@@ -158,6 +177,8 @@ export function RiderPopupScreen({ navigation, route }) {
       const lat = data.lat;
       const lng = data.lng || data.lon;
       if (lat && lng) setDriverPos({ latitude: lat, longitude: lng });
+      if (data.speed != null) setDriverSpeed(Number(data.speed));
+      if (data.heading != null) setDriverHeading(Number(data.heading));
       if (data.pickup_distance_km != null) {
         setDistance(data.pickup_distance_km <= 1 ? `${Math.round(data.pickup_distance_km * 1000)} m` : `${data.pickup_distance_km} km`);
       } else if (data.remaining_distance_km != null) {
@@ -257,7 +278,7 @@ export function RiderPopupScreen({ navigation, route }) {
             </Marker>
           )}
           {driverPos && (
-            <SmoothMarker id="driver" targetLat={driverPos.latitude} targetLng={driverPos.longitude}>
+            <SmoothMarker id="driver" targetLat={driverPos.latitude} targetLng={driverPos.longitude} heading={driverHeading} speedKmh={driverSpeed}>
               <View style={styles.driverMarker}>
                 <Text style={{ fontSize: 24 }}>🏍️</Text>
               </View>

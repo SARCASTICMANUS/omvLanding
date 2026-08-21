@@ -16,19 +16,47 @@ export const getRideEstimate = async (pickupLat, pickupLng, dropLat, dropLng, ve
   }
 };
 
-export const calculateFare = (distanceKm, vehicleType) => {
-  const baseFares = {
-    auto: 30,
-    bike: 20,
-  };
-  const perKmRates = {
-    auto: 10,
-    bike: 5,
-  };
+export const FARE_RATES = {
+  auto: { baseFare: 30, perKmRate: 10 },
+  bike: { baseFare: 20, perKmRate: 5 },
+  default: { baseFare: 50, perKmRate: 15 },
+};
 
-  const baseFare = baseFares[vehicleType] || 50;
-  const perKmRate = perKmRates[vehicleType] || 15;
+const getRate = (vehicleType) => FARE_RATES[vehicleType] || FARE_RATES.default;
+
+export const calculateFare = (distanceKm, vehicleType) => {
+  const { baseFare, perKmRate } = getRate(vehicleType);
   return Math.round(baseFare + distanceKm * perKmRate);
+};
+
+export const calculateFareBreakdown = (distanceKm, vehicleType) => {
+  const { baseFare, perKmRate } = getRate(vehicleType);
+  const distanceFare = Math.round(Number(distanceKm) * perKmRate);
+  return {
+    baseFare,
+    perKmRate,
+    distanceFare,
+    totalFare: baseFare + distanceFare,
+  };
+};
+
+export const buildFareBreakdown = ({ distanceKm = 0, vehicleType = "bike", fareData = null, totalFare = null }) => {
+  const baseFare = fareData?.base_fare != null ? Number(fareData.base_fare) : null;
+  const perKmRate = fareData?.per_km_charge != null ? Number(fareData.per_km_charge) : null;
+  const distanceFare = fareData?.distance_fare != null ? Number(fareData.distance_fare) : null;
+  const total = totalFare != null
+    ? Number(totalFare)
+    : (fareData?.total_fare != null ? Number(fareData.total_fare) : null);
+
+  if (baseFare != null && perKmRate != null) {
+    return {
+      baseFare,
+      perKmRate,
+      distanceFare: distanceFare != null ? distanceFare : Math.round(Number(distanceKm) * perKmRate),
+      totalFare: total != null ? total : baseFare + Math.round(Number(distanceKm) * perKmRate),
+    };
+  }
+  return calculateFareBreakdown(distanceKm, vehicleType);
 };
 
 export const formatDurationMinutes = (seconds) => {
@@ -47,6 +75,9 @@ export const formatDistanceKm = (meters) => {
 export default {
   getRideEstimate,
   calculateFare,
+  calculateFareBreakdown,
+  buildFareBreakdown,
+  FARE_RATES,
   formatDurationMinutes,
   formatDistanceKm,
 };

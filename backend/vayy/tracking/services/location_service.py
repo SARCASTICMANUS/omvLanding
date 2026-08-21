@@ -164,6 +164,133 @@ class LocationService:
         except Exception as e:
             logger.warning(f"WS broadcast failed for {group_name}: {e}")
 
+    # ── hot path / cold path ────────────────────────────────
+
+    COLD_PATH_KEY = "vayy:cold_path"
+    COLD_PATH_INTERVAL_S = 15
+
+    @staticmethod
+    def should_enqueue_cold_path(vehicle_id: str) -> bool:
+        """
+        Throttle the heavy cold path (DB + OSRM + ETA math) to once per
+        COLD_PATH_INTERVAL_S per vehicle using a Redis SETNX-style add.
+        """
+        try:
+            return cache.add(
+                f"{LocationService.COLD_PATH_KEY}:{vehicle_id}",
+                "1",
+                LocationService.COLD_PATH_INTERVAL_S,
+            )
+        except Exception as e:
+            logger.warning(f"Cold path throttle failed for {vehicle_id}: {e}")
+            return True  # fail-open: never drop an update if Redis misbehaves
+
+    @staticmethod
+    def hot_path_process(payload: Dict[str, Any]) -> None:
+        """
+        Lightweight per-ping pipeline. No DB writes, no OSRM, no ETA math.
+
+        1. Update the Redis GEO set (nearby-vehicle lookups).
+        2. Cache a short-lived position snapshot (instant marker on reconnect).
+        3. Broadcast a minimal vehicle_update to the vehicle + trip groups.
+
+        The enriched payload (ETAs, remaining distance, route state) is handled
+        by the throttled cold path (process_location_update).
+        """
+        vehicle_id = str(payload.get("vehicle_id"))
+        lat = payload.get("lat")
+        lng = payload.get("lng") or payload.get("lon")
+        if not vehicle_id or lat is None or lng is None:
+            logger.error(f"Invalid hot path payload: {payload}")
+            return
+
+        speed = payload.get("speed", 0)
+        heading = payload.get("heading", 0)
+        trip_id = payload.get("trip_id")
+
+        # Reuse cached vehicle metadata so we never hit the DB on this path.
+        meta = RedisGeoService.get_vehicle_meta(vehicle_id)
+        if meta:
+            vehicle_type = meta.get("vehicle_type", "")
+            driver_id = meta.get("driver_id", "")
+            vehicle_number = meta.get("vehicle_number", "")
+        else:
+            try:
+                from operations.models import Vehicle
+                vehicle = Vehicle.objects.get(id=vehicle_id)
+                vehicle_type = vehicle.vehicle_type
+                driver_id = str(vehicle.driver_id) if vehicle.driver_id else None
+                vehicle_number = vehicle.vehicle_number
+                RedisGeoService.set_vehicle_meta(
+                    vehicle_id, vehicle_type, driver_id, vehicle_number,
+                    str(trip_id) if trip_id else None,
+                )
+            except Vehicle.DoesNotExist:
+                logger.warning(f"Hot path: vehicle {vehicle_id} not found")
+                return
+            except Exception as e:
+                logger.warning(f"Hot path: failed to hydrate vehicle meta {vehicle_id}: {e}")
+                return
+
+        try:
+            RedisGeoService.add_vehicle_location(vehicle_id, lat, lng)
+            RedisGeoService.set_vehicle_snapshot(
+                vehicle_id, lat, lng, speed, heading,
+                str(trip_id) if trip_id else None,
+            )
+        except Exception as e:
+            logger.warning(f"Hot path: redis sync failed for {vehicle_id}: {e}")
+
+        # Minimal broadcast — the enriched fields arrive via the cold path.
+        ws_payload = {
+            "type": "vehicle_update",
+            "lat": lat,
+            "lng": lng,
+            "speed": speed,
+            "heading": heading,
+            "vehicle_id": vehicle_id,
+            "trip_id": str(trip_id) if trip_id else None,
+            "hot": True,
+            "timestamp": timezone.now().isoformat(),
+        }
+        LocationService._notify_ws(f"vehicle_{vehicle_id}", "vehicle_update", ws_payload)
+        if trip_id:
+            LocationService._notify_ws(f"trip_{trip_id}", "trip_update", ws_payload)
+
+    @staticmethod
+    def get_trip_latest_snapshot(trip_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Return the last-known vehicle position for a trip so a passenger that
+        connects mid-trip sees the marker immediately instead of waiting for
+        the next GPS ping.
+        """
+        try:
+            trip = ActiveTrip.objects.get(id=trip_id, status__in=["accepted", "arrived", "active"])
+        except ActiveTrip.DoesNotExist:
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to resolve trip for snapshot {trip_id}: {e}")
+            return None
+
+        vehicle_id = str(trip.vehicle_id)
+        snap = RedisGeoService.get_vehicle_snapshot(vehicle_id)
+        if not snap:
+            return None
+
+        route_id = snap.get("route_id") or (str(trip.route_id) if trip.route_id else None)
+        return {
+            "type": "vehicle_update",
+            "lat": float(snap.get("lat")),
+            "lng": float(snap.get("lng")),
+            "speed": float(snap.get("speed", 0)),
+            "heading": float(snap.get("heading", 0)),
+            "vehicle_id": vehicle_id,
+            "trip_id": str(trip.id),
+            "route_id": route_id,
+            "snapshot": True,
+            "timestamp": snap.get("ts"),
+        }
+
     # ── main entry point ─────────────────────────────────────
 
     @staticmethod
@@ -314,6 +441,15 @@ class LocationService:
                             driver_id=str(vehicle.driver_id) if vehicle.driver_id else None,
                             vehicle_number=vehicle.vehicle_number,
                             trip_id=str(active_trip.id) if active_trip else None,
+                        )
+                        RedisGeoService.set_vehicle_snapshot(
+                            vehicle_id=str(vehicle_id),
+                            lat=lat,
+                            lng=lng,
+                            speed=speed,
+                            heading=heading,
+                            trip_id=str(active_trip.id) if active_trip else None,
+                            route_id=str(active_trip.route_id) if active_trip else None,
                         )
                     except Exception as e:
                         logger.warning(f"Failed to sync to Redis GEO: {e}")

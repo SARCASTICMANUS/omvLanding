@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
+import { buildFareBreakdown } from "../../shared/services/fareEstimationService";
 
 const { width } = Dimensions.get("window");
 
@@ -21,11 +22,11 @@ export default function AutoTripCompleteScreen({ navigation, route }) {
   const tripData = route.params?.tripData || {};
 
   const distanceNum = Number(buddy.distance) || Number(tripData.distance) || 0;
-  const durationNum = Number(buddy.duration) || Number(tripData.duration) || 0;
   const fare = Number(buddy.fare) || Number(tripData.fare) || 0;
-  const baseFare = Math.round(fare * 0.35);
-  const distanceFare = Math.round(distanceNum * 5);
-  const timeFare = Math.round(durationNum * 2);
+  const breakdown = buildFareBreakdown({ distanceKm: distanceNum, vehicleType: "auto", totalFare: fare || null });
+  const baseFare = breakdown.baseFare;
+  const distanceFare = breakdown.distanceFare;
+  const perKmRate = breakdown.perKmRate;
   const rating = buddy.rating || tripData.rating || 0;
 
   const now = new Date();
@@ -126,12 +127,8 @@ export default function AutoTripCompleteScreen({ navigation, route }) {
             <Text style={styles.fareValue}>₹{baseFare || "—"}</Text>
           </View>
           <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Distance ({distanceNum ? `${distanceNum} km × ₹5/km` : "—"})</Text>
+            <Text style={styles.fareLabel}>Distance ({distanceNum ? `${distanceNum} km × ₹${perKmRate}/km` : "—"})</Text>
             <Text style={styles.fareValue}>₹{distanceFare || "—"}</Text>
-          </View>
-          <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Time ({durationNum ? `${durationNum} min × ₹2/min` : "—"})</Text>
-            <Text style={styles.fareValue}>₹{timeFare || "—"}</Text>
           </View>
           <View style={styles.fareDivider} />
           <View style={styles.fareRow}>

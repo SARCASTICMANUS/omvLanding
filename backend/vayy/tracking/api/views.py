@@ -224,8 +224,9 @@ class PassengerLocationAPIView(APIView):
 class DriverLocationAPIView(APIView):
     """
     POST /api/tracking/driver-location/
-    Drivers push their GPS location here.
-    Publishes to RabbitMQ → consumer → Celery → LocationService → Redis GEO + DB + WS.
+    Drivers push their GPS location here (legacy HTTP fallback; the app now
+    streams over WebSocket). Runs the Redis/broadcast hot path inline and
+    throttles the DB/OSRM cold path to one Celery job per 15s per vehicle.
 
     Request body:
         {
@@ -255,7 +256,6 @@ class DriverLocationAPIView(APIView):
             )
 
         try:
-            # Verify vehicle belongs to this driver
             from operations.models import Vehicle
             try:
                 vehicle = Vehicle.objects.get(id=vehicle_id)
@@ -272,7 +272,6 @@ class DriverLocationAPIView(APIView):
                 )
                 raise PermissionDenied("Vehicle is not assigned to this driver.")
 
-            # Publish to Celery for async processing
             payload = {
                 "vehicle_id": str(vehicle_id),
                 "lat": float(lat),
@@ -284,10 +283,14 @@ class DriverLocationAPIView(APIView):
             if trip_id:
                 payload["trip_id"] = str(trip_id)
 
-            process_location_update.delay(payload)
+            # Hot path inline (Redis GEO + broadcast), cold path throttled.
+            from tracking.services.location_service import LocationService
+            LocationService.hot_path_process(payload)
+            if LocationService.should_enqueue_cold_path(str(vehicle_id)):
+                process_location_update.delay(payload)
 
             logger.info(
-                f"[DriverLocation] Dispatched GPS for vehicle {vehicle_id}: "
+                f"[DriverLocation] Processed GPS for vehicle {vehicle_id}: "
                 f"lat={lat} lng={lng} speed={speed} heading={heading}"
             )
 

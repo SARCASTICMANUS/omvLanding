@@ -5,6 +5,7 @@ import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/comp
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import VehicleIconBadge from "../../shared/components/common/VehicleIconBadge";
+import SmoothMarker from "../../shared/components/common/SmoothMarker";
 import LiveDot from "../../shared/components/common/LiveDot";
 import VayyButton from "../../shared/components/common/VayyButton";
 import useWebSocket from "../../shared/hooks/useWebSocket";
@@ -29,6 +30,7 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
   const { route, activeTrip } = navRoute?.params || {};
   const [vehiclePos, setVehiclePos] = useState(null);
   const [currentSpeed, setCurrentSpeed] = useState(0);
+  const [currentHeading, setCurrentHeading] = useState(0);
   const [nextStops, setNextStops] = useState([]);
   const [passengers, setPassengers] = useState({});
   const [wsStatus, setWsStatus] = useState("connecting");
@@ -65,6 +67,7 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
           const newPos = { lat: location.coords.latitude, lon: location.coords.longitude };
           setVehiclePos(newPos);
           setCurrentSpeed(Math.max(0, Math.round((location.coords.speed || 0) * 3.6)));
+          setCurrentHeading(location.coords.heading || 0);
 
           // Send to backend via WebSocket if connected
           if (sendRef.current) {
@@ -72,6 +75,8 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
               trip_id: tripId,
               lat: newPos.lat,
               lon: newPos.lon,
+              speed: Math.max(0, Math.round((location.coords.speed || 0) * 3.6)),
+              heading: location.coords.heading || 0,
             });
           }
         },
@@ -190,12 +195,20 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
             />
           </GeoJSONSource>
         ) : null}
-        <ViewAnnotation id="vehicle-marker" lngLat={vehicleCoord ? [vehicleCoord.longitude, vehicleCoord.latitude] : [0, 0]} anchor="center">
-          <View style={[styles.vehicleMarker, { opacity: vehicleCoord ? 1 : 0 }]}>
-            <LiveDot size={13} />
-            <VehicleIconBadge size={38} vehicleType={activeTrip?.vehicle_type || "auto"} />
-          </View>
-        </ViewAnnotation>
+        {vehicleCoord ? (
+          <SmoothMarker
+            id="vehicle-marker"
+            targetLat={vehicleCoord.latitude}
+            targetLng={vehicleCoord.longitude}
+            heading={currentHeading}
+            speedKmh={currentSpeed}
+          >
+            <View style={styles.vehicleMarker}>
+              <LiveDot size={13} />
+              <VehicleIconBadge size={38} vehicleType={activeTrip?.vehicle_type || "auto"} />
+            </View>
+          </SmoothMarker>
+        ) : null}
         {passengerList.map((passenger) => {
           const coord = toCoord(passenger);
           if (!coord) return null;

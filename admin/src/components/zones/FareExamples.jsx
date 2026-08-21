@@ -1,0 +1,53 @@
+import { MapPin } from "lucide-react";
+import { stopIndexById, shortStopName } from "../../utils/zoneLogic";
+
+// Frontend-only demonstration of what passengers would pay for journeys that
+// END in each zone. Fare is determined by the destination's zone.
+export default function FareExamples({ stops, zones }) {
+  const ordered = [...stops].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const first = ordered[0];
+
+  const examples = (zones || [])
+    .filter((z) => {
+      const e = stopIndexById(ordered, z.endStopId);
+      return e >= 0;
+    })
+    .map((z) => {
+      const e = stopIndexById(ordered, z.endStopId);
+      return {
+        id: z.id,
+        zoneName: z.name,
+        toName: shortStopName(ordered[e]),
+        toStopNo: e + 1,
+        fare: Number(z.flatFareINR),
+        valid: Number.isFinite(Number(z.flatFareINR)) && Number(z.flatFareINR) >= 0,
+      };
+    });
+
+  if (!first || !examples.length) return null;
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-6">
+      <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Fare Examples</h3>
+      <p className="text-xs text-slate-400 font-medium mt-1">
+        Passengers pay the zone fare based on where their journey ends. Demo only — no pricing logic runs here.
+      </p>
+
+      <div className="mt-4 space-y-2">
+        {examples.map((ex) => (
+          <div key={ex.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-100">
+            <div className="flex items-center gap-2 min-w-0">
+              <MapPin size={14} className="text-brand-600 shrink-0" />
+              <span className="text-sm font-medium text-slate-600 truncate">
+                Stop 1 → <span className="font-semibold text-slate-800">{ex.toName}</span>
+              </span>
+            </div>
+            <span className="text-sm font-black text-slate-800">
+              {ex.valid ? `₹${ex.fare}` : "—"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

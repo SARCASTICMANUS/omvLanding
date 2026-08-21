@@ -30,6 +30,10 @@ from operations.api.views import (
     BroadcastAcceptAPIView,
     BroadcastRejectAPIView,
     BroadcastCancelAPIView,
+    VehicleRegistrationAPIView,
+    AdminPendingDriversAPIView,
+    AdminDriverVerifyAPIView,
+    AdminDocumentVerifyAPIView,
 )
 
 urlpatterns = [
@@ -170,5 +174,29 @@ urlpatterns = [
         "dispatch/broadcast/<uuid:request_id>/cancel/",
         BroadcastCancelAPIView.as_view(),
         name="broadcast-cancel",
+    ),
+
+    # Vehicle Registration (driver self-registration)
+    path(
+        "vehicles/register/",
+        VehicleRegistrationAPIView.as_view(),
+        name="vehicle-register",
+    ),
+
+    # Admin: Driver Verification
+    path(
+        "admin/drivers/pending/",
+        AdminPendingDriversAPIView.as_view(),
+        name="admin-pending-drivers",
+    ),
+    path(
+        "admin/drivers/<str:driver_id>/verify/",
+        AdminDriverVerifyAPIView.as_view(),
+        name="admin-driver-verify",
+    ),
+    path(
+        "admin/documents/<uuid:doc_id>/verify/",
+        AdminDocumentVerifyAPIView.as_view(),
+        name="admin-document-verify",
     ),
 ]

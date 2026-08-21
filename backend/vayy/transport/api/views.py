@@ -485,8 +485,8 @@ class RouteSearchByLocationAPIView(APIView):
                     else 600
                 )
 
-            rate_per_km = 12
-            fare = max(25, round(stop_distance_km * rate_per_km))
+            from operations.services.fare_service import FareService
+            fare = int(FareService.calculate_fare(stop_distance_km, "auto"))
 
             walk_pickup_min = max(1, round(pickup_dist_m / 80))
             walk_dropoff_min = max(1, round(dropoff_dist_m / 80))

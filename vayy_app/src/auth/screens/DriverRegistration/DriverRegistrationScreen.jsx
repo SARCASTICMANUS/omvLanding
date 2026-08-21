@@ -7,8 +7,9 @@ import DriverStep4Documents from "./DriverStep4Documents";
 import DriverStep5Bank from "./DriverStep5Bank";
 import DriverStep6OTP from "./DriverStep6OTP";
 import ApplicationSubmittedScreen from "../ApplicationSubmittedScreen";
-import { registerUser } from "../../authSlice";
-import { ROLE } from "../../../constants";
+import { registerUser, loginUser } from "../../authSlice";
+import { ROLE, OPERATIONS, AUTH } from "../../../constants";
+import api from "../../../shared/lib/api";
 
 export default function DriverRegistrationScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -49,6 +50,63 @@ export default function DriverRegistrationScreen({ navigation }) {
     setStep((s) => s + 1);
   };
 
+  const onOtpComplete = async () => {
+    try {
+      // 0. Auto-login to get auth token (required for subsequent API calls)
+      const loginResult = await dispatch(
+        loginUser({ email: data.email, password: data.password }),
+      );
+      if (!loginUser.fulfilled.match(loginResult)) {
+        // Login failed but OTP was verified — driver can login manually later
+        setStep(7);
+        return;
+      }
+
+      // 1. Register vehicle
+      if (data.vehicleNumber) {
+        await api.post(OPERATIONS.vehicleRegister, {
+          vehicle_number: data.vehicleNumber,
+          vehicle_type: data.vehicleType,
+        });
+      }
+
+      // 2. Update driver profile
+      await api.put(AUTH.driverProfile, {
+        display_name: data.fullName,
+        phone_number: data.mobile,
+        license_number: data.rcNumber || "",
+        vehicle_number: data.vehicleNumber || "",
+        vehicle_type: data.vehicleType || "auto",
+      });
+
+      // 3. Upload documents (fire-and-forget, files upload async)
+      const docMap = {
+        LICENSE: [data.dlFront, data.dlBack],
+        IDENTITY: [data.selfie],
+      };
+      const fileEntries = Object.entries(docMap).flatMap(([type, files]) =>
+        files.filter(Boolean).map((file) => ({ type, file }))
+      );
+      for (const { type, file } of fileEntries) {
+        const formData = new FormData();
+        formData.append("document_type", type);
+        formData.append("file", {
+          uri: file,
+          name: file.split("/").pop(),
+          type: "image/jpeg",
+        });
+        api.post(AUTH.driverDocuments, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        }).catch(() => {});
+      }
+    } catch {
+      // Registration succeeded even if profile/doc upload fails
+      // Driver can complete profile later
+    }
+
+    setStep(7);
+  };
+
   const onBack = () => {
     if (step === 1) navigation.goBack();
     else setStep((s) => s - 1);
@@ -80,7 +138,7 @@ export default function DriverRegistrationScreen({ navigation }) {
       {step === 5 && <DriverStep5Bank onNext={onNext} onBack={onBack} />}
       {step === 6 && (
         <DriverStep6OTP
-          onComplete={() => setStep(7)}
+          onComplete={onOtpComplete}
           onBack={onBack}
           email={data.email}
         />

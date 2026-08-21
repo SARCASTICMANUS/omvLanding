@@ -19,8 +19,8 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { getRecentSearches, saveRecentSearch, searchRoutesByLocation } from "../services/passengerService";
 
 import COLORS from "../../shared/constants/colors";
-import { NOMINATIM_SEARCH } from "../../constants";
 import SHADOW from "../../shared/constants/shadow";
+import api from "../../shared/lib/api";
 
 const { width } = Dimensions.get("window");
 
@@ -60,23 +60,27 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
       return undefined;
     }
 
-    const controller = new AbortController();
+    let active = true;
     const timer = setTimeout(async () => {
       setLoading(true);
 
       try {
-        const data = await NOMINATIM_SEARCH(query);
-        setResults(Array.isArray(data) ? data : []);
+        const res = await api.get("/api/transport/geocode/search/", {
+          params: { q: query, limit: 5, countrycodes: "in" },
+        });
+        if (!active) return;
+        setResults(Array.isArray(res.data) ? res.data : []);
       } catch {
+        if (!active) return;
         setResults([]);
         setDropdownHeight(0);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }, 500);
 
     return () => {
-      controller.abort();
+      active = false;
       clearTimeout(timer);
     };
   }, [hasSelection, query]);
@@ -149,9 +153,11 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
       </View>
 
       {showResults ? (
-        <View
+        <ScrollView
           onLayout={(e) => setDropdownHeight(e.nativeEvent.layout.height)}
           style={[styles.dropdown, { top: dropdownLift }]}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
         >
           {results.map((item) => (
             <Pressable key={String(item.place_id)} onPress={() => handleSelect(item)} style={styles.resultRow}>
@@ -168,7 +174,7 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
               </View>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       ) : loading ? (
         <Text style={styles.searchingText}>Searching...</Text>
       ) : null}
@@ -554,6 +560,7 @@ const styles = StyleSheet.create({
   },
   locationField: {
     marginBottom: 16,
+    position: "relative",
     zIndex: 10,
   },
   searchInputWrap: {
@@ -620,7 +627,8 @@ const styles = StyleSheet.create({
     ...SHADOW.md,
     zIndex: 9999,
     elevation: 20,
-    overflow: "hidden",
+    paddingTop: 4,
+    paddingBottom: 4,
   },
   resultRow: {
     alignItems: "center",

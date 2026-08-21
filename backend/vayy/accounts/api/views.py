@@ -48,7 +48,9 @@ from accounts.services.wallet_service import WalletService
 from accounts.permissions import (
     IsAdmin,
     IsDriver,
+    IsDriverOrAdmin,
     IsPassenger,
+    IsPassengerOrAdmin,
 )
 from common.responses import success_response, error_response
 
@@ -257,7 +259,7 @@ class CurrentUserAPIView(APIView):
 class PassengerProfileAPIView(APIView):
     permission_classes = [
         IsAuthenticated,
-        IsPassenger,
+        IsPassengerOrAdmin,
     ]
 
     def _get_merged_data(self, user):
@@ -289,8 +291,24 @@ class PassengerProfileAPIView(APIView):
             "last_active_at": profile.last_active_at,
         }
 
+    def _get_target_user(self, request):
+        user_id = request.query_params.get("user_id")
+        if user_id and request.user.role == "admin":
+            from accounts.models import User
+            try:
+                return User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return None
+        return request.user
+
     def get(self, request):
-        data = self._get_merged_data(request.user)
+        target = self._get_target_user(request)
+        if target is None:
+            return Response(
+                {"success": False, "message": "User not found", "data": None},
+                status=404,
+            )
+        data = self._get_merged_data(target)
         serializer = MergedPassengerProfileSerializer(data)
         resp = Response(serializer.data)
         return resp
@@ -335,7 +353,7 @@ class PassengerProfileAPIView(APIView):
 class DriverProfileAPIView(APIView):
     permission_classes = [
         IsAuthenticated,
-        IsDriver,
+        IsDriverOrAdmin,
     ]
 
     def _get_merged_data(self, user):
@@ -365,8 +383,24 @@ class DriverProfileAPIView(APIView):
             "total_trips": profile.total_trips,
         }
 
+    def _get_target_user(self, request):
+        user_id = request.query_params.get("user_id")
+        if user_id and request.user.role == "admin":
+            from accounts.models import User
+            try:
+                return User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return None
+        return request.user
+
     def get(self, request):
-        data = self._get_merged_data(request.user)
+        target = self._get_target_user(request)
+        if target is None:
+            return Response(
+                {"success": False, "message": "User not found", "data": None},
+                status=404,
+            )
+        data = self._get_merged_data(target)
         serializer = MergedDriverProfileSerializer(data)
         resp = Response(serializer.data)
         return resp
@@ -465,14 +499,34 @@ class RecentSearchAPIView(APIView):
     def post(self, request):
         serializer = RecentSearchCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        pickup_lat = serializer.validated_data["pickup_lat"]
+        pickup_lon = serializer.validated_data["pickup_lon"]
+        destination_lat = serializer.validated_data["destination_lat"]
+        destination_lon = serializer.validated_data["destination_lon"]
+
+        existing = RecentSearch.objects.filter(
+            user=request.user,
+            pickup_lat=pickup_lat,
+            pickup_lon=pickup_lon,
+            destination_lat=destination_lat,
+            destination_lon=destination_lon,
+        ).first()
+
+        if existing:
+            return success_response(
+                data=RecentSearchSerializer(existing).data,
+                message="Search already exists.",
+                status_code=status.HTTP_200_OK,
+            )
+
         search = RecentSearch.objects.create(
             user=request.user,
             pickup_name=serializer.validated_data.get("pickup_name", ""),
-            pickup_lat=serializer.validated_data["pickup_lat"],
-            pickup_lon=serializer.validated_data["pickup_lon"],
+            pickup_lat=pickup_lat,
+            pickup_lon=pickup_lon,
             destination_name=serializer.validated_data.get("destination_name", ""),
-            destination_lat=serializer.validated_data["destination_lat"],
-            destination_lon=serializer.validated_data["destination_lon"],
+            destination_lat=destination_lat,
+            destination_lon=destination_lon,
         )
         # Keep only last 20 searches per user
         RecentSearch.objects.filter(user=request.user).exclude(

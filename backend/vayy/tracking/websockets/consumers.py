@@ -2,6 +2,7 @@ import json
 import logging
 from asgiref.sync import sync_to_async
 from common.websockets.auth import BaseAuthenticatedConsumer
+from tracking.services.location_service import LocationService
 from tracking.tasks import process_location_update
 
 logger = logging.getLogger(__name__)
@@ -10,6 +11,10 @@ class VehicleTrackingConsumer(BaseAuthenticatedConsumer):
     """
     Consumer for live vehicle tracking.
     Groups: vehicle_{vehicle_id}
+
+    Ingestion is WebSocket-first (no per-ping HTTP/Celery):
+      - Hot path runs inline: Redis GEO + snapshot + minimal broadcast.
+      - Cold path is throttled to once/15s per vehicle: Celery → DB + OSRM + ETAs.
     """
     async def connect(self):
         await super().connect()
@@ -34,7 +39,7 @@ class VehicleTrackingConsumer(BaseAuthenticatedConsumer):
     async def receive(self, text_data):
         """
         Handle incoming messages from the driver (e.g., location updates).
-        Publishes to RabbitMQ for async processing by Celery.
+        Runs the hot path inline and throttles the heavy cold path.
         """
         try:
             data = json.loads(text_data)
@@ -48,10 +53,14 @@ class VehicleTrackingConsumer(BaseAuthenticatedConsumer):
                     "speed": data.get("speed", 0),
                     "heading": data.get("heading", 0),
                 }
-                # Celery .delay() does a blocking AMQP publish; run it on a
-                # thread so high-frequency pings don't stall the event loop.
-                await sync_to_async(process_location_update.delay)(payload)
-                logger.debug(f"Dispatched location for vehicle {self.vehicle_id}")
+                # HOT PATH — Redis GEO + broadcast, no DB/OSRM. Run on a thread
+                # so the (blocking) redis calls don't stall the event loop.
+                await sync_to_async(LocationService.hot_path_process)(payload)
+                # COLD PATH — DB writes + OSRM + ETAs, throttled per vehicle.
+                if LocationService.should_enqueue_cold_path(str(self.vehicle_id)):
+                    # Celery .delay() is a blocking AMQP publish; run it on a thread.
+                    await sync_to_async(process_location_update.delay)(payload)
+                logger.debug(f"Hot+throttled cold path for vehicle {self.vehicle_id}")
             else:
                 logger.debug(f"Unknown message type from driver: {msg_type}")
         except json.JSONDecodeError:
@@ -78,6 +87,12 @@ class TripTrackingConsumer(BaseAuthenticatedConsumer):
             self.channel_name
         )
         logger.info(f"WebSocket connected to {self.group_name}")
+
+        # Send the last-known vehicle position immediately so the passenger
+        # sees the marker without waiting for the next GPS ping.
+        snapshot = await sync_to_async(LocationService.get_trip_latest_snapshot)(self.trip_id)
+        if snapshot:
+            await self.send(text_data=json.dumps(snapshot))
 
     async def disconnect(self, close_code):
         if not hasattr(self, 'group_name'):
