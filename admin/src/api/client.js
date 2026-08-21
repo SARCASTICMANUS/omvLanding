@@ -17,7 +17,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
-    if (err.response?.status === 401 && !err.config._retry) {
+    const originalRequest = err.config;
+
+    if (err.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
       const refresh = localStorage.getItem("admin_refresh");
       if (refresh) {
         try {
@@ -27,8 +30,11 @@ api.interceptors.response.use(
           );
           if (res.data.access) {
             localStorage.setItem("admin_token", res.data.access);
-            err.config.headers.Authorization = `Bearer ${res.data.access}`;
-            return api(err.config);
+            if (res.data.refresh) {
+              localStorage.setItem("admin_refresh", res.data.refresh);
+            }
+            originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
+            return api(originalRequest);
           }
         } catch {
           localStorage.removeItem("admin_token");
@@ -40,6 +46,7 @@ api.interceptors.response.use(
         window.location.href = "/zxcv";
       }
     }
+
     return Promise.reject(err);
   }
 );

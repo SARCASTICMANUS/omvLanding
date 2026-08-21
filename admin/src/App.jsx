@@ -8,6 +8,7 @@ import RoutesPage from "./pages/Routes";
 import Stops from "./pages/Stops";
 import TripSchedules from "./pages/TripSchedules";
 import Users from "./pages/Users";
+import DriverVerification from "./pages/DriverVerification";
 import Sidebar from "./components/Sidebar";
 import api from "./api/client";
 
@@ -22,6 +23,7 @@ function AdminLayout({ onLogout }) {
     { id: "routes", label: "Routes" },
     { id: "stops", label: "Stops" },
     { id: "schedules", label: "Schedules" },
+    { id: "drivers", label: "Drivers" },
     { id: "users", label: "Users" },
   ];
 
@@ -39,6 +41,7 @@ function AdminLayout({ onLogout }) {
         {activeTab === "routes" && <RoutesPage />}
         {activeTab === "stops" && <Stops />}
         {activeTab === "schedules" && <TripSchedules />}
+        {activeTab === "drivers" && <DriverVerification />}
         {activeTab === "users" && <Users />}
       </main>
     </div>
@@ -57,12 +60,17 @@ export default function App() {
         .get("/accounts/me/")
         .then((res) => {
           const u = res.data?.data || res.data;
-          if (u.role !== "admin" && !u.is_staff) throw new Error("Not admin");
+          if (!u || (u.role !== "admin" && !u.is_staff)) {
+            throw new Error("Not admin");
+          }
           setUser(u);
         })
-        .catch(() => {
-          localStorage.removeItem("admin_token");
-          localStorage.removeItem("admin_refresh");
+        .catch((err) => {
+          // Only clear tokens on 401 (unauthorized) — not on network errors or server issues
+          if (err.response?.status === 401) {
+            localStorage.removeItem("admin_token");
+            localStorage.removeItem("admin_refresh");
+          }
         })
         .finally(() => setLoading(false));
     } else {
