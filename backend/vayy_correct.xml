@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net">
+  <diagram name="Vayy Architecture">
+    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1">
+      <root>
+
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- ================= MOBILE APP ================= -->
+        <mxCell id="mobile" value="Vayy Mobile App (React Native / Flutter)" style="swimlane" vertex="1" parent="1">
+          <mxGeometry x="20" y="20" width="300" height="200" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ui" value="UI Layer" vertex="1" parent="mobile">
+          <mxGeometry x="20" y="40" width="120" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="api_client" value="REST API Client" vertex="1" parent="mobile">
+          <mxGeometry x="20" y="90" width="120" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="mq_client" value="RabbitMQ Client (AMQP / MQTT Bridge)" vertex="1" parent="mobile">
+          <mxGeometry x="20" y="140" width="240" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- ================= API LAYER ================= -->
+        <mxCell id="api" value="Django REST Layer" style="swimlane" vertex="1" parent="1">
+          <mxGeometry x="350" y="20" width="350" height="300" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="auth_controller" value="AuthController" vertex="1" parent="api">
+          <mxGeometry x="10" y="40" width="120" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ride_controller" value="RideController" vertex="1" parent="api">
+          <mxGeometry x="10" y="80" width="120" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="location_controller" value="LocationController" vertex="1" parent="api">
+          <mxGeometry x="10" y="120" width="140" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dispatch_controller" value="DispatchController" vertex="1" parent="api">
+          <mxGeometry x="10" y="160" width="140" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="auth_service" value="AuthService" vertex="1" parent="api">
+          <mxGeometry x="180" y="40" width="120" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ride_service" value="RideService" vertex="1" parent="api">
+          <mxGeometry x="180" y="80" width="120" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="location_service" value="LocationService" vertex="1" parent="api">
+          <mxGeometry x="180" y="120" width="140" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dispatch_service" value="DispatchService" vertex="1" parent="api">
+          <mxGeometry x="180" y="160" width="140" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- ================= RABBITMQ ================= -->
+        <mxCell id="mq" value="RabbitMQ Message Broker" style="swimlane" vertex="1" parent="1">
+          <mxGeometry x="750" y="20" width="350" height="300" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ex_location" value="Exchange: location.topic" vertex="1" parent="mq">
+          <mxGeometry x="20" y="40" width="200" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ex_dispatch" value="Exchange: dispatch.direct" vertex="1" parent="mq">
+          <mxGeometry x="20" y="90" width="200" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ex_notification" value="Exchange: notification.topic" vertex="1" parent="mq">
+          <mxGeometry x="20" y="140" width="220" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="q_auto" value="Queue: auto.location" vertex="1" parent="mq">
+          <mxGeometry x="240" y="40" width="140" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="q_bike" value="Queue: bike.location" vertex="1" parent="mq">
+          <mxGeometry x="240" y="80" width="140" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- ================= WORKERS ================= -->
+        <mxCell id="workers" value="Async Workers (Celery)" style="swimlane" vertex="1" parent="1">
+          <mxGeometry x="1150" y="20" width="300" height="300" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="location_consumer" value="LocationConsumer" vertex="1" parent="workers">
+          <mxGeometry x="20" y="40" width="160" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dispatch_consumer" value="DispatchConsumer" vertex="1" parent="workers">
+          <mxGeometry x="20" y="100" width="160" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="notification_consumer" value="NotificationConsumer" vertex="1" parent="workers">
+          <mxGeometry x="20" y="160" width="180" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- ================= DATABASE ================= -->
+        <mxCell id="db" value="PostgreSQL + PostGIS" style="swimlane" vertex="1" parent="1">
+          <mxGeometry x="350" y="350" width="400" height="200" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="users" value="users" vertex="1" parent="db">
+          <mxGeometry x="20" y="40" width="100" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="rides" value="rides" vertex="1" parent="db">
+          <mxGeometry x="140" y="40" width="100" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="vehicles" value="vehicles" vertex="1" parent="db">
+          <mxGeometry x="260" y="40" width="100" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- ================= EDGES ================= -->
+        <mxCell edge="1" source="ui" target="api_client" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell edge="1" source="api_client" target="ride_controller" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell edge="1" source="ride_controller" target="ride_service" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell edge="1" source="ride_service" target="ex_dispatch" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell edge="1" source="ex_dispatch" target="dispatch_consumer" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell edge="1" source="dispatch_consumer" target="rides" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell edge="1" source="notification_consumer" target="mq_client" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,75 @@
+export const colors = {
+  primary: "#009849",
+  primaryDark: "#007A3B",
+  primaryLight: "#E0F5E8",
+  liveAccent: "#00E676",
+  bikeAccent: "#009849",
+  bikeLight: "#CEBBF6",
+  autoAccent: "#BA7517",
+  autoLight: "#FAC775",
+  bg: "#F8FAF9",
+  surface: "#FFFFFF",
+  surfaceElevated: "#F3F4F6",
+  border: "#E5E7EB",
+  borderLight: "#F0F0F0",
+  textPrimary: "#111827",
+  textSecondary: "#374151",
+  textMuted: "#6B7280",
+  textLight: "#9CA3AF",
+  success: "#1D9E75",
+  successLight: "#DCfce7",
+  successBorder: "#BBF7D0",
+  warning: "#F59E0B",
+  danger: "#EF4444",
+  dangerLight: "#FEF2F2",
+  info: "#378ADD",
+  white: "#FFFFFF",
+  black: "#000000",
+  star: "#FFB800",
+  greenVariant: "#1a8a2e",
+  error: "#EF4444",
+  errorLight: "#FEF2F2",
+};
+
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  base: 16,
+  lg: 20,
+  xl: 24,
+  xxl: 32,
+  xxxl: 48,
+};
+
+export const radius = {
+  sm: 10,
+  md: 14,
+  lg: 18,
+  xl: 24,
+  full: 999,
+};
+
+export const shadow = {
+  sm: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  md: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  lg: {
+    shadowColor: "#009849",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+};

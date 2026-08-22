@@ -1,0 +1,240 @@
+services:
+
+  db:
+    image: postgis/postgis:15-3.3
+    container_name: vayy-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vayy}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-vayy}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: vayy-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "15672:15672"   # management UI - restrict/remove in public deployments
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    container_name: vayy-web
+    command: sh /app/entrypoint.sh
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  celery:
+    build: .
+    container_name: vayy-celery
+    command: sh -c "celery -A vayy worker -l info -Q celery,dispatch,matching,notifications"
+    volumes:
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-beat:
+    build: .
+    container_name: vayy-celery-beat
+    command: sh -c "celery -A vayy beat -l info"
+    volumes:
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-tracking:
+    build: .
+    container_name: vayy-celery-tracking
+    command: sh -c "celery -A vayy worker -l info -Q tracking --concurrency=4 --prefetch-multiplier=1 -Ofair --max-tasks-per-child=100"
+    volumes:
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Replicated RabbitMQ consumers - scale with `docker compose up --scale consume-location=3`
+  consume-location:
+    build: .
+    # container_name: vayy-consume-location
+    command: python manage.py consume_location
+    restart: always
+    volumes:
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+
+  consume-boarding:
+    build: .
+    # container_name: vayy-consume-boarding
+    command: python manage.py consume_boarding
+    restart: always
+    volumes:
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+
+  redis:
+    image: redis:7-alpine
+    container_name: vayy-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Debug/dev only - do NOT expose in production. Remove or comment out.
+  # redisinsight:
+  #   image: redis/redisinsight:latest
+  #   container_name: redis_insight
+  #   restart: always
+  #   ports:
+  #     - "5540:5540"
+  #   volumes:
+  #     - redisinsight_data:/db
+  #   depends_on:
+  #     - redis
+
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: vayy-nginx
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ../../nginx.conf:/etc/nginx/conf.d/default.conf:ro
+  #     - ./nginx/certs:/etc/nginx/certs:ro
+  #     - static_volume:/static
+  #     - media_volume:/media
+  #   depends_on:
+  #     - web
+
+  osrm-download:
+    image: alpine:3.20
+    container_name: vayy-osrm-download
+    restart: "no"
+    volumes:
+      - ./osrm:/data
+    command: >
+      sh -c "if [ ! -f /data/map.osm.pbf ]; then
+               echo 'Downloading central-zone map...';
+               wget -q -O /data/map.osm.pbf.tmp https://download.geofabrik.de/asia/india/central-zone-latest.osm.pbf &&
+               mv /data/map.osm.pbf.tmp /data/map.osm.pbf &&
+               echo 'Map downloaded to /data/map.osm.pbf';
+             else
+               echo 'map.osm.pbf already present, skipping download';
+             fi"
+
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: vayy-osrm
+    volumes:
+      - ./osrm:/data
+    ports:
+      - "5000:5000"
+    depends_on:
+      osrm-download:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ ! -f /data/map.osrm ]; then
+          echo 'Extracting map (one-time, may take a while)...';
+          osrm-extract -p /opt/car.lua /data/map.osm.pbf &&
+          osrm-partition /data/map.osrm &&
+          osrm-customize /data/map.osrm &&
+          echo 'Map extracted.';
+        else
+          echo 'map.osrm already present, skipping extraction';
+        fi
+        exec osrm-routed --algorithm mld /data/map.osrm
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/5000' 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    cpus: 2
+    mem_limit: 4g
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  redis_data:
+  static_volume:
+  media_volume:

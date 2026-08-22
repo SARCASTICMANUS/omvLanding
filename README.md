@@ -1,226 +1,157 @@
-Here is the complete **README.md** file. You can create a file named `README.md` in your project root and paste this content.
+# 🚖 Vayy - Public Transit & Real-Time Tracking Platform
 
-It covers everything from architecture to specific commands for Docker and Local development.
+**Vayy** is a production-grade, real-time geospatial platform designed for urban public transport and institutional bus tracking. Built to handle high concurrency, Vayy connects passengers with fixed-route buses, vans, and shuttles through a resilient, low-latency architecture.
 
----
-
-# 🚖 Vayy - Real-Time Commuter Tracking Platform
-
-**Vayy** is a scalable, real-time geospatial platform that connects passengers with fixed-route vehicles (Buses/Shuttles). It features a **10-meter geospatial buffer matching system**, real-time WebSocket tracking, and a dedicated Admin Route Creator.
-
-## 🏗 System Architecture
-
-The project is built to handle high concurrency ("millions of users") by offloading geospatial calculations to OSRM and real-time state to Redis.
-
-| Service       | Technology              | Purpose                                           |
-| :------------ | :---------------------- | :------------------------------------------------ |
-| **Frontend**  | React + Vite + Tailwind | User Interface (Leaflet Maps).                    |
-| **Backend**   | Django + GeoDjango      | API, Auth, Database Management.                   |
-| **Real-Time** | Django Channels (ASGI)  | WebSocket handling for live tracking.             |
-| **Database**  | PostgreSQL + PostGIS    | Persistent storage for Routes & Spatial Indexing. |
-| **Cache**     | Redis                   | Ephemeral storage for live Driver GPS & Pub/Sub.  |
-| **Routing**   | OSRM (C++ Engine)       | High-speed routing engine for ETA & Distances.    |
+The platform has recently transitioned to a flexible **City/Passenger/Driver** model, supporting multi-city deployments and diverse vehicle types (Bus, Van, Auto-Rickshaw, etc.).
 
 ---
 
-## 🚀 Prerequisites
+## 🏗 System Architecture & High Level Design
 
-Before you begin, ensure you have:
+Vayy is architected for low-latency geospatial tracking and high concurrency. The system is divided into three primary layers:
 
-1.  **Docker Desktop** (Installed and running).
-2.  **Map Data**: This project requires raw map data (`.osm.pbf`) to calculate routes.
-    - Go to [Geofabrik Download Server](https://download.geofabrik.de/).
-    - Download the region you want to test (e.g., `north-america/us/delaware-latest.osm.pbf` for a small test file).
+### 1. Ingestion & Real-Time State (Hot Layer)
+- **WebSockets (Daphne):** Drivers stream GPS coordinates every 1-3 seconds. Passengers stream location and 'hand-raise' status.
+- **Redis GEO:** High-frequency positions are stored in Redis GEO sets for sub-millisecond proximity queries.
+- **Delta Updates:** To minimize bandwidth, the server broadcasts 'delta' payloads (only changed fields like coordinates, heading, and delay) to subscribed clients.
+
+### 2. Processing & Logic (Logic Layer)
+- **Kalman Filtering:** All raw GPS data passes through a Kalman Filter to smooth out noise and provide fluid vehicle movement on the map.
+- **Schedule Adherence:** The system automatically calculates delays by comparing the vehicle's current position to the scheduled arrival times at the nearest stop.
+- **Automated Geofencing:** 
+    - **Arrival Detection:** Detects when a bus is within 50m of a stop for >15 seconds.
+    - **Proximity Alerts:** Automatically notifies passengers when their bus is within 500m of their pickup point.
+- **Hybrid Resolution:** Non-GPS location data (Cell/Wi-Fi) is resolved via Mozilla Location Service (MLS) through a Redis-backed async pipeline.
+
+### 3. Persistence & Analytics (Cold Layer)
+- **PostgreSQL + PostGIS:** Long-term storage for routes, stops, and user profiles. 
+- **Celery Sync:** High-frequency location data is batched and synced from Redis to PostgreSQL every 60 seconds to optimize DB performance.
 
 ---
 
-## 📂 Project Setup (The "Golden Path")
+## 🛠 Real-Time Data Flow
 
-### 1. File Structure Setup
+1.  **Driver Update:** `GPS Update -> WebSocket -> process_gps_update()`
+2.  **Processing:** 
+    - Update Redis State (GEO & String)
+    - Calculate Schedule Delay
+    - Detect Stop Arrival / Geofence Breach
+3.  **Broadcast:** 
+    - `Trip Group:` Individual tracking info.
+    - `City Group:` Delta updates for all vehicles in the city.
+    - `User Group:` Specific proximity alerts for passengers.
 
-Create a folder named `osrm-data` in the project root and place your downloaded map file there. **Rename it** to `map.osm.pbf`.
+---
+
+## 🚀 Key Features
+
+### **🗺️ Real-Time Geospatial & Tracking**
+- **Live Tracking:** Sub-second GPS updates via WebSockets for both drivers and passengers.
+- **Directional Filtering:** Smart "Filtered Trips" logic ensuring passengers only see buses moving *towards* them.
+- **Hybrid Ingestion:** Supports GPS and Cell Tower/Wi-Fi signals for robust tracking.
+- **Smoothing:** Kalman Filter implementation for fluid, noise-reduced vehicle positioning.
+- **Schedule Adherence:** Automatic delay calculation (Actual vs. Scheduled) shown in real-time.
+- **Geofencing & Alerts:** Automated proximity notifications when a bus approaches a pickup stop.
+
+### **🎫 Boarding & Manifest Management**
+- **Digital Manifest:** Real-time boarding control interface for drivers via dedicated WebSocket manifests.
+- **Booking System:** Passenger-driven stop booking (Pending -> Approaching -> Boarded -> Completed).
+- **Automated Stop Detection:** Geofencing logic to auto-detect arrivals at stops based on dwell time.
+
+### **🛠️ Admin Panel**
+- **Route Creator:** Map interface to design complex routes with ordered stops.
+- **Multi-City Management:** Support for multiple cities, each with isolated routes, users, and vehicles.
+- **Granular Roles:** `Admin`, `City Admin`, `Driver`, and `Passenger`.
+
+### **📱 Driver & Passenger Experience**
+- **One-Tap Trip:** Drivers can easily start/resume trips with route-specific stop lists.
+- **OTP Onboarding:** Secure 6-digit OTP flow for registration and password resets.
+- **High-Performance Map:** Smooth, low-bandwidth Delta Updates for live vehicle motion.
+- **Walking ETAs:** OSRM-powered walking ETAs for passengers to reach stops on time.
+
+---
+
+## 📁 Project Structure
 
 ```text
 vayy/
-├── backend/
-├── frontend/
-├── docker-compose.yml
-└── osrm-data/
-    └── map.osm.pbf  <-- CRITICAL: Must be named exactly this
+├── backend/                # Django/GeoDjango Project
+│   ├── core/               # Main application logic (Models, Views, Consumers)
+│   │   ├── api/            # DRF Serializers & ViewSets
+│   │   ├── services/       # Business Logic (ManifestManager)
+│   │   ├── tasks.py        # Celery background tasks (Geofencing, Manifests)
+│   │   ├── consumers.py    # WebSocket logic (Daphne/Channels)
+│   │   └── utils.py        # Kalman Filter, OSRM & Geospatial helpers
+├── frontend/               # React Vite SPA
+│   ├── src/
+│   │   ├── components/     # UI & Map Components (DriverManifest, MapLibre)
+│   │   └── pages/          # Admin, Dashboard, Auth pages
+└── docker-compose.yaml     # Infrastructure & Service Orchestration
 ```
 
-### 2. Run with Docker Compose
+---
 
-This command sets up the Database, Redis, OSRM, Backend, and Frontend automatically.
+## 🐳 Docker Deployment Setup (Recommended)
 
+### 1. Map Data Preparation
+Place your `.osm.pbf` file (e.g., from [Geofabrik](https://download.geofabrik.de/)) in `backend/osrm-data/` and rename it to `map.osm.pbf`.
+
+```bash
+mkdir -p backend/osrm-data
+# Move your downloaded file there:
+mv india-latest.osm.pbf backend/osrm-data/map.osm.pbf
+```
+
+### 2. Launch Services
 ```bash
 docker-compose up -d --build
 ```
 
-**What happens automatically?**
-
-1.  **OSRM Container**: Detects the `.pbf` file, processes the road graph (Extract/Partition/Customize), and starts the server.
-2.  **Database**: Starts PostgreSQL with PostGIS extensions.
-3.  **Backend**: Waits for DB, runs migrations, creates a default Superuser, and starts the Daphne server.
-4.  **Frontend**: Installs Node modules and starts the Vite server.
-
-### 3. Access the App
-
-- **Frontend:** [http://localhost:3000](http://localhost:3000)
-- **Backend API:** [http://localhost:8000/api/](http://localhost:8000/api/)
-- **Django Admin:** [http://localhost:8000/admin/](http://localhost:8000/admin/)
-
-**Default Superuser Credentials:**
-
-- **Username:** `root`
-- **Password:** `zxcv9876`
+**Unified Entry Point:** [http://localhost](http://localhost) (via Nginx)
 
 ---
 
-## 🛠 Manual / Local Development Setup
+## 🛠 Local Development
 
-If you want to run the code locally (outside Docker) for debugging, follow these steps.
+### Prerequisites
+- Python 3.10+ & Node.js 20+
+- **PostgreSQL 15+** with **PostGIS** extension
+- **Redis 7**
 
-### 1. Start Infrastructure Only
-
-You still need the Database, Redis, and OSRM running. Docker is the best way to run these.
-
-```bash
-# Run only infrastructure services
-docker-compose up -d db redis osrm
-```
-
-### 2. Backend Setup (Windows/Linux)
-
-**Prerequisites:** Python 3.10+
-
-- **Windows Users:** You MUST install **GDAL** via [OSGeo4W](https://trac.osgeo.org/osgeo4w/).
-- **Linux Users:** `sudo apt-get install gdal-bin libgdal-dev`
-
+### Backend Setup
 ```bash
 cd backend
-
-# 1. Create Virtual Environment
-python -m venv venv
-
-# 2. Activate
-# Windows:
-.\venv\Scripts\activate
-# Mac/Linux:
-source venv/bin/activate
-
-# 3. Install Dependencies
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-
-# 4. Run Migrations
 python manage.py migrate
-
-# 5. Run Server
-daphne -b 127.0.0.1 -p 8000 vayy.asgi:application
+# Start core services:
+python manage.py runserver  # API Development
+daphne -p 8001 vayy.asgi:application # WebSockets
+celery -A vayy worker -l info # Async Tasks
 ```
 
-### 3. Frontend Setup
-
-**Prerequisites:** Node.js 20+
-
+### Frontend Setup
 ```bash
 cd frontend
-
-# 1. Install Dependencies
 npm install
-
-# 2. Start Dev Server
 npm run dev
 ```
 
-Access at `http://localhost:5173` (or `3000` depending on Vite config).
+---
+
+## 📈 Scalability & Production Readiness
+
+Vayy is architected for regional and institutional scales (up to 10k concurrent users). For PAN India deployment (1M+ users), the platform has a clear roadmap involving:
+- **Hot Geospatial Store:** Shifting real-time positions from PostgreSQL to **Tile38** or **Redis Cluster**.
+- **Microservices:** Decoupling coordinate ingestion using **Go** or **Node.js** for high-performance I/O.
+- **Protobuf:** Utilizing Protocol Buffers for WebSocket messages to reduce bandwidth by ~60%.
+
+*See [scalability_report.md](scalability_report.md) for the full technical audit.*
 
 ---
 
-## 📱 User Guide
+## 📜 Troubleshooting
 
-### 1. Admin: Create a Route
-
-1.  Go to the Home Page.
-2.  Click the **"🔧 Admin Panel"** button (Bottom Right).
-3.  **Create Route:**
-    - Search for "Start" (e.g., _Central Park_).
-    - Search for "End" (e.g., _Times Square_).
-    - Or click points on the map.
-    - Click **"Save Route"**.
-4.  The route is now saved in PostGIS.
-
-### 2. Driver: Start a Trip
-
-1.  Go to Home -> **Driver**.
-2.  Select the route you created from the dropdown.
-3.  Click **"Load Route"** -> **"Start Engine"**.
-4.  The simulation begins. Your location is broadcasted via WebSockets.
-
-### 3. Passenger: Track a Vehicle
-
-1.  Go to Home -> **Passenger**.
-2.  Search your location (Must be within **10 meters** of the driver's route).
-3.  Click **"Scan for Vehicles"**.
-4.  If the driver is active and near your route, you will see "Found 1 Vehicle".
-5.  Click the vehicle card to see the live map, bus path, and ETA.
-
----
-
-## 🔧 Troubleshooting
-
-### 1. "OSRM Missing Files" or "Connection Refused"
-
-- **Cause:** The OSRM container hasn't finished processing the map data yet.
-- **Fix:** Check logs: `docker-compose logs -f osrm`. Wait until you see `running and waiting for requests`.
-
-### 2. "GDALException" or "WinError 127" (Windows)
-
-- **Cause:** Trying to run Django locally without OSGeo4W installed.
-- **Fix:** Use the Docker setup (`docker-compose up`). It handles GDAL for you.
-
-### 3. "Vite requires Node.js version 20.19+"
-
-- **Cause:** Your local Node version is old.
-- **Fix:** Upgrade Node.js or use the Docker setup (which uses Node 22).
-
-### 4. ETA is "Updating..." forever
-
-- **Cause:** The passenger must send a heartbeat to calculate ETA.
-- **Fix:** Ensure the WebSocket connection is open. The frontend automatically sends a heartbeat every 4 seconds.
-
----
-
-## 📜 API Endpoints
-
-| Method | Endpoint                    | Description                                  |
-| :----- | :-------------------------- | :------------------------------------------- |
-| `GET`  | `/api/global-search/?q=...` | Search for a real-world address (Nominatim). |
-| `POST` | `/api/admin/routes/`        | Create a new fixed route.                    |
-| `GET`  | `/api/driver/routes/`       | List all available routes.                   |
-| `POST` | `/api/driver/start-trip/`   | Driver starts a session on a route.          |
-| `POST` | `/api/passenger/match/`     | Find active vehicles within 10m of a point.  |
-
----
-
-## 🐳 Docker Commands Cheatsheet
-
-```bash
-# Start everything
-docker-compose up -d --build
-
-# Stop everything
-docker-compose down
-
-# Stop and DELETE DATABASE (Fresh Start)
-docker-compose down -v
-
-# View Backend Logs
-docker-compose logs -f backend
-
-# View OSRM Logs
-docker-compose logs -f osrm
-
-# Open Shell inside Backend
-docker-compose exec backend /bin/bash
-```
+- **PostGIS Compatibility**: The `docker-compose.yaml` uses `platform: linux/amd64` for the `db` container to ensure stability on Apple Silicon.
+- **OSRM Unreachable**: Ensure the `OSRM_URL` environment variable points to the correct endpoint (Default: `http://osrm:5000`).
+- **WebSocket Connection**: If connecting via Nginx, ensure the `/ws/` block is correctly configured for `Upgrade` headers.
