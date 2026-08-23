@@ -91,8 +91,17 @@ class DispatchService:
                 pickup_stop=stop,
                 status=BOARDING_PENDING,
             )
+        except Stop.DoesNotExist:
+            logger.error(
+                f"[Dispatch] Pickup stop {pickup_stop_id} not found for trip {trip.id} — "
+                f"passenger {passenger.id} has no boarding link"
+            )
+            raise ValueError(f"Pickup stop {pickup_stop_id} not found")
         except Exception as e:
-            logger.warning(f"Failed to link boarding request for trip {trip.id}: {e}")
+            logger.error(
+                f"[Dispatch] Failed to create boarding request for trip {trip.id}: {e} — "
+                f"trip was created but passenger is unlinked"
+            )
 
         payload = {
             "trip_id": str(trip.id),

@@ -492,10 +492,17 @@ class VehicleDetailAPIView(APIView):
         request,
         vehicle_id,
     ):
-        vehicle = (
-            VehicleSelector
-            .get_vehicle(vehicle_id)
-        )
+        try:
+            vehicle = (
+                VehicleSelector
+                .get_vehicle(vehicle_id)
+            )
+        except Exception:
+            logger.warning(f"[VehicleDetail] Vehicle {vehicle_id} not found")
+            return Response(
+                {"detail": "Vehicle not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         resp = Response(
             VehicleSerializer(vehicle).data
@@ -512,10 +519,18 @@ class VehicleStateAPIView(APIView):
         request,
         vehicle_id,
     ):
-        vehicle = (
-            VehicleSelector
-            .get_vehicle(vehicle_id)
-        )
+        try:
+            vehicle = (
+                VehicleSelector
+                .get_vehicle(vehicle_id)
+            )
+        except Exception:
+            logger.warning(f"[VehicleState] Vehicle {vehicle_id} not found")
+            return Response(
+                {"detail": "Vehicle not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
         state = getattr(
             vehicle,
             "state",
@@ -585,9 +600,16 @@ class ActiveTripDetailAPIView(APIView):
         request,
         trip_id,
     ):
-        trip = TripSelector.get_trip(
-            trip_id
-        )
+        try:
+            trip = TripSelector.get_trip(
+                trip_id
+            )
+        except Exception:
+            logger.warning(f"[TripDetail] Trip {trip_id} not found")
+            return Response(
+                {"detail": "Trip not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         resp = Response(
             ActiveTripSerializer(trip).data
@@ -782,10 +804,30 @@ class DispatchCompleteAPIView(APIView):
     """
     PATCH /api/dispatch/{id}/complete
     Driver or passenger completes the trip.
+    Only the assigned driver or a passenger on the trip can complete it.
     """
     permission_classes = [IsAuthenticated]
 
     def patch(self, request, trip_id):
+        try:
+            trip = ActiveTrip.objects.get(id=trip_id)
+        except ActiveTrip.DoesNotExist:
+            return Response(
+                {"success": False, "message": "Trip not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Authorization: only driver or passenger on this trip
+        is_driver = trip.driver_id == request.user.id
+        is_passenger = trip.boarding_requests.filter(
+            passenger_id=request.user.id
+        ).exists()
+        if not is_driver and not is_passenger:
+            return Response(
+                {"success": False, "message": "You are not authorized to complete this trip"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
             trip = DispatchService.complete_trip(trip_id, request.user)
             resp = Response({

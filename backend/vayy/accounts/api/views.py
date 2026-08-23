@@ -1,5 +1,7 @@
+import json
 import logging
 from django.utils import timezone
+from django.core.cache import cache
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.permissions import (
@@ -213,10 +215,8 @@ class ChangePasswordAPIView(APIView):
                 "new_password"
             ],
         )
-        resp = Response(
-            {
-                "message": "Password changed successfully."
-            }
+        resp = success_response(
+            message="Password changed successfully."
         )
         return resp
 
@@ -227,8 +227,8 @@ class CurrentUserAPIView(APIView):
     ]
 
     def get(self, request):
-        resp = Response(
-            UserSerializer(
+        resp = success_response(
+            data=UserSerializer(
                 request.user
             ).data
         )
@@ -245,8 +245,8 @@ class CurrentUserAPIView(APIView):
         )
         serializer.save()
 
-        resp = Response(
-            UserSerializer(
+        resp = success_response(
+            data=UserSerializer(
                 request.user
             ).data
         )
@@ -304,13 +304,13 @@ class PassengerProfileAPIView(APIView):
     def get(self, request):
         target = self._get_target_user(request)
         if target is None:
-            return Response(
-                {"success": False, "message": "User not found", "data": None},
-                status=404,
+            return error_response(
+                message="User not found",
+                status_code=status.HTTP_404_NOT_FOUND,
             )
         data = self._get_merged_data(target)
         serializer = MergedPassengerProfileSerializer(data)
-        resp = Response(serializer.data)
+        resp = success_response(data=serializer.data)
         return resp
 
     def put(self, request):
@@ -318,8 +318,20 @@ class PassengerProfileAPIView(APIView):
         update_ser.is_valid(raise_exception=True)
         attrs = update_ser.validated_data
 
-        # Update User fields
+        # Support admin updating another user's profile via ?user_id
         user = request.user
+        user_id = request.query_params.get("user_id")
+        if user_id and request.user.role == "admin":
+            from accounts.models import User
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return error_response(
+                    message="User not found",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
+
+        # Update User fields
         if "first_name" in attrs:
             user.first_name = attrs["first_name"]
         if "last_name" in attrs:
@@ -346,7 +358,7 @@ class PassengerProfileAPIView(APIView):
 
         data = self._get_merged_data(user)
         serializer = MergedPassengerProfileSerializer(data)
-        resp = Response(serializer.data)
+        resp = success_response(data=serializer.data)
         return resp
 
 # DRIVER PROFILE
@@ -396,13 +408,13 @@ class DriverProfileAPIView(APIView):
     def get(self, request):
         target = self._get_target_user(request)
         if target is None:
-            return Response(
-                {"success": False, "message": "User not found", "data": None},
-                status=404,
+            return error_response(
+                message="User not found",
+                status_code=status.HTTP_404_NOT_FOUND,
             )
         data = self._get_merged_data(target)
         serializer = MergedDriverProfileSerializer(data)
-        resp = Response(serializer.data)
+        resp = success_response(data=serializer.data)
         return resp
 
     def put(self, request):
@@ -410,8 +422,20 @@ class DriverProfileAPIView(APIView):
         update_ser.is_valid(raise_exception=True)
         attrs = update_ser.validated_data
 
-        # Update User fields
+        # Support admin updating another user's profile via ?user_id
         user = request.user
+        user_id = request.query_params.get("user_id")
+        if user_id and request.user.role == "admin":
+            from accounts.models import User
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return error_response(
+                    message="User not found",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
+
+        # Update User fields
         if "first_name" in attrs:
             user.first_name = attrs["first_name"]
         if "last_name" in attrs:
@@ -433,7 +457,7 @@ class DriverProfileAPIView(APIView):
 
         data = self._get_merged_data(user)
         serializer = MergedDriverProfileSerializer(data)
-        resp = Response(serializer.data)
+        resp = success_response(data=serializer.data)
         return resp
 
 # WALLET
@@ -444,10 +468,12 @@ class WalletAPIView(APIView):
         wallet = WalletService.get_or_create_wallet(request.user)
         transactions = Transaction.objects.filter(wallet=wallet).order_by("-created_at")
         
-        resp = Response({
-            "wallet": WalletSerializer(wallet).data,
-            "transactions": TransactionSerializer(transactions, many=True).data
-        })
+        resp = success_response(
+            data={
+                "wallet": WalletSerializer(wallet).data,
+                "transactions": TransactionSerializer(transactions, many=True).data
+            }
+        )
         return resp
 
 class AddFundsAPIView(APIView):
@@ -465,7 +491,11 @@ class AddFundsAPIView(APIView):
             metadata={"source": "app_manual_add"}
         )
         
-        resp = Response(TransactionSerializer(tx).data, status=status.HTTP_201_CREATED)
+        resp = success_response(
+            data=TransactionSerializer(tx).data,
+            message="Funds added successfully",
+            status_code=status.HTTP_201_CREATED
+        )
         return resp
 
 # DRIVER DOCUMENTS (KYC)
@@ -484,60 +514,215 @@ class DriverDocumentAPIView(APIView):
         resp = Response(serializer.data, status=status.HTTP_201_CREATED)
         return resp
 
-# RECENT SEARCHES
+# RECENT SEARCHES — Redis-first with 48h TTL, DB as durable backup
+_RECENT_SEARCH_TTL = 172800  # 48 hours in seconds
+_RECENT_SEARCH_MAX = 20
+
+
+def _redis_key(user_id):
+    return f"recent_searches:{user_id}"
+
+
+def _load_from_redis(user_id):
+    raw = cache.get(_redis_key(user_id))
+    if raw is None:
+        return None
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        # Corrupt data — delete key so next read warms fresh from DB
+        cache.delete(_redis_key(user_id))
+        logger.warning(f"Corrupt recent search cache for user {user_id}, deleted key")
+        return None
+
+
+def _save_to_redis(user_id, items):
+    cache.set(_redis_key(user_id), json.dumps(items), _RECENT_SEARCH_TTL)
+
+
+def _warm_redis_from_db(user):
+    """Load recent searches from DB into Redis (called on cache miss)."""
+    searches = RecentSearch.objects.filter(user=user)[:_RECENT_SEARCH_MAX]
+    items = [
+        {
+            "id": str(s.id),
+            "pickup_name": s.pickup_name,
+            "pickup_lat": s.pickup_lat,
+            "pickup_lon": s.pickup_lon,
+            "destination_name": s.destination_name,
+            "destination_lat": s.destination_lat,
+            "destination_lon": s.destination_lon,
+            "created_at": s.created_at.isoformat(),
+        }
+        for s in searches
+    ]
+    if items:
+        _save_to_redis(user.id, items)
+    return items
+
+
+def _search_matches_existing(search_data, existing_items):
+    """Check if a search matches any existing item by lat/lon coordinates."""
+    for item in existing_items:
+        if (
+            abs(item.get("pickup_lat", 0) - search_data["pickup_lat"]) < 1e-6
+            and abs(item.get("pickup_lon", 0) - search_data["pickup_lon"]) < 1e-6
+            and abs(item.get("destination_lat", 0) - search_data["destination_lat"]) < 1e-6
+            and abs(item.get("destination_lon", 0) - search_data["destination_lon"]) < 1e-6
+        ):
+            return True
+    return False
+
+
 class RecentSearchAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        searches = RecentSearch.objects.filter(
-            user=request.user
-        )[:10]
-        serializer = RecentSearchSerializer(searches, many=True)
-        resp = success_response(data=serializer.data)
-        return resp
+        user = request.user
+
+        # 1. Try Redis first
+        items = _load_from_redis(user.id)
+        if items is None:
+            # Cache miss — warm from DB
+            items = _warm_redis_from_db(user)
+
+        serializer = RecentSearchSerializer(
+            [self._item_to_obj(item) for item in items[:10]],
+            many=True,
+        )
+        return success_response(data=serializer.data)
 
     def post(self, request):
         serializer = RecentSearchCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        pickup_lat = serializer.validated_data["pickup_lat"]
-        pickup_lon = serializer.validated_data["pickup_lon"]
-        destination_lat = serializer.validated_data["destination_lat"]
-        destination_lon = serializer.validated_data["destination_lon"]
+        data = serializer.validated_data
 
-        existing = RecentSearch.objects.filter(
-            user=request.user,
-            pickup_lat=pickup_lat,
-            pickup_lon=pickup_lon,
-            destination_lat=destination_lat,
-            destination_lon=destination_lon,
+        user = request.user
+        search_data = {
+            "pickup_name": data.get("pickup_name", ""),
+            "pickup_lat": data["pickup_lat"],
+            "pickup_lon": data["pickup_lon"],
+            "destination_name": data.get("destination_name", ""),
+            "destination_lat": data["destination_lat"],
+            "destination_lon": data["destination_lon"],
+        }
+
+        # 1. Load existing from Redis (or DB fallback)
+        items = _load_from_redis(user.id)
+        if items is None:
+            items = _warm_redis_from_db(user)
+
+        # 2. Check for duplicate in Redis items
+        if _search_matches_existing(search_data, items):
+            # Find the existing item to return
+            for item in items:
+                if (
+                    abs(item.get("pickup_lat", 0) - search_data["pickup_lat"]) < 1e-6
+                    and abs(item.get("pickup_lon", 0) - search_data["pickup_lon"]) < 1e-6
+                    and abs(item.get("destination_lat", 0) - search_data["destination_lat"]) < 1e-6
+                    and abs(item.get("destination_lon", 0) - search_data["destination_lon"]) < 1e-6
+                ):
+                    return success_response(
+                        data=self._serialize_item(item),
+                        message="Search already exists.",
+                        status_code=status.HTTP_200_OK,
+                    )
+
+        # 3. Check DB for duplicate (handles case where Redis expired but DB has it)
+        existing_db = RecentSearch.objects.filter(
+            user=user,
+            pickup_lat=search_data["pickup_lat"],
+            pickup_lon=search_data["pickup_lon"],
+            destination_lat=search_data["destination_lat"],
+            destination_lon=search_data["destination_lon"],
         ).first()
 
-        if existing:
+        if existing_db:
+            # Touch Redis: reload from DB
+            items = _warm_redis_from_db(user)
             return success_response(
-                data=RecentSearchSerializer(existing).data,
+                data=RecentSearchSerializer(existing_db).data,
                 message="Search already exists.",
                 status_code=status.HTTP_200_OK,
             )
 
-        search = RecentSearch.objects.create(
-            user=request.user,
-            pickup_name=serializer.validated_data.get("pickup_name", ""),
-            pickup_lat=pickup_lat,
-            pickup_lon=pickup_lon,
-            destination_name=serializer.validated_data.get("destination_name", ""),
-            destination_lat=destination_lat,
-            destination_lon=destination_lon,
+        # 4. Create in DB
+        db_search = RecentSearch.objects.create(
+            user=user,
+            pickup_name=search_data["pickup_name"],
+            pickup_lat=search_data["pickup_lat"],
+            pickup_lon=search_data["pickup_lon"],
+            destination_name=search_data["destination_name"],
+            destination_lat=search_data["destination_lat"],
+            destination_lon=search_data["destination_lon"],
         )
-        # Keep only last 20 searches per user
-        RecentSearch.objects.filter(user=request.user).exclude(
-            id__in=RecentSearch.objects.filter(user=request.user)[:20].values("id")
+
+        # 5. Prepend to Redis list, dedup, trim to max
+        new_item = {
+            "id": str(db_search.id),
+            "pickup_name": search_data["pickup_name"],
+            "pickup_lat": search_data["pickup_lat"],
+            "pickup_lon": search_data["pickup_lon"],
+            "destination_name": search_data["destination_name"],
+            "destination_lat": search_data["destination_lat"],
+            "destination_lon": search_data["destination_lon"],
+            "created_at": db_search.created_at.isoformat(),
+        }
+        items.insert(0, new_item)
+        # Dedup (keep first occurrence only)
+        seen = set()
+        deduped = []
+        for item in items:
+            key = (item["pickup_lat"], item["pickup_lon"], item["destination_lat"], item["destination_lon"])
+            if key not in seen:
+                seen.add(key)
+                deduped.append(item)
+        items = deduped[:_RECENT_SEARCH_MAX]
+        _save_to_redis(user.id, items)
+
+        # 6. Trim DB to keep only the latest 20
+        RecentSearch.objects.filter(user=user).exclude(
+            id__in=RecentSearch.objects.filter(user=user).order_by("-created_at")[:_RECENT_SEARCH_MAX].values("id")
         ).delete()
-        resp = success_response(
-            data=RecentSearchSerializer(search).data,
+
+        return success_response(
+            data=RecentSearchSerializer(db_search).data,
             message="Search saved.",
             status_code=status.HTTP_201_CREATED,
         )
-        return resp
+
+    def _item_to_obj(self, item):
+        """Convert a raw dict item to a mock object for the serializer."""
+        class MockObj:
+            pass
+        obj = MockObj()
+        obj.id = item.get("id", "")
+        obj.pickup_name = item.get("pickup_name", "")
+        obj.pickup_lat = item.get("pickup_lat", 0)
+        obj.pickup_lon = item.get("pickup_lon", 0)
+        obj.destination_name = item.get("destination_name", "")
+        obj.destination_lat = item.get("destination_lat", 0)
+        obj.destination_lon = item.get("destination_lon", 0)
+        return obj
+
+    def _serialize_item(self, item):
+        """Serialize a raw dict item directly."""
+        return {
+            "id": item.get("id", ""),
+            "pickup": {
+                "lat": item.get("pickup_lat", 0),
+                "lon": item.get("pickup_lon", 0),
+                "name": item.get("pickup_name", ""),
+                "display_name": item.get("pickup_name", ""),
+            },
+            "destination": {
+                "lat": item.get("destination_lat", 0),
+                "lon": item.get("destination_lon", 0),
+                "name": item.get("destination_name", ""),
+                "display_name": item.get("destination_name", ""),
+            },
+            "created_at": item.get("created_at", ""),
+        }
 
 # USERS (ADMIN ONLY)
 

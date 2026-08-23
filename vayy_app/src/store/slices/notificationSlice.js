@@ -30,13 +30,20 @@ const notificationSlice = createSlice({
   name: "notifications",
   initialState: {
     list: [],
+    unreadCount: 0,
     loading: false,
     error: null,
   },
   reducers: {
     addNotification: (state, action) => {
       state.list.unshift(action.payload);
-    }
+      if (!action.payload.is_read) {
+        state.unreadCount += 1;
+      }
+    },
+    clearUnreadCount: (state) => {
+      state.unreadCount = 0;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -46,6 +53,7 @@ const notificationSlice = createSlice({
       .addCase(fetchNotifications.fulfilled, (state, action) => {
         state.loading = false;
         state.list = action.payload?.data || action.payload?.results || action.payload || [];
+        state.unreadCount = state.list.filter((n) => !n.is_read).length;
       })
       .addCase(fetchNotifications.rejected, (state, action) => {
         state.loading = false;
@@ -55,10 +63,11 @@ const notificationSlice = createSlice({
         const index = state.list.findIndex(n => n.id === action.payload.id);
         if (index !== -1) {
           state.list[index].is_read = true;
+          if (state.unreadCount > 0) state.unreadCount -= 1;
         }
       });
   },
 });
 
-export const { addNotification } = notificationSlice.actions;
+export const { addNotification, clearUnreadCount } = notificationSlice.actions;
 export default notificationSlice.reducer;

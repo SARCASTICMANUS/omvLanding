@@ -16,6 +16,7 @@ const COLORS = {
   error: colors.danger,
   errorLight: colors.dangerLight,
   warning: colors.warning,
+  info: colors.info,
   black: colors.textPrimary,
   white: colors.white,
 };

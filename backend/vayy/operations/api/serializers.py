@@ -94,6 +94,15 @@ class ActiveTripSerializer(
         read_only=True
     )
 
+    # Computed fields for frontend trip history display
+    pickup_name = serializers.SerializerMethodField()
+    destination_name = serializers.SerializerMethodField()
+    distance_km = serializers.SerializerMethodField()
+    duration_min = serializers.SerializerMethodField()
+    date = serializers.SerializerMethodField()
+    fare = serializers.SerializerMethodField()
+    earnings = serializers.SerializerMethodField()
+
     class Meta:
         model = ActiveTrip
 
@@ -118,7 +127,59 @@ class ActiveTripSerializer(
             "total_duration_s",
             "total_fare",
             "rating",
+            "pickup_name",
+            "destination_name",
+            "distance_km",
+            "duration_min",
+            "date",
+            "fare",
+            "earnings",
         )
+
+    def get_pickup_name(self, obj):
+        """First stop name as pickup."""
+        try:
+            stops = obj.route.stops.order_by("order")
+            first = stops.first()
+            return first.name if first else obj.route.name
+        except Exception:
+            return obj.route.name if obj.route else "--"
+
+    def get_destination_name(self, obj):
+        """Last stop name as destination."""
+        try:
+            stops = obj.route.stops.order_by("order")
+            last = stops.last()
+            return last.name if last else obj.route.name
+        except Exception:
+            return obj.route.name if obj.route else "--"
+
+    def get_distance_km(self, obj):
+        if obj.total_distance_m is not None:
+            return round(obj.total_distance_m / 1000, 1)
+        return None
+
+    def get_duration_min(self, obj):
+        if obj.total_duration_s is not None:
+            return round(obj.total_duration_s / 60, 1)
+        return None
+
+    def get_date(self, obj):
+        dt = obj.ended_at or obj.started_at
+        if dt:
+            return dt.strftime("%b %d, %Y %I:%M %p")
+        return None
+
+    def get_fare(self, obj):
+        if obj.total_fare is not None:
+            return float(obj.total_fare)
+        return None
+
+    def get_earnings(self, obj):
+        """Driver earnings = total fare (same as fare for now)."""
+        if obj.total_fare is not None:
+            return float(obj.total_fare)
+        return None
 
 
 class BoardingRequestSerializer(

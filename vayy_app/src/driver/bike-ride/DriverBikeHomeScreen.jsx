@@ -1,16 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
-  FlatList,
   Image,
   Keyboard,
   PanResponder,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
@@ -20,121 +17,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import VayyMap, { Marker } from "../../shared/components/VayyMap";
+import LocationSearch from "../../shared/components/common/LocationSearch";
 import COLORS from "../../shared/constants/colors";
 import SHADOW from "../../shared/constants/shadow";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { NOMINATIM_SEARCH, STORAGE_KEYS } from "../../constants";
+import { getRecentSearches, saveRecentSearch } from "../../shared/services/searchHistoryService";
 import { useSelector } from "react-redux";
 
 const SHEET_COMPACT = 240;
 const BIKE_TOP_IMAGE = require("../../../assets-webp/vayyTopBike1.webp");
-
-function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 110 }) {
-  const [query, setQuery] = useState(value?.name || value?.display_name || "");
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [hasSelection, setHasSelection] = useState(Boolean(value));
-  const [dropdownHeight, setDropdownHeight] = useState(0);
-  const isPickup = label === "Start Point";
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    if (hasSelection) return;
-    if (!query || query.length < 3) {
-      setResults([]);
-      setDropdownHeight(0);
-      return;
-    }
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const data = await NOMINATIM_SEARCH(query);
-        setResults(Array.isArray(data) ? data : []);
-      } catch {
-        setResults([]);
-        setDropdownHeight(0);
-      } finally {
-        setLoading(false);
-      }
-    }, 500);
-    return () => { controller.abort(); clearTimeout(timer); };
-  }, [hasSelection, query]);
-
-  const handleSelect = (item) => {
-    const next = {
-      lat: Number(item.lat), lon: Number(item.lon),
-      name: item.name || item.display_name?.split(",")?.[0],
-      display_name: item.display_name,
-    };
-    setQuery(next.display_name || next.name || "");
-    setResults([]);
-    setDropdownHeight(0);
-    setLoading(false);
-    setHasSelection(true);
-    onSelect(next);
-  };
-
-  const handleChangeText = (text) => {
-    setQuery(text);
-    setHasSelection(false);
-    if (text.length < 3) { setResults([]); setDropdownHeight(0); }
-  };
-
-  const showResults = results.length > 0;
-
-  return (
-    <View style={[styles.fieldWrap, showResults && { marginBottom: dropdownHeight + 20, zIndex: 9999 }]}>
-      <View style={styles.fieldHead}>
-        <View style={[styles.fieldDot, { backgroundColor: isPickup ? COLORS.primary : "#EF4444" }]} />
-        <Text style={styles.fieldLabel}>{label}</Text>
-      </View>
-      <View style={styles.fieldInput}>
-        <View style={[styles.fieldIconBox, { backgroundColor: isPickup ? "rgba(0,152,73,0.1)" : "rgba(239,68,68,0.1)" }]}>
-          <Ionicons name={isPickup ? "locate-outline" : "navigate-outline"} size={16} color={isPickup ? COLORS.primary : "#EF4444"} />
-        </View>
-        <TextInput
-          ref={inputRef}
-          autoCapitalize="none"
-          onChangeText={handleChangeText}
-          placeholder={placeholder}
-          placeholderTextColor="#9CA3AF"
-          style={styles.fieldText}
-          value={query}
-        />
-        {query.length > 0 && !hasSelection && (
-          <TouchableOpacity onPress={() => { setQuery(""); setResults([]); inputRef.current?.focus(); }}>
-            <Ionicons name="close-circle" size={18} color="#D1D5DB" />
-          </TouchableOpacity>
-        )}
-        {hasSelection && <Ionicons name="checkmark-circle" size={18} color={COLORS.primary} />}
-      </View>
-      {showResults ? (
-        <View onLayout={(e) => setDropdownHeight(e.nativeEvent.layout.height)} style={[styles.dropdown, { top: dropdownLift }]}>
-          <FlatList
-            data={results}
-            keyboardShouldPersistTaps="handled"
-            keyExtractor={(item) => String(item.place_id)}
-            scrollEnabled={false}
-            renderItem={({ item }) => (
-              <Pressable onPress={() => handleSelect(item)} style={styles.resultRow}>
-                <View style={styles.resultIconBox}>
-                  <Ionicons name="location-outline" size={16} color={COLORS.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text numberOfLines={1} style={styles.resultTitle}>
-                    {item.name || item.display_name?.split(",")?.[0]}
-                  </Text>
-                  <Text numberOfLines={2} style={styles.resultSub}>{item.display_name}</Text>
-                </View>
-              </Pressable>
-            )}
-          />
-        </View>
-      ) : loading ? <Text style={styles.searching}>Searching...</Text> : null}
-    </View>
-  );
-}
 
 export default function DriverBikeHomeScreen({ navigation }) {
   const { height: windowHeight } = useWindowDimensions();
@@ -213,19 +103,22 @@ export default function DriverBikeHomeScreen({ navigation }) {
 
   const loadRecentSearches = useCallback(async () => {
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEYS.driverRecentSearchesBike);
-      if (stored) setRecentSearches(JSON.parse(stored));
+      const data = await getRecentSearches();
+      setRecentSearches(Array.isArray(data) ? data : []);
     } catch {}
   }, []);
 
-  const saveRecentSearch = async (pick, dest) => {
+  const persistRecentSearch = async (pick, dest) => {
     try {
-      const entry = { pickup: pick, destination: dest };
-      const updated = [entry, ...recentSearches.filter(
-        (r) => r.pickup?.name !== pick?.name || r.destination?.name !== dest?.name,
-      )].slice(0, 5);
-      setRecentSearches(updated);
-      await AsyncStorage.setItem(STORAGE_KEYS.driverRecentSearchesBike, JSON.stringify(updated));
+      await saveRecentSearch({
+        pickup_name: pick?.name || pick?.display_name || "",
+        pickup_lat: pick?.lat || 0,
+        pickup_lon: pick?.lon || 0,
+        destination_name: dest?.name || dest?.display_name || "",
+        destination_lat: dest?.lat || 0,
+        destination_lon: dest?.lon || 0,
+      });
+      loadRecentSearches();
     } catch {}
   };
 
@@ -316,7 +209,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
 
   const handleNext = () => {
     if (!canProceed) return;
-    saveRecentSearch(pickup, destination);
+    persistRecentSearch(pickup, destination);
     navigation.navigate("DriverRouteSearch", { pickup, destination, mode: "bike" });
   };
 
@@ -445,7 +338,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
                 <View style={styles.recentSection}>
                   <View style={styles.recentHeader}>
                     <Ionicons name="time-outline" size={12} color="#9CA3AF" />
-                    <Text style={styles.recentHeading}>RECENT</Text>
+                    <Text style={styles.recentHeading}>RECENT SEARCHES</Text>
                   </View>
                   {recentSearches.slice(0, 3).map((item, index) => (
                     <TouchableOpacity
@@ -454,17 +347,15 @@ export default function DriverBikeHomeScreen({ navigation }) {
                       onPress={() => applyRecent(item)}
                       style={styles.recentRow}
                     >
-                      <View style={styles.routeMini}>
-                        <View style={[styles.routeMiniDot, { backgroundColor: COLORS.primary }]} />
-                        <View style={styles.routeMiniLine} />
-                        <View style={[styles.routeMiniDot, { backgroundColor: "#EF4444" }]} />
+                      <View style={styles.recentIconCircle}>
+                        <Ionicons name="time-outline" size={14} color="#9CA3AF" />
                       </View>
                       <View style={styles.recentCopy}>
                         <Text numberOfLines={1} style={styles.recentFrom}>
                           {item.pickup?.name || item.pickup?.display_name || "Unknown"}
                         </Text>
                         <Text numberOfLines={1} style={styles.recentTo}>
-                          {item.destination?.name || item.destination?.display_name || "Unknown"}
+                          To: {item.destination?.name || item.destination?.display_name || "Unknown"}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -611,63 +502,6 @@ const styles = StyleSheet.create({
   },
   sheetScroll: { flex: 1 },
 
-  /* Fields */
-  fieldWrap: { marginBottom: 14, zIndex: 10 },
-  fieldHead: { flexDirection: "row", alignItems: "center", marginBottom: 6, gap: 6 },
-  fieldDot: { width: 8, height: 8, borderRadius: 4 },
-  fieldLabel: { fontSize: 12, fontWeight: "700", color: "#374151", letterSpacing: 0.3 },
-  fieldInput: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.9)",
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.06)",
-    borderRadius: 14,
-    minHeight: 48,
-    paddingHorizontal: 4,
-    paddingLeft: 4,
-  },
-  fieldIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
-  },
-  fieldText: { flex: 1, fontSize: 14, fontWeight: "500", color: "#111827", minHeight: 36, paddingVertical: 0 },
-  dropdown: {
-    position: "absolute",
-    left: 0, right: 0,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.06)",
-    borderRadius: 14,
-    maxHeight: 180,
-    ...SHADOW.sm,
-    elevation: 20,
-    zIndex: 9999,
-  },
-  resultRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-    gap: 10,
-  },
-  resultIconBox: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
-    backgroundColor: "rgba(0,152,73,0.08)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  resultTitle: { fontSize: 13, fontWeight: "700", color: "#111827" },
-  resultSub: { fontSize: 11, fontWeight: "500", color: "#9CA3AF", marginTop: 1 },
-  searching: { fontSize: 11, fontWeight: "500", color: "#9CA3AF", marginTop: 6, paddingLeft: 4 },
-
   swapRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -734,21 +568,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 2,
   },
-  routeMini: {
-    width: 18,
+  recentIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#F3F4F6",
     alignItems: "center",
-  },
-  routeMiniDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-  },
-  routeMiniLine: {
-    width: 2,
-    flex: 1,
-    minHeight: 16,
-    backgroundColor: "rgba(0,0,0,0.12)",
-    marginVertical: 2,
+    justifyContent: "center",
   },
   recentCopy: { flex: 1 },
   recentFrom: {

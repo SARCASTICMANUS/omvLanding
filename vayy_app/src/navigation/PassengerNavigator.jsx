@@ -12,7 +12,6 @@ import ProfileScreen from "../shared/screens/ProfileScreen";
 import EditProfileScreen from "../shared/screens/EditProfileScreen";
 import PrivacyPolicyScreen from "../shared/screens/PrivacyPolicyScreen";
 import HelpSupportScreen from "../shared/screens/HelpSupportScreen";
-import PassengerAlertsScreen from "../handshake/screens/PassengerAlertsScreen";
 import PassengerActionsScreen from "../passenger/screens/PassengerActionsScreen";
 import JourneyHistoryScreen from "../passenger/screens/JourneyHistoryScreen";
 import DestinationSearchScreen from "../passenger/screens/DestinationSearchScreen";
@@ -69,11 +68,6 @@ function PassengerTabs() {
         name="PassengerRoutes"
         component={MyRoutesScreen}
         options={{ title: "My Trips", tabBarIcon: ({ color, size }) => <MaterialIcons name="history" size={size} color={color} /> }}
-      />
-      <Tab.Screen
-        name="PassengerAlerts"
-        component={PassengerAlertsScreen}
-        options={{ title: "Alerts", tabBarIcon: ({ color, size }) => <MaterialIcons name="notifications" size={size} color={color} /> }}
       />
       <Tab.Screen
         name="PassengerActions"

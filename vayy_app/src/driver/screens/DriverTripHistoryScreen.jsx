@@ -52,25 +52,29 @@ function TripHistoryCard({ item, accent }) {
 }
 
 function mapHistoryItem(raw, accent) {
-  const vehicle = raw?.vehicle || raw?.vehicle_type || (accent === "#BA7517" ? "Auto" : "Bike");
+  const vehicle = raw?.vehicle_type || raw?.vehicle || (accent === "#BA7517" ? "Auto" : "Bike");
   return {
     id: String(raw?.id ?? raw?.trip_id ?? raw?.dispatch_id ?? "--"),
-    pickup: raw?.pickup || raw?.source_name || raw?.origin || raw?.from || "--",
-    destination: raw?.destination || raw?.destination_name || raw?.dropoff || raw?.to || "--",
-    date: raw?.date || raw?.completed_at || raw?.created_at || "--",
-    fare: raw?.fare !== undefined ? `₹${raw.fare}` : raw?.total_fare ? `₹${raw.total_fare}` : "--",
-    distance: raw?.distance !== undefined
-      ? (typeof raw.distance === "number" ? `${raw.distance.toFixed(1)} km` : raw.distance)
-      : raw?.distance_km
-        ? `${raw.distance_km} km`
-        : "--",
-    duration: raw?.duration !== undefined
-      ? `${raw.duration} min`
-      : raw?.duration_minutes
-        ? `${raw.duration_minutes} min`
-        : "--",
+    pickup: raw?.pickup_name || raw?.route_name || raw?.pickup || "--",
+    destination: raw?.destination_name || raw?.route_name || raw?.destination || "--",
+    date: raw?.date || raw?.ended_at || raw?.started_at || "--",
+    fare: raw?.fare != null ? `₹${raw.fare}` : raw?.total_fare ? `₹${raw.total_fare}` : "--",
+    distance: raw?.distance_km != null
+      ? `${raw.distance_km} km`
+      : raw?.total_distance_m != null
+        ? `${(raw.total_distance_m / 1000).toFixed(1)} km`
+        : raw?.distance !== undefined
+          ? (typeof raw.distance === "number" ? `${raw.distance.toFixed(1)} km` : raw.distance)
+          : "--",
+    duration: raw?.duration_min != null
+      ? `${raw.duration_min} min`
+      : raw?.total_duration_s != null
+        ? `${(raw.total_duration_s / 60).toFixed(1)} min`
+        : raw?.duration !== undefined
+          ? `${raw.duration} min`
+          : "--",
     vehicle,
-    earnings: raw?.earnings !== undefined ? `₹${raw.earnings}` : raw?.driver_earnings ? `₹${raw.driver_earnings}` : raw?.fare ? `₹${raw.fare}` : "--",
+    earnings: raw?.earnings != null ? `₹${raw.earnings}` : raw?.total_fare ? `₹${raw.total_fare}` : raw?.fare ? `₹${raw.fare}` : "--",
   };
 }
 
