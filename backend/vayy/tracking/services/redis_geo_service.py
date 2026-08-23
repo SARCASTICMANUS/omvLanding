@@ -273,3 +273,88 @@ class RedisGeoService:
         except Exception as e:
             logger.warning(f"Redis GEO: get vehicle location failed: {e}")
             return None
+
+    # ── async methods for hot path ────────────────────────────
+
+    @classmethod
+    def _async_client(cls):
+        """Get the async Redis client from channels_redis."""
+        from channels.layers import get_channel_layer
+        channel_layer = get_channel_layer()
+        return channel_layer.connection(0)
+
+    @classmethod
+    async def hot_path_pipeline(
+        cls,
+        vehicle_id: str,
+        lat: float,
+        lng: float,
+        speed: float,
+        heading: float,
+        trip_id: Optional[str] = None,
+        route_id: Optional[str] = None,
+        vehicle_type: str = "",
+        driver_id: str = "",
+        vehicle_number: str = "",
+    ) -> None:
+        """
+        Single async Redis pipeline for the hot path:
+        GEOADD + meta hash + snapshot hash. One round-trip.
+        """
+        try:
+            client = cls._async_client()
+            meta_key = cls._meta_key(vehicle_id)
+            snapshot_key = f"{LATEST_PREFIX}:{vehicle_id}"
+            ts = str(int(time.time()))
+
+            async with client.pipeline(transaction=True) as pipe:
+                # GEOADD
+                pipe.geoadd(GEO_KEY, (lng, lat, vehicle_id))
+                # Meta hash
+                pipe.hset(meta_key, mapping={
+                    "vehicle_type": vehicle_type or "",
+                    "driver_id": driver_id or "",
+                    "vehicle_number": vehicle_number or "",
+                    "trip_id": trip_id or "",
+                })
+                pipe.expire(meta_key, 120)
+                # Snapshot hash
+                pipe.hset(snapshot_key, mapping={
+                    "lat": lat,
+                    "lng": lng,
+                    "speed": speed,
+                    "heading": heading,
+                    "trip_id": trip_id or "",
+                    "route_id": route_id or "",
+                    "ts": ts,
+                })
+                pipe.expire(snapshot_key, SNAPSHOT_TTL)
+                await pipe.execute()
+        except Exception as e:
+            logger.warning(f"Redis GEO async pipeline failed for {vehicle_id}: {e}")
+
+    @classmethod
+    async def get_vehicle_meta_async(cls, vehicle_id: str) -> Optional[Dict]:
+        """Async read vehicle metadata from Redis."""
+        try:
+            client = cls._async_client()
+            raw = await client.hgetall(cls._meta_key(vehicle_id))
+            if not raw:
+                return None
+            return {cls._decode(k): cls._decode(v) for k, v in raw.items()}
+        except Exception as e:
+            logger.warning(f"Redis GEO async meta read failed for {vehicle_id}: {e}")
+            return None
+
+    @classmethod
+    async def get_vehicle_snapshot_async(cls, vehicle_id: str) -> Optional[Dict]:
+        """Async read vehicle snapshot from Redis."""
+        try:
+            client = cls._async_client()
+            raw = await client.hgetall(f"{LATEST_PREFIX}:{vehicle_id}")
+            if not raw:
+                return None
+            return {cls._decode(k): cls._decode(v) for k, v in raw.items()}
+        except Exception as e:
+            logger.warning(f"Redis GEO async snapshot read failed for {vehicle_id}: {e}")
+            return None

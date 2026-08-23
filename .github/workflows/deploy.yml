@@ -7,8 +7,8 @@ on:
     paths:
       - "backend/vayy/**"
       - "admin/**"
-      - "docker-compose.yaml"
-      - "nginx.conf"
+      - "docker-compose-prod.yaml"
+      - "nginx.prod.conf"
 
 jobs:
   deploy:
@@ -34,7 +34,7 @@ jobs:
         run: |
           ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p $COMPOSE_DIR"
           rsync -avz -e "ssh" \
-            docker-compose.yaml .dockerignore nginx.conf \
+            docker-compose-prod.yaml .dockerignore nginx.prod.conf \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:$COMPOSE_DIR/
 
       # Sync backend app source into the compose layout.

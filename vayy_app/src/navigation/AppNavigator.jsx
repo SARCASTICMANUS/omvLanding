@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { useDispatch, useSelector } from "react-redux";
@@ -10,6 +11,7 @@ import DriverNavigator from "./DriverNavigator";
 import PassengerNavigator from "./PassengerNavigator";
 import AdminScreen from "../admin/screens/AdminScreen";
 import SplashCarouselScreen from "../passenger/splash/SplashCarouselScreen";
+import NotificationRoot from "../shared/components/common/NotificationRoot";
 import { DRIVER_ROLES, STORAGE_KEYS } from "../constants";
 
 const Stack = createStackNavigator();
@@ -52,16 +54,19 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer key={navKey}>
-      <Stack.Navigator
-        initialRouteName={initialRoute}
-        screenOptions={{ headerShown: false }}
-      >
-        <Stack.Screen name="SplashCarousel" component={SplashCarouselScreen} />
-        <Stack.Screen name="AuthNavigator" component={AuthNavigator} />
-        <Stack.Screen name="DriverNavigator" component={DriverNavigator} />
-        <Stack.Screen name="PassengerNavigator" component={PassengerNavigator} />
-        <Stack.Screen name="AdminScreen" component={AdminScreen} />
-      </Stack.Navigator>
+      <View style={{ flex: 1 }}>
+        <Stack.Navigator
+          initialRouteName={initialRoute}
+          screenOptions={{ headerShown: false }}
+        >
+          <Stack.Screen name="SplashCarousel" component={SplashCarouselScreen} />
+          <Stack.Screen name="AuthNavigator" component={AuthNavigator} />
+          <Stack.Screen name="DriverNavigator" component={DriverNavigator} />
+          <Stack.Screen name="PassengerNavigator" component={PassengerNavigator} />
+          <Stack.Screen name="AdminScreen" component={AdminScreen} />
+        </Stack.Navigator>
+        <NotificationRoot />
+      </View>
     </NavigationContainer>
   );
 }

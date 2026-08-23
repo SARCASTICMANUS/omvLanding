@@ -3,10 +3,13 @@ import locationService from "../../shared/lib/locationService";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 
-export default function useDriverLocationPush({ enabled, vehicleId, tripId, onLocation }) {
+export default function useDriverLocationPush({ enabled, vehicleId, tripId, onLocation, vehicleType, vehicleNumber, driverId }) {
   const vehicleIdRef = useRef(vehicleId);
   const tripIdRef = useRef(tripId);
   const onLocationRef = useRef(onLocation);
+  const vehicleTypeRef = useRef(vehicleType);
+  const vehicleNumberRef = useRef(vehicleNumber);
+  const driverIdRef = useRef(driverId);
   const pendingRef = useRef(null);
   const wasConnectedRef = useRef(false);
 
@@ -37,6 +40,9 @@ export default function useDriverLocationPush({ enabled, vehicleId, tripId, onLo
         lng: coords.longitude,
         speed: coords.speed || 0,
         heading: coords.heading || 0,
+        vehicle_type: vehicleTypeRef.current || undefined,
+        vehicle_number: vehicleNumberRef.current || undefined,
+        driver_id: driverIdRef.current || undefined,
       };
 
       // Stream over the persistent vehicle tracking WebSocket. If the socket
@@ -60,6 +66,12 @@ export default function useDriverLocationPush({ enabled, vehicleId, tripId, onLo
   );
 
   useEffect(() => {
+    vehicleTypeRef.current = vehicleType;
+    vehicleNumberRef.current = vehicleNumber;
+    driverIdRef.current = driverId;
+  });
+
+  useEffect(() => {
     if (!enabled || !vehicleId) return;
 
     let stopped = false;
@@ -70,8 +82,8 @@ export default function useDriverLocationPush({ enabled, vehicleId, tripId, onLo
       if (!hasPermission || stopped) return;
 
       sub = await locationService.startTracking(handleLocation, {
-        timeInterval: 3000,
-        distanceInterval: 5,
+        timeInterval: 1000,
+        distanceInterval: 1,
       });
     })();
 

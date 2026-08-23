@@ -1,10 +1,8 @@
 import logging
 from celery import shared_task
-from django.db import transaction
 
-from tracking.consumers.location_consumer import LocationConsumer
-from tracking.consumers.gps_consumer import GPSConsumer
 from communication.services.rabbitmq_service import RabbitMQService
+from tracking.services.location_service import LocationService
 
 logger = logging.getLogger(__name__)
 
@@ -45,32 +43,12 @@ def prune_hybrid_logs(self, days=7, batch=5000):
 )
 def process_location_update(self, payload):
     """
-    Celery task to process location updates.
+    Celery task for cold path: DB writes + snap-to-route + ETAs + broadcast.
     """
     try:
-        LocationConsumer.handle_location_update(payload)
+        LocationService.process_location_update(payload)
     except Exception as exc:
         logger.error(f"Error processing location update: {exc}")
-        raise self.retry(exc=exc)
-
-
-@shared_task(
-    bind=True,
-    max_retries=3,
-    default_retry_delay=5,
-    queue="tracking",
-    ignore_result=True,
-    acks_late=True,
-    reject_on_worker_lost=True,
-)
-def process_gps_raw(self, payload):
-    """
-    Celery task to process raw GPS ingestion.
-    """
-    try:
-        GPSConsumer.handle_gps_raw(payload)
-    except Exception as exc:
-        logger.error(f"Error processing raw GPS: {exc}")
         raise self.retry(exc=exc)
 
 
@@ -259,3 +237,70 @@ def sync_rabbitmq_infrastructure():
     except Exception as e:
         logger.error(f"RabbitMQ setup failed: {e}")
         return f"RabbitMQ setup failed: {str(e)}"
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=2,
+    queue="tracking",
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def flush_hybrid_logs(self):
+    """
+    Flush HybridLog entries from Redis queue to database in batch.
+    Called every 5 seconds via Celery Beat.
+    Reduces DB write pressure from N individual inserts to 1 bulk_create.
+    """
+    import json
+    try:
+        from django_redis import get_redis_connection
+        from tracking.models import HybridLog
+        from operations.models import Vehicle
+        from django.contrib.gis.geos import Point
+
+        conn = get_redis_connection("default")
+        queue_key = "vayy:hybrid_log_queue"
+
+        # Atomic: read + delete in one operation
+        entries = []
+        while True:
+            entry = conn.rpop(queue_key)
+            if entry is None:
+                break
+            entries.append(json.loads(entry))
+            if len(entries) >= 500:
+                break
+
+        if not entries:
+            return 0
+
+        hybrid_logs = []
+        for entry in entries:
+            try:
+                vehicle_id = entry.get("vehicle_id")
+                vehicle = Vehicle.objects.get(id=vehicle_id)
+                driver = vehicle.driver if hasattr(vehicle, "driver") and vehicle.driver else None
+                point = Point(float(entry["lng"]), float(entry["lat"]), srid=4326)
+                hybrid_logs.append(HybridLog(
+                    user=driver,
+                    vehicle=vehicle,
+                    trip_id=entry.get("trip_id"),
+                    location=point,
+                    speed=entry.get("speed", 0),
+                    heading=entry.get("heading", 0),
+                    timestamp=entry.get("timestamp"),
+                ))
+            except Exception as e:
+                logger.warning(f"Skipping malformed HybridLog entry: {e}")
+
+        if hybrid_logs:
+            HybridLog.objects.bulk_create(hybrid_logs, batch_size=500)
+
+        return len(hybrid_logs)
+
+    except Exception as exc:
+        logger.error(f"Error flushing HybridLogs: {exc}")
+        raise self.retry(exc=exc)

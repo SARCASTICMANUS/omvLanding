@@ -1,5 +1,6 @@
 import json
 import logging
+from urllib.parse import parse_qs
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -11,9 +12,16 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     """
     Consumer for real-time user notifications.
     Groups: notifications_{user_id}
+
+    Authenticates via JWT token in query string and validates
+    that the authenticated user matches the user_id in the URL.
     """
     async def connect(self):
-        token = self.scope.get('query_string', b'').decode().split('=')[-1]
+        # Parse token from query string properly
+        query_string = self.scope.get('query_string', b'').decode()
+        params = parse_qs(query_string)
+        token = params.get('token', [None])[0]
+
         user = await self._authenticate_token(token) if token else None
         if not user:
             await self.close(code=4001)
