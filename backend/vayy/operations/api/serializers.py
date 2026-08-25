@@ -272,6 +272,7 @@ class BoardingRequestCreateSerializer(
 ):
     trip = serializers.UUIDField()
     pickup_stop = serializers.UUIDField()
+    drop_stop = serializers.UUIDField(required=False, allow_null=True)
 
     def validate(self, attrs):
         from operations.constants import TRIP_STATUS_ACTIVE
@@ -325,13 +326,24 @@ class BoardingRequestCreateSerializer(
         attrs["trip"] = trip
         attrs["pickup_stop"] = pickup_stop
 
+        drop_stop_id = attrs.get("drop_stop")
+        if drop_stop_id:
+            drop_stop = Stop.objects.filter(
+                id=drop_stop_id,
+                route_id=trip.route_id,
+            ).first()
+            attrs["drop_stop"] = drop_stop
+        else:
+            attrs["drop_stop"] = None
+
         return attrs
 
 
 class DispatchRequestSerializer(serializers.Serializer):
     route_id = serializers.UUIDField()
     pickup_stop_id = serializers.UUIDField()
-    mode = serializers.ChoiceField(choices=["direct", "broadcast"], default="direct")
+    drop_stop_id = serializers.UUIDField(required=False, allow_null=True)
+    mode = serializers.ChoiceField(choices=["direct", "broadcast"], default="broadcast")
 
 
 class DispatchAssignSerializer(serializers.Serializer):

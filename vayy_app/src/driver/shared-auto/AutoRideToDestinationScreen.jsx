@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import COLORS from "../../shared/constants/colors";
+import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import VayyMap from "../../shared/components/VayyMap";
 import AutoCancelRideModal from "./AutoCancelRideModal";
 import ZoomControls from "../../shared/components/common/ZoomControls";
@@ -22,6 +23,7 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
   const [distance, setDistance] = useState(initialDist);
   const [eta, setEta] = useState(buddy?.eta ? `${buddy.eta} min` : "—");
   const [elapsed, setElapsed] = useState(0);
+  const [currentSpeed, setCurrentSpeed] = useState(null);
   const [showCancel, setShowCancel] = useState(false);
   const mapRef = useRef(null);
   const zoomIn = () => mapRef.current?.zoomIn();
@@ -38,6 +40,7 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
       const destLon = buddy?.dest_lon || null;
       locationService.startTracking((coords) => {
         if (removed) return;
+        if (coords.speed != null) setCurrentSpeed(Math.max(0, Math.round(coords.speed * 3.6)));
         if (destLat != null && destLon != null) {
           const R = 6371e3;
           const dLat = ((destLat - coords.latitude) * Math.PI) / 180;
@@ -103,8 +106,8 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
           ref={mapRef}
           style={styles.mapBg}
           initialRegion={{
-            latitude: 26.8467,
-            longitude: 80.9462,
+            latitude: DEFAULT_CENTER.latitude,
+            longitude: DEFAULT_CENTER.longitude,
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}
@@ -180,7 +183,7 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
           <View style={styles.statItem}>
             <Ionicons name="speedometer" size={16} color="#3B82F6" />
             <View style={styles.statValueRow}>
-              <Text style={styles.statValue}>28</Text>
+              <Text style={styles.statValue}>{currentSpeed || "—"}</Text>
               <Text style={styles.statUnit}>km/h</Text>
             </View>
             <Text style={styles.statLabel}>avg speed</Text>

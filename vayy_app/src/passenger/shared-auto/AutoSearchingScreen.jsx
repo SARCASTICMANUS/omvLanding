@@ -46,7 +46,7 @@ export function AutoSearchingScreen({ navigation, route }) {
   const cameraRef = useRef(null);
   const didFitRef = useRef(false);
 
-  const { route_id, pickup_stop_id, trip, pickup, destination, boardingRequestId } = route?.params || {};
+  const { route_id, pickup_stop_id, drop_stop_id, trip, pickup, destination, boardingRequestId } = route?.params || {};
 
   const pickupStop = trip?.pickup_stop || {};
   const pickupName = pickupStop?.name || pickup?.name || pickup?.display_name || "the stop";
@@ -106,7 +106,7 @@ export function AutoSearchingScreen({ navigation, route }) {
           const activeTrip = trips[0];
           setActiveTripId(activeTrip.trip_id);
           setActiveTripData(activeTrip);
-          dispatch(createBoardingRequest({ trip: activeTrip.trip_id, pickup_stop: pickup_stop_id }));
+          dispatch(createBoardingRequest({ trip: activeTrip.trip_id, pickup_stop: pickup_stop_id, drop_stop: drop_stop_id }));
         } else {
           setShowNoRide(true);
           setSearchStatus("failed");
@@ -135,7 +135,7 @@ export function AutoSearchingScreen({ navigation, route }) {
         if (Array.isArray(trips) && trips.length > 0) {
           const activeTrip = trips[0];
           setActiveTripId(activeTrip.trip_id);
-          dispatch(createBoardingRequest({ trip: activeTrip.trip_id, pickup_stop: pickup_stop_id }));
+          dispatch(createBoardingRequest({ trip: activeTrip.trip_id, pickup_stop: pickup_stop_id, drop_stop: drop_stop_id }));
         } else {
           setShowNoRide(true);
           setSearchStatus("failed");

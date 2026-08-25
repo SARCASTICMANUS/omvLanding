@@ -29,16 +29,16 @@ export default function TripEndSummary({ navigation, route }) {
 
         <VayyCard style={styles.earningsCard}>
           <Text style={styles.earningsLabel}>TOTAL EARNINGS</Text>
-          <Text style={styles.earningsValue}>₹{stats.earnings || "450.00"}</Text>
+          <Text style={styles.earningsValue}>₹{stats.earnings || "-"}</Text>
           <View style={styles.earningsDivider} />
           <View style={styles.earningsRow}>
              <View style={styles.earningsStat}>
                 <Text style={styles.statLabel}>DISTANCE</Text>
-                <Text style={styles.statValue}>{stats.distance || "12.4"} km</Text>
+                <Text style={styles.statValue}>{stats.distance || "-"} km</Text>
              </View>
              <View style={styles.earningsStat}>
                 <Text style={styles.statLabel}>DURATION</Text>
-                <Text style={styles.statValue}>{stats.duration || "45"} min</Text>
+                <Text style={styles.statValue}>{stats.duration || "-"} min</Text>
              </View>
           </View>
         </VayyCard>
@@ -47,15 +47,15 @@ export default function TripEndSummary({ navigation, route }) {
           <Text style={styles.sectionTitle}>Performance Overview</Text>
           <View style={styles.statsGrid}>
              <View style={styles.miniCard}>
-                <Text style={styles.miniValue}>{stats.passengers || "24"}</Text>
+                <Text style={styles.miniValue}>{stats.passengers || "-"}</Text>
                 <Text style={styles.miniLabel}>Passengers</Text>
              </View>
              <View style={styles.miniCard}>
-                <Text style={styles.miniValue}>{stats.stops || "12"}</Text>
+                <Text style={styles.miniValue}>{stats.stops || "-"}</Text>
                 <Text style={styles.miniLabel}>Stops Hit</Text>
              </View>
              <View style={styles.miniCard}>
-                <Text style={styles.miniValue}>{stats.rating || "4.9"}</Text>
+                <Text style={styles.miniValue}>{stats.rating || "-"}</Text>
                 <Text style={styles.miniLabel}>Avg Rating</Text>
              </View>
           </View>
@@ -67,7 +67,7 @@ export default function TripEndSummary({ navigation, route }) {
           <VayyCard style={styles.heatmapCard}>
              <View style={styles.heatmapPlaceholder}>
                 <Text style={styles.heatmapIcon}>📍</Text>
-                <Text style={styles.heatmapText}>City Center & Metro Gate 2</Text>
+                <Text style={styles.heatmapText}>{stats.topZone || "—"}</Text>
              </View>
           </VayyCard>
         </View>

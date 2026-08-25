@@ -16,12 +16,7 @@ export default function useNotificationListener(toastRef) {
   const navigation = useNavigation();
   const { user } = useSelector((state) => state.auth);
   const userId = user?.id;
-  const toastRefInternal = useRef(toastRef);
   const navigationRef = useRef(navigation);
-
-  useEffect(() => {
-    toastRefInternal.current = toastRef;
-  }, [toastRef]);
 
   useEffect(() => {
     navigationRef.current = navigation;
@@ -39,7 +34,7 @@ export default function useNotificationListener(toastRef) {
 
         dispatch(addNotification(notification));
 
-        toastRefInternal.current?.show({
+        toastRef.current?.show({
           id: notification.id,
           title: notification.title,
           message: notification.message,

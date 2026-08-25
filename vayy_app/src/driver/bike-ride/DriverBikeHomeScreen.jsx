@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -233,7 +234,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
         style={StyleSheet.absoluteFillObject}
         grayscale
         initialViewState={{
-          center: [80.9462, 26.8467],
+          center: [DEFAULT_CENTER.longitude, DEFAULT_CENTER.latitude],
           zoom: 12,
         }}
       >

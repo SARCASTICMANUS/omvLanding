@@ -12,25 +12,19 @@ import {
 import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { getNearbyVehicles } from "../../passenger/services/passengerService";
+import { DEFAULT_CENTER as MAP_CENTER } from "../../constants/mapConfig";
 
 const VAYY_PRIMARY = "#009849";
 const AUTO_COLORS = [VAYY_PRIMARY, "#F59E0B", "#EF4444"];
-
-const MOCK_AUTOS = [
-  { autoId: "1", vehicleNumber: "UP32 AB 1234", distance: 240, eta: 2, lat: 26.8500, lng: 80.9500 },
-  { autoId: "2", vehicleNumber: "UP32 CD 5678", distance: 520, eta: 4, lat: 26.8550, lng: 80.9550 },
-  { autoId: "3", vehicleNumber: "UP32 EF 9012", distance: 780, eta: 6, lat: 26.8600, lng: 80.9600 },
-];
-
-const MAP_CENTER = { latitude: 26.8467, longitude: 80.9462 };
 
 export function AutoDiscoveryScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const [approachingAutos] = useState(MOCK_AUTOS);
-  const [nearestDist, setNearestDist] = useState(MOCK_AUTOS[0].distance);
+  const [approachingAutos, setApproachingAutos] = useState([]);
+  const [nearestDist, setNearestDist] = useState(null);
   const [searchStatus, setSearchStatus] = useState("autos_found");
   const [showBoardConfirm, setShowBoardConfirm] = useState(false);
   const arrivedRef = useRef(false);
@@ -47,6 +41,29 @@ export function AutoDiscoveryScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
+    const fetchAutos = async () => {
+      try {
+        const data = await getNearbyVehicles(MAP_CENTER.latitude, MAP_CENTER.longitude, "auto", 2000);
+        const vehicles = Array.isArray(data) ? data : data?.results || data?.vehicles || [];
+        const mapped = vehicles.map((v, i) => ({
+          autoId: v.id || v.vehicle_id || String(i),
+          vehicleNumber: v.vehicle_number || v.number || "—",
+          distance: v.distance || v.distance_meters || 500,
+          eta: v.eta || v.eta_minutes || 3,
+          lat: v.lat || v.latitude || MAP_CENTER.latitude,
+          lng: v.lng || v.longitude || MAP_CENTER.longitude,
+        }));
+        setApproachingAutos(mapped.length > 0 ? mapped : []);
+        if (mapped.length > 0) setNearestDist(mapped[0].distance);
+      } catch {
+        setApproachingAutos([]);
+      }
+    };
+    fetchAutos();
+  }, []);
+
+  useEffect(() => {
+    if (nearestDist === null) return;
     const interval = setInterval(() => {
       setNearestDist((prev) => {
         const next = Math.max(0, prev - 25);
@@ -60,7 +77,7 @@ export function AutoDiscoveryScreen({ navigation }) {
       });
     }, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [nearestDist !== null]);
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
@@ -79,10 +96,10 @@ export function AutoDiscoveryScreen({ navigation }) {
     navigation.replace('AutoRideActive');
   };
 
-  const nearest = {
-    ...MOCK_AUTOS[0],
-    distance: nearestDist,
-  };
+  const nearest = approachingAutos.length > 0 ? {
+    ...approachingAutos[0],
+    distance: nearestDist ?? approachingAutos[0].distance,
+  } : null;
 
   return (
     <View style={styles.container}>

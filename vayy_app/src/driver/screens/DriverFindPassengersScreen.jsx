@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { getNearbyPassengers } from "../services/driverService";
 import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import COLORS from "../../shared/constants/colors";
 import { WS } from "../../constants";
 import { buildRouteSummary } from "../utils/driverFlowUtils";
@@ -256,8 +257,8 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
         style={styles.map}
         initialViewState={{
           center: [
-            summary?.startCoord?.longitude || 80.9462,
-            summary?.startCoord?.latitude || 26.8467,
+            summary?.startCoord?.longitude || DEFAULT_CENTER.longitude,
+            summary?.startCoord?.latitude || DEFAULT_CENTER.latitude,
           ],
           zoom: 14,
         }}

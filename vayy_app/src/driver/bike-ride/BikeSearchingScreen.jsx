@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import VayyMap, { UserLocation } from "../../shared/components/VayyMap";
+import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import COLORS from "../../shared/constants/colors";
 
 export default function BikeSearchingScreen({ navigation, route }) {
@@ -15,7 +16,7 @@ export default function BikeSearchingScreen({ navigation, route }) {
         <VayyMap
           style={styles.map}
           initialViewState={{
-            center: [80.9462, 26.8467],
+            center: [DEFAULT_CENTER.longitude, DEFAULT_CENTER.latitude],
             zoom: 14,
           }}
           onDidFinishLoadingMap={() => setIsMapReady(true)}

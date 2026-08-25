@@ -4,12 +4,13 @@ import { OPERATIONS, TRACKING } from "../../constants";
 
 export const requestDispatch = createAsyncThunk(
   "dispatch/request",
-  async ({ route_id, pickup_stop_id, mode }, { rejectWithValue }) => {
+  async ({ route_id, pickup_stop_id, drop_stop_id, mode }, { rejectWithValue }) => {
     try {
       const response = await api.post(OPERATIONS.dispatchRequest, {
         route_id,
         pickup_stop_id,
-        mode: mode || "direct",
+        drop_stop_id,
+        mode: mode || "broadcast",
       });
       return response.data;
     } catch (error) {
@@ -32,11 +33,12 @@ export const fetchActiveRouteTrips = createAsyncThunk(
 
 export const createBoardingRequest = createAsyncThunk(
   "dispatch/createBoardingRequest",
-  async ({ trip, pickup_stop }, { rejectWithValue }) => {
+  async ({ trip, pickup_stop, drop_stop }, { rejectWithValue }) => {
     try {
       const response = await api.post(OPERATIONS.boardingRequests, {
         trip,
         pickup_stop,
+        drop_stop,
       });
       return response.data;
     } catch (error) {

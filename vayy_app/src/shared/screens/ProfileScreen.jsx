@@ -51,7 +51,7 @@ export default function ProfileScreen({ navigation }) {
 
   const isDriver = DRIVER_ROLES.includes(user?.role);
   const displayName = profile?.display_name || user?.full_name || user?.name || "User Name";
-  const displayEmail = user?.email || "user@example.com";
+  const displayEmail = user?.email || "No email";
   const phoneNumber = profile?.phone_number || "--";
   const licenseNumber = profile?.license_number;
   const vehicleNumber = profile?.vehicle_number;

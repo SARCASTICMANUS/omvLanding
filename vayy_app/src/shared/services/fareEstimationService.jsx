@@ -22,7 +22,10 @@ export const FARE_RATES = {
   default: { baseFare: 50, perKmRate: 15 },
 };
 
-const getRate = (vehicleType) => FARE_RATES[vehicleType] || FARE_RATES.default;
+const getRate = (vehicleType) => {
+  const rate = FARE_RATES[vehicleType] || FARE_RATES.default;
+  return rate;
+};
 
 export const calculateFare = (distanceKm, vehicleType) => {
   const { baseFare, perKmRate } = getRate(vehicleType);

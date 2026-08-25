@@ -217,11 +217,11 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
 
         <View style={styles.buddyRow}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{buddy?.avatar || "RK"}</Text>
+            <Text style={styles.avatarText}>{buddy?.avatar || "-"}</Text>
           </View>
           <View style={styles.buddyInfo}>
-            <Text style={styles.buddyName}>{buddy?.name || "Passenger"}</Text>
-            <Text style={styles.buddyPickup}>{buddy?.pickup || "Pickup"}</Text>
+            <Text style={styles.buddyName}>{buddy?.name || "-"}</Text>
+            <Text style={styles.buddyPickup}>{buddy?.pickup || "-"}</Text>
           </View>
           <View style={styles.etaBadge}>
             <Ionicons name="time" size={13} color={COLORS.primary} />
@@ -250,8 +250,8 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
             />
           </View>
           <View style={styles.progressLabels}>
-            <Text style={styles.progressLabel}>1.2 km</Text>
-            <Text style={[styles.progressLabel, { color: COLORS.primary }]}>0 km</Text>
+            <Text style={styles.progressLabel}>-</Text>
+            <Text style={[styles.progressLabel, { color: COLORS.primary }]}>- km</Text>
           </View>
         </View>
 
@@ -270,7 +270,7 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
         {!isInRange && (
           <View style={styles.arriveHint}>
             <Ionicons name="radio" size={14} color="#9CA3AF" />
-            <Text style={styles.arriveHintText}>Arrive within 30 m to activate</Text>
+            <Text style={styles.arriveHintText}>Arrive within - m to activate</Text>
           </View>
         )}
         <TouchableOpacity
