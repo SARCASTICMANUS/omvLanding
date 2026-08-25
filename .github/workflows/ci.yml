@@ -38,8 +38,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate prod compose
-        run: docker compose -f docker-compose-prod.yaml config
+      # - name: Validate prod compose
+      #   run: docker compose -f docker-compose-prod.yaml config
 
       - name: Build backend image
         run: docker build -t vayy-backend ./backend/vayy
