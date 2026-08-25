@@ -5,7 +5,7 @@ import {
   Route,
 } from "react-router-dom";
 
-import { FullScreenLoader } from "./components/shared";
+import { FullScreenLoader } from "./components/Shared";
 import { useAuthExpiryGuard } from "./hooks/useAuthExpiryGuard";
 import { appRouteConfig } from "./routes/routeConfig";
 
