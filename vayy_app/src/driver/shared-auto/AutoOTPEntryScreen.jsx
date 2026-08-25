@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
 import VayyMap from "../../shared/components/VayyMap";
@@ -92,8 +93,8 @@ export default function AutoOTPEntryScreen({ navigation, route }) {
         <VayyMap
           style={styles.mapBg}
           initialRegion={{
-            latitude: 26.8467,
-            longitude: 80.9462,
+            latitude: DEFAULT_CENTER.latitude,
+            longitude: DEFAULT_CENTER.longitude,
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}

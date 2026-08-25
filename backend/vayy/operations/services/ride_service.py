@@ -54,6 +54,22 @@ class RideService:
         }
 
     @staticmethod
+    def calculate_segment_fare(pickup_stop, drop_stop, vehicle_type: str) -> float:
+        """
+        Calculates fare for a specific segment between two stops.
+        """
+        if not pickup_stop or not drop_stop:
+            return 0.0
+        
+        pickup_lat = pickup_stop.location.y
+        pickup_lng = pickup_stop.location.x
+        drop_lat = drop_stop.location.y
+        drop_lng = drop_stop.location.x
+        
+        estimate = RideService.calculate_estimate(pickup_lat, pickup_lng, drop_lat, drop_lng, vehicle_type)
+        return estimate.get("estimated_fare", 0.0)
+
+    @staticmethod
     def calculate_final_fare(trip) -> float:
         """
         Calculates the final fare for a completed trip.

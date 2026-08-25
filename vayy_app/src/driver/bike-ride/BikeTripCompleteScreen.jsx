@@ -114,7 +114,7 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
           <View style={styles.tripMeta}>
             <View style={styles.metaItem}>
               <Ionicons name="navigate" size={16} color="#6B7280" />
-              <Text style={styles.metaText}>{buddy.distance ? `${buddy.distance}` : "—"}</Text>
+              <Text style={styles.metaText}>{buddy.distance != null ? `${buddy.distance} km` : "—"}</Text>
             </View>
             <View style={styles.metaDot} />
             <View style={styles.metaItem}>

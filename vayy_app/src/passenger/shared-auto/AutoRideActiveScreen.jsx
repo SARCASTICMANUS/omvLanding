@@ -13,6 +13,7 @@ import { useDispatch } from "react-redux";
 import { completeDispatch } from "../../store/slices/dispatchSlice";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
+import { DEFAULT_CENTER } from "../../constants/mapConfig";
 
 const DESTINATION_THRESHOLD = 100;
 
@@ -114,17 +115,15 @@ export function AutoRideActiveScreen({ navigation, route }) {
     }
   };
 
-  const confirmEndRide = () => {
+  const confirmEndRide = async () => {
     setShowEndConfirm(false);
     setEndRideLoading(true);
     const tripId = tripData.trip_id || dispatchId;
-    (async () => {
-      try {
-        await dispatchRedux(completeDispatch(tripId)).unwrap();
-      } catch (e) {
-        console.warn("completeDispatch auto passenger end ride failed:", e);
-      }
-    })();
+    try {
+      await dispatchRedux(completeDispatch(tripId)).unwrap();
+    } catch (e) {
+      console.warn("completeDispatch auto passenger end ride failed:", e);
+    }
     navigation.replace('AutoRideComplete', {
       tripId,
       boardedAt: "",
@@ -160,8 +159,8 @@ export function AutoRideActiveScreen({ navigation, route }) {
           ref={mapRef}
           cameraRef={cameraRef}
           initialRegion={{
-            latitude: 26.8467,
-            longitude: 80.9462,
+            latitude: DEFAULT_CENTER.latitude,
+            longitude: DEFAULT_CENTER.longitude,
             latitudeDelta: 0.03,
             longitudeDelta: 0.03,
           }}

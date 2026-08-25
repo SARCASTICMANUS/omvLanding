@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import { useSelector } from "react-redux";
 import { getAssignedVehicle } from "../services/driverService";
 import useWebSocket from "../../shared/hooks/useWebSocket";
@@ -206,8 +207,8 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
         <VayyMap
           style={styles.mapBg}
           initialRegion={{
-            latitude: 26.8467,
-            longitude: 80.9462,
+            latitude: DEFAULT_CENTER.latitude,
+            longitude: DEFAULT_CENTER.longitude,
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}

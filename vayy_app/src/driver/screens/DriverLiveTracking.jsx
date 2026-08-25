@@ -161,7 +161,7 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
 
   const vehicleCoord = toCoord(vehiclePos);
   const routeCoords = summary.stops.map(toCoord).filter(Boolean);
-  const initial = vehicleCoord || routeCoords[0] || { latitude: 28.6139, longitude: 77.209 };
+  const initial = vehicleCoord || routeCoords[0] || { latitude: 26.8467, longitude: 80.9462 };
   const nextStop = nextStops[0] || summary.stops[1] || summary.stops[0];
   const passengerList = Object.values(passengers);
 

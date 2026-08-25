@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import VayyMap from "../../shared/components/VayyMap";
+import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import AppFrame from "../../components/AppFrame";
 import RaiseHandButton from "../../components/RaiseHandButton";
 import StatBar from "../../components/StatBar";
@@ -23,8 +24,8 @@ export function SharedAutoMapScreen({ navigation, route }) {
         <VayyMap
           style={styles.mapBg}
           initialRegion={{
-            latitude: route?.params?.latitude || 26.8467,
-            longitude: route?.params?.longitude || 80.9462,
+            latitude: route?.params?.latitude || DEFAULT_CENTER.latitude,
+            longitude: route?.params?.longitude || DEFAULT_CENTER.longitude,
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}

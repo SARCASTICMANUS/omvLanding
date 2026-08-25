@@ -6,6 +6,7 @@ import AppFrame from "../../components/AppFrame";
 import BadgeChip from "../../components/BadgeChip";
 import Logo from "../../shared/components/common/Logo";
 import { setVehicleMode } from "../../store/slices/vehicleModeSlice";
+import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import { colors } from "../../theme/colors";
 import { spacing } from "../../theme/spacing";
 
@@ -22,8 +23,8 @@ export default function PassengerHomeScreen({ navigation, mode = "auto" }) {
         <VayyMap
           style={styles.mapBg}
           initialRegion={{
-            latitude: user?.latitude || 26.8467,
-            longitude: user?.longitude || 80.9462,
+            latitude: user?.latitude || DEFAULT_CENTER.latitude,
+            longitude: user?.longitude || DEFAULT_CENTER.longitude,
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}

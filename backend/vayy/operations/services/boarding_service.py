@@ -70,6 +70,7 @@ class BoardingService:
         passenger,
         trip,
         pickup_stop,
+        drop_stop=None,
     ):
         existing = (
             BoardingSelector.get_pending_request(
@@ -86,6 +87,7 @@ class BoardingService:
                 passenger=passenger,
                 trip=trip,
                 pickup_stop=pickup_stop,
+                drop_stop=drop_stop,
                 status=BOARDING_PENDING,
             )
         )

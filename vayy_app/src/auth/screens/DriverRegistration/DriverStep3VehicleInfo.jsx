@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Platform, KeyboardAvoidingView } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Platform, KeyboardAvoidingView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
 import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import ImageUploadCard from "../../components/ImageUploadCard";
@@ -28,7 +29,22 @@ export default function DriverStep3VehicleInfo({ onNext, onBack, vehicleType }) 
 
   const inputStyle = (f) => [styles.inputWrap, focused[f] && styles.inputFocused, errors[f] && styles.inputError];
 
-  const handleUpload = () => { setPhoto("file:///mock/upload.jpg"); };
+  const handleUpload = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission Required", "Please grant gallery access to upload a photo.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      setPhoto(result.assets[0].uri);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.root}>

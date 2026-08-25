@@ -205,16 +205,14 @@ export function RideStatsScreen({ navigation, route }) {
     setShowEndConfirm(true);
   }
 
-  function handleConfirmEndRide() {
+  async function handleConfirmEndRide() {
     setShowEndConfirm(false);
     const tripId = tripData.trip_id || dispatchId;
-    (async () => {
-      try {
-        await dispatchRedux(completeDispatch(tripId)).unwrap();
-      } catch (e) {
-        console.warn("completeDispatch passenger end ride failed:", e);
-      }
-    })();
+    try {
+      await dispatchRedux(completeDispatch(tripId)).unwrap();
+    } catch (e) {
+      console.warn("completeDispatch passenger end ride failed:", e);
+    }
     navigation.navigate("RideComplete", {
       tripId,
       riderName: driverName,
@@ -474,7 +472,7 @@ export function RideStatsScreen({ navigation, route }) {
 
             <TouchableOpacity
               style={styles.emergencyContactBtn}
-              onPress={() => Linking.openURL("tel:+919876543210")}
+              onPress={() => Linking.openURL("tel:112")}
             >
               <Text style={styles.emergencyContactText}>Call Emergency Contact</Text>
             </TouchableOpacity>

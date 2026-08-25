@@ -14,7 +14,7 @@ import StatusBadge from "../../shared/components/common/StatusBadge";
 const pick = (...values) => values.find((value) => value !== undefined && value !== null && value !== "");
 
 export default function RouteCard({ trip, onPress }) {
-  const routeCode = pick(trip?.route_code, trip?.vehicle_number, trip?.vehicle?.number, "VAYY");
+  const routeCode = pick(trip?.route_code, trip?.vehicle_number, trip?.vehicle?.number, null);
   const eta = pick(trip?.eta_minutes, trip?.eta, trip?.next_stop_eta, "--");
   const from = pick(trip?.source_name, trip?.origin, trip?.from, "Pickup");
   const to = pick(trip?.destination_name, trip?.destination, trip?.to, "Destination");
@@ -46,7 +46,7 @@ export default function RouteCard({ trip, onPress }) {
       </View>
 
       <View style={styles.routeBlock}>
-        <RouteLine progress={45} />
+        <RouteLine progress={trip?.progress ?? 0} />
         <View style={styles.placeRow}>
           <Text numberOfLines={1} style={styles.placeText}>{from}</Text>
           <Text numberOfLines={1} style={styles.placeText}>{to}</Text>
@@ -56,8 +56,8 @@ export default function RouteCard({ trip, onPress }) {
       <View style={styles.metrics}>
         <MetricChip value={distance} label="Distance" />
         <MetricChip value={stops} label="Stops" />
-        <MetricChip value="Seat" label="Type" />
-        <MetricChip value="via" label="Route" green />
+        {trip?.vehicle_type ? <MetricChip value={trip.vehicle_type} label="Type" /> : null}
+        {trip?.via || trip?.via_route ? <MetricChip value={trip.via || trip.via_route} label="Route" green /> : null}
       </View>
     </TouchableOpacity>
   );

@@ -123,7 +123,7 @@ export default function PassengerLiveTracking({ navigation, route }) {
       [myCoord, vehicleCoord, destinationCoord].filter(Boolean),
     [vehicleCoord, destinationCoord, myCoord],
   );
-  const initial = myCoord || vehicleCoord || destinationCoord || { latitude: 28.6139, longitude: 77.209 };
+  const initial = myCoord || vehicleCoord || destinationCoord || { latitude: 26.8467, longitude: 80.9462 };
   const etaMinutes = vehicleData.eta?.[0]?.duration_seconds
     ? Math.ceil(vehicleData.eta[0].duration_seconds / 60)
     : "--";
@@ -154,7 +154,7 @@ export default function PassengerLiveTracking({ navigation, route }) {
   const handleReportIssue = () => {
     Alert.alert(
       "Report Issue",
-      "Please contact support at support@vayy.app or call +91-XXXXX-XXXXX.",
+      "Please contact support at support@vayy.app.",
       [{ text: "OK" }],
     );
   };
