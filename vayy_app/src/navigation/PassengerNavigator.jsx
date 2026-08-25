@@ -1,6 +1,7 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import COLORS from "../shared/constants/colors";
 import IntroPage from "../passenger/screens/IntroPage";
@@ -13,7 +14,6 @@ import EditProfileScreen from "../shared/screens/EditProfileScreen";
 import PrivacyPolicyScreen from "../shared/screens/PrivacyPolicyScreen";
 import HelpSupportScreen from "../shared/screens/HelpSupportScreen";
 import PassengerAlertsScreen from "../handshake/screens/PassengerAlertsScreen";
-import PassengerActionsScreen from "../passenger/screens/PassengerActionsScreen";
 import JourneyHistoryScreen from "../passenger/screens/JourneyHistoryScreen";
 import DestinationSearchScreen from "../passenger/screens/DestinationSearchScreen";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -37,6 +37,8 @@ const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
 function PassengerTabs() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       initialRouteName="PassengerHome"
@@ -53,8 +55,8 @@ function PassengerTabs() {
           borderTopColor: COLORS.border,
           borderTopLeftRadius: 12,
           borderTopRightRadius: 12,
-          height: 62,
-          paddingBottom: 14,
+          height: 62 + insets.bottom,
+          paddingBottom: 14 + insets.bottom,
           paddingTop: 4,
           position: "absolute",
         },
@@ -74,11 +76,6 @@ function PassengerTabs() {
         name="PassengerAlerts"
         component={PassengerAlertsScreen}
         options={{ title: "Alerts", tabBarIcon: ({ color, size }) => <MaterialIcons name="notifications" size={size} color={color} /> }}
-      />
-      <Tab.Screen
-        name="PassengerActions"
-        component={PassengerActionsScreen}
-        options={{ title: "Actions", tabBarIcon: ({ color, size }) => <MaterialIcons name="explore" size={size} color={color} /> }}
       />
       <Tab.Screen
         name="ProfileScreen"

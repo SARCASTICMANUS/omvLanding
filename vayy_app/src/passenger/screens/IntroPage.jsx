@@ -104,6 +104,10 @@ export default function PassengerHomeScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
+    handleGetLocation();
+  }, [handleGetLocation]);
+
+  useEffect(() => {
     const fullGreeting = "Namaste,";
     const fullSub = "Aaj aap kahan jaana chahte hain?";
     let t = 0;
