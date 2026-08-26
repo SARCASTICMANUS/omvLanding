@@ -6,20 +6,37 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import Constants from "expo-constants";
 import { logout as logoutUser } from "../../auth/authSlice";
 import { fetchProfile } from "../../store/slices/profileSlice";
 
 import COLORS from "../constants/colors";
 import { DRIVER_ROLES } from "../../constants";
 
+const APP_VERSION = Constants.expoConfig?.version || "1.0.0";
+
 const INITIALS_COLORS = ["#009849", "#2563EB", "#F59E0B", "#EF4444", "#8B5CF6"];
 
+function safeStr(val) {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "string") return val;
+  if (typeof val === "number" || typeof val === "boolean") return String(val);
+  if (typeof val === "object") {
+    if (val.name) return String(val.name);
+    if (val.display_name) return String(val.display_name);
+    if (val.lat !== undefined && val.lng !== undefined) return `${val.lat}, ${val.lng}`;
+    try { return JSON.stringify(val); } catch { return ""; }
+  }
+  return "";
+}
+
 function getInitials(name) {
-  if (!name) return "?";
+  if (!name || typeof name !== "string") return "?";
   return name
     .split(" ")
     .map((w) => w[0])
@@ -50,18 +67,18 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const isDriver = DRIVER_ROLES.includes(user?.role);
-  const displayName = profile?.display_name || user?.full_name || user?.name || "User Name";
-  const displayEmail = user?.email || "user@example.com";
-  const phoneNumber = profile?.phone_number || "--";
-  const licenseNumber = profile?.license_number;
-  const vehicleNumber = profile?.vehicle_number;
-  const vehicleType = profile?.vehicle_type;
-  const rating = profile?.rating;
+  const displayName = safeStr(profile?.display_name || user?.full_name || user?.name) || "User Name";
+  const displayEmail = safeStr(user?.email) || "user@example.com";
+  const phoneNumber = safeStr(profile?.phone_number) || "--";
+  const licenseNumber = safeStr(profile?.license_number);
+  const vehicleNumber = safeStr(profile?.vehicle_number);
+  const vehicleType = safeStr(profile?.vehicle_type);
+  const rating = typeof profile?.rating === "number" ? profile.rating : null;
   const totalTrips = profile?.total_trips || 0;
-  const cityName = profile?.city_name || user?.city?.name || user?.city || null;
+  const cityName = safeStr(profile?.city_name || user?.city?.name || user?.city) || null;
   const avatarColor = getAvatarColor(displayName);
   const initials = getInitials(displayName);
-  const roleLabel = isDriver ? "MARSHAL" : user?.role?.toUpperCase() || "PASSENGER";
+  const roleLabel = isDriver ? "MARSHAL" : safeStr(user?.role).toUpperCase() || "PASSENGER";
 
   const headerStats = [
     { label: "Trips", value: String(totalTrips) },
@@ -96,12 +113,10 @@ export default function ProfileScreen({ navigation }) {
   ];
 
   const settings = [
-    { icon: "notifications-outline", label: "Notifications", value: "Enabled" },
-    { icon: "language-outline", label: "Language", value: "English" },
     { icon: "create-outline", label: "Edit Profile", screen: "EditProfile" },
     { icon: "shield-checkmark-outline", label: "Privacy Policy", value: "View", screen: "PrivacyPolicy" },
     { icon: "help-circle-outline", label: "Help & Support", screen: "HelpSupport" },
-    { icon: "information-circle-outline", label: "About", value: "v1.0.0" },
+    { icon: "information-circle-outline", label: "About", value: APP_VERSION },
   ];
 
   return (
@@ -119,9 +134,13 @@ export default function ProfileScreen({ navigation }) {
 
           <View style={styles.headerTop}>
             <View style={styles.avatarWrap}>
-              <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
-                <Text style={styles.avatarText}>{initials}</Text>
-              </View>
+              {profile?.profile_photo ? (
+                <Image source={{ uri: profile.profile_photo }} style={styles.avatarImage} />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+                  <Text style={styles.avatarText}>{initials}</Text>
+                </View>
+              )}
               <View style={styles.onlineDot} />
             </View>
             <Text style={styles.headerName}>{displayName}</Text>
@@ -211,7 +230,7 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.versionText}>Vayy App v1.0.0</Text>
+        <Text style={styles.versionText}>Vayy App v{APP_VERSION}</Text>
       </ScrollView>
     </View>
   );
@@ -284,6 +303,13 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.4)",
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     borderWidth: 3,
     borderColor: "rgba(255,255,255,0.4)",
   },

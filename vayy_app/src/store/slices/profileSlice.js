@@ -11,11 +11,11 @@ export const fetchProfile = createAsyncThunk(
 
       if (DRIVER_ROLES.includes(role)) {
         const response = await api.get(AUTH.driverProfile);
-        return { type: "driver", data: response.data };
+        return { type: "driver", data: response.data?.data || response.data };
       }
 
       const response = await api.get(AUTH.passengerProfile);
-      return { type: "passenger", data: response.data };
+      return { type: "passenger", data: response.data?.data || response.data };
     } catch (error) {
       return rejectWithValue(error.response?.data || "Failed to fetch profile");
     }
@@ -31,11 +31,11 @@ export const updateProfile = createAsyncThunk(
 
       if (DRIVER_ROLES.includes(role)) {
         const response = await api.put(AUTH.driverProfile, profileData);
-        return { type: "driver", data: response.data };
+        return { type: "driver", data: response.data?.data || response.data };
       }
 
       const response = await api.put(AUTH.passengerProfile, profileData);
-      return { type: "passenger", data: response.data };
+      return { type: "passenger", data: response.data?.data || response.data };
     } catch (error) {
       return rejectWithValue(error.response?.data || "Failed to update profile");
     }
