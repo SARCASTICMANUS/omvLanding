@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { loginUser } from "../authSlice";
-import { Lock, Mail, Eye, EyeOff, User, Navigation } from "lucide-react-native";
+import { Lock, Mail, Eye, EyeOff } from "lucide-react-native";
 
 import { ROLE } from "../../constants";
 
@@ -33,10 +33,9 @@ const LoginPage = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  const [role, setRole] = useState(ROLE.PASSENGER);
 
   const handleSignIn = () => {
-    dispatch(loginUser({ email, password, role }));
+    dispatch(loginUser({ email, password, role: ROLE.PASSENGER }));
   };
 
   const toggleShowPassword = () => {
@@ -75,12 +74,12 @@ const LoginPage = ({ navigation }) => {
         {/* Hero Image */}
         <View style={styles.heroContainer}>
           <Image
-            source={require("../../../assets-webp/LoginAuto.webp")}
+            source={require("../../../assets-webp/loginVayy.png")}
             style={styles.heroImage}
-            resizeMode="cover"
+            // resizeMode="fill"
           />
           <View style={styles.heroOverlay}>
-            <Text style={styles.heroTitle}>VAYY</Text>
+            <Text style={styles.heroTitle}>OMV{"\n"}onmyvayy</Text>
             <Text style={styles.heroTagline}>Your Ride. Your Route.</Text>
           </View>
         </View>
@@ -90,30 +89,7 @@ const LoginPage = ({ navigation }) => {
           <View style={styles.dragHandle} />
 
           <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to your VAYY account</Text>
-
-          <View style={styles.roleToggle}>
-            <TouchableOpacity
-              style={[styles.rolePill, role === ROLE.PASSENGER && styles.rolePillActive]}
-              onPress={() => setRole(ROLE.PASSENGER)}
-              activeOpacity={0.7}
-            >
-              <User size={16} color={role === ROLE.PASSENGER ? '#fff' : '#666'} />
-              <Text style={[styles.rolePillText, role === ROLE.PASSENGER && styles.rolePillTextActive]}>
-                Passenger
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.rolePill, role === ROLE.BIKE_DRIVER && styles.rolePillActive]}
-              onPress={() => setRole(ROLE.BIKE_DRIVER)}
-              activeOpacity={0.7}
-            >
-              <Navigation size={16} color={role === ROLE.BIKE_DRIVER ? '#fff' : '#666'} />
-              <Text style={[styles.rolePillText, role === ROLE.BIKE_DRIVER && styles.rolePillTextActive]}>
-                Driver
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.subtitle}>Sign in to your onmyvayy account</Text>
 
           {error ? (
             <View style={styles.errorBox}>
@@ -190,7 +166,7 @@ const LoginPage = ({ navigation }) => {
             )}
           </TouchableOpacity>
 
-          <View style={styles.dividerRow}>
+          {/* <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>or continue with</Text>
             <View style={styles.dividerLine} />
@@ -205,7 +181,7 @@ const LoginPage = ({ navigation }) => {
               <Text style={styles.microsoftIcon}>⊞</Text>
               <Text style={styles.socialText}>Microsoft</Text>
             </TouchableOpacity>
-          </View>
+          </View> */}
 
           <View style={styles.createRow}>
             <Text style={styles.createText}>{"Don't have an account? "}</Text>
@@ -213,6 +189,14 @@ const LoginPage = ({ navigation }) => {
               <Text style={styles.createLink}>Create free account</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={styles.splashBtn}
+            onPress={() => navigation.navigate("SplashPreview")}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.splashBtnText}>View Splash</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -225,12 +209,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#0d1f0f",
   },
   heroContainer: {
-    height: height * 0.35,
+    height: height * 0.48,
     backgroundColor: "#053D24",
   },
   heroImage: {
     width: "100%",
-    height: "100%",
+    height: "140%",
     position: "absolute",
   },
   heroOverlay: {
@@ -243,11 +227,13 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: "#ffffff",
     letterSpacing: -1,
+    textAlign: "center",
+    marginTop: 240,
   },
   heroTagline: {
     fontSize: 14,
     color: "rgba(255,255,255,0.7)",
-    marginTop: 4,
+    marginTop: 1,
   },
   bottomSheet: {
     backgroundColor: "#ffffff",
@@ -275,40 +261,8 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 13,
     color: "#888888",
-    marginBottom: 24,
+    marginBottom: 12,
     fontWeight: "400",
-  },
-  roleToggle: {
-    flexDirection: "row",
-    backgroundColor: "#f0f0f0",
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 18,
-  },
-  rolePill: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  rolePillActive: {
-    backgroundColor: "#1a8a2e",
-    shadowColor: "#1a8a2e",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  rolePillText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#666",
-  },
-  rolePillTextActive: {
-    color: "#fff",
   },
   errorBox: {
     backgroundColor: "#fef2f2",
@@ -477,6 +431,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#1a8a2e",
     fontWeight: "700",
+  },
+  splashBtn: {
+    marginTop: 16,
+    alignItems: "center",
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#1a8a2e",
+    backgroundColor: "#f0faf2",
+  },
+  splashBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1a8a2e",
   },
 });
 

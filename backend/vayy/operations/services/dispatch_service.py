@@ -673,13 +673,14 @@ class DispatchService:
                     vtype = trip.vehicle.vehicle_type if trip.vehicle else "bike"
                     trip.total_fare = FareService.calculate_fare(dist_km, vtype)
                     trip.save(update_fields=["total_distance_m", "total_duration_s", "total_fare"])
-        # Update driver stats (only when the driver completes)
+        # Update driver stats after status update succeeds
         is_driver = trip.driver == user
+        result = DispatchService.update_trip_status(trip_id, TRIP_STATUS_COMPLETED, driver=user if is_driver else None)
         if is_driver:
             profile = user.driver_profile
             profile.total_trips += 1
-            profile.save()
-        return DispatchService.update_trip_status(trip_id, TRIP_STATUS_COMPLETED, driver=user if is_driver else None)
+            profile.save(update_fields=["total_trips"])
+        return result
 
     @staticmethod
     def cancel_dispatch(trip_id: str, user: User, reason: str = "user_cancelled"):

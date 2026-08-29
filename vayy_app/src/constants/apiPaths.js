@@ -73,6 +73,9 @@ export const ADMIN = {
   stops: "/api/admin/stops/",
   driversPending: "/api/operations/admin/drivers/pending/",
   driverVerify: (id) => `/api/operations/admin/drivers/${id}/verify/`,
+  users: "/api/accounts/users/",
+  passengerProfile: (userId) => `/api/accounts/me/passenger-profile/?user_id=${userId}`,
+  driverProfile: (userId) => `/api/accounts/me/driver-profile/?user_id=${userId}`,
 };
 
 const API_PATHS = {

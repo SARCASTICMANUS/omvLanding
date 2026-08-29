@@ -9,9 +9,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
+import * as ImagePicker from "expo-image-picker";
 import { updateProfile } from "../../store/slices/profileSlice";
 
 import COLORS from "../constants/colors";
@@ -33,6 +35,8 @@ export default function EditProfileScreen({ navigation }) {
   const isDriver = DRIVER_ROLES.includes(user?.role);
 
   const [form, setForm] = useState({
+    first_name: profile?.first_name || "",
+    last_name: profile?.last_name || "",
     display_name: profile?.display_name || "",
     phone_number: profile?.phone_number || "",
     bio: profile?.bio || "",
@@ -48,6 +52,23 @@ export default function EditProfileScreen({ navigation }) {
 
   const updateField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission needed", "Please allow access to your photos to upload a profile picture.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      updateField("profile_photo", result.assets[0].uri);
+    }
   };
 
   const handleSave = async () => {
@@ -81,12 +102,34 @@ export default function EditProfileScreen({ navigation }) {
 
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Full Name</Text>
+            <Text style={styles.label}>First Name</Text>
+            <TextInput
+              style={styles.input}
+              value={form.first_name}
+              onChangeText={(v) => updateField("first_name", v)}
+              placeholder="Enter first name"
+              placeholderTextColor={COLORS.textLight}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Last Name</Text>
+            <TextInput
+              style={styles.input}
+              value={form.last_name}
+              onChangeText={(v) => updateField("last_name", v)}
+              placeholder="Enter last name"
+              placeholderTextColor={COLORS.textLight}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Display Name</Text>
             <TextInput
               style={styles.input}
               value={form.display_name}
               onChangeText={(v) => updateField("display_name", v)}
-              placeholder="Enter your name"
+              placeholder="Enter display name"
               placeholderTextColor={COLORS.textLight}
             />
           </View>
@@ -118,15 +161,16 @@ export default function EditProfileScreen({ navigation }) {
 
           {!isDriver && (
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Profile Photo URL</Text>
-              <TextInput
-                style={styles.input}
-                value={form.profile_photo}
-                onChangeText={(v) => updateField("profile_photo", v)}
-                placeholder="Enter photo URL"
-                placeholderTextColor={COLORS.textLight}
-                autoCapitalize="none"
-              />
+              <Text style={styles.label}>Profile Photo</Text>
+              <TouchableOpacity style={styles.photoPicker} onPress={pickImage} activeOpacity={0.7}>
+                {form.profile_photo ? (
+                  <Image source={{ uri: form.profile_photo }} style={styles.photoPreview} />
+                ) : (
+                  <View style={styles.photoPlaceholder}>
+                    <Text style={styles.photoPlaceholderText}>Tap to choose photo</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
           )}
 
@@ -300,5 +344,30 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     marginTop: SPACING.md,
+  },
+  photoPicker: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    borderStyle: "dashed",
+  },
+  photoPreview: {
+    width: "100%",
+    height: "100%",
+  },
+  photoPlaceholder: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: COLORS.surfaceElevated || "#F3F4F6",
+  },
+  photoPlaceholderText: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    fontWeight: "600",
+    textAlign: "center",
   },
 });

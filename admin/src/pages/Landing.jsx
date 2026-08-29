@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { MusicPlayer } from "../components/MusicPlayer";
-import WaitlistForm from "../components/WaitlistForm";
 import coffeeImg from "../assets/coffee.webp";
 import breakfastImg from "../assets/breakfast.webp";
 import foodImg from "../assets/food.webp";
@@ -12,6 +11,8 @@ import deliveryImg from "../assets/fooddelivary.webp";
 import cabImg from "../assets/cab.webp";
 import vayyBg from "../assets/vayybg.webp";
 import vayyBgMobile from "../assets/vayybgMobile.webp";
+
+const FORM_URL = "https://forms.gle/StUs6RQTXGrhceMC6";
 
 const COPY = {
   en: {
@@ -31,13 +32,6 @@ const COPY = {
       "OMV connects you with people already \n travelling your way making everyday commutes more \n affordable, predictable, and efficient.",
     badge: "Launching in India — join early",
     primaryCta: "Join Waitlist",
-    submitting: "Joining…",
-    placeholder: "you@example.com",
-    successTitle: "You're on the waitlist.",
-    successBody: "We'll email you when onmyvayy launches near you.",
-    addAnother: "Add another email",
-    duplicateError: "This email is already on the waitlist.",
-    genericError: "Something went wrong. Please try again.",
   },
   hi: {
     line1: "Agar aapke roz ke safar ka kharcha hota sirf…",
@@ -56,13 +50,6 @@ const COPY = {
       "OMV aapko un logon se jodta hai jo aapke hi raaste par \n travel kar rahe hain taaki roz ke commutes \n affordable, predictable aur efficient ho jayein.",
     badge: "India mein launch ho raha hai — jaldi judiye",
     primaryCta: "Waitlist Join Karein",
-    submitting: "Ho raha hai…",
-    placeholder: "aap@example.com",
-    successTitle: "Aap waitlist mein hain.",
-    successBody: "Aapke shehar mein onmyvayy launch hote hi email karenge.",
-    addAnother: "Ek aur email add karein",
-    duplicateError: "Yeh email pehle se waitlist mein hai.",
-    genericError: "Kuch galat ho gaya. Phir se try karein.",
   },
 };
 
@@ -96,12 +83,12 @@ function RotatingHook({ lang }) {
 
   return (
     <span
-      className="relative inline-flex h-[3.8em] Md:mt-0 mt-10  items-center overflow-hidden md:h-[7.3em]"
+      className="relative inline-flex h-[4.8em]  Md:mt-0 mt-8  items-center overflow-hidden md:h-[7.3em]"
       aria-live="polite"
     >
       <span
         key={`${lang}-${index}`}
-        className="animate-hook-in flex flex-col items-center   gap-0.5 bg-[linear-gradient(90deg,#009849,#22C55E,#009849)] bg-[length:200%_100%] bg-clip-text text-transparent md:gap-1"
+        className="animate-hook-in flex flex-col items-center mt-5  gap-0.5 bg-[linear-gradient(90deg,#009849,#22C55E,#009849)] bg-[length:200%_100%] bg-clip-text text-transparent md:gap-1"
       >
         {HOOK_IMAGES[index]?.img ? (
           <img
@@ -186,7 +173,7 @@ export default function Landing() {
           {/* Hero headline */}
           <h1
             key={`h1-${contentKey}`}
-            className="animate-lang-fade mx-auto   max-w-[300px] text-balance text-center text-[23px] font-bold leading-[1.15] tracking-[-0.02em] text-white sm:text-[32px] sm:max-w-[360px]  md:mt-[-16rem] md:max-w-2xl md:text-3xl md:text-neutral-900"
+            className="animate-lang-fade mx-auto mt-20  max-w-[300px] text-balance text-center text-[23px] font-bold leading-[1.15] tracking-[-0.02em] text-white sm:text-[32px] sm:max-w-[360px]  md:mt-[-15rem] md:max-w-2xl md:text-3xl md:text-neutral-900"
           >
             <span className="block">{copy.line1}</span>
             <RotatingHook lang={lang} />
@@ -195,7 +182,7 @@ export default function Landing() {
           {/* Description */}
           <p
             key={`desc-${contentKey}`}
-            className="animate-lang-fade mx-auto   mt-3 max-w-[280px] text-center text-[10px] font-semibold leading-[1.5] text-neutral-700 sm:text-sm sm:max-w-[300px] md:mt-8 md:max-w-lg md:text-base"
+            className="animate-lang-fade mx-auto   mt-8 max-w-[280px] text-center text-[10px] font-semibold leading-[1.5] text-neutral-700 sm:text-sm sm:max-w-[300px] md:mt-1 md:max-w-lg md:text-base"
           >
             {copy.description.split("\n").map((line, i) => (
               <span key={i} className="block">
@@ -204,24 +191,29 @@ export default function Landing() {
             ))}
           </p>
 
-          {/* Waitlist form */}
-          <div key={`form-${contentKey}`}  className="animate-lang-fade mx-auto mt-6 md:mt-8  ">
-            <WaitlistForm
-              submitLabel={copy.primaryCta}
-              submittingLabel={copy.submitting}
-              placeholder={copy.placeholder}
-              successTitle={copy.successTitle}
-              successBody={copy.successBody}
-              addAnotherLabel={copy.addAnother}
-              duplicateError={copy.duplicateError}
-              genericError={copy.genericError}
-            />
+          {/* Join Waitlist — opens Google Form */}
+          <div key={`form-${contentKey}`} className="animate-lang-fade mx-auto mt-16 md:mt-2">
+            <a
+              href={FORM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group relative inline-flex h-12 w-full max-w-[200px] items-center justify-center gap-2 overflow-hidden rounded-full bg-[#009849] px-5 text-sm font-medium text-white animate-glow-pulse transition-all duration-300 hover:scale-[1.05] hover:bg-[#007a3a] active:scale-[0.97] md:h-10 md:w-auto md:min-w-[7.5rem] md:max-w-none md:px-5 md:text-sm"
+            >
+              <span className="relative z-10 inline-flex items-center gap-2">
+                {copy.primaryCta}
+                <span className="inline-block transition-transform duration-300 group-hover:translate-x-1">→</span>
+              </span>
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 z-0 animate-shine bg-[linear-gradient(110deg,transparent_30%,rgba(255,255,255,0.5)_50%,transparent_70%)]"
+              />
+            </a>
           </div>
         </main>
       </div>
 
-      {/* Music player — fixed bottom on mobile, in-flow on desktop */}
-      <section className="fixed bottom-0 left-0 right-0 z-40 px-3 pb-3 pt-2 md:static md:w-full md:px-6 md:pb-5 md:pt-4">
+      {/* Music player — fixed bottom on all screens with 20px margin */}
+      <section className="fixed bottom-0 left-0 right-0 z-40 px-3 pb-5 pt-2 md:px-6">
         <div className="mx-auto flex max-w-6xl justify-center">
           <MusicPlayer />
         </div>

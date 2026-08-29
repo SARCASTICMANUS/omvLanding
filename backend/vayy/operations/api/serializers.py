@@ -93,6 +93,16 @@ class ActiveTripSerializer(
     otp = serializers.CharField(
         read_only=True
     )
+    pickup_name = serializers.CharField(
+        source="route.start_name",
+        read_only=True,
+        default="",
+    )
+    destination_name = serializers.CharField(
+        source="route.end_name",
+        read_only=True,
+        default="",
+    )
 
     # Computed fields for frontend trip history display
     pickup_name = serializers.SerializerMethodField()

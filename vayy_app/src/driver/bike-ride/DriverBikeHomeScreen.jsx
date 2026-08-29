@@ -27,6 +27,115 @@ import { useSelector } from "react-redux";
 const SHEET_COMPACT = 240;
 const BIKE_TOP_IMAGE = require("../../../assets-webp/vayyTopBike1.webp");
 
+function LocationSearch({ label, placeholder, value, onSelect }) {
+  const [query, setQuery] = useState(value?.name || value?.display_name || "");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [hasSelection, setHasSelection] = useState(Boolean(value));
+  const [searchError, setSearchError] = useState(false);
+  const isPickup = label === "Start Point";
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (hasSelection) return;
+    if (!query || query.length < 3) {
+      setResults([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      setSearchError(false);
+      try {
+        const data = await NOMINATIM_SEARCH(query);
+        setResults(Array.isArray(data) ? data : []);
+      } catch {
+        setResults([]);
+        setSearchError(true);
+      } finally {
+        setLoading(false);
+      }
+    }, 500);
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [hasSelection, query]);
+
+  const handleSelect = (item) => {
+    const next = {
+      lat: Number(item.lat), lon: Number(item.lon),
+      name: item.name || item.display_name?.split(",")?.[0],
+      display_name: item.display_name,
+    };
+    setQuery(next.display_name || next.name || "");
+    setResults([]);
+    setLoading(false);
+    setHasSelection(true);
+    onSelect(next);
+  };
+
+  const handleChangeText = (text) => {
+    setQuery(text);
+    setHasSelection(false);
+    setSearchError(false);
+    if (text.length < 3) { setResults([]); }
+  };
+
+  const showResults = results.length > 0;
+
+  return (
+    <View style={styles.fieldWrap}>
+      <View style={styles.fieldHead}>
+        <View style={[styles.fieldDot, { backgroundColor: isPickup ? COLORS.primary : "#EF4444" }]} />
+        <Text style={styles.fieldLabel}>{label}</Text>
+      </View>
+      <View style={styles.fieldInput}>
+        <View style={[styles.fieldIconBox, { backgroundColor: isPickup ? "rgba(0,152,73,0.1)" : "rgba(239,68,68,0.1)" }]}>
+          <Ionicons name={isPickup ? "locate-outline" : "navigate-outline"} size={16} color={isPickup ? COLORS.primary : "#EF4444"} />
+        </View>
+        <TextInput
+          ref={inputRef}
+          autoCapitalize="none"
+          onChangeText={handleChangeText}
+          placeholder={placeholder}
+          placeholderTextColor="#9CA3AF"
+          style={styles.fieldText}
+          value={query}
+        />
+        {query.length > 0 && !hasSelection && (
+          <TouchableOpacity onPress={() => { setQuery(""); setResults([]); inputRef.current?.focus(); }}>
+            <Ionicons name="close-circle" size={18} color="#D1D5DB" />
+          </TouchableOpacity>
+        )}
+        {hasSelection && <Ionicons name="checkmark-circle" size={18} color={COLORS.primary} />}
+      </View>
+      {showResults ? (
+        <View style={styles.dropdownInline}>
+          <FlatList
+            data={results}
+            keyboardShouldPersistTaps="handled"
+            keyExtractor={(item) => String(item.place_id)}
+            scrollEnabled={false}
+            renderItem={({ item }) => (
+              <Pressable onPress={() => handleSelect(item)} style={styles.resultRow}>
+                <View style={styles.resultIconBox}>
+                  <Ionicons name="location-outline" size={16} color={COLORS.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text numberOfLines={1} style={styles.resultTitle}>
+                    {item.name || item.display_name?.split(",")?.[0]}
+                  </Text>
+                  <Text numberOfLines={2} style={styles.resultSub}>{item.display_name}</Text>
+                </View>
+              </Pressable>
+            )}
+          />
+        </View>
+      ) : loading ? <Text style={styles.searching}>Searching...</Text> : searchError ? (
+        <Text style={[styles.searching, { color: "#EF4444" }]}>Search failed. Check connection and try again.</Text>
+      ) : null}
+    </View>
+  );
+}
+
 export default function DriverBikeHomeScreen({ navigation }) {
   const { height: windowHeight } = useWindowDimensions();
   const [pickup, setPickup] = useState(null);
@@ -140,10 +249,14 @@ export default function DriverBikeHomeScreen({ navigation }) {
     }).start();
 
     const showSub = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", (e) => {
-      Animated.timing(keyboardHeight, { toValue: e.endCoordinates.height, duration: 250, useNativeDriver: false }).start();
+      const kbHeight = e.endCoordinates.height;
+      Animated.timing(keyboardHeight, { toValue: kbHeight, duration: 250, useNativeDriver: false }).start();
+      const availableHeight = windowHeight - kbHeight - 140;
+      Animated.spring(sheetHeight, { toValue: Math.max(SHEET_COMPACT, availableHeight), friction: 9, tension: 80, useNativeDriver: false }).start();
     });
     const hideSub = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => {
       Animated.timing(keyboardHeight, { toValue: 0, duration: 250, useNativeDriver: false }).start();
+      Animated.spring(sheetHeight, { toValue: SHEET_COMPACT, friction: 9, useNativeDriver: false }).start();
     });
     return () => { showSub.remove(); hideSub.remove(); };
   }, [cardAnim, keyboardHeight, loadRecentSearches]);
@@ -296,6 +409,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
             <ScrollView
               bounces={false}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={false}
               style={styles.sheetScroll}
               contentContainerStyle={styles.cardScroll}
@@ -436,13 +550,13 @@ const styles = StyleSheet.create({
   greetingText: {
     fontSize: 28,
     fontWeight: "900",
-    color: "#fff",
+    color: "#FFD700",
     marginLeft: 6,
   },
   nameText: {
     fontSize: 28,
     fontWeight: "900",
-    color: COLORS.primary,
+    color: "#FFFFFF",
     marginTop: 2,
   },
   subText: {
@@ -502,6 +616,61 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   sheetScroll: { flex: 1 },
+
+  /* Fields */
+  fieldWrap: { marginBottom: 14 },
+  fieldHead: { flexDirection: "row", alignItems: "center", marginBottom: 6, gap: 6 },
+  fieldDot: { width: 8, height: 8, borderRadius: 4 },
+  fieldLabel: { fontSize: 12, fontWeight: "700", color: "#374151", letterSpacing: 0.3 },
+  fieldInput: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+    borderRadius: 14,
+    minHeight: 48,
+    paddingHorizontal: 4,
+    paddingLeft: 4,
+  },
+  fieldIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
+  fieldText: { flex: 1, fontSize: 14, fontWeight: "500", color: "#111827", minHeight: 36, paddingVertical: 0 },
+  dropdownInline: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+    borderRadius: 14,
+    maxHeight: 180,
+    marginTop: 6,
+    ...SHADOW.sm,
+    elevation: 4,
+  },
+  resultRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+    gap: 10,
+  },
+  resultIconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: "rgba(0,152,73,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  resultTitle: { fontSize: 13, fontWeight: "700", color: "#111827" },
+  resultSub: { fontSize: 11, fontWeight: "500", color: "#9CA3AF", marginTop: 1 },
+  searching: { fontSize: 11, fontWeight: "500", color: "#9CA3AF", marginTop: 6, paddingLeft: 4 },
 
   swapRow: {
     flexDirection: "row",

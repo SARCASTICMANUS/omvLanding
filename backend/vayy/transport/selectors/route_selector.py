@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 
@@ -67,6 +69,7 @@ class RouteSelector:
     def search_routes_by_location(origin_lat, origin_lng, dest_lat, dest_lng, radius=5000):
         """
         Find routes that have stops near both the origin and destination points.
+        When multiple routes share the same name, keep only the shortest one.
         """
         origin_point = Point(origin_lng, origin_lat, srid=4326)
         dest_point = Point(dest_lng, dest_lat, srid=4326)
@@ -87,10 +90,21 @@ class RouteSelector:
 
         route_ids = set(origin_route_ids) & set(dest_route_ids)
 
-        return (
+        routes_qs = (
             Route.objects
             .select_related("city")
             .prefetch_related("stops")
             .filter(id__in=route_ids, is_public=True)
+            .distinct()
             .order_by("name")
         )
+
+        by_name = defaultdict(list)
+        for r in routes_qs:
+            by_name[r.name].append(r)
+
+        deduped = []
+        for name, group in by_name.items():
+            deduped.append(min(group, key=lambda r: r.total_distance_meters or float("inf")))
+
+        return sorted(deduped, key=lambda r: r.name)

@@ -2,6 +2,7 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { useSelector } from "react-redux";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import COLORS from "../shared/constants/colors";
 import { ROLE } from "../constants";
@@ -61,6 +62,8 @@ function DriverHomeTab({ navigation }) {
 
 
 function DriverTabs() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -76,8 +79,8 @@ function DriverTabs() {
           borderTopColor: COLORS.border,
           borderTopLeftRadius: 12,
           borderTopRightRadius: 12,
-          height: 62,
-          paddingBottom: 14,
+          height: 62 + insets.bottom,
+          paddingBottom: 14 + insets.bottom,
           paddingTop: 4,
           position: "absolute",
         },

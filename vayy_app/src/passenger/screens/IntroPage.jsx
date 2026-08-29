@@ -75,7 +75,14 @@ export default function PassengerHomeScreen({ navigation }) {
   const { user } = useSelector((state) => state.auth);
   const displayName = user?.full_name || user?.name || user?.first_name || "there";
 
-  const [currentLoc, setCurrentLoc] = useState(user?.city || "Current location");
+  const safeCityName = (() => {
+    const c = user?.city;
+    if (!c) return "Current location";
+    if (typeof c === "string") return c;
+    if (typeof c === "object") return c.name || c.city_name || String(c) || "Current location";
+    return String(c);
+  })();
+  const [currentLoc, setCurrentLoc] = useState(safeCityName);
   const [greeting, setGreeting] = useState("");
   const [subLine, setSubLine] = useState("");
   const [showName, setShowName] = useState(false);
@@ -102,6 +109,10 @@ export default function PassengerHomeScreen({ navigation }) {
     pulse.start();
     return () => pulse.stop();
   }, []);
+
+  useEffect(() => {
+    handleGetLocation();
+  }, [handleGetLocation]);
 
   useEffect(() => {
     const fullGreeting = "Namaste,";

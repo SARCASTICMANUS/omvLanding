@@ -1,7 +1,11 @@
 from typing import Any, Dict, List, Optional
+import logging
 
 from geopy.geocoders import Nominatim as GeopyNominatim
 from geopy.location import Location
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError, GeocoderQueryError
+
+logger = logging.getLogger(__name__)
 
 _geolocator = GeopyNominatim(user_agent="vayy/1.0", timeout=10)
 
@@ -31,14 +35,25 @@ class GeocodingService:
         limit: int = 5,
         country_codes: str = "in",
     ) -> List[Dict[str, Any]]:
-        results = _geolocator.geocode(
-            query,
-            exactly_one=False,
-            country_codes=country_codes,
-            addressdetails=True,
-            limit=limit,
-            language="en",
-        )
+        try:
+            results = _geolocator.geocode(
+                query,
+                exactly_one=False,
+                country_codes=country_codes,
+                addressdetails=True,
+                limit=limit,
+                language="en",
+            )
+        except GeocoderTimedOut:
+            logger.warning("Geocoding search timed out for query: %s", query)
+            return []
+        except GeocoderServiceError as exc:
+            logger.error("Geocoding service error for query %s: %s", query, exc)
+            return []
+        except GeocoderQueryError as exc:
+            logger.warning("Invalid geocoding query %s: %s", query, exc)
+            return []
+
         if not results:
             return []
 
@@ -53,11 +68,19 @@ class GeocodingService:
         lat: float,
         lon: float,
     ) -> Optional[Dict[str, Any]]:
-        location = _geolocator.reverse(
-            f"{lat}, {lon}",
-            addressdetails=True,
-            language="en",
-        )
+        try:
+            location = _geolocator.reverse(
+                f"{lat}, {lon}",
+                addressdetails=True,
+                language="en",
+            )
+        except GeocoderTimedOut:
+            logger.warning("Geocoding reverse timed out for %s, %s", lat, lon)
+            return None
+        except GeocoderServiceError as exc:
+            logger.error("Geocoding reverse error for %s, %s: %s", lat, lon, exc)
+            return None
+
         if not location:
             return None
 

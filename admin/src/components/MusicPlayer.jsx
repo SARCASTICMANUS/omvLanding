@@ -188,7 +188,7 @@ export function MusicPlayer() {
   const progress = duration > 0 ? (elapsed / duration) * 100 : 0;
 
   return (
-    <div className="relative mt-0 flex w-full items-center rounded-[28px] border border-white/10 bg-[linear-gradient(15deg,rgba(6,134,168,0.45),rgba(12,145,59,0.4))] p-[5px_8px_5px_5px] text-white shadow-[0_8px_24px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.1)] backdrop-blur-[16px] md:mt-40 md:h-[1px] md:w-[min(500px,calc(100vw-32px))] md:rounded-[42px] md:p-[8px_14px_8px_8px] md:shadow-[0_14px_35px_rgba(0,0,0,0.15),inset_0_1px_1px_rgba(255,255,255,0.1)]">
+    <div className="relative flex w-full items-center rounded-[28px] border border-white/10 bg-[linear-gradient(15deg,rgba(6,134,168,0.45),rgba(12,145,59,0.4))] p-[5px_8px_5px_5px] text-white shadow-[0_8px_24px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.1)] backdrop-blur-[16px] md:w-[min(500px,calc(100vw-32px))] md:rounded-[42px] md:p-[8px_14px_8px_8px] md:shadow-[0_14px_35px_rgba(0,0,0,0.15),inset_0_1px_1px_rgba(255,255,255,0.1)]">
       <div
         ref={hostRef}
         className="pointer-events-none absolute left-0 top-0 h-[1px] w-[1px] overflow-hidden opacity-0"

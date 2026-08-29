@@ -23,15 +23,11 @@ const CARD_SHADOW = Platform.select({
   android: { elevation: 2 },
 });
 
-function RouteCard({ item, index, pickup, destination, onSelect }) {
+function RouteCard({ item, index, pickup, destination, onSelect, expanded, onToggleExpand }) {
   const timeline = estimateStopTimeline(item);
   const isBest = index === 0;
-  const earnings = item?.earnings || item?.estimated_earnings || (80 + index * 15);
-  const demand = item?.demand || (index === 0 ? "High" : index === 1 ? "Medium" : "Low");
-  const activeDrivers = item?.active_drivers || Math.max(1, 8 - index * 3);
 
   const stops = item?.stops || [];
-  const demandColor = demand === "High" ? "#009849" : demand === "Medium" ? "#F59E0B" : "#EF4444";
 
   const firstStop = timeline[0];
   const lastStop = timeline[timeline.length - 1];
@@ -48,6 +44,10 @@ function RouteCard({ item, index, pickup, destination, onSelect }) {
     item.endLabel ||
     "--";
 
+  const fare = item?.fare;
+  const fareText = fare != null ? `₹${fare}` : "--";
+  const isExpanded = expanded === item.id;
+
   return (
     <View style={[s.card, isBest && s.cardBest]}>
       {isBest && (
@@ -56,7 +56,7 @@ function RouteCard({ item, index, pickup, destination, onSelect }) {
         </View>
       )}
 
-      {/* Route visualization — start & end (user-chosen, matched to route stops) */}
+      {/* Route visualization — start & end */}
       <TouchableOpacity activeOpacity={0.93} onPress={() => onSelect(item)}>
         <View style={s.routeRow}>
           <View style={s.routeNumCol}>
@@ -84,7 +84,7 @@ function RouteCard({ item, index, pickup, destination, onSelect }) {
         </View>
       </TouchableOpacity>
 
-      {/* Stats bar — Driver-centric */}
+      {/* Stats bar — Duration | Distance | Fare */}
       <View style={s.statsBar}>
         <View style={s.statItem}>
           <Ionicons name="time-outline" size={15} color="#6B7280" />
@@ -97,23 +97,46 @@ function RouteCard({ item, index, pickup, destination, onSelect }) {
         </View>
         <View style={s.statDivider} />
         <View style={s.statItem}>
-          <Text style={s.earningsValue}>₹{earnings}</Text>
-        </View>
-        <View style={s.statDivider} />
-        <View style={s.statItem}>
-          <View style={[s.demandDot, { backgroundColor: demandColor }]} />
-          <Text style={s.statValue}>{demand}</Text>
+          <Text style={s.earningsValue}>{fareText}</Text>
         </View>
       </View>
 
-      {/* Active marshals + stops count */}
-      <View style={s.nearbyHint}>
-        <Ionicons name="people" size={13} color="#009849" />
-        <Text style={s.nearbyHintLabel}>{activeDrivers} Marshals on route</Text>
-        <Text style={s.nearbyHintText} numberOfLines={1}>
-          {stops.length} stops
-        </Text>
+      {/* Stops count + View Stops toggle */}
+      <View style={s.stopsRow}>
+        <View style={s.stopsCountBadge}>
+          <Ionicons name="map-pin-outline" size={13} color="#009849" />
+          <Text style={s.stopsCountText}>{stops.length} stops</Text>
+        </View>
+        {stops.length > 0 && (
+          <TouchableOpacity style={s.viewStopsBtn} onPress={() => onToggleExpand(item.id)}>
+            <Text style={s.viewStopsText}>{isExpanded ? "Hide Stops" : "View Stops"}</Text>
+            <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={14} color="#009849" />
+          </TouchableOpacity>
+        )}
       </View>
+
+      {/* Expandable stops panel */}
+      {isExpanded && (
+        <View style={s.stopsPanel}>
+          {timeline.map((stop, i) => (
+            <View key={stop.id || i} style={s.stopTimelineRow}>
+              <View style={s.stopTimelineCol}>
+                <View style={[s.stopTimelineDot, { backgroundColor: stop.isBoardingPoint ? "#009849" : "#D1D5DB" }]} />
+                {i < timeline.length - 1 && <View style={s.stopTimelineLine} />}
+              </View>
+              <View style={s.stopTimelineContent}>
+                <Text style={s.stopTimelineName} numberOfLines={1}>{stop.name}</Text>
+                <Text style={s.stopTimelineEta}>{stop.arrivalLabel}</Text>
+              </View>
+              {stop.isBoardingPoint && (
+                <View style={s.boardingBadge}>
+                  <Text style={s.boardingBadgeText}>Boarding</Text>
+                </View>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* CTA */}
       <TouchableOpacity
@@ -131,6 +154,7 @@ function RouteCard({ item, index, pickup, destination, onSelect }) {
 export default function DriverRouteList({ navigation, route: routeProp }) {
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expandedRouteId, setExpandedRouteId] = useState(null);
   const insets = useSafeAreaInsets();
   const mode = routeProp?.params?.mode || "bike";
   const pickup = routeProp?.params?.pickup;
@@ -162,7 +186,22 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
     fetchRoutes();
   }, []);
 
-  const normalizedRoutes = useMemo(() => routes.map(buildRouteSummary), [routes]);
+  const normalizedRoutes = useMemo(() => {
+    const summaries = routes.map(buildRouteSummary);
+    const seen = new Map();
+    for (const s of summaries) {
+      const key = s.name || s.id;
+      if (!seen.has(key)) {
+        seen.set(key, s);
+      } else {
+        const existing = seen.get(key);
+        if ((s.distanceMeters || Infinity) < (existing.distanceMeters || Infinity)) {
+          seen.set(key, s);
+        }
+      }
+    }
+    return Array.from(seen.values());
+  }, [routes]);
 
   const onSelectRoute = (selectedRoute) => {
     const routeData = {
@@ -177,9 +216,11 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
   const renderItem = ({ item, index }) => (
     <RouteCard
       destination={destination}
+      expanded={expandedRouteId}
       index={index}
       item={item}
       onSelect={onSelectRoute}
+      onToggleExpand={(id) => setExpandedRouteId(expandedRouteId === id ? null : id)}
       pickup={pickup}
     />
   );
@@ -421,35 +462,96 @@ const s = StyleSheet.create({
     fontSize: 16,
     fontWeight: "900",
   },
-  demandDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
 
-  /* nearby hint — active drivers + stops count */
-  nearbyHint: {
+  /* stops row — count badge + view stops toggle */
+  stopsRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  stopsCountBadge: {
     alignItems: "center",
     backgroundColor: "#ECFAF1",
     borderRadius: 10,
     flexDirection: "row",
     gap: 6,
-    marginTop: 10,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
-  nearbyHintLabel: {
+  stopsCountText: {
     color: "#009849",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
   },
-  nearbyHintText: {
-    color: "#374151",
+  viewStopsBtn: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 4,
+  },
+  viewStopsText: {
+    color: "#009849",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  /* expandable stops panel */
+  stopsPanel: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  stopTimelineRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    minHeight: 36,
+  },
+  stopTimelineCol: {
+    alignItems: "center",
+    width: 20,
+  },
+  stopTimelineDot: {
+    borderRadius: 999,
+    height: 10,
+    marginTop: 4,
+    width: 10,
+  },
+  stopTimelineLine: {
+    backgroundColor: "#D1D5DB",
     flex: 1,
-    fontSize: 12,
+    minHeight: 16,
+    width: 2,
+  },
+  stopTimelineContent: {
+    flex: 1,
+    marginLeft: 8,
+    paddingVertical: 2,
+  },
+  stopTimelineName: {
+    color: "#111827",
+    fontSize: 13,
     fontWeight: "600",
-    lineHeight: 15,
-    textAlign: "right",
+  },
+  stopTimelineEta: {
+    color: "#9CA3AF",
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 1,
+  },
+  boardingBadge: {
+    backgroundColor: "#DCFCE7",
+    borderRadius: 6,
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    alignSelf: "center",
+  },
+  boardingBadgeText: {
+    color: "#009849",
+    fontSize: 10,
+    fontWeight: "700",
   },
 
   /* continue CTA */
