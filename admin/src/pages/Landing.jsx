@@ -83,12 +83,12 @@ function RotatingHook({ lang }) {
 
   return (
     <span
-      className="relative inline-flex h-[4.8em]  Md:mt-0 mt-8  items-center overflow-hidden md:h-[7.3em]"
+      className="relative inline-flex h-[3.8em] Md:mt-0 mt-5  items-center overflow-hidden md:h-[7.3em]"
       aria-live="polite"
     >
       <span
         key={`${lang}-${index}`}
-        className="animate-hook-in flex flex-col items-center mt-5  gap-0.5 bg-[linear-gradient(90deg,#009849,#22C55E,#009849)] bg-[length:200%_100%] bg-clip-text text-transparent md:gap-1"
+        className="animate-hook-in flex flex-col items-center   gap-0.5 bg-[linear-gradient(90deg,#009849,#22C55E,#009849)] bg-[length:200%_100%] bg-clip-text text-transparent md:gap-1"
       >
         {HOOK_IMAGES[index]?.img ? (
           <img
@@ -173,7 +173,7 @@ export default function Landing() {
           {/* Hero headline */}
           <h1
             key={`h1-${contentKey}`}
-            className="animate-lang-fade mx-auto mt-20  max-w-[300px] text-balance text-center text-[23px] font-bold leading-[1.15] tracking-[-0.02em] text-white sm:text-[32px] sm:max-w-[360px]  md:mt-[-15rem] md:max-w-2xl md:text-3xl md:text-neutral-900"
+            className="animate-lang-fade mx-auto mt-10  max-w-[300px] text-balance text-center text-[23px] font-bold leading-[1.15] tracking-[-0.02em] text-white sm:text-[32px] sm:max-w-[360px]  md:mt-[-15rem] md:max-w-2xl md:text-3xl md:text-neutral-900"
           >
             <span className="block">{copy.line1}</span>
             <RotatingHook lang={lang} />
@@ -182,7 +182,7 @@ export default function Landing() {
           {/* Description */}
           <p
             key={`desc-${contentKey}`}
-            className="animate-lang-fade mx-auto   mt-8 max-w-[280px] text-center text-[10px] font-semibold leading-[1.5] text-neutral-700 sm:text-sm sm:max-w-[300px] md:mt-1 md:max-w-lg md:text-base"
+            className="animate-lang-fade mx-auto   mt-3 max-w-[280px] text-center text-[10px] font-semibold leading-[1.5] text-neutral-700 sm:text-sm sm:max-w-[300px] md:mt-1 md:max-w-lg md:text-base"
           >
             {copy.description.split("\n").map((line, i) => (
               <span key={i} className="block">
@@ -192,7 +192,7 @@ export default function Landing() {
           </p>
 
           {/* Join Waitlist — opens Google Form */}
-          <div key={`form-${contentKey}`} className="animate-lang-fade mx-auto mt-16 md:mt-2">
+          <div key={`form-${contentKey}`} className="animate-lang-fade mx-auto mt-6 md:mt-2">
             <a
               href={FORM_URL}
               target="_blank"
