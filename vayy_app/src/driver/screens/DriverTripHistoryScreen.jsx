@@ -52,25 +52,27 @@ function TripHistoryCard({ item, accent }) {
 }
 
 function mapHistoryItem(raw, accent) {
-  const vehicle = raw?.vehicle || raw?.vehicle_type || (accent === "#BA7517" ? "Auto" : "Bike");
+  const vehicle = raw?.vehicle_type || (accent === "#BA7517" ? "Auto" : "Bike");
+  const distM = raw?.total_distance_m;
+  const durS = raw?.total_duration_s;
+  const dateStr = raw?.ended_at || raw?.started_at;
+  let dateFormatted = "--";
+  if (dateStr) {
+    try {
+      const d = new Date(dateStr);
+      dateFormatted = d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    } catch { dateFormatted = dateStr; }
+  }
   return {
     id: String(raw?.id ?? raw?.trip_id ?? raw?.dispatch_id ?? "--"),
-    pickup: raw?.pickup || raw?.source_name || raw?.origin || raw?.from || "--",
-    destination: raw?.destination || raw?.destination_name || raw?.dropoff || raw?.to || "--",
-    date: raw?.date || raw?.completed_at || raw?.created_at || "--",
-    fare: raw?.fare !== undefined ? `₹${raw.fare}` : raw?.total_fare ? `₹${raw.total_fare}` : "--",
-    distance: raw?.distance !== undefined
-      ? (typeof raw.distance === "number" ? `${raw.distance.toFixed(1)} km` : raw.distance)
-      : raw?.distance_km
-        ? `${raw.distance_km} km`
-        : "--",
-    duration: raw?.duration !== undefined
-      ? `${raw.duration} min`
-      : raw?.duration_minutes
-        ? `${raw.duration_minutes} min`
-        : "--",
+    pickup: raw?.pickup_name || raw?.pickup || raw?.route_name || "--",
+    destination: raw?.destination_name || raw?.destination || raw?.route_name || "--",
+    date: dateFormatted,
+    fare: raw?.total_fare !== undefined && raw?.total_fare !== null ? `₹${raw.total_fare}` : raw?.fare !== undefined ? `₹${raw.fare}` : "--",
+    distance: distM != null ? `${(distM / 1000).toFixed(1)} km` : raw?.distance !== undefined ? (typeof raw.distance === "number" ? `${raw.distance.toFixed(1)} km` : raw.distance) : "--",
+    duration: durS != null ? `${Math.round(durS / 60)} min` : raw?.duration !== undefined ? `${raw.duration} min` : "--",
     vehicle,
-    earnings: raw?.earnings !== undefined ? `₹${raw.earnings}` : raw?.driver_earnings ? `₹${raw.driver_earnings}` : raw?.fare ? `₹${raw.fare}` : "--",
+    earnings: raw?.total_fare !== undefined && raw?.total_fare !== null ? `₹${raw.total_fare}` : raw?.earnings !== undefined ? `₹${raw.earnings}` : "--",
   };
 }
 
@@ -118,9 +120,16 @@ export default function DriverTripHistoryScreen({ navigation, route }) {
         <FlatList
           data={tripItems}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={tripItems.length === 0 ? styles.emptyContainer : styles.listContent}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => <TripHistoryCard item={item} accent={accent} />}
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <Ionicons name="car-outline" size={48} color={COLORS.textMuted} />
+              <Text style={styles.emptyTitle}>No trips yet</Text>
+              <Text style={styles.emptySub}>Your completed trips will appear here</Text>
+            </View>
+          }
         />
       </View>
     );
@@ -325,6 +334,27 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     paddingBottom: 32,
+  },
+  emptyContainer: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyWrap: {
+    alignItems: "center",
+    paddingVertical: 48,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: COLORS.text,
+    marginTop: 16,
+  },
+  emptySub: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    fontWeight: "500",
+    marginTop: 6,
   },
   historyCard: {
     backgroundColor: COLORS.white,

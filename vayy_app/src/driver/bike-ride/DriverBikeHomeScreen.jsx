@@ -29,12 +29,12 @@ import { useSelector } from "react-redux";
 const SHEET_COMPACT = 240;
 const BIKE_TOP_IMAGE = require("../../../assets-webp/vayyTopBike1.webp");
 
-function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 110 }) {
+function LocationSearch({ label, placeholder, value, onSelect }) {
   const [query, setQuery] = useState(value?.name || value?.display_name || "");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasSelection, setHasSelection] = useState(Boolean(value));
-  const [dropdownHeight, setDropdownHeight] = useState(0);
+  const [searchError, setSearchError] = useState(false);
   const isPickup = label === "Start Point";
   const inputRef = useRef(null);
 
@@ -42,18 +42,18 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 11
     if (hasSelection) return;
     if (!query || query.length < 3) {
       setResults([]);
-      setDropdownHeight(0);
       return;
     }
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setLoading(true);
+      setSearchError(false);
       try {
         const data = await NOMINATIM_SEARCH(query);
         setResults(Array.isArray(data) ? data : []);
       } catch {
         setResults([]);
-        setDropdownHeight(0);
+        setSearchError(true);
       } finally {
         setLoading(false);
       }
@@ -69,7 +69,6 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 11
     };
     setQuery(next.display_name || next.name || "");
     setResults([]);
-    setDropdownHeight(0);
     setLoading(false);
     setHasSelection(true);
     onSelect(next);
@@ -78,13 +77,14 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 11
   const handleChangeText = (text) => {
     setQuery(text);
     setHasSelection(false);
-    if (text.length < 3) { setResults([]); setDropdownHeight(0); }
+    setSearchError(false);
+    if (text.length < 3) { setResults([]); }
   };
 
   const showResults = results.length > 0;
 
   return (
-    <View style={[styles.fieldWrap, showResults && { marginBottom: dropdownHeight + 20, zIndex: 9999 }]}>
+    <View style={styles.fieldWrap}>
       <View style={styles.fieldHead}>
         <View style={[styles.fieldDot, { backgroundColor: isPickup ? COLORS.primary : "#EF4444" }]} />
         <Text style={styles.fieldLabel}>{label}</Text>
@@ -110,7 +110,7 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 11
         {hasSelection && <Ionicons name="checkmark-circle" size={18} color={COLORS.primary} />}
       </View>
       {showResults ? (
-        <View onLayout={(e) => setDropdownHeight(e.nativeEvent.layout.height)} style={[styles.dropdown, { top: dropdownLift }]}>
+        <View style={styles.dropdownInline}>
           <FlatList
             data={results}
             keyboardShouldPersistTaps="handled"
@@ -131,7 +131,9 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 11
             )}
           />
         </View>
-      ) : loading ? <Text style={styles.searching}>Searching...</Text> : null}
+      ) : loading ? <Text style={styles.searching}>Searching...</Text> : searchError ? (
+        <Text style={[styles.searching, { color: "#EF4444" }]}>Search failed. Check connection and try again.</Text>
+      ) : null}
     </View>
   );
 }
@@ -246,10 +248,14 @@ export default function DriverBikeHomeScreen({ navigation }) {
     }).start();
 
     const showSub = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", (e) => {
-      Animated.timing(keyboardHeight, { toValue: e.endCoordinates.height, duration: 250, useNativeDriver: false }).start();
+      const kbHeight = e.endCoordinates.height;
+      Animated.timing(keyboardHeight, { toValue: kbHeight, duration: 250, useNativeDriver: false }).start();
+      const availableHeight = windowHeight - kbHeight - 140;
+      Animated.spring(sheetHeight, { toValue: Math.max(SHEET_COMPACT, availableHeight), friction: 9, tension: 80, useNativeDriver: false }).start();
     });
     const hideSub = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => {
       Animated.timing(keyboardHeight, { toValue: 0, duration: 250, useNativeDriver: false }).start();
+      Animated.spring(sheetHeight, { toValue: SHEET_COMPACT, friction: 9, useNativeDriver: false }).start();
     });
     return () => { showSub.remove(); hideSub.remove(); };
   }, [cardAnim, keyboardHeight, loadRecentSearches]);
@@ -402,6 +408,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
             <ScrollView
               bounces={false}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={false}
               style={styles.sheetScroll}
               contentContainerStyle={styles.cardScroll}
@@ -544,13 +551,13 @@ const styles = StyleSheet.create({
   greetingText: {
     fontSize: 28,
     fontWeight: "900",
-    color: "#fff",
+    color: "#FFD700",
     marginLeft: 6,
   },
   nameText: {
     fontSize: 28,
     fontWeight: "900",
-    color: COLORS.primary,
+    color: "#FFFFFF",
     marginTop: 2,
   },
   subText: {
@@ -612,7 +619,7 @@ const styles = StyleSheet.create({
   sheetScroll: { flex: 1 },
 
   /* Fields */
-  fieldWrap: { marginBottom: 14, zIndex: 10 },
+  fieldWrap: { marginBottom: 14 },
   fieldHead: { flexDirection: "row", alignItems: "center", marginBottom: 6, gap: 6 },
   fieldDot: { width: 8, height: 8, borderRadius: 4 },
   fieldLabel: { fontSize: 12, fontWeight: "700", color: "#374151", letterSpacing: 0.3 },
@@ -636,17 +643,15 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   fieldText: { flex: 1, fontSize: 14, fontWeight: "500", color: "#111827", minHeight: 36, paddingVertical: 0 },
-  dropdown: {
-    position: "absolute",
-    left: 0, right: 0,
+  dropdownInline: {
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.06)",
     borderRadius: 14,
     maxHeight: 180,
+    marginTop: 6,
     ...SHADOW.sm,
-    elevation: 20,
-    zIndex: 9999,
+    elevation: 4,
   },
   resultRow: {
     flexDirection: "row",

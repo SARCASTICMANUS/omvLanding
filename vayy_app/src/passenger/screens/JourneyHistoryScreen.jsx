@@ -50,7 +50,7 @@ export default function JourneyHistoryScreen({ navigation }) {
         {item.rating && (
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>Rating</Text>
-            <Text style={styles.detailValue}>★ {item.rating.toFixed(1)}</Text>
+            <Text style={styles.detailValue}>★ {typeof item.rating === "number" ? item.rating.toFixed(1) : item.rating?.score ? Number(item.rating.score).toFixed(1) : "--"}</Text>
           </View>
         )}
       </View>

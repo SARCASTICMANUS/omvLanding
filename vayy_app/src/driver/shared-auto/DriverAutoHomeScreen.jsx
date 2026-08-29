@@ -1,11 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
   Easing,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +14,7 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
 import SHADOW from "../../shared/constants/shadow";
@@ -29,30 +28,30 @@ const heroImages = [
   require("../../../assets-webp/vayyAuto.webp"),
 ];
 
-function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90 }) {
+function LocationSearch({ label, placeholder, value, onSelect }) {
   const [query, setQuery] = useState(value?.name || value?.display_name || "");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasSelection, setHasSelection] = useState(Boolean(value));
-  const [dropdownHeight, setDropdownHeight] = useState(0);
+  const [searchError, setSearchError] = useState(false);
   const isPickup = label === "Start Point";
 
   useEffect(() => {
     if (hasSelection) return;
     if (!query || query.length < 3) {
       setResults([]);
-      setDropdownHeight(0);
       return;
     }
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setLoading(true);
+      setSearchError(false);
       try {
         const data = await NOMINATIM_SEARCH(query);
         setResults(Array.isArray(data) ? data : []);
       } catch {
         setResults([]);
-        setDropdownHeight(0);
+        setSearchError(true);
       } finally {
         setLoading(false);
       }
@@ -68,7 +67,6 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
     };
     setQuery(next.display_name || next.name || "");
     setResults([]);
-    setDropdownHeight(0);
     setLoading(false);
     setHasSelection(true);
     onSelect(next);
@@ -77,13 +75,14 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
   const handleChangeText = (text) => {
     setQuery(text);
     setHasSelection(false);
-    if (text.length < 3) { setResults([]); setDropdownHeight(0); }
+    setSearchError(false);
+    if (text.length < 3) { setResults([]); }
   };
 
   const showResults = results.length > 0;
 
   return (
-    <View style={[styles.fieldWrap, showResults && { marginBottom: dropdownHeight + 20, zIndex: 9999 }]}>
+    <View style={styles.fieldWrap}>
       <View style={styles.fieldHead}>
         <View style={[styles.fieldDot, { backgroundColor: isPickup ? COLORS.primary : "#EF4444" }]} />
         <Text style={styles.fieldLabel}>{label}</Text>
@@ -105,7 +104,7 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
         )}
       </View>
       {showResults ? (
-        <View onLayout={(e) => setDropdownHeight(e.nativeEvent.layout.height)} style={[styles.dropdown, { top: dropdownLift }]}>
+        <View style={styles.dropdownInline}>
           <FlatList
             data={results}
             keyboardShouldPersistTaps="handled"
@@ -124,7 +123,9 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
             )}
           />
         </View>
-      ) : loading ? <Text style={styles.searching}>Searching...</Text> : null}
+      ) : loading ? <Text style={styles.searching}>Searching...</Text> : searchError ? (
+        <Text style={[styles.searching, { color: "#EF4444" }]}>Search failed. Check connection and try again.</Text>
+      ) : null}
     </View>
   );
 }
@@ -171,6 +172,18 @@ export default function DriverAutoHomeScreen({ navigation }) {
   useEffect(() => {
     loadRecentSearches();
   }, []);
+
+  const locateUser = useCallback(async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    locateUser();
+  }, [locateUser]);
 
   const canProceed = useMemo(
     () => Boolean(pickup?.lat && pickup?.lon && destination?.lat && destination?.lon),
@@ -276,11 +289,8 @@ export default function DriverAutoHomeScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <StatusBar backgroundColor="#fff" style="dark" />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.flex}
-      >
-        <ScrollView bounces={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <View style={styles.flex}>
+        <ScrollView bounces={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
 
           {/* ─── Hero ─── */}
           <View style={styles.hero}>
@@ -385,7 +395,7 @@ export default function DriverAutoHomeScreen({ navigation }) {
           </View>
 
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -450,13 +460,13 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 30,
     fontWeight: "900",
-    color: "#03111F",
+    color: "#FFD700",
     lineHeight: 34,
   },
   heroAccent: {
     fontSize: 30,
     fontWeight: "900",
-    color: COLORS.primary,
+    color: "#FFFFFF",
     lineHeight: 34,
   },
   heroSub: {
@@ -521,7 +531,7 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 12,
   },
-  fieldWrap: { marginBottom: 16, zIndex: 10 },
+  fieldWrap: { marginBottom: 16 },
   fieldHead: { flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 8 },
   fieldDot: { width: 10, height: 10, borderRadius: 5 },
   fieldLabel: { fontSize: 13, fontWeight: "800", color: "#111827" },
@@ -536,17 +546,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   fieldText: { flex: 1, fontSize: 13, fontWeight: "500", color: "#111827", minHeight: 40, paddingVertical: 0 },
-  dropdown: {
-    position: "absolute",
-    left: 0, right: 0,
+  dropdownInline: {
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#F3F4F6",
     borderRadius: 14,
     maxHeight: 190,
+    marginTop: 6,
     ...SHADOW.sm,
-    elevation: 20,
-    zIndex: 9999,
+    elevation: 4,
   },
   resultRow: {
     flexDirection: "row",

@@ -774,7 +774,11 @@ class GeocodeSearchAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        limit = min(int(request.query_params.get("limit", 5)), 10)
+        try:
+            limit = min(int(request.query_params.get("limit", 5)), 10)
+        except (TypeError, ValueError):
+            limit = 5
+
         country_codes = request.query_params.get("countrycodes", "in")
 
         from transport.services.geocoding_service import GeocodingService
