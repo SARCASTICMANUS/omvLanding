@@ -129,15 +129,15 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
           <View style={styles.buddyMeta}>
             <View style={styles.metaItem}>
               <Ionicons name="star" size={12} color="#F59E0B" />
-              <Text style={styles.metaText}>{buddy?.rating || "4.5"}</Text>
+              <Text style={styles.metaText}>{buddy?.rating || null}</Text>
             </View>
             <View style={styles.metaItem}>
               <Ionicons name="cash" size={12} color={COLORS.primary} />
-              <Text style={styles.metaText}>₹{buddy?.fare || "45"}</Text>
+              <Text style={styles.metaText}>{buddy?.fare ? `₹${buddy.fare}` : null}</Text>
             </View>
             <View style={styles.metaItem}>
               <Ionicons name="map" size={12} color="#6B7280" />
-              <Text style={styles.metaText}>{buddy?.distance || "1.2"} km</Text>
+              <Text style={styles.metaText}>{buddy?.distanceDisplay || (buddy?.distance ? `${buddy.distance} km` : null)}</Text>
             </View>
           </View>
         </View>

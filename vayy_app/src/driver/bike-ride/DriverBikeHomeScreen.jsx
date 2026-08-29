@@ -1,29 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
-  FlatList,
   Image,
   Keyboard,
   PanResponder,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import VayyMap, { Marker } from "../../shared/components/VayyMap";
+import LocationSearch from "../../shared/components/common/LocationSearch";
 import COLORS from "../../shared/constants/colors";
 import SHADOW from "../../shared/constants/shadow";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { NOMINATIM_SEARCH, STORAGE_KEYS } from "../../constants";
+import { getRecentSearches, saveRecentSearch } from "../../shared/services/searchHistoryService";
 import { useSelector } from "react-redux";
 
 const SHEET_COMPACT = 240;
@@ -215,19 +213,22 @@ export default function DriverBikeHomeScreen({ navigation }) {
 
   const loadRecentSearches = useCallback(async () => {
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEYS.driverRecentSearchesBike);
-      if (stored) setRecentSearches(JSON.parse(stored));
+      const data = await getRecentSearches();
+      setRecentSearches(Array.isArray(data) ? data : []);
     } catch {}
   }, []);
 
-  const saveRecentSearch = async (pick, dest) => {
+  const persistRecentSearch = async (pick, dest) => {
     try {
-      const entry = { pickup: pick, destination: dest };
-      const updated = [entry, ...recentSearches.filter(
-        (r) => r.pickup?.name !== pick?.name || r.destination?.name !== dest?.name,
-      )].slice(0, 5);
-      setRecentSearches(updated);
-      await AsyncStorage.setItem(STORAGE_KEYS.driverRecentSearchesBike, JSON.stringify(updated));
+      await saveRecentSearch({
+        pickup_name: pick?.name || pick?.display_name || "",
+        pickup_lat: pick?.lat || 0,
+        pickup_lon: pick?.lon || 0,
+        destination_name: dest?.name || dest?.display_name || "",
+        destination_lat: dest?.lat || 0,
+        destination_lon: dest?.lon || 0,
+      });
+      loadRecentSearches();
     } catch {}
   };
 
@@ -322,7 +323,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
 
   const handleNext = () => {
     if (!canProceed) return;
-    saveRecentSearch(pickup, destination);
+    persistRecentSearch(pickup, destination);
     navigation.navigate("DriverRouteSearch", { pickup, destination, mode: "bike" });
   };
 
@@ -346,7 +347,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
         style={StyleSheet.absoluteFillObject}
         grayscale
         initialViewState={{
-          center: [80.9462, 26.8467],
+          center: [DEFAULT_CENTER.longitude, DEFAULT_CENTER.latitude],
           zoom: 12,
         }}
       >
@@ -452,7 +453,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
                 <View style={styles.recentSection}>
                   <View style={styles.recentHeader}>
                     <Ionicons name="time-outline" size={12} color="#9CA3AF" />
-                    <Text style={styles.recentHeading}>RECENT</Text>
+                    <Text style={styles.recentHeading}>RECENT SEARCHES</Text>
                   </View>
                   {recentSearches.slice(0, 3).map((item, index) => (
                     <TouchableOpacity
@@ -461,17 +462,15 @@ export default function DriverBikeHomeScreen({ navigation }) {
                       onPress={() => applyRecent(item)}
                       style={styles.recentRow}
                     >
-                      <View style={styles.routeMini}>
-                        <View style={[styles.routeMiniDot, { backgroundColor: COLORS.primary }]} />
-                        <View style={styles.routeMiniLine} />
-                        <View style={[styles.routeMiniDot, { backgroundColor: "#EF4444" }]} />
+                      <View style={styles.recentIconCircle}>
+                        <Ionicons name="time-outline" size={14} color="#9CA3AF" />
                       </View>
                       <View style={styles.recentCopy}>
                         <Text numberOfLines={1} style={styles.recentFrom}>
                           {item.pickup?.name || item.pickup?.display_name || "Unknown"}
                         </Text>
                         <Text numberOfLines={1} style={styles.recentTo}>
-                          {item.destination?.name || item.destination?.display_name || "Unknown"}
+                          To: {item.destination?.name || item.destination?.display_name || "Unknown"}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -739,21 +738,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 2,
   },
-  routeMini: {
-    width: 18,
+  recentIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#F3F4F6",
     alignItems: "center",
-  },
-  routeMiniDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-  },
-  routeMiniLine: {
-    width: 2,
-    flex: 1,
-    minHeight: 16,
-    backgroundColor: "rgba(0,0,0,0.12)",
-    marginVertical: 2,
+    justifyContent: "center",
   },
   recentCopy: { flex: 1 },
   recentFrom: {

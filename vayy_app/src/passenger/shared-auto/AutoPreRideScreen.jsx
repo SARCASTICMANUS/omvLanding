@@ -905,6 +905,7 @@ export function AutoPreRideScreen({ navigation, route }) {
     navigation.navigate("AutoSearching", {
       route_id: trip?.route_id,
       pickup_stop_id: stopId,
+      drop_stop_id: trip?.dropoff_stop?.id || null,
       trip, pickup, destination,
     });
 

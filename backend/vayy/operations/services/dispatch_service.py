@@ -50,7 +50,7 @@ class DispatchService:
         )
 
     @staticmethod
-    def request_dispatch(passenger: User, route_id: str, pickup_stop_id: str, mode: str = "direct") -> Dict[str, Any]:
+    def request_dispatch(passenger: User, route_id: str, pickup_stop_id: str, drop_stop_id: str = None, mode: str = "broadcast") -> Dict[str, Any]:
         """
         Initiates a ride request and triggers the matching engine.
         Supports 'direct' and 'broadcast' modes.
@@ -64,13 +64,13 @@ class DispatchService:
             return {"status": "no_drivers_available", "message": "No drivers found nearby"}
 
         if mode == "broadcast":
-            return DispatchService._handle_broadcast_dispatch(passenger, route_id, pickup_stop_id, candidates)
+            return DispatchService._handle_broadcast_dispatch(passenger, route_id, pickup_stop_id, drop_stop_id, candidates)
 
         best_candidate = candidates[0]
-        return DispatchService._assign_to_driver(passenger, route_id, pickup_stop_id, best_candidate)
+        return DispatchService._assign_to_driver(passenger, route_id, pickup_stop_id, best_candidate, drop_stop_id)
 
     @staticmethod
-    def _assign_to_driver(passenger: User, route_id: str, pickup_stop_id: str, candidate: Dict[str, Any]) -> Dict[str, Any]:
+    def _assign_to_driver(passenger: User, route_id: str, pickup_stop_id: str, candidate: Dict[str, Any], drop_stop_id: str = None) -> Dict[str, Any]:
         # 2. Create Trip in 'requested' state
         route = Route.objects.get(id=route_id)
         trip = ActiveTrip.objects.create(
@@ -81,6 +81,14 @@ class DispatchService:
             started_at=timezone.now()
         )
 
+        # Get drop stop if provided
+        drop_stop = None
+        if drop_stop_id:
+            try:
+                drop_stop = Stop.objects.get(id=drop_stop_id, route_id=route_id)
+            except Stop.DoesNotExist:
+                pass
+
         # Link the passenger to the trip + pickup stop so live tracking can
         # report the true distance to pickup (not remaining route distance).
         try:
@@ -89,10 +97,20 @@ class DispatchService:
                 passenger=passenger,
                 trip=trip,
                 pickup_stop=stop,
+                drop_stop=drop_stop,
                 status=BOARDING_PENDING,
             )
+        except Stop.DoesNotExist:
+            logger.error(
+                f"[Dispatch] Pickup stop {pickup_stop_id} not found for trip {trip.id} — "
+                f"passenger {passenger.id} has no boarding link"
+            )
+            raise ValueError(f"Pickup stop {pickup_stop_id} not found")
         except Exception as e:
-            logger.warning(f"Failed to link boarding request for trip {trip.id}: {e}")
+            logger.error(
+                f"[Dispatch] Failed to create boarding request for trip {trip.id}: {e} — "
+                f"trip was created but passenger is unlinked"
+            )
 
         payload = {
             "trip_id": str(trip.id),
@@ -100,6 +118,7 @@ class DispatchService:
             "driver_id": str(trip.driver.id),
             "route_id": route_id,
             "pickup_stop_id": pickup_stop_id,
+            "drop_stop_id": str(drop_stop.id) if drop_stop else None,
             "status": trip.status,
             "requested_at": timezone.now().isoformat()
         }
@@ -126,7 +145,7 @@ class DispatchService:
         return {"status": "assigned", "trip_id": str(trip.id), "driver_name": trip.driver.get_full_name()}
 
     @staticmethod
-    def _handle_broadcast_dispatch(passenger: User, route_id: str, pickup_stop_id: str, candidates: List[Dict]) -> Dict[str, Any]:
+    def _handle_broadcast_dispatch(passenger: User, route_id: str, pickup_stop_id: str, drop_stop_id: str, candidates: List[Dict]) -> Dict[str, Any]:
         """
         Broadcasts the dispatch request to ALL nearby drivers on the route.
         First driver to accept wins; others get dismissed via WS.
@@ -137,6 +156,14 @@ class DispatchService:
         route = Route.objects.get(id=route_id)
         passenger_name = passenger.get_full_name() or passenger.email
 
+        # Get drop stop if provided, otherwise fallback to route end
+        drop_stop = None
+        if drop_stop_id:
+            try:
+                drop_stop = Stop.objects.get(id=drop_stop_id, route_id=route_id)
+            except Stop.DoesNotExist:
+                pass
+
         # Create broadcast dispatch request
         dispatch_request = DispatchRequest.objects.create(
             passenger=passenger,
@@ -144,18 +171,26 @@ class DispatchService:
             pickup_stop=stop,
             pickup_lat=stop.location.y,
             pickup_lng=stop.location.x,
+            drop_stop=drop_stop,
+            drop_lat=drop_stop.location.y if drop_stop else None,
+            drop_lng=drop_stop.location.x if drop_stop else None,
             notified_drivers=[str(c["driver"].id) for c in candidates],
             expires_at=timezone.now() + timedelta(seconds=90),
         )
 
         # Shared request metadata for all candidate drivers
-        drop_name = route.end_name or route.name
-        drop_lat = drop_lng = None
-        try:
-            if route.path:
-                drop_lng, drop_lat = route.path.coords[-1]
-        except Exception:
-            pass
+        if drop_stop:
+            drop_name = drop_stop.name
+            drop_lat = drop_stop.location.y
+            drop_lng = drop_stop.location.x
+        else:
+            drop_name = route.end_name or route.name
+            drop_lat = drop_lng = None
+            try:
+                if route.path:
+                    drop_lng, drop_lat = route.path.coords[-1]
+            except Exception:
+                pass
 
         passenger_rating = None
         passenger_trips = 0
@@ -289,6 +324,7 @@ class DispatchService:
                 passenger=dispatch_request.passenger,
                 trip=trip,
                 pickup_stop=dispatch_request.pickup_stop,
+                drop_stop=dispatch_request.drop_stop,
                 status=BOARDING_PENDING,
             )
         except Exception as e:
@@ -557,15 +593,21 @@ class DispatchService:
     def _process_trip_settlement(trip: ActiveTrip):
         """
         Handles financial settlement for all passengers on the trip.
+        Calculates per-passenger fare based on their actual pickup and drop stops.
         """
-        fare = RideService.calculate_final_fare(trip)
-        fare_decimal = Decimal(str(fare))
+        vehicle_type = trip.vehicle.vehicle_type if trip.vehicle else "bike"
         
         # Find all boarded passengers
         boarding_requests = BoardingRequest.objects.filter(trip=trip, status="boarded")
         
         for request in boarding_requests:
             try:
+                # Calculate fare for this passenger's specific segment
+                passenger_fare = RideService.calculate_segment_fare(
+                    request.pickup_stop, request.drop_stop, vehicle_type
+                )
+                fare_decimal = Decimal(str(passenger_fare))
+                
                 WalletService.transfer_funds(
                     sender=request.passenger,
                     receiver=trip.driver,
@@ -579,8 +621,8 @@ class DispatchService:
                 NotificationService.create(
                     user=request.passenger,
                     title="Ride Completed",
-                    message=f"Hope you enjoyed your ride! {fare} has been deducted from your wallet.",
-                    metadata={"trip_id": str(trip.id), "fare": fare}
+                    message=f"Hope you enjoyed your ride! {passenger_fare} has been deducted from your wallet.",
+                    metadata={"trip_id": str(trip.id), "fare": passenger_fare}
                 )
             except Exception as e:
                 logger.error(f"Failed to settle payment for passenger {request.passenger.id} on trip {trip.id}: {e}")

@@ -8,6 +8,7 @@ import { startDispatchTrip, completeDispatch } from "../../store/slices/dispatch
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import VayyMap from "../../shared/components/VayyMap";
+import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 import COLORS from "../../shared/constants/colors";
 import { colors } from "../../theme/colors";
@@ -24,9 +25,12 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
   const dispatchId = route?.params?.dispatchId || tripData.id;
   const [liveDistance, setLiveDistance] = useState(route?.params?.distance || tripData.distance || "");
   const [liveDuration, setLiveDuration] = useState(route?.params?.duration || tripData.duration || "");
-  const initialLat = route?.params?.latitude || tripData.latitude || 26.8467;
-  const initialLng = route?.params?.longitude || tripData.longitude || 80.9462;
+  const initialLat = route?.params?.latitude || tripData.latitude || DEFAULT_CENTER.latitude;
+  const initialLng = route?.params?.longitude || tripData.longitude || DEFAULT_CENTER.longitude;
   const [earning] = useState(Number(route?.params?.initialEarning) || 0);
+  const passengerName = route?.params?.passengerName || tripData.passenger_name || "Passenger";
+  const destination = route?.params?.destination || tripData.destination || null;
+  const pickup = route?.params?.pickup || tripData.pickup || null;
   const mapRef = useRef(null);
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
@@ -54,7 +58,15 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
     navigation.navigate("AutoTripComplete", {
       dispatchId,
       tripData,
-      buddy: { distance: liveDistance, duration: liveDuration, fare: earning },
+      buddy: {
+        name: passengerName,
+        pickup: pickup || "Pickup",
+        drop: destination || "Destination",
+        avatar: (passengerName || "P").split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase() || "P",
+        distance: liveDistance,
+        duration: liveDuration,
+        fare: earning,
+      },
       summary: { earnings: earning, distance: liveDistance, duration: liveDuration },
       stats: { earnings: earning, distance: liveDistance, duration: liveDuration, passengers: livePassengers, stops: route?.params?.stops, rating: route?.params?.rating },
     });

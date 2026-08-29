@@ -391,6 +391,14 @@ class BoardingRequest(models.Model):
         on_delete=models.CASCADE,
     )
 
+    drop_stop = models.ForeignKey(
+        Stop,
+        related_name="drop_requests",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+    )
+
     status = models.CharField(
         max_length=20,
         choices=BOARDING_STATUS_CHOICES,
@@ -469,6 +477,17 @@ class DispatchRequest(models.Model):
         related_name="dispatch_requests",
         on_delete=models.CASCADE,
     )
+
+    drop_stop = models.ForeignKey(
+        Stop,
+        related_name="dispatch_requests_drop",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+    )
+
+    drop_lat = models.FloatField(null=True, blank=True)
+    drop_lng = models.FloatField(null=True, blank=True)
 
     status = models.CharField(
         max_length=20,

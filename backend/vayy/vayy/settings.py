@@ -269,6 +269,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "tracking.tasks.prune_hybrid_logs",
         "schedule": 24 * 3600,  # daily
     },
+    "flush-hybrid-logs": {
+        "task": "tracking.tasks.flush_hybrid_logs",
+        "schedule": 5.0,  # every 5 seconds
+    },
 }
 
 # RABBITMQ
@@ -286,7 +290,7 @@ RABBITMQ_USER = env(
 )
 RABBITMQ_PASSWORD = env(
     "RABBITMQ_PASSWORD",
-    default="admin123"
+    default="change-me-in-production"
 )
 
 # OSRM

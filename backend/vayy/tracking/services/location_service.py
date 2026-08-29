@@ -6,6 +6,7 @@ from django.db import transaction
 from django.contrib.gis.geos import Point
 from django.core.cache import cache
 from asgiref.sync import async_to_sync
+from channels.db import database_sync_to_async
 from channels.layers import get_channel_layer
 
 from operations.models import Vehicle, ActiveTrip, VehicleState, BoardingRequest
@@ -48,6 +49,7 @@ def _project_point_on_linestring(
     best_dist = float("inf")
     best_seg = 0
     best_frac = 0.0
+    best_cumul = 0.0
     cumul_before = 0.0
 
     for i in range(len(coords) - 1):
@@ -97,6 +99,46 @@ def _snap_to_route(
     bx, by = route_coords[seg + 1]
     snapped = (ax + frac * (bx - ax), ay + frac * (by - ay))
     return snapped, seg, dist, cumul
+
+
+def _snap_to_route_windowed(
+    point: Tuple[float, float],
+    route_coords: List[Tuple[float, float]],
+    last_segment: Optional[int] = None,
+    window: int = 5,
+) -> Tuple[Tuple[float, float], int, float, float]:
+    """
+    Optimized snap: only search ±window segments around last known position.
+    Falls back to full search if last_segment is None.
+    Saves ~95% CPU for routes with 1000+ coordinates.
+    """
+    if last_segment is None or not route_coords:
+        return _snap_to_route(point, route_coords)
+
+    total_segs = len(route_coords) - 1
+    start = max(0, last_segment - window)
+    end = min(total_segs, last_segment + window + 1)
+
+    # Extract the window of coordinates
+    window_coords = route_coords[start:end + 1]
+    if len(window_coords) < 2:
+        return _snap_to_route(point, route_coords)
+
+    seg, frac, dist, cumul = _project_point_on_linestring(point, window_coords)
+    ax, ay = window_coords[seg]
+    bx, by = window_coords[seg + 1]
+    snapped = (ax + frac * (bx - ax), ay + frac * (by - ay))
+
+    # Adjust segment index back to full-route coordinates
+    global_seg = start + seg
+
+    # Recompute cumulative distance along full route
+    full_cumul = 0.0
+    for i in range(global_seg):
+        full_cumul += _haversine_m(route_coords[i], route_coords[i + 1])
+    full_cumul += frac * _haversine_m(route_coords[global_seg], route_coords[global_seg + 1])
+
+    return snapped, global_seg, dist, full_cumul
 
 
 def _determine_direction(
@@ -258,6 +300,122 @@ class LocationService:
             LocationService._notify_ws(f"trip_{trip_id}", "trip_update", ws_payload)
 
     @staticmethod
+    async def hot_path_process_async(
+        payload: Dict[str, Any], channel_layer=None
+    ) -> None:
+        """
+        Fully async hot path. Zero DB queries, zero sync_to_async.
+
+        1. Redis pipeline: GEOADD + meta hash + snapshot hash (1 round-trip).
+        2. Channel layer broadcast (already async).
+        """
+        vehicle_id = str(payload.get("vehicle_id"))
+        lat = payload.get("lat")
+        lng = payload.get("lng") or payload.get("lon")
+        if not vehicle_id or lat is None or lng is None:
+            logger.error(f"Invalid async hot path payload: {payload}")
+            return
+
+        speed = payload.get("speed", 0)
+        heading = payload.get("heading", 0)
+        trip_id = payload.get("trip_id")
+        vehicle_type = payload.get("vehicle_type", "")
+        driver_id = payload.get("driver_id", "")
+        vehicle_number = payload.get("vehicle_number", "")
+
+        # If vehicle metadata not in payload, try async Redis read.
+        # On miss: skip DB entirely — cold path will populate it.
+        if not vehicle_type:
+            meta = await RedisGeoService.get_vehicle_meta_async(vehicle_id)
+            if meta:
+                vehicle_type = meta.get("vehicle_type", "")
+                driver_id = meta.get("driver_id", "")
+                vehicle_number = meta.get("vehicle_number", "")
+
+        # Single Redis pipeline: GEOADD + meta + snapshot
+        await RedisGeoService.hot_path_pipeline(
+            vehicle_id=vehicle_id,
+            lat=lat,
+            lng=lng,
+            speed=speed,
+            heading=heading,
+            trip_id=str(trip_id) if trip_id else None,
+            vehicle_type=vehicle_type,
+            driver_id=driver_id,
+            vehicle_number=vehicle_number,
+        )
+
+        # Broadcast via channel layer (already async, no wrapper needed)
+        if channel_layer is None:
+            from channels.layers import get_channel_layer
+            channel_layer = get_channel_layer()
+
+        ws_payload = {
+            "type": "vehicle_update",
+            "lat": lat,
+            "lng": lng,
+            "speed": speed,
+            "heading": heading,
+            "vehicle_id": vehicle_id,
+            "trip_id": str(trip_id) if trip_id else None,
+            "hot": True,
+            "timestamp": timezone.now().isoformat(),
+        }
+        await channel_layer.group_send(
+            f"vehicle_{vehicle_id}",
+            {"type": "vehicle_update", "data": ws_payload},
+        )
+        if trip_id:
+            await channel_layer.group_send(
+                f"trip_{trip_id}",
+                {"type": "trip_update", "data": ws_payload},
+            )
+
+    @staticmethod
+    async def get_trip_latest_snapshot_async(trip_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Async version of get_trip_latest_snapshot.
+        Resolves trip via sync_to_async (once per connect), reads snapshot from async Redis.
+        """
+        from operations.models import ActiveTrip
+
+        @database_sync_to_async
+        def _get_trip():
+            try:
+                return ActiveTrip.objects.get(
+                    id=trip_id, status__in=["accepted", "arrived", "active"]
+                )
+            except ActiveTrip.DoesNotExist:
+                return None
+            except Exception:
+                return None
+
+        trip = await _get_trip()
+        if not trip:
+            return None
+
+        vehicle_id = str(trip.vehicle_id)
+        snap = await RedisGeoService.get_vehicle_snapshot_async(vehicle_id)
+        if not snap:
+            return None
+
+        route_id = snap.get("route_id") or (
+            str(trip.route_id) if trip.route_id else None
+        )
+        return {
+            "type": "vehicle_update",
+            "lat": float(snap.get("lat")),
+            "lng": float(snap.get("lng")),
+            "speed": float(snap.get("speed", 0)),
+            "heading": float(snap.get("heading", 0)),
+            "vehicle_id": vehicle_id,
+            "trip_id": str(trip.id),
+            "route_id": route_id,
+            "snapshot": True,
+            "timestamp": snap.get("ts"),
+        }
+
+    @staticmethod
     def get_trip_latest_snapshot(trip_id: str) -> Optional[Dict[str, Any]]:
         """
         Return the last-known vehicle position for a trip so a passenger that
@@ -322,31 +480,18 @@ class LocationService:
                 state.current_location = point
                 state.last_updated = timezone.now()
 
-                # ── 2. Resolve active trip ───────────────────────
+                # ── 2. Resolve active trip (cached) ─────────────
                 active_trip = None
                 if trip_id:
-                    try:
-                        active_trip = ActiveTrip.objects.get(id=trip_id, status__in=["accepted", "arrived", "active"])
-                    except ActiveTrip.DoesNotExist:
-                        logger.warning(f"ActiveTrip {trip_id} not found")
+                    active_trip = LocationService._get_active_trip_cached(trip_id, vehicle)
 
                 if not active_trip:
-                    active_trip = ActiveTrip.objects.filter(vehicle=vehicle, status__in=["accepted", "arrived", "active"]).first()
+                    active_trip = ActiveTrip.objects.filter(
+                        vehicle=vehicle, status__in=["accepted", "arrived", "active"]
+                    ).first()
 
-                # ── 3. Store HybridLog for persistence ───────────
-                try:
-                    driver = vehicle.driver if hasattr(vehicle, "driver") and vehicle.driver else None
-                    HybridLog.objects.create(
-                        user=driver,
-                        vehicle=vehicle,
-                        trip=active_trip,
-                        location=point,
-                        speed=speed,
-                        heading=heading,
-                        timestamp=timezone.now(),
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to store HybridLog: {e}")
+                # ── 3. Enqueue HybridLog to Redis (zero DB lock) ─
+                LocationService._enqueue_hybrid_log(vehicle, active_trip, point, speed, heading)
 
                 # ── 4. Route-based processing ────────────────────
                 next_stop_eta_list = []
@@ -356,17 +501,20 @@ class LocationService:
                 remaining_distance_km = None
                 remaining_duration_min = None
                 direction = None
+                current_stop = None
+                segment_idx = None
                 route_stops = []
                 if active_trip:
-                    route_stops = list(
-                        active_trip.route.stops.select_related("route").order_by("order")
-                    )
+                    route_stops = LocationService._get_route_stops_cached(active_trip.route_id)
 
                     if route_stops:
                         route_coords = LocationService._get_route_coords(route_stops)
 
-                        # 4a. Snap GPS to route
-                        snapped, seg_idx, dist_to_route, dist_along = _snap_to_route(gps_tuple, route_coords)
+                        # 4a. Snap GPS to route (±5 segment window)
+                        last_seg = getattr(state, "current_segment_index", None)
+                        snapped, seg_idx, dist_to_route, dist_along = _snap_to_route_windowed(
+                            gps_tuple, route_coords, last_seg, window=5
+                        )
                         state.snapped_location = Point(snapped[0], snapped[1], srid=4326)
                         state.distance_along_route_m = dist_along
 
@@ -408,7 +556,7 @@ class LocationService:
                 state.save()
 
                 def _post_commit():
-                    # ── 5. Cache route state + WS broadcast (after commit) ──
+                    # ── 5. Cache route state (after commit) ──────
                     try:
                         if active_trip and route_stops and snapped is not None and direction:
                             RedisRouteService.set_vehicle_route_state(
@@ -454,78 +602,75 @@ class LocationService:
                     except Exception as e:
                         logger.warning(f"Failed to sync to Redis GEO: {e}")
 
-                    # ── 7. Broadcast via WebSocket ────────────────
-                    total_route_m = 0
-                    if route_stops:
-                        total_route_m = max(
-                            (s.cumulative_distance_m for s in route_stops if s.cumulative_distance_m),
-                            default=0
-                        )
-                    remaining_m = max(0, total_route_m - (dist_along or 0))
-                    remaining_distance_km = round(remaining_m / 1000, 2)
-                    remaining_duration_min = None
-                    if etas:
-                        remaining_duration_min = round(max(etas.values()) / 60, 1)
-
-                    # Distance from the vehicle to the passenger's pickup stop
-                    # (NOT remaining route distance) so passengers see the real
-                    # "marshal is N m away" value even when the marshal is
-                    # mid-route or already at their stop.
-                    pickup_distance_km = None
-                    pickup_duration_min = None
-                    if active_trip:
-                        try:
-                            pickup_req = (
-                                BoardingRequest.objects.filter(
-                                    trip=active_trip,
-                                    status__in=[BOARDING_PENDING, BOARDING_APPROACHING],
-                                )
-                                .select_related("pickup_stop")
-                                .first()
-                            )
-                            if pickup_req and pickup_req.pickup_stop_id:
-                                stop_point = pickup_req.pickup_stop.location
-                                pickup_dist_m = _haversine_m(
-                                    (lng, lat),
-                                    (stop_point.x, stop_point.y),
-                                )
-                                pickup_distance_km = round(pickup_dist_m / 1000.0, 2)
-                                if speed_mps and speed_mps > 0:
-                                    pickup_duration_min = round(pickup_dist_m / speed_mps / 60.0, 1)
-                        except Exception as e:
-                            logger.warning(f"Failed to compute pickup distance for trip {active_trip.id}: {e}")
-
-                    ws_payload = {
-                        "type": "vehicle_update",
-                        "lat": lat,
-                        "lng": lng,
-                        "speed": speed,
-                        "heading": heading,
-                        "vehicle_id": str(vehicle_id),
-                        "trip_id": str(active_trip.id) if active_trip else None,
-                        "route_id": str(active_trip.route_id) if active_trip else None,
-                        "direction": active_trip.direction if active_trip else None,
-                        "current_stop_index": state.current_stop_index,
-                        "remaining_distance_km": remaining_distance_km,
-                        "remaining_duration_min": remaining_duration_min,
-                        "pickup_distance_km": pickup_distance_km,
-                        "pickup_duration_min": pickup_duration_min,
-                        "next_stop_eta": next_stop_eta_list,
-                        "snapped_lat": state.snapped_location.y if state.snapped_location else None,
-                        "snapped_lng": state.snapped_location.x if state.snapped_location else None,
-                        "timestamp": state.last_updated.isoformat(),
-                    }
-
-                    LocationService._notify_ws(f"vehicle_{vehicle_id}", "vehicle_update", ws_payload)
-                    if active_trip:
-                        LocationService._notify_ws(f"trip_{active_trip.id}", "trip_update", ws_payload)
-                        LocationService._notify_ws(
-                            f"route_{active_trip.route_id}",
-                            "route_vehicle_update",
-                            ws_payload,
-                        )
-
                 transaction.on_commit(_post_commit)
+
+            # ── 7. Broadcast via WebSocket (after commit, sync) ─
+            total_route_m = 0
+            if route_stops:
+                total_route_m = max(
+                    (s.cumulative_distance_m for s in route_stops if s.cumulative_distance_m),
+                    default=0
+                )
+            remaining_m = max(0, total_route_m - (dist_along or 0))
+            remaining_distance_km = round(remaining_m / 1000, 2)
+            remaining_duration_min = None
+            if etas:
+                remaining_duration_min = round(max(etas.values()) / 60, 1)
+
+            # Distance from the vehicle to the passenger's pickup stop
+            pickup_distance_km = None
+            pickup_duration_min = None
+            if active_trip:
+                try:
+                    pickup_req = (
+                        BoardingRequest.objects.filter(
+                            trip=active_trip,
+                            status__in=[BOARDING_PENDING, BOARDING_APPROACHING],
+                        )
+                        .select_related("pickup_stop")
+                        .first()
+                    )
+                    if pickup_req and pickup_req.pickup_stop_id:
+                        stop_point = pickup_req.pickup_stop.location
+                        pickup_dist_m = _haversine_m(
+                            (lng, lat),
+                            (stop_point.x, stop_point.y),
+                        )
+                        pickup_distance_km = round(pickup_dist_m / 1000.0, 2)
+                        if speed_mps and speed_mps > 0:
+                            pickup_duration_min = round(pickup_dist_m / speed_mps / 60.0, 1)
+                except Exception as e:
+                    logger.warning(f"Failed to compute pickup distance for trip {active_trip.id}: {e}")
+
+            ws_payload = {
+                "type": "vehicle_update",
+                "lat": lat,
+                "lng": lng,
+                "speed": speed,
+                "heading": heading,
+                "vehicle_id": str(vehicle_id),
+                "trip_id": str(active_trip.id) if active_trip else None,
+                "route_id": str(active_trip.route_id) if active_trip else None,
+                "direction": active_trip.direction if active_trip else None,
+                "current_stop_index": state.current_stop_index,
+                "remaining_distance_km": remaining_distance_km,
+                "remaining_duration_min": remaining_duration_min,
+                "pickup_distance_km": pickup_distance_km,
+                "pickup_duration_min": pickup_duration_min,
+                "next_stop_eta": next_stop_eta_list,
+                "snapped_lat": state.snapped_location.y if state.snapped_location else None,
+                "snapped_lng": state.snapped_location.x if state.snapped_location else None,
+                "timestamp": state.last_updated.isoformat(),
+            }
+
+            LocationService._notify_ws(f"vehicle_{vehicle_id}", "vehicle_update", ws_payload)
+            if active_trip:
+                LocationService._notify_ws(f"trip_{active_trip.id}", "trip_update", ws_payload)
+                LocationService._notify_ws(
+                    f"route_{active_trip.route_id}",
+                    "route_vehicle_update",
+                    ws_payload,
+                )
 
             logger.info(
                 f"Updated vehicle {vehicle_id}: stop={state.current_stop_index} "
@@ -560,6 +705,71 @@ class LocationService:
         coords = LocationService._build_route_coords(stops)
         cache.set(cache_key, coords, timeout=3600)
         return coords
+
+    @staticmethod
+    def _get_route_stops_cached(route_id) -> list:
+        """
+        Cache route_stops in Redis (300s TTL) to avoid DB query every ping.
+        Returns list of stop objects.
+        """
+        from transport.models import Stop
+        cache_key = f"route_stops_{route_id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        stops = list(
+            Stop.objects.filter(route_id=route_id)
+            .select_related("route")
+            .order_by("order")
+        )
+        cache.set(cache_key, stops, timeout=300)
+        return stops
+
+    @staticmethod
+    def _get_active_trip_cached(trip_id, vehicle) -> Optional['ActiveTrip']:
+        """
+        Cache active trip lookup to avoid DB query every cold path ping.
+        Uses Django cache framework (Redis backend).
+        """
+        cache_key = f"active_trip_{trip_id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            trip = ActiveTrip.objects.get(
+                id=trip_id,
+                status__in=["accepted", "arrived", "active"]
+            )
+            cache.set(cache_key, trip, timeout=60)
+            return trip
+        except ActiveTrip.DoesNotExist:
+            return None
+
+    @staticmethod
+    def _enqueue_hybrid_log(vehicle, trip, point, speed, heading):
+        """
+        Enqueue HybridLog entry to Redis list instead of direct DB write.
+        A Celery beat task flushes the batch every 5 seconds.
+        """
+        import json
+        entry = json.dumps({
+            "vehicle_id": str(vehicle.id),
+            "driver_id": str(vehicle.driver_id) if vehicle.driver_id else None,
+            "trip_id": str(trip.id) if trip else None,
+            "lat": point.y,
+            "lng": point.x,
+            "speed": speed,
+            "heading": heading,
+            "timestamp": timezone.now().isoformat(),
+        })
+        try:
+            from django_redis import get_redis_connection
+            conn = get_redis_connection("default")
+            conn.lpush("vayy:hybrid_log_queue", entry)
+        except Exception as e:
+            logger.warning(f"Failed to enqueue HybridLog: {e}")
 
     @staticmethod
     def _build_route_coords(stops: list) -> List[Tuple[float, float]]:

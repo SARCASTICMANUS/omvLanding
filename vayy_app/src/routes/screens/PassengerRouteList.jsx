@@ -19,12 +19,12 @@ export function formatEtaMinutes(etaSeconds) {
 export function formatDistanceText(trip) {
   if (trip?.distance_text) return trip.distance_text;
   if (trip?.distance_km) return `${trip.distance_km} km`;
-  return "45 km";
+  return "—";
 }
 export function formatDurationText(trip) {
   if (trip?.duration_text) return trip.duration_text;
   if (trip?.eta_seconds) return `${formatEtaMinutes(trip.eta_seconds)} min`;
-  return "45 min";
+  return "—";
 }
 export function shortPlace(point, fallback) {
   return (
@@ -70,13 +70,13 @@ function StopDotLine({ pickupLabel, dropLabel, walkText }) {
 ───────────────────────────────────────────── */
 function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggleExpand, expanded }) {
   // const eta      = formatEtaMinutes(trip?.eta_seconds);
-  const fromLbl  = shortPlace(pickup,      trip?.pickup_name      || "Campus Gate");
-  const toLbl    = shortPlace(destination, trip?.destination_name || "City Metro");
-  const rating   = trip?.rating  || trip?.score        || (4.8 - index * 0.2).toFixed(1);
-  const reviews  = trip?.reviews || trip?.review_count || Math.max(90, 320 - index * 70);
+  const fromLbl  = shortPlace(pickup,      trip?.pickup_name      || "Pickup");
+  const toLbl    = shortPlace(destination, trip?.destination_name || "Destination");
+  const rating   = trip?.rating  || trip?.score        || null;
+  const reviews  = trip?.reviews || trip?.review_count || null;
   // const fuelType = trip?.fuel_type || trip?.vehicle_type || "CNG";
-  const walkMin  = trip?.walk_minutes || (index + 1) * 2;
-  const fare     = trip?.fare || trip?.price || (78 + index * 14);
+  const walkMin  = trip?.walk_minutes || null;
+  const fare     = trip?.fare || trip?.price || null;
   const payment  = trip?.payment_method || "Cash";
   const dist     = formatDistanceText(trip);
   const dur      = formatDurationText(trip);
@@ -183,7 +183,7 @@ export default function PassengerRouteList({ navigation, route }) {
     mode = "auto",
   } = route?.params || {};
 
-  console.log("initialDestination : ",initialDestination)
+
 
   const isBike = mode === "bike";
   const accent = "#009849";
@@ -208,7 +208,7 @@ export default function PassengerRouteList({ navigation, route }) {
   /* Handlers */
   const handleContinue = (tripOverride = null) => {
     const trip = tripOverride || bestTrip;
-    console.log("trip :",trip)
+
     if (!trip) return;
     if (mode === "auto") {
       navigation.navigate("AutoPreRide", { trip, pickup, destination, mode });

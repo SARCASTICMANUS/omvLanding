@@ -1,5 +1,6 @@
 import React, { forwardRef, useImperativeHandle, useRef, useCallback, useEffect, useState } from "react";
 import { StyleSheet } from "react-native";
+import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import {
   Map,
   Camera,
@@ -143,7 +144,7 @@ function convertInitialRegion(region) {
     ? Math.round(14 - Math.log2(((latitudeDelta || 0.05) * 111) / 2))
     : 14;
   return {
-    center: [longitude || 80.9462, latitude || 26.8467],
+    center: [longitude || DEFAULT_CENTER.longitude, latitude || DEFAULT_CENTER.latitude],
     zoom,
   };
 }
@@ -190,7 +191,7 @@ const VayyMap = forwardRef(function VayyMap(
   const viewState =
     initialViewState ||
     convertInitialRegion(initialRegion) || {
-      center: [80.9462, 26.8467],
+      center: [DEFAULT_CENTER.longitude, DEFAULT_CENTER.latitude],
       zoom: 14,
     };
 
@@ -206,7 +207,7 @@ const VayyMap = forwardRef(function VayyMap(
       try {
         return await activeMapRef.current?.getCenter();
       } catch {
-        return [80.9462, 26.8467];
+        return [DEFAULT_CENTER.longitude, DEFAULT_CENTER.latitude];
       }
     },
     zoomIn: async (delta = 1, duration = 300) => {
@@ -216,7 +217,7 @@ const VayyMap = forwardRef(function VayyMap(
         const pitch = await activeMapRef.current?.getPitch();
         const heading = await activeMapRef.current?.getBearing();
         activeCameraRef.current?.setStop({
-          center: center || [80.9462, 26.8467],
+          center: center || [DEFAULT_CENTER.longitude, DEFAULT_CENTER.latitude],
           zoom: Math.min((zoom || 14) + delta, 22),
           bearing: heading || 0,
           duration,
@@ -230,7 +231,7 @@ const VayyMap = forwardRef(function VayyMap(
         const pitch = await activeMapRef.current?.getPitch();
         const heading = await activeMapRef.current?.getBearing();
         activeCameraRef.current?.setStop({
-          center: center || [80.9462, 26.8467],
+          center: center || [DEFAULT_CENTER.longitude, DEFAULT_CENTER.latitude],
           zoom: Math.max((zoom || 14) - delta, 2),
           bearing: heading || 0,
           duration,
@@ -276,7 +277,7 @@ const VayyMap = forwardRef(function VayyMap(
     },
     setCamera: (stop) => {
       if (!stop) return;
-      const center = stop.center || [80.9462, 26.8467];
+      const center = stop.center || [DEFAULT_CENTER.longitude, DEFAULT_CENTER.latitude];
       const zoom = stop.zoom || 14;
       activeCameraRef.current?.setStop({
         center,

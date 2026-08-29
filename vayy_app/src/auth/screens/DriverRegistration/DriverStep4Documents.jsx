@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, CheckCircle } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
 import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import ImageUploadCard from "../../components/ImageUploadCard";
@@ -17,7 +18,22 @@ export default function DriverStep4Documents({ onNext, onBack }) {
   const [docs, setDocs] = useState({ dlFront: null, dlBack: null, aadhaarFront: null, aadhaarBack: null, selfie: null });
   const [errors, setErrors] = useState({});
 
-  const upload = (field) => setDocs((p) => ({ ...p, [field]: "file:///mock/" + field + ".jpg" }));
+  const upload = async (field) => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission Required", "Please grant gallery access to upload documents.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      setDocs((p) => ({ ...p, [field]: result.assets[0].uri }));
+    }
+  };
 
   const completed = SECTIONS.reduce((acc, s) => {
     if (s.key === "dl") acc[s.key] = !!(docs.dlFront && docs.dlBack);

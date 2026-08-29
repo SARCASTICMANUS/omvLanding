@@ -25,8 +25,12 @@ class CorrelationIDMiddleware:
         # Add to request object
         request.correlation_id = correlation_id
 
-        response = self.get_response(request)
-        
+        try:
+            response = self.get_response(request)
+        finally:
+            # Clear thread-local to prevent leak across requests in thread pool
+            _thread_locals.correlation_id = None
+
         # Return in response header
         response['X-Correlation-ID'] = correlation_id
         return response
@@ -67,10 +71,13 @@ class RequestResponseLoggingMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # Capture request details up-front (body can only be read once)
+        # Capture request details up-front (body can only be read once).
+        # Skip body reading for multipart/form-data (file uploads) to avoid
+        # consuming the stream before DRF's MultiPartParser can read it.
         req_body = getattr(request, "body", b"")
         req_data = {}
-        if req_body:
+        content_type = request.content_type or ""
+        if req_body and "multipart/form-data" not in content_type:
             try:
                 req_data = _sanitize(json.loads(req_body))
             except (json.JSONDecodeError, TypeError):

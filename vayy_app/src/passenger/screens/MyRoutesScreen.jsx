@@ -13,16 +13,16 @@ import SPACING from "../../shared/constants/spacing";
 import { getRideHistory } from "../services/passengerService";
 
 function formatTrip(trip) {
-  const pickup = trip.pickup_location || trip.origin || trip.boarded_at || "--";
-  const destination = trip.dropoff_location || trip.destination || trip.dropped_at || "--";
-  const date = trip.completed_at || trip.date || trip.created_at || "";
+  const pickup = trip.pickup_name || trip.route_name || trip.pickup || "--";
+  const destination = trip.destination_name || trip.route_name || trip.destination || "--";
+  const date = trip.date || trip.ended_at || trip.started_at || "";
   const formattedDate = date ? new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "--";
-  const fare = trip.fare || trip.total_fare || trip.amount || null;
+  const fare = trip.fare || trip.total_fare || null;
   const vehicleType = trip.vehicle_type || trip.mode || "Auto";
-  const distance = trip.distance || trip.distance_km || null;
-  const distanceText = distance ? (typeof distance === "number" ? `${distance.toFixed(1)} km` : distance) : "--";
-  const duration = trip.duration || trip.duration_minutes || null;
-  const durationText = duration ? (typeof duration === "number" ? `${duration} min` : duration) : "--";
+  const distance = trip.distance_km || (trip.total_distance_m != null ? trip.total_distance_m / 1000 : null);
+  const distanceText = distance != null ? (typeof distance === "number" ? `${distance.toFixed(1)} km` : distance) : "--";
+  const duration = trip.duration_min || (trip.total_duration_s != null ? trip.total_duration_s / 60 : null);
+  const durationText = duration != null ? (typeof duration === "number" ? `${duration.toFixed(1)} min` : duration) : "--";
   const routeName = trip.route_name || trip.route?.name || "Direct Ride";
 
   return {

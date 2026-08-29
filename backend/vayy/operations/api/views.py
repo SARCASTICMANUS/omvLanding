@@ -129,7 +129,8 @@ class DispatchRequestAPIView(APIView):
                 passenger=request.user,
                 route_id=str(serializer.validated_data["route_id"]),
                 pickup_stop_id=str(serializer.validated_data["pickup_stop_id"]),
-                mode=serializer.validated_data.get("mode", "direct")
+                drop_stop_id=str(serializer.validated_data["drop_stop_id"]) if serializer.validated_data.get("drop_stop_id") else None,
+                mode=serializer.validated_data.get("mode", "broadcast")
             )
             resp = Response(result, status=status.HTTP_202_ACCEPTED)
             return resp
@@ -492,10 +493,17 @@ class VehicleDetailAPIView(APIView):
         request,
         vehicle_id,
     ):
-        vehicle = (
-            VehicleSelector
-            .get_vehicle(vehicle_id)
-        )
+        try:
+            vehicle = (
+                VehicleSelector
+                .get_vehicle(vehicle_id)
+            )
+        except Exception:
+            logger.warning(f"[VehicleDetail] Vehicle {vehicle_id} not found")
+            return Response(
+                {"detail": "Vehicle not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         resp = Response(
             VehicleSerializer(vehicle).data
@@ -512,10 +520,18 @@ class VehicleStateAPIView(APIView):
         request,
         vehicle_id,
     ):
-        vehicle = (
-            VehicleSelector
-            .get_vehicle(vehicle_id)
-        )
+        try:
+            vehicle = (
+                VehicleSelector
+                .get_vehicle(vehicle_id)
+            )
+        except Exception:
+            logger.warning(f"[VehicleState] Vehicle {vehicle_id} not found")
+            return Response(
+                {"detail": "Vehicle not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
         state = getattr(
             vehicle,
             "state",
@@ -585,9 +601,16 @@ class ActiveTripDetailAPIView(APIView):
         request,
         trip_id,
     ):
-        trip = TripSelector.get_trip(
-            trip_id
-        )
+        try:
+            trip = TripSelector.get_trip(
+                trip_id
+            )
+        except Exception:
+            logger.warning(f"[TripDetail] Trip {trip_id} not found")
+            return Response(
+                {"detail": "Trip not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         resp = Response(
             ActiveTripSerializer(trip).data
@@ -782,10 +805,30 @@ class DispatchCompleteAPIView(APIView):
     """
     PATCH /api/dispatch/{id}/complete
     Driver or passenger completes the trip.
+    Only the assigned driver or a passenger on the trip can complete it.
     """
     permission_classes = [IsAuthenticated]
 
     def patch(self, request, trip_id):
+        try:
+            trip = ActiveTrip.objects.get(id=trip_id)
+        except ActiveTrip.DoesNotExist:
+            return Response(
+                {"success": False, "message": "Trip not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Authorization: only driver or passenger on this trip
+        is_driver = trip.driver_id == request.user.id
+        is_passenger = trip.boarding_requests.filter(
+            passenger_id=request.user.id
+        ).exists()
+        if not is_driver and not is_passenger:
+            return Response(
+                {"success": False, "message": "You are not authorized to complete this trip"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
             trip = DispatchService.complete_trip(trip_id, request.user)
             resp = Response({
@@ -915,6 +958,9 @@ class BoardingRequestListAPIView(APIView):
                 pickup_stop=serializer.validated_data[
                     "pickup_stop"
                 ],
+                drop_stop=serializer.validated_data.get(
+                    "drop_stop"
+                ),
             )
         )
 
@@ -1232,6 +1278,8 @@ class TripFareDetailAPIView(APIView):
 
     def get(self, request, trip_id):
         from operations.services.fare_service import FareService
+        from operations.services.ride_service import RideService
+        from operations.models import BoardingRequest
 
         try:
             trip = ActiveTrip.objects.get(id=trip_id)
@@ -1240,7 +1288,32 @@ class TripFareDetailAPIView(APIView):
 
         vehicle_type = trip.vehicle.vehicle_type if trip.vehicle else "bike"
 
-        # If trip has stored fare, use it (breakdown derived from stored distance)
+        # Try to find the passenger's boarding request for per-passenger fare
+        boarding_request = BoardingRequest.objects.filter(
+            trip=trip, passenger=request.user
+        ).first()
+
+        if boarding_request and boarding_request.pickup_stop and boarding_request.drop_stop:
+            # Calculate per-passenger fare
+            fare = RideService.calculate_segment_fare(
+                boarding_request.pickup_stop, boarding_request.drop_stop, vehicle_type
+            )
+            # Get distance for breakdown
+            pickup_lat = boarding_request.pickup_stop.location.y
+            pickup_lng = boarding_request.pickup_stop.location.x
+            drop_lat = boarding_request.drop_stop.location.y
+            drop_lng = boarding_request.drop_stop.location.x
+            estimate = RideService.calculate_estimate(pickup_lat, pickup_lng, drop_lat, drop_lng, vehicle_type)
+            dist_km = estimate.get("distance_km", 0)
+            dur_min = estimate.get("duration_minutes", 0)
+            breakdown = FareService.calculate_fare_breakdown(dist_km, vehicle_type, dur_min)
+            breakdown["total_fare"] = fare
+            return Response({
+                "success": True,
+                "data": breakdown,
+            })
+
+        # Fallback: route-level fare (for driver view or if no boarding request)
         if trip.total_fare is not None:
             dist_km = round(trip.total_distance_m / 1000, 2) if trip.total_distance_m else 0
             dur_min = round(trip.total_duration_s / 60, 1) if trip.total_duration_s else None
@@ -1251,7 +1324,7 @@ class TripFareDetailAPIView(APIView):
                 "data": breakdown,
             })
 
-        # Otherwise calculate from route or estimate
+        # Otherwise calculate from route
         route = trip.route
         if route and route.total_distance_meters:
             dist_km = route.total_distance_meters / 1000

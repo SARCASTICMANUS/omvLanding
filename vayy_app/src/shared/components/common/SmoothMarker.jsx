@@ -19,10 +19,10 @@ const M_PER_DEG_LAT = 111320;
 export default function SmoothMarker({
   targetLat,
   targetLng,
-  duration = 1200,
+  duration = 900,
   heading,
   speedKmh,
-  staleAfterMs = 4000,
+  staleAfterMs = 2000,
   maxDeadReckonMs = 10000,
   children,
   id,
@@ -67,10 +67,13 @@ export default function SmoothMarker({
           lng: lerp(start.lng, tgt.lng, ease),
         };
       } else if (speedKmh > 0 && heading != null) {
-        // Dead reckoning: extrapolate along last heading * speed.
+        // Dead reckoning: extrapolate along last heading * speed with decay.
         if (deadStartRef.current == null) deadStartRef.current = now;
         if (now - deadStartRef.current <= maxDeadReckonMs) {
-          const stepM = (speedKmh / 3.6) * dt;
+          // Decay speed by 10% per second so marker decelerates
+          const deadElapsed = (now - deadStartRef.current) / 1000;
+          const decay = Math.pow(0.9, deadElapsed);
+          const stepM = (speedKmh / 3.6) * dt * decay;
           const lat = currentRef.current.lat;
           const latDelta = (stepM * Math.cos((heading * Math.PI) / 180)) / M_PER_DEG_LAT;
           const lngDelta =

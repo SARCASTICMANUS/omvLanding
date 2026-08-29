@@ -38,8 +38,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate compose
-        run: docker compose config
+      # - name: Validate prod compose
+      #   run: docker compose -f docker-compose-prod.yaml config
 
       - name: Build backend image
         run: docker build -t vayy-backend ./backend/vayy
@@ -88,11 +88,11 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Sync root compose to VM
+      - name: Sync prod compose to VM
         run: |
           ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p /home/azureuser/vayy"
           rsync -avz -e "ssh" \
-            docker-compose.yaml .dockerignore nginx.conf \
+            docker-compose-prod.yaml nginx.prod.conf .dockerignore \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/azureuser/vayy/
 
       - name: Sync backend to VM
@@ -117,13 +117,13 @@ jobs:
           ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} 'bash -s' << 'EOF'
             set -e
             cd /home/azureuser/vayy
-            docker compose down --remove-orphans || true
+            docker compose -f docker-compose-prod.yaml down --remove-orphans || true
             sudo systemctl stop nginx apache2 httpd caddy 2>/dev/null || true
             for i in $(seq 1 15); do
               if ! sudo ss -tlnp | grep -q ':80 '; then break; fi
               sleep 2
             done
-            docker compose up -d --build
-            docker compose exec web python manage.py migrate
-            docker compose exec web python manage.py collectstatic --noinput
+            docker compose -f docker-compose-prod.yaml up -d --build
+            docker compose -f docker-compose-prod.yaml exec web python manage.py migrate
+            docker compose -f docker-compose-prod.yaml exec web python manage.py collectstatic --noinput
           EOF

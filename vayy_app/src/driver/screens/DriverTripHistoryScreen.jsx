@@ -167,7 +167,7 @@ export default function DriverTripHistoryScreen({ navigation, route }) {
             <Ionicons name="wallet-outline" size={18} color={accent} />
             <Text style={styles.paymentTitle}>Payment</Text>
             <View style={[styles.paymentBadge, { backgroundColor: accent + "20" }]}>
-              <Text style={[styles.paymentBadgeText, { color: accent }]}>Paid via UPI</Text>
+              <Text style={[styles.paymentBadgeText, { color: accent }]}>{lastTrip?.payment_method || "—"}</Text>
             </View>
           </View>
 

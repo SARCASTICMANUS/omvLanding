@@ -534,6 +534,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
                   navigation.navigate("BikeSearching", {
                     route_id: routeId,
                     pickup_stop_id: trip?.pickup_stop?.id,
+                    drop_stop_id: trip?.dropoff_stop?.id,
                     pickup: pickup,
                     pickupName: pickupName,
                     destination: dropoffName,

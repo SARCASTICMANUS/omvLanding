@@ -39,7 +39,7 @@ export function BikeSearchingScreen({ navigation, route }) {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [searchStatus, setSearchStatus] = useState("locating");
   const timerRef = useRef(null);
-  const { route_id, pickup_stop_id } = route?.params || {};
+  const { route_id, pickup_stop_id, drop_stop_id } = route?.params || {};
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
   const [currentPosition, setCurrentPosition] = useState(null);
@@ -211,6 +211,7 @@ export function BikeSearchingScreen({ navigation, route }) {
         const result = await dispatch(requestDispatch({
           route_id,
           pickup_stop_id,
+          drop_stop_id,
           mode: "broadcast",
         })).unwrap();
         const payload = result.data || result;
@@ -265,6 +266,7 @@ export function BikeSearchingScreen({ navigation, route }) {
         const result = await dispatch(requestDispatch({
           route_id,
           pickup_stop_id,
+          drop_stop_id,
           mode: "broadcast",
         })).unwrap();
         const payload = result.data || result;
@@ -509,7 +511,7 @@ export function BikeSearchingScreen({ navigation, route }) {
           <View style={styles.availDivider} />
           <View style={styles.availItem}>
             <Ionicons name="time-outline" size={18} color="#009849" />
-            <Text style={styles.availText}><Text style={styles.availBold}>~2 min</Text> avg. wait</Text>
+            <Text style={styles.availText}><Text style={styles.availBold}>- min</Text> avg. wait</Text>
           </View>
         </View>
 

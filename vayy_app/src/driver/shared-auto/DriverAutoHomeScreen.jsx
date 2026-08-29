@@ -5,10 +5,11 @@ import {
   Easing,
   FlatList,
   Pressable,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -16,10 +17,10 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
+import LocationSearch from "../../shared/components/common/LocationSearch";
 import COLORS from "../../shared/constants/colors";
 import SHADOW from "../../shared/constants/shadow";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { NOMINATIM_SEARCH, STORAGE_KEYS } from "../../constants";
+import { getRecentSearches, saveRecentSearch } from "../../shared/services/searchHistoryService";
 import { useSelector } from "react-redux";
 
 const { width } = Dimensions.get("window");
@@ -146,19 +147,22 @@ export default function DriverAutoHomeScreen({ navigation }) {
 
   const loadRecentSearches = async () => {
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEYS.driverRecentSearchesAuto);
-      if (stored) setRecentSearches(JSON.parse(stored));
+      const data = await getRecentSearches();
+      setRecentSearches(Array.isArray(data) ? data : []);
     } catch {}
   };
 
-  const saveRecentSearch = async (pick, dest) => {
+  const persistRecentSearch = async (pick, dest) => {
     try {
-      const entry = { pickup: pick, destination: dest };
-      const updated = [entry, ...recentSearches.filter(
-        (r) => r.pickup?.name !== pick?.name || r.destination?.name !== dest?.name,
-      )].slice(0, 5);
-      setRecentSearches(updated);
-      await AsyncStorage.setItem(STORAGE_KEYS.driverRecentSearchesAuto, JSON.stringify(updated));
+      await saveRecentSearch({
+        pickup_name: pick?.name || pick?.display_name || "",
+        pickup_lat: pick?.lat || 0,
+        pickup_lon: pick?.lon || 0,
+        destination_name: dest?.name || dest?.display_name || "",
+        destination_lat: dest?.lat || 0,
+        destination_lon: dest?.lon || 0,
+      });
+      loadRecentSearches();
     } catch {}
   };
 
@@ -277,7 +281,7 @@ export default function DriverAutoHomeScreen({ navigation }) {
 
   const handleNext = () => {
     if (!canProceed) return;
-    saveRecentSearch(pickup, destination);
+    persistRecentSearch(pickup, destination);
     navigation.navigate("DriverRouteSearch", { pickup, destination, mode: "auto" });
   };
 
