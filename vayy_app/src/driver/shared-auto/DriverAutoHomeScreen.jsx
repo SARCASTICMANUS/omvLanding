@@ -3,10 +3,6 @@ import {
   Animated,
   Dimensions,
   Easing,
-  FlatList,
-  Pressable,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -28,108 +24,6 @@ const { width } = Dimensions.get("window");
 const heroImages = [
   require("../../../assets-webp/vayyAuto.webp"),
 ];
-
-function LocationSearch({ label, placeholder, value, onSelect }) {
-  const [query, setQuery] = useState(value?.name || value?.display_name || "");
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [hasSelection, setHasSelection] = useState(Boolean(value));
-  const [searchError, setSearchError] = useState(false);
-  const isPickup = label === "Start Point";
-
-  useEffect(() => {
-    if (hasSelection) return;
-    if (!query || query.length < 3) {
-      setResults([]);
-      return;
-    }
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      setSearchError(false);
-      try {
-        const data = await NOMINATIM_SEARCH(query);
-        setResults(Array.isArray(data) ? data : []);
-      } catch {
-        setResults([]);
-        setSearchError(true);
-      } finally {
-        setLoading(false);
-      }
-    }, 500);
-    return () => { controller.abort(); clearTimeout(timer); };
-  }, [hasSelection, query]);
-
-  const handleSelect = (item) => {
-    const next = {
-      lat: Number(item.lat), lon: Number(item.lon),
-      name: item.name || item.display_name?.split(",")?.[0],
-      display_name: item.display_name,
-    };
-    setQuery(next.display_name || next.name || "");
-    setResults([]);
-    setLoading(false);
-    setHasSelection(true);
-    onSelect(next);
-  };
-
-  const handleChangeText = (text) => {
-    setQuery(text);
-    setHasSelection(false);
-    setSearchError(false);
-    if (text.length < 3) { setResults([]); }
-  };
-
-  const showResults = results.length > 0;
-
-  return (
-    <View style={styles.fieldWrap}>
-      <View style={styles.fieldHead}>
-        <View style={[styles.fieldDot, { backgroundColor: isPickup ? COLORS.primary : "#EF4444" }]} />
-        <Text style={styles.fieldLabel}>{label}</Text>
-      </View>
-      <View style={styles.fieldInput}>
-        <Ionicons name="search" size={16} color="#9CA3AF" style={{ marginRight: 8 }} />
-        <TextInput
-          autoCapitalize="none"
-          onChangeText={handleChangeText}
-          placeholder={placeholder}
-          placeholderTextColor="#9CA3AF"
-          style={styles.fieldText}
-          value={query}
-        />
-        {query.length > 0 && !hasSelection && (
-          <TouchableOpacity onPress={() => { setQuery(""); setResults([]); }}>
-            <Ionicons name="close-circle" size={16} color="#D1D5DB" />
-          </TouchableOpacity>
-        )}
-      </View>
-      {showResults ? (
-        <View style={styles.dropdownInline}>
-          <FlatList
-            data={results}
-            keyboardShouldPersistTaps="handled"
-            scrollEnabled={false}
-            keyExtractor={(item) => String(item.place_id)}
-            renderItem={({ item }) => (
-              <Pressable onPress={() => handleSelect(item)} style={styles.resultRow}>
-                <Ionicons name="location-outline" size={16} color="#9CA3AF" style={{ marginRight: 10 }} />
-                <View style={{ flex: 1 }}>
-                  <Text numberOfLines={1} style={styles.resultTitle}>
-                    {item.name || item.display_name?.split(",")?.[0]}
-                  </Text>
-                  <Text numberOfLines={2} style={styles.resultSub}>{item.display_name}</Text>
-                </View>
-              </Pressable>
-            )}
-          />
-        </View>
-      ) : loading ? <Text style={styles.searching}>Searching...</Text> : searchError ? (
-        <Text style={[styles.searching, { color: "#EF4444" }]}>Search failed. Check connection and try again.</Text>
-      ) : null}
-    </View>
-  );
-}
 
 export default function DriverAutoHomeScreen({ navigation }) {
   const [pickup, setPickup] = useState(null);
