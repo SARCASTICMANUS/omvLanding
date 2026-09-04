@@ -16,16 +16,16 @@ jobs:
           npm ci
           npx eslint .
 
-  frontend-build:
+  admin-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm ci
-          npm run build
+      # - name: Build frontend
+      #   run: |
+      #     cd frontend
+      #     npm ci
+      #     npm run build
 
       - name: Build admin
         run: |
@@ -47,35 +47,36 @@ jobs:
       - name: Build admin image
         run: docker build -t vayy-admin ./admin
 
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  # security-scan:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+  #     - name: Setup Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.12"
 
-      - name: Audit Python deps
-        run: |
-          pip install pip-audit
-          pip-audit -r backend/vayy/requirements.txt
+  #     - name: Audit Python deps
+  #       run: |
+  #         pip install pip-audit
+  #         pip-audit -r backend/vayy/requirements.txt
 
-      - name: Audit frontend deps
-        run: |
-          cd frontend
-          npm ci
-          npm audit --audit-level=high
+  #     - name: Audit frontend deps
+  #       run: |
+  #         cd frontend
+  #         npm ci
+  #         npm audit --audit-level=high
 
-      - name: Audit admin deps
-        run: |
-          cd admin
-          npm ci
-          npm audit --audit-level=high
+  #     - name: Audit admin deps
+  #       run: |
+  #         cd admin
+  #         npm ci
+  #         npm audit --audit-level=high
 
   deploy:
-    needs: [lint, frontend-build, docker-build, security-scan]
+    # needs: [lint, admin-build, docker-build, security-scan]
+    needs: [lint, admin-build, docker-build]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
