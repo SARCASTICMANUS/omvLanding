@@ -11,7 +11,6 @@ import DriverNavigator from "./DriverNavigator";
 import PassengerNavigator from "./PassengerNavigator";
 import AdminScreen from "../admin/screens/AdminScreen";
 import SplashCarouselScreen from "../passenger/splash/SplashCarouselScreen";
-import NotificationRoot from "../shared/components/common/NotificationRoot";
 import { DRIVER_ROLES, STORAGE_KEYS } from "../constants";
 
 const Stack = createStackNavigator();
@@ -65,7 +64,6 @@ export default function AppNavigator() {
           <Stack.Screen name="PassengerNavigator" component={PassengerNavigator} />
           <Stack.Screen name="AdminScreen" component={AdminScreen} />
         </Stack.Navigator>
-        <NotificationRoot />
       </View>
     </NavigationContainer>
   );

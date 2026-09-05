@@ -17,10 +17,15 @@ export default function useNotificationListener(toastRef) {
   const { user } = useSelector((state) => state.auth);
   const userId = user?.id;
   const navigationRef = useRef(navigation);
+  const dispatchRef = useRef(dispatch);
 
   useEffect(() => {
     navigationRef.current = navigation;
   }, [navigation]);
+
+  useEffect(() => {
+    dispatchRef.current = dispatch;
+  }, [dispatch]);
 
   useEffect(() => {
     if (!userId) return;
@@ -32,7 +37,7 @@ export default function useNotificationListener(toastRef) {
         const notification = normalizeNotification(data);
         if (!notification) return;
 
-        dispatch(addNotification(notification));
+        dispatchRef.current(addNotification(notification));
 
         toastRef.current?.show({
           id: notification.id,
@@ -46,7 +51,7 @@ export default function useNotificationListener(toastRef) {
     });
 
     return unsub;
-  }, [userId, dispatch]);
+  }, [userId]);
 }
 
 function normalizeNotification(data) {

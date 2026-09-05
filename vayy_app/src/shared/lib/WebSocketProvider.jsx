@@ -16,17 +16,6 @@ export function WebSocketProvider({ children }) {
     broadcastId: null,
   });
 
-  useEffect(() => {
-    if (userId) {
-      socketManager.keepAlive(WS.notifications(userId));
-    }
-    return () => {
-      if (userId) {
-        socketManager.releaseKeepAlive(WS.notifications(userId));
-      }
-    };
-  }, [userId]);
-
   const setChannelIds = useCallback((ids) => {
     setActiveIds((prev) => {
       if (
