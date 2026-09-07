@@ -29,10 +29,10 @@ import ZoomControls from "../../shared/components/common/ZoomControls";
 const { height } = Dimensions.get("window");
 
 const VEHICLE_IMAGES = [
-  require("../../../assets-webp/vayyWithoutPassengerBike.webp"),
-  require("../../../assets-webp/vayyWithoutPassengerBike2.webp"),
-  require("../../../assets-webp/vayyWithoutPassengerBike3.webp"),
-  require("../../../assets-webp/vayyWithoutPassengerBike4.webp"),
+  require("../../../assets/vayyWithoutPassengerBike.webp"),
+  require("../../../assets/vayyWithoutPassengerBike2.webp"),
+  require("../../../assets/vayyWithoutPassengerBike3.webp"),
+  require("../../../assets/vayyWithoutPassengerBike4.webp"),
 ];
 
 const CHECKS = [
@@ -589,7 +589,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
         <Animated.View style={[styles.verifyOverlay, { transform: [{ translateY: verifyTranslate }], opacity: verifyOpacity }]}>
           <View style={[styles.verifyCard, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
             <View style={styles.vCardHeader}>
-              <Image source={require("../../../assets-webp/vayyFrontBike.webp")} style={{ width: 16, height: 16, opacity: 0.5 }} resizeMode="contain" />
+              <Image source={require("../../../assets/vayyFrontBike.webp")} style={{ width: 16, height: 16, opacity: 0.5 }} resizeMode="contain" />
               <Text style={styles.vCardHeaderText}>Pre-Ride Check</Text>
             </View>
 

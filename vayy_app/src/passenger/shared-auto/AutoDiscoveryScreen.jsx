@@ -146,7 +146,7 @@ export function AutoDiscoveryScreen({ navigation }) {
                     ]}
                   >
                     <Image
-                      source={require("../../../assets-webp/vayyTopAuto.webp")}
+                      source={require("../../../assets/vayyTopAuto.webp")}
                       style={{ width: isNearest ? 34 : 28, height: isNearest ? 34 : 28 }}
                       resizeMode="contain"
                     />
@@ -211,7 +211,7 @@ export function AutoDiscoveryScreen({ navigation }) {
             <View style={styles.foundDetails}>
               <View style={styles.foundRow}>
                 <Image
-                  source={require("../../../assets-webp/vayyFrontAuto.webp")}
+                  source={require("../../../assets/vayyFrontAuto.webp")}
                   style={{ width: 16, height: 16 }}
                   resizeMode="contain"
                 />
@@ -259,7 +259,7 @@ export function AutoDiscoveryScreen({ navigation }) {
                       ]}
                     >
                       <Image
-                        source={require("../../../assets-webp/vayyFrontAuto.webp")}
+                        source={require("../../../assets/vayyFrontAuto.webp")}
                         style={{ width: 18, height: 18 }}
                         resizeMode="contain"
                       />
@@ -300,7 +300,7 @@ export function AutoDiscoveryScreen({ navigation }) {
           <View style={styles.modalContent}>
             <View style={styles.modalIconWrap}>
               <Image
-                source={require("../../../assets-webp/vayyAutoBoarding.webp")}
+                source={require("../../../assets/vayyAutoBoarding.webp")}
                 style={{ width: 120, height: 120 }}
                 resizeMode="contain"
               />

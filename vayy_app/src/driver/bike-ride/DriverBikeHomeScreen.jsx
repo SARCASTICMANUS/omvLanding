@@ -25,7 +25,7 @@ import { getRecentSearches, saveRecentSearch } from "../../shared/services/searc
 import { useSelector } from "react-redux";
 
 const SHEET_COMPACT = 240;
-const BIKE_TOP_IMAGE = require("../../../assets-webp/vayyTopBike1.webp");
+const BIKE_TOP_IMAGE = require("../../../assets/vayyTopBike1.webp");
 
 export default function DriverBikeHomeScreen({ navigation }) {
   const { height: windowHeight } = useWindowDimensions();

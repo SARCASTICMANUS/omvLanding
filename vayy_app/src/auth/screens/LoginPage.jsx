@@ -74,7 +74,7 @@ const LoginPage = ({ navigation }) => {
         {/* Hero Image */}
         <View style={styles.heroContainer}>
           <Image
-            source={require("../../../assets-webp/loginVayy.png")}
+            source={require("../../../assets/loginVayy.png")}
             style={styles.heroImage}
             // resizeMode="fill"
           />

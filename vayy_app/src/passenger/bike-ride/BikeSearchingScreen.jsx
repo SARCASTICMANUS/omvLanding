@@ -25,7 +25,7 @@ import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import locationService from "../../shared/lib/locationService";
 
-const USER_TOP_IMAGE = require("../../../assets-webp/VayyUserTop.webp");
+const USER_TOP_IMAGE = require("../../../assets/VayyUserTop.webp");
 
 
 export function BikeSearchingScreen({ navigation, route }) {
@@ -505,7 +505,7 @@ export function BikeSearchingScreen({ navigation, route }) {
 
         <View style={styles.availabilityRow}>
           <View style={styles.availItem}>
-            <Image source={require("../../../assets-webp/vayyFrontBike.webp")} style={{ width: 18, height: 18 }} resizeMode="contain" />
+            <Image source={require("../../../assets/vayyFrontBike.webp")} style={{ width: 18, height: 18 }} resizeMode="contain" />
             <Text style={styles.availText}><Text style={styles.availBold}>{driversNotified ?? "—"}</Text> Marshals nearby</Text>
           </View>
           <View style={styles.availDivider} />

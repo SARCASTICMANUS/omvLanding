@@ -13,7 +13,7 @@ const VEHICLES = [
     subtitle: "Drive passengers on fixed routes",
     icon: (active) => (
       <View style={[styles.vIcon, active && styles.vIconActive]}>
-        <Image source={require("../../../../assets-webp/vayyFrontAuto.webp")} style={{ width: 36, height: 36 }} resizeMode="contain" />
+        <Image source={require("../../../../assets/vayyFrontAuto.webp")} style={{ width: 36, height: 36 }} resizeMode="contain" />
       </View>
     ),
   },
