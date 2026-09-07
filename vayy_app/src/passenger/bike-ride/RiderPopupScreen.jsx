@@ -233,7 +233,7 @@ export function RiderPopupScreen({ navigation, route }) {
           <UserLocation visible={true} showsUserHeadingIndicator={true} />
           {passengerPos && (
             <Marker lngLat={[passengerPos.longitude, passengerPos.latitude]}>
-              <Image source={require("../../../assets-webp/VayyUserTop.webp")} style={styles.userMarker} resizeMode="contain" />
+              <Image source={require("../../../assets/VayyUserTop.webp")} style={styles.userMarker} resizeMode="contain" />
             </Marker>
           )}
           {driverPos && (

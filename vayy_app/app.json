@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "vayy-autos",
-    "slug": "vayy-autos",
+    "name": "OMV-onmyvayy",
+    "slug": "OMV-onmyvayy",
     "version": "54.0.8",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon.jpeg",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/splash.jpeg",
       "resizeMode": "contain",
       "backgroundColor": "#F8FAF9"
     },
@@ -16,14 +16,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.vayy.autos"
+      "bundleIdentifier": "com.onmyvayy.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F8FAF9"
       },
-      "package": "com.vayy.autos",
+      "package": "com.onmyvayy.app",
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
@@ -34,7 +34,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow vayy-autos to access your location even when the app is in the background."
+          "locationAlwaysAndWhenInUsePermission": "Allow OMV-onmyvayy to access your location even when the app is in the background."
         }
       ],
       "expo-notifications",

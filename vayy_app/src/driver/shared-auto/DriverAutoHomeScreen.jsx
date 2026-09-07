@@ -22,7 +22,7 @@ import { useSelector } from "react-redux";
 const { width } = Dimensions.get("window");
 
 const heroImages = [
-  require("../../../assets-webp/vayyAuto.webp"),
+  require("../../../assets/vayyAuto.webp"),
 ];
 
 export default function DriverAutoHomeScreen({ navigation }) {

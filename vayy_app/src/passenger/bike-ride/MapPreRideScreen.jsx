@@ -18,7 +18,7 @@ import { fetchRouteGeometry } from "../../routes/services/routeService";
 
 const ARRIVAL_THRESHOLD = 500;
 
-const USER_TOP_IMAGE = require("../../../assets-webp/VayyUserTop.webp");
+const USER_TOP_IMAGE = require("../../../assets/VayyUserTop.webp");
 
 function haversine(a, b) {
   const R = 6371e3;
@@ -511,7 +511,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           <View style={styles.modalContent}>
             <View style={styles.modalIconWrap}>
               <Image
-                source={require("../../../assets-webp/VayyHandRaise.webp")}
+                source={require("../../../assets/VayyHandRaise.webp")}
                 style={{ width: 120, height: 120 }}
                 resizeMode="contain"
               />

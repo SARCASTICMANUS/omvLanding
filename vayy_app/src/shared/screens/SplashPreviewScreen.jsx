@@ -16,11 +16,11 @@ import COLORS from "../constants/colors";
 const { width, height } = Dimensions.get("window");
 
 const SPLASH_IMAGES = [
-  { key: "splash1", source: require("../../../assets-webp/splash1.png"), headline: "Still Waiting?", subtitle: "Your daily commute shouldn't start with a long wait." },
-  { key: "splash2", source: require("../../../assets-webp/splash2.png"), headline: "Too Crowded.\nToo Slow.", subtitle: "Skip packed buses and unpredictable waits." },
-  { key: "splash3", source: require("../../../assets-webp/splash3.png"), headline: "Someone's Already\nGoing Your Way.", subtitle: "Find a ride already moving along your route." },
-  { key: "splash4", source: require("../../../assets-webp/splash4.png"), headline: "Share the Journey.", subtitle: "Marshals pick up Buddies along their route." },
-  { key: "splash5", source: require("../../../assets-webp/splash5.png"), headline: "Stop Waiting.\nStart Moving.", subtitle: "Join onmyvayy"},
+  { key: "splash1", source: require("../../../assets/splash1.png"), headline: "Still Waiting?", subtitle: "Your daily commute shouldn't start with a long wait." },
+  { key: "splash2", source: require("../../../assets/splash2.png"), headline: "Too Crowded.\nToo Slow.", subtitle: "Skip packed buses and unpredictable waits." },
+  { key: "splash3", source: require("../../../assets/splash3.png"), headline: "Someone's Already\nGoing Your Way.", subtitle: "Find a ride already moving along your route." },
+  { key: "splash4", source: require("../../../assets/splash4.png"), headline: "Share the Journey.", subtitle: "Marshals pick up Buddies along their route." },
+  { key: "splash5", source: require("../../../assets/splash5.png"), headline: "Stop Waiting.\nStart Moving.", subtitle: "Join onmyvayy"},
 ];
 
 function Slide({ item }) {

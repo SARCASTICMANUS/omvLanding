@@ -15,9 +15,9 @@ import { setVehicleMode } from "../../store/slices/vehicleModeSlice";
 import { MaterialIcons } from "@expo/vector-icons";
 import { NOMINATIM_REVERSE } from "../../constants";
 
-const AUTO_IMG = require("../../../assets-webp/vayySideAuto.webp");
-const BIKE_IMG = require("../../../assets-webp/vayyPulsureBike.webp");
-const NAMASTE_ICON = require("../../../assets-webp/vayyNamaste.webp");
+const AUTO_IMG = require("../../../assets/vayySideAuto.webp");
+const BIKE_IMG = require("../../../assets/vayyPulsureBike.webp");
+const NAMASTE_ICON = require("../../../assets/vayyNamaste.webp");
 
 const GREEN = "#009849";
 const GREEN_DARK = "#007a3a";

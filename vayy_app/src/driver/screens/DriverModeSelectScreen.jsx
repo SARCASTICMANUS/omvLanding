@@ -4,8 +4,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
 
-const bikeImg = require("../../../assets-webp/vayyBike.webp");
-const autoImg = require("../../../assets-webp/vayyAuto.webp");
+const bikeImg = require("../../../assets/vayyBike.webp");
+const autoImg = require("../../../assets/vayyAuto.webp");
 
 export default function DriverModeSelectScreen({ navigation }) {
   const insets = useSafeAreaInsets();
