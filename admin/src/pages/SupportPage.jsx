@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 const PRIVACY_SECTIONS = [
   { title: "Information We Collect", text: "We collect your name, email, phone number, profile info, location data, route preferences, and trip history to provide our ride-sharing services." },
@@ -27,8 +27,16 @@ const SUPPORT_CONTACTS = [
 
 export default function SupportPage() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("privacy");
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "privacy");
   const [openFaq, setOpenFaq] = useState(null);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && ["privacy", "faq", "contact"].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#003923] via-[#00653a] to-[#009849] font-manrope">
