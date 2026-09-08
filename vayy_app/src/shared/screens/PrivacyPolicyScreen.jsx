@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar } from 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../constants/colors";
+import { PRIVACY_POLICY } from "../../data/landingPageData";
 
 export default function PrivacyPolicyScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -25,50 +26,21 @@ export default function PrivacyPolicyScreen({ navigation }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.lastUpdated}>Last updated: July 2026</Text>
+        <Text style={styles.lastUpdated}>Last updated: {PRIVACY_POLICY.lastUpdated}</Text>
+        <Text style={styles.paragraph}>{PRIVACY_POLICY.intro}</Text>
 
-        <Text style={styles.paragraph}>
-          VAYY (“we,” “our,” or “us”) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application and services.
-        </Text>
-
-        <Text style={styles.sectionTitle}>1. Information We Collect</Text>
-        <Text style={styles.paragraph}>
-          We collect information that you provide directly to us, including your name, email address, phone number, and profile information when you create an account. We also collect location data, route preferences, and trip history to provide our ride-sharing and transit services.
-        </Text>
-        <Text style={styles.paragraph}>
-          When you use our app, we automatically collect certain information, including device type, operating system, app usage data, and precise location data when the app is in use.
-        </Text>
-
-        <Text style={styles.sectionTitle}>2. How We Use Your Information</Text>
-        <Text style={styles.paragraph}>
-          We use the information we collect to:
-        </Text>
-        <Text style={styles.bullet}>• Match you with routes and Marshals</Text>
-        <Text style={styles.bullet}>• Provide real-time tracking and navigation</Text>
-        <Text style={styles.bullet}>• Process payments and trips</Text>
-        <Text style={styles.bullet}>• Improve our services and user experience</Text>
-        <Text style={styles.bullet}>• Communicate with you about your trips</Text>
-        <Text style={styles.bullet}>• Ensure safety and security of our platform</Text>
-
-        <Text style={styles.sectionTitle}>3. Data Sharing</Text>
-        <Text style={styles.paragraph}>
-          We may share your information with Marshals or passengers as necessary for trip coordination, with service providers who help us operate our platform, and as required by law. We do not sell your personal information to third parties.
-        </Text>
-
-        <Text style={styles.sectionTitle}>4. Data Security</Text>
-        <Text style={styles.paragraph}>
-          We implement industry-standard security measures to protect your data, including encryption in transit and at rest. However, no method of electronic storage is 100% secure, and we cannot guarantee absolute security.
-        </Text>
-
-        <Text style={styles.sectionTitle}>5. Your Rights</Text>
-        <Text style={styles.paragraph}>
-          You have the right to access, update, or delete your personal information at any time through your account settings. You may also contact us to request a copy of your data or to close your account.
-        </Text>
-
-        <Text style={styles.sectionTitle}>6. Contact Us</Text>
-        <Text style={styles.paragraph}>
-          If you have questions about this Privacy Policy, please contact us at support@vayy.app or write to us at: VAYY Mobility Pvt. Ltd., Lucknow, Uttar Pradesh, India.
-        </Text>
+        {PRIVACY_POLICY.sections.map((section, i) => (
+          <View key={i}>
+            <Text style={styles.sectionTitle}>{section.title}</Text>
+            {section.paragraphs.map((p, j) => (
+              <Text key={j} style={styles.paragraph}>{p}</Text>
+            ))}
+            {section.bullets &&
+              section.bullets.map((b, j) => (
+                <Text key={j} style={styles.bullet}>• {b}</Text>
+              ))}
+          </View>
+        ))}
       </ScrollView>
     </View>
   );

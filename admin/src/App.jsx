@@ -5,6 +5,7 @@ import Sidebar from "./components/Sidebar";
 import api from "./api/client";
 
 const Landing = lazy(() => import("./pages/Landing"));
+const SupportPage = lazy(() => import("./pages/SupportPage"));
 const Login = lazy(() => import("./pages/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Cities = lazy(() => import("./pages/Cities"));
@@ -110,6 +111,7 @@ export default function App() {
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/" element={<Landing />} />
+        <Route path="/support" element={<SupportPage />} />
         <Route
           path={ADMIN_PATH}
           element={
