@@ -20,7 +20,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/adaptive-icon.webp",
         "backgroundColor": "#F8FAF9"
       },
       "package": "com.onmyvayy.app",

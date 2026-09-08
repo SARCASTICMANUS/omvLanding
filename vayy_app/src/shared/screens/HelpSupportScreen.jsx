@@ -1,17 +1,9 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../constants/colors";
-
-const FAQS = [
-  { q: "How do I book a ride?", a: "Enter your destination on the home screen, select a route or auto match, then confirm your booking." },
-  { q: "How does route matching work?", a: "VAYY uses route-based matching. We connect you with Marshals going your way, making rides affordable and efficient." },
-  { q: "What is Hand Raise?", a: "Hand Raise lets Marshals know you're waiting at a nearby stop. Once raised, they'll see you and pick you up along the route." },
-  { q: "How do I track my ride?", a: "Once your ride starts, you can see the live location of your Marshal on the map with real-time ETA updates." },
-  { q: "How do I pay?", a: "Payments are processed via UPI or cash. Your fare is calculated based on distance and route." },
-  { q: "What if I lose something?", a: "Contact us at support@vayy.app with your trip details, and we'll help connect you with the Marshal." },
-];
+import { FAQS, SUPPORT_INFO } from "../../data/landingPageData";
 
 export default function HelpSupportScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -42,8 +34,11 @@ export default function HelpSupportScreen({ navigation }) {
             </View>
             <View style={styles.contactTextWrap}>
               <Text style={styles.contactLabel}>Email</Text>
-              <Text style={styles.contactValue}>support@vayy.app</Text>
+              <Text style={styles.contactValue}>{SUPPORT_INFO.email}</Text>
             </View>
+            <TouchableOpacity onPress={() => Linking.openURL(`mailto:${SUPPORT_INFO.email}`)}>
+              <Ionicons name="open-outline" size={18} color={COLORS.primary} />
+            </TouchableOpacity>
           </View>
           <View style={styles.contactDivider} />
           <View style={styles.contactRow}>
@@ -52,8 +47,11 @@ export default function HelpSupportScreen({ navigation }) {
             </View>
             <View style={styles.contactTextWrap}>
               <Text style={styles.contactLabel}>Phone</Text>
-              <Text style={styles.contactValue}>+91 1800-123-4567</Text>
+              <Text style={styles.contactValue}>{SUPPORT_INFO.phone}</Text>
             </View>
+            <TouchableOpacity onPress={() => Linking.openURL(`tel:${SUPPORT_INFO.phone}`)}>
+              <Ionicons name="open-outline" size={18} color={COLORS.primary} />
+            </TouchableOpacity>
           </View>
           <View style={styles.contactDivider} />
           <View style={styles.contactRow}>
@@ -62,7 +60,7 @@ export default function HelpSupportScreen({ navigation }) {
             </View>
             <View style={styles.contactTextWrap}>
               <Text style={styles.contactLabel}>Live Chat</Text>
-              <Text style={styles.contactValue}>Available 9 AM - 9 PM</Text>
+              <Text style={styles.contactValue}>{SUPPORT_INFO.liveChat}</Text>
             </View>
           </View>
         </View>
@@ -90,7 +88,7 @@ export default function HelpSupportScreen({ navigation }) {
           </TouchableOpacity>
         ))}
 
-        <Text style={styles.responseTime}>We typically respond within 24 hours</Text>
+        <Text style={styles.responseTime}>{SUPPORT_INFO.responseTime}</Text>
       </ScrollView>
     </View>
   );
