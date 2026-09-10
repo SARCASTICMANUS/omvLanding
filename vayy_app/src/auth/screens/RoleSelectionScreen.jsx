@@ -3,11 +3,13 @@ import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform } from "r
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, User, Navigation } from "lucide-react-native";
 import COLORS from "../../shared/constants/colors";
+import { useDispatch } from "react-redux";
+import { setField } from "../../store/slices/onboardingSlice";
 
 const ROLES = [
   {
     key: "passenger",
-    title: "Passenger",
+    title: "Buddy",
     subtitle: "I want to find rides.",
     icon: (active) => <User size={36} color={active ? COLORS.primary : "#9ca3af"} />,
   },
@@ -20,19 +22,16 @@ const ROLES = [
 ];
 
 export default function RoleSelectionScreen({ navigation }) {
+  const dispatch = useDispatch();
   const [selected, setSelected] = useState(null);
 
   const ctaLabel = selected
-    ? `Continue as ${selected === "passenger" ? "Passenger" : "Marshal"}`
+    ? `Continue as ${selected === "passenger" ? "Buddy" : "Marshal"}`
     : "Select your role";
 
   const handleContinue = () => {
     if (!selected) return;
-    if (selected === "passenger") {
-      navigation.navigate("PassengerRegistration");
-    } else {
-      navigation.navigate("DriverRegistration");
-    }
+    navigation.navigate("EmailVerification", { role: selected });
   };
 
   return (
@@ -42,7 +41,7 @@ export default function RoleSelectionScreen({ navigation }) {
         <ArrowLeft size={22} color={COLORS.text} />
       </TouchableOpacity>
       <View style={styles.content}>
-        <Text style={styles.hero}>How will you use VAYY?</Text>
+        <Text style={styles.hero}>How will you use OMV?</Text>
         <Text style={styles.sub}>Choose your role to get started</Text>
         <View style={styles.cardStack}>
           {ROLES.map((role) => {
@@ -51,7 +50,10 @@ export default function RoleSelectionScreen({ navigation }) {
               <TouchableOpacity
                 key={role.key}
                 style={[styles.card, active && styles.cardActive]}
-                onPress={() => setSelected(role.key)}
+                onPress={() => {
+                  dispatch(setField({ field: "role", value: role.key }));
+                  setSelected(role.key);
+                }}
                 activeOpacity={0.85}
               >
                 {active && <View style={styles.badge}><Text style={styles.badgeText}>✓</Text></View>}

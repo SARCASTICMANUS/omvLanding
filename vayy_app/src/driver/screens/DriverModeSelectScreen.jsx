@@ -14,7 +14,7 @@ export default function DriverModeSelectScreen({ navigation }) {
     <View style={[styles.root, { paddingTop: insets.top + 20 }]}>
       <View style={styles.header}>
         <Text style={styles.greeting}>Drive with</Text>
-        <Text style={styles.brand}>VAYY</Text>
+        <Text style={styles.brand}>OMV</Text>
         <Text style={styles.subtitle}>Select your vehicle to get started</Text>
       </View>
 

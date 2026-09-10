@@ -28,6 +28,7 @@ const OtpVerificationPage = ({ navigation, route }) => {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [resendDisabled, setResendDisabled] = useState(false);
   const [resendTimer, setResendTimer] = useState(30);
+  const [tosAccepted, setTosAccepted] = useState(false);
   const inputRefs = useRef([]);
 
   useEffect(() => {
@@ -145,10 +146,26 @@ const OtpVerificationPage = ({ navigation, route }) => {
             </View>
 
             <TouchableOpacity
+              style={styles.tosRow}
+              onPress={() => setTosAccepted(!tosAccepted)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, tosAccepted && styles.checkboxChecked]}>
+                {tosAccepted && <Text style={styles.checkmark}>{"\u2713"}</Text>}
+              </View>
+              <Text style={styles.tosText}>
+                I agree to the{" "}
+                <Text style={styles.tosLink} onPress={() => navigation.navigate("TermsOfService")}>
+                  Terms of Service
+                </Text>
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               activeOpacity={0.85}
-              disabled={loading || !isOtpComplete}
+              disabled={loading || !isOtpComplete || !tosAccepted}
               onPress={handleVerify}
-              style={[styles.verifyButton, (!isOtpComplete || loading) && styles.disabledButton]}
+              style={[styles.verifyButton, (!isOtpComplete || loading || !tosAccepted) && styles.disabledButton]}
             >
               {loading ? (
                 <ActivityIndicator color={COLORS.white} />
@@ -308,6 +325,29 @@ const styles = StyleSheet.create({
   resendLinkDisabled: {
     color: COLORS.textLight,
   },
+  tosRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 24,
+    gap: 10,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderMedium,
+    backgroundColor: "#fafafa",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  checkmark: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  tosText: { fontSize: 13, color: COLORS.textMuted, flex: 1 },
+  tosLink: { color: COLORS.primary, fontWeight: "700" },
 });
 
 export default OtpVerificationPage;

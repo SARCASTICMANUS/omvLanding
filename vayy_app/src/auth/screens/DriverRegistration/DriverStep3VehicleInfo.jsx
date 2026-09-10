@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Platform, KeyboardAvoidingView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft } from "lucide-react-native";
@@ -7,16 +7,31 @@ import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import ImageUploadCard from "../../components/ImageUploadCard";
 import BottomStickyButton from "../../components/BottomStickyButton";
+import { useSelector, useDispatch } from "react-redux";
+import { setField } from "../../../store/slices/onboardingSlice";
 import { VALIDATORS, VALIDATION_MESSAGES } from "../../validators";
 
 export default function DriverStep3VehicleInfo({ onNext, onBack, vehicleType }) {
+  const dispatch = useDispatch();
+  const fields = useSelector((state) => state.onboarding.fields);
   const isAuto = vehicleType === "auto";
   const [form, setForm] = useState({ vehicleNumber: "", rcNumber: "", autoType: "Standard" });
   const [photo, setPhoto] = useState(null);
   const [focused, setFocused] = useState({});
   const [errors, setErrors] = useState({});
 
-  const update = (f, v) => setForm((p) => ({ ...p, [f]: v }));
+  useEffect(() => {
+    setForm({
+      vehicleNumber: fields.vehicleNumber || "",
+      rcNumber: fields.rcNumber || "",
+      autoType: fields.autoType || "Standard",
+    });
+  }, [fields]);
+
+  const update = (f, v) => {
+    setForm((p) => ({ ...p, [f]: v }));
+    dispatch(setField({ field: f, value: v }));
+  };
 
   const validate = () => {
     const e = {};

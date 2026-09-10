@@ -12,6 +12,7 @@ export const AUTH = {
   walletAddFunds: "/api/accounts/wallet/add-funds/",
   pushToken: "/api/accounts/push-token/",
   driverDocuments: "/api/accounts/driver/documents/",
+  verificationStatus: "/api/accounts/verification-status/",
 };
 
 export const OPERATIONS = {

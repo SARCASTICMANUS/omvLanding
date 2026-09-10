@@ -161,6 +161,9 @@ export default function Landing() {
         <Link to="/support?tab=privacy" className="text-[11px] font-medium text-white/70 hover:text-white transition-colors md:text-sm">
           Privacy
         </Link>
+        <Link to="/support?tab=terms" className="text-[11px] font-medium text-white/70 hover:text-white transition-colors md:text-sm">
+          Terms
+        </Link>
         <Link to="/support?tab=faq" className="text-[11px] font-medium text-white/70 hover:text-white transition-colors md:text-sm">
           FAQ
         </Link>

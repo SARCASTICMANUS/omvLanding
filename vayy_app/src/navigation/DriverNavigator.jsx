@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
+import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import COLORS from "../shared/constants/colors";
@@ -18,6 +19,8 @@ import EditProfileScreen from "../shared/screens/EditProfileScreen";
 import PrivacyPolicyScreen from "../shared/screens/PrivacyPolicyScreen";
 import HelpSupportScreen from "../shared/screens/HelpSupportScreen";
 import BikeFindPassengerScreen from "../driver/bike-ride/BikeFindPassengerScreen";
+import VerificationPopup from "../shared/components/VerificationPopup";
+import { fetchVerificationStatus } from "../store/slices/profileSlice";
 
 // Auto Flow Screens
 import DriverAutoHomeScreen from "../driver/shared-auto/DriverAutoHomeScreen";
@@ -25,8 +28,7 @@ import AutoFindPassengerScreen from "../driver/shared-auto/AutoFindPassengerScre
 import AutoRideToPickupScreen from "../driver/shared-auto/AutoRideToPickupScreen";
 import AutoRideToDestinationScreen from "../driver/shared-auto/AutoRideToDestinationScreen";
 import AutoTripCompleteScreen from "../driver/shared-auto/AutoTripCompleteScreen";
-import MarshalWalletScreen from "../driver/bike-ride/MarshalWalletScreen";
-import { LayoutDashboard, History, User, Wallet } from "lucide-react-native";
+import { LayoutDashboard, History, User } from "lucide-react-native";
 
 // Auto Flow Screens (for future)
 import AutoAheadAlertScreen from "../driver/shared-auto/AutoAheadAlertScreen";
@@ -60,7 +62,6 @@ function DriverHomeTab({ navigation }) {
   return <DriverModeSelectScreen navigation={navigation} />;
 }
 
-
 function DriverTabs() {
   const insets = useSafeAreaInsets();
 
@@ -88,41 +89,94 @@ function DriverTabs() {
     >
       <Tab.Screen name="DriverModeSelect" component={DriverHomeTab} options={{ title: "Home", tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} /> }} />
       <Tab.Screen name="DriverRoutes" component={DriverTripHistoryScreen} initialParams={{ list: true }} options={{ title: "My Trips", tabBarIcon: ({ color, size }) => <History size={size} color={color} /> }} />
-      <Tab.Screen name="DriverWallet" component={MarshalWalletScreen} options={{ title: "Wallet", tabBarIcon: ({ color, size }) => <Wallet size={size} color={color} /> }} />
       <Tab.Screen name="ProfileScreen" component={ProfileScreen} options={{ title: "Profile", tabBarIcon: ({ color, size }) => <User size={size} color={color} /> }} />
     </Tab.Navigator>
   );
 }
 
 export default function DriverNavigator() {
+  const [showVerification, setShowVerification] = useState(false);
+  const dismissedRef = useRef(false);
+  const dispatch = useDispatch();
+  const navigation = useNavigation();
+
+  const checkVerification = () => {
+    if (dismissedRef.current) return;
+    dispatch(fetchVerificationStatus())
+      .unwrap()
+      .then((res) => {
+        const s = res?.status;
+        if (s && s !== "verified" && !dismissedRef.current) {
+          setShowVerification(true);
+        } else {
+          setShowVerification(false);
+        }
+      })
+      .catch(() => {
+        if (!dismissedRef.current) {
+          setShowVerification(true);
+        }
+      });
+  };
+
+  useEffect(() => { checkVerification(); }, [dispatch]);
+
+  // Re-check on stack state changes (push/pop within stack)
+  useEffect(() => {
+    const unsub = navigation.addListener("state", () => {
+      checkVerification();
+    });
+    return unsub;
+  }, [navigation, dispatch]);
+
+  // Reset dismissed flag when navigator loses focus (e.g. logout/switch role)
+  useEffect(() => {
+    const unsub = navigation.addListener("blur", () => {
+      dismissedRef.current = false;
+    });
+    return unsub;
+  }, [navigation]);
+
+  const handleDismiss = () => {
+    dismissedRef.current = true;
+    setShowVerification(false);
+  };
+
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="DriverTabs" component={DriverTabs} />
-      <Stack.Screen name="DriverRouteSearch" component={DriverRouteList} />
-      <Stack.Screen name="DriverBikeHome" component={DriverBikeHomeScreen} />
-      <Stack.Screen name="DriverTripReview" component={DriverTripReview} />
-      <Stack.Screen name="DriverLiveTracking" component={DriverLiveTracking} />
-      <Stack.Screen name="DriverTripHistoryScreen" component={DriverTripHistoryScreen} />
-      <Stack.Screen name="VehicleSelectionScreen" component={VehicleSelectionScreen} />
-      <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
-      <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
-      <Stack.Screen name="FindPassenger" component={BikeFindPassengerScreen} />
-      <Stack.Screen name="DriverFindPassengers" component={DriverFindPassengersScreen} />
-      <Stack.Screen name="AheadAlert" component={AutoAheadAlertScreen} />
-      <Stack.Screen name="BoardedPopup" component={AutoBoardedPopupScreen} />
-      <Stack.Screen name="AutoRideActive" component={AutoLiveTrackingScreen} />
-      <Stack.Screen name="BikeSearching" component={BikeSearchingScreen} />
-      <Stack.Screen name="BikeOTPEntry" component={BikeOTPEntryScreen} />
-      <Stack.Screen name="BikeRideToPickup" component={BikeRideToPickupScreen} />
-      <Stack.Screen name="BikeRideToDestination" component={BikeRideToDestinationScreen} />
-      <Stack.Screen name="BikeTripComplete" component={BikeTripCompleteScreen} />
-      <Stack.Screen name="TripEndSummary" component={TripEndSummary} />
-      <Stack.Screen name="DriverAutoHome" component={DriverAutoHomeScreen} />
-      <Stack.Screen name="AutoFindPassenger" component={AutoFindPassengerScreen} />
-      <Stack.Screen name="AutoRideToPickup" component={AutoRideToPickupScreen} />
-      <Stack.Screen name="AutoRideToDestination" component={AutoRideToDestinationScreen} />
-      <Stack.Screen name="AutoTripComplete" component={AutoTripCompleteScreen} />
-    </Stack.Navigator>
+    <>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="DriverTabs" component={DriverTabs} />
+        <Stack.Screen name="DriverRouteSearch" component={DriverRouteList} />
+        <Stack.Screen name="DriverBikeHome" component={DriverBikeHomeScreen} />
+        <Stack.Screen name="DriverTripReview" component={DriverTripReview} />
+        <Stack.Screen name="DriverLiveTracking" component={DriverLiveTracking} />
+        <Stack.Screen name="DriverTripHistoryScreen" component={DriverTripHistoryScreen} />
+        <Stack.Screen name="VehicleSelectionScreen" component={VehicleSelectionScreen} />
+        <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+        <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+        <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
+        <Stack.Screen name="FindPassenger" component={BikeFindPassengerScreen} />
+        <Stack.Screen name="DriverFindPassengers" component={DriverFindPassengersScreen} />
+        <Stack.Screen name="AheadAlert" component={AutoAheadAlertScreen} />
+        <Stack.Screen name="BoardedPopup" component={AutoBoardedPopupScreen} />
+        <Stack.Screen name="AutoRideActive" component={AutoLiveTrackingScreen} />
+        <Stack.Screen name="BikeSearching" component={BikeSearchingScreen} />
+        <Stack.Screen name="BikeOTPEntry" component={BikeOTPEntryScreen} />
+        <Stack.Screen name="BikeRideToPickup" component={BikeRideToPickupScreen} />
+        <Stack.Screen name="BikeRideToDestination" component={BikeRideToDestinationScreen} />
+        <Stack.Screen name="BikeTripComplete" component={BikeTripCompleteScreen} />
+        <Stack.Screen name="TripEndSummary" component={TripEndSummary} />
+        <Stack.Screen name="DriverAutoHome" component={DriverAutoHomeScreen} />
+        <Stack.Screen name="AutoFindPassenger" component={AutoFindPassengerScreen} />
+        <Stack.Screen name="AutoRideToPickup" component={AutoRideToPickupScreen} />
+        <Stack.Screen name="AutoRideToDestination" component={AutoRideToDestinationScreen} />
+        <Stack.Screen name="AutoTripComplete" component={AutoTripCompleteScreen} />
+      </Stack.Navigator>
+      <VerificationPopup
+        visible={showVerification}
+        onDismiss={handleDismiss}
+        navigation={navigation}
+      />
+    </>
   );
 }

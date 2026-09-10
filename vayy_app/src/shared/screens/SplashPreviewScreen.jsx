@@ -20,7 +20,7 @@ const SPLASH_IMAGES = [
   { key: "splash2", source: require("../../../assets/splash2.png"), headline: "Too Crowded.\nToo Slow.", subtitle: "Skip packed buses and unpredictable waits." },
   { key: "splash3", source: require("../../../assets/splash3.png"), headline: "Someone's Already\nGoing Your Way.", subtitle: "Find a ride already moving along your route." },
   { key: "splash4", source: require("../../../assets/splash4.png"), headline: "Share the Journey.", subtitle: "Marshals pick up Buddies along their route." },
-  { key: "splash5", source: require("../../../assets/splash5.png"), headline: "Stop Waiting.\nStart Moving.", subtitle: "Join onmyvayy"},
+  { key: "splash5", source: require("../../../assets/splash5.png"), headline: "Stop Waiting.\nStart Moving.", subtitle: "Join OMV"},
 ];
 
 function Slide({ item }) {
@@ -41,8 +41,6 @@ function Slide({ item }) {
         {item.vayy ? (
           <Text style={styles.subtitleText}>
             {item.subtitle}
-            <Text style={styles.vayyText}>Vayy</Text>
-            <Text style={styles.subtitleText}>.</Text>
           </Text>
         ) : (
           <Text style={styles.subtitleText}>{item.subtitle}</Text>

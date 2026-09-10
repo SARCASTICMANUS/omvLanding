@@ -37,7 +37,7 @@ export default function MapPlaceholder({ accent = colors.primary, vehicle = "ðŸ›
         <View style={[styles.pin, { backgroundColor: accent }]} />
       </View>
       <Animated.Text style={[styles.vehicle, { transform: [{ translateX: vehicleMove }] }]}>{vehicle}</Animated.Text>
-      <Text style={styles.mapLabel}>VAYY LIVE MAP</Text>
+      <Text style={styles.mapLabel}>OMV LIVE MAP</Text>
     </View>
   );
 }

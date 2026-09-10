@@ -1,14 +1,19 @@
-import React, { useState } from "react";
-import { useDispatch } from "react-redux";
+import React, { useState, useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import PassengerStep1Basic from "./PassengerStep1Basic";
 import PassengerStep2Permissions from "./PassengerStep2Permissions";
-import PassengerStep3OTP from "./PassengerStep3OTP";
-import SuccessScreen from "../SuccessScreen";
+import ApplicationSubmittedScreen from "../ApplicationSubmittedScreen";
+import { useNavigation } from "@react-navigation/native";
 import { registerUser } from "../../authSlice";
 import { ROLE } from "../../../constants";
+import { setField } from "../../../store/slices/onboardingSlice";
 
 export default function PassengerRegistrationScreen({ navigation }) {
   const dispatch = useDispatch();
+  const { isAuthenticated, user } = useSelector((state) => state.auth);
+  const onboarding = useSelector((state) => state.onboarding);
+  const nav = useNavigation();
+
   const [step, setStep] = useState(1);
   const [data, setData] = useState({});
   const [registerError, setRegisterError] = useState(null);
@@ -40,9 +45,16 @@ export default function PassengerRegistrationScreen({ navigation }) {
         return;
       }
       setRegisterError(null);
+      dispatch(setField({ field: "fullName", value: merged.fullName }));
+      dispatch(setField({ field: "email", value: merged.email }));
+      dispatch(setField({ field: "password", value: merged.password }));
+      setStep(2);
+      return;
     }
 
-    setStep((s) => s + 1);
+    if (step === 2) {
+      setStep(3);
+    }
   };
 
   const onBack = () => {
@@ -50,10 +62,19 @@ export default function PassengerRegistrationScreen({ navigation }) {
     else setStep((s) => s - 1);
   };
 
-  if (step === 5) {
+  useEffect(() => {
+    if (step === 3) {
+      const timeoutId = setTimeout(() => {
+        nav.navigate("LoginPage");
+      }, 2000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [step, nav]);
+
+  if (step === 3) {
     return (
-      <SuccessScreen
-        title="Welcome to VAYY!"
+      <ApplicationSubmittedScreen
+        title="Welcome to OMV!"
         message="Your account is ready. Sign in to start finding rides."
         cta="Sign In"
         onCta={() => navigation.navigate("LoginPage")}
@@ -72,13 +93,6 @@ export default function PassengerRegistrationScreen({ navigation }) {
         />
       )}
       {step === 2 && <PassengerStep2Permissions onNext={onNext} onBack={onBack} />}
-      {step === 3 && (
-        <PassengerStep3OTP
-          onComplete={() => setStep(5)}
-          onBack={onBack}
-          email={data.email}
-        />
-      )}
     </>
   );
 }

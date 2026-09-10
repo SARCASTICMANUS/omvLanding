@@ -1,18 +1,30 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Platform, KeyboardAvoidingView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, User, CreditCard, Building2, Smartphone } from "lucide-react-native";
 import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import BottomStickyButton from "../../components/BottomStickyButton";
+import { useSelector, useDispatch } from "react-redux";
+import { setField } from "../../../store/slices/onboardingSlice";
 import { VALIDATORS, VALIDATION_MESSAGES } from "../../validators";
 
 export default function DriverStep5Bank({ onNext, onBack }) {
-  const [form, setForm] = useState({ holderName: "", accountNumber: "", confirmAccount: "", ifsc: "", upi: "" });
+  const dispatch = useDispatch();
+  const fields = useSelector((state) => state.onboarding.fields);
+  const [form, setForm] = useState({
+    holderName: fields.holderName || "",
+    accountNumber: fields.accountNumber || "",
+    confirmAccount: fields.confirmAccount || "",
+    ifsc: fields.ifsc || "",
+    upi: fields.upi || "",
+  });
   const [focused, setFocused] = useState({});
   const [errors, setErrors] = useState({});
-
-  const update = (f, v) => setForm((p) => ({ ...p, [f]: v }));
+  const update = (f, v) => {
+    setForm((p) => ({ ...p, [f]: v }));
+    dispatch(setField({ field: f, value: v }));
+  };
 
   const validate = () => {
     const e = {};
@@ -24,6 +36,16 @@ export default function DriverStep5Bank({ onNext, onBack }) {
     setErrors(e);
     return Object.keys(e).length === 0;
   };
+
+  useEffect(() => {
+    setForm({
+      holderName: fields.holderName || "",
+      accountNumber: fields.accountNumber || "",
+      confirmAccount: fields.confirmAccount || "",
+      ifsc: fields.ifsc || "",
+      upi: fields.upi || "",
+    });
+  }, [fields]);
 
   const inputStyle = (f) => [styles.inputWrap, focused[f] && styles.inputFocused, errors[f] && styles.inputError];
   const iconColor = (f) => focused[f] ? COLORS.primary : "#9ca3af";

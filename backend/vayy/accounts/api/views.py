@@ -23,6 +23,7 @@ from accounts.models import (
 
 from accounts.api.serializers import (
     UserSerializer,
+    UserCreateUpdateSerializer,
     CurrentUserUpdateSerializer,
     RegisterSerializer,
     LoginSerializer,
@@ -514,6 +515,46 @@ class DriverDocumentAPIView(APIView):
         resp = Response(serializer.data, status=status.HTTP_201_CREATED)
         return resp
 
+
+# VERIFICATION STATUS
+class VerificationStatusAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        is_driver = user.role in ("bikedriver", "autodriver")
+
+        if not is_driver:
+            return success_response(data={
+                "is_verified": user.is_verified,
+                "status": "verified" if user.is_verified else "unverified",
+                "documents": [],
+            })
+
+        docs = DriverDocument.objects.filter(driver=user)
+        doc_list = DriverDocumentSerializer(docs, many=True).data
+
+        profile = PublicDriverProfile.objects.filter(user=user).first()
+        profile_verified = profile.is_verified if profile else False
+
+        statuses = [d["status"] for d in doc_list]
+        if profile_verified:
+            verification_status = "verified"
+        elif not doc_list:
+            verification_status = "not_submitted"
+        elif "REJECTED" in statuses:
+            verification_status = "rejected"
+        elif all(s == "VERIFIED" for s in statuses):
+            verification_status = "verified"
+        else:
+            verification_status = "pending"
+
+        return success_response(data={
+            "is_verified": profile_verified or user.is_verified,
+            "status": verification_status,
+            "documents": doc_list,
+        })
+
 # RECENT SEARCHES — Redis-first with 48h TTL, DB as durable backup
 _RECENT_SEARCH_TTL = 172800  # 48 hours in seconds
 _RECENT_SEARCH_MAX = 20
@@ -727,7 +768,7 @@ class RecentSearchAPIView(APIView):
 # USERS (ADMIN ONLY)
 
 class UserViewSet(
-    viewsets.ReadOnlyModelViewSet
+    viewsets.ModelViewSet
 ):
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -740,6 +781,11 @@ class UserViewSet(
         "city",
         "is_verified",
     ]
+
+    def get_serializer_class(self):
+        if self.action in ("create", "update", "partial_update"):
+            return UserCreateUpdateSerializer
+        return UserSerializer
 
     def list(self, request, *args, **kwargs):
         resp = super().list(request, *args, **kwargs)

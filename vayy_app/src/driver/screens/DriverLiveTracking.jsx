@@ -229,7 +229,7 @@ export default function DriverLiveTracking({ navigation, route: navRoute }) {
         <View style={styles.headerCard}>
           <View>
             <Text style={styles.vehicleTitle}>
-              {activeTrip?.route_code || activeTrip?.vehicle_number || summary.vehicleNumber || "VAYY Vehicle"}
+              {activeTrip?.route_code || activeTrip?.vehicle_number || summary.vehicleNumber || "OMV Vehicle"}
             </Text>
             <Text style={styles.routeName}>{summary.title}</Text>
           </View>

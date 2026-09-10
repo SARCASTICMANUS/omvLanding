@@ -28,7 +28,7 @@ export default function PassengerStep2Permissions({ onNext, onBack }) {
             </View>
             <View style={styles.cardText}>
               <Text style={styles.cardTitle}>Enable Location</Text>
-              <Text style={styles.cardSub}>VAYY uses location to find rides near you.</Text>
+              <Text style={styles.cardSub}>OMV uses location to find rides near you.</Text>
             </View>
           </View>
           <Switch value={location} onValueChange={setLocation} trackColor={{ false: "#e5e7eb", true: COLORS.primary }} thumbColor="#fff" />

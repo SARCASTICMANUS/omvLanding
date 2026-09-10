@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Platform, KeyboardAvoidingView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, User, Mail, Lock, Eye, EyeOff, Phone, Calendar } from "lucide-react-native";
@@ -6,33 +6,46 @@ import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import PasswordChecklist from "../../components/PasswordChecklist";
 import BottomStickyButton from "../../components/BottomStickyButton";
-import { VALIDATORS, VALIDATION_MESSAGES } from "../../validators";
+import DatePickerModal from "../../components/DatePickerModal";
+import { useSelector, useDispatch } from "react-redux";
+import { setField } from "../../../store/slices/onboardingSlice";
 
 const GENDERS = ["Male", "Female", "Other"];
 
 export default function DriverStep1Personal({ onNext, onBack }) {
+  const dispatch = useDispatch();
+  const fields = useSelector((state) => state.onboarding.fields);
   const [form, setForm] = useState({
-    fullName: "", mobile: "", email: "", password: "", confirmPassword: "",
-    dob: "", gender: "",
+    fullName: fields.fullName || "",
+    mobile: fields.mobile || "",
+    email: fields.email || "",
+    password: fields.password || "",
+    confirmPassword: fields.confirmPassword || "",
+    dob: fields.dob || "",
+    gender: fields.gender || "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [focused, setFocused] = useState({});
   const [errors, setErrors] = useState({});
-  const update = (f, v) => setForm((p) => ({ ...p, [f]: v }));
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const validate = () => {
-    const e = {};
-    if (!VALIDATORS.fullName(form.fullName)) e.fullName = VALIDATION_MESSAGES.fullName;
-    if (!VALIDATORS.mobile(form.mobile)) e.mobile = VALIDATION_MESSAGES.mobile;
-    if (!VALIDATORS.email(form.email)) e.email = VALIDATION_MESSAGES.email;
-    if (!VALIDATORS.password(form.password)) e.password = VALIDATION_MESSAGES.password;
-    if (form.password !== form.confirmPassword) e.confirmPassword = VALIDATION_MESSAGES.confirmPassword;
-    if (!form.dob) e.dob = "Enter your date of birth";
-    if (!form.gender) e.gender = "Select your gender";
-    setErrors(e);
-    return Object.keys(e).length === 0;
+  const update = (f, v) => {
+    setForm((p) => ({ ...p, [f]: v }));
+    dispatch(setField({ field: f, value: v }));
   };
+
+  useEffect(() => {
+    setForm({
+      fullName: fields.fullName || "",
+      mobile: fields.mobile || "",
+      email: fields.email || "",
+      password: fields.password || "",
+      confirmPassword: fields.confirmPassword || "",
+      dob: fields.dob || "",
+      gender: fields.gender || "",
+    });
+  }, [fields]);
 
   const inputStyle = (f) => [styles.inputWrap, focused[f] && styles.inputFocused, errors[f] && styles.inputError];
 
@@ -68,9 +81,8 @@ export default function DriverStep1Personal({ onNext, onBack }) {
           <Text style={styles.label}>Email</Text>
           <View style={inputStyle("email")}>
             <Mail size={18} color={focused.email ? COLORS.primary : "#9ca3af"} />
-            <TextInput style={styles.input} placeholder="email@example.com" placeholderTextColor="#aaa" value={form.email} onChangeText={(v) => update("email", v)} keyboardType="email-address" autoCapitalize="none" onFocus={() => setFocused({ email: true })} onBlur={() => setFocused({})} />
+            <TextInput style={styles.input} placeholder="email@example.com" placeholderTextColor="#aaa" value={form.email} onChangeText={(v) => update("email", v)} keyboardType="email-address" autoCapitalize="none" editable={false} onFocus={() => setFocused({ email: true })} onBlur={() => setFocused({})} />
           </View>
-          {errors.email && <Text style={styles.err}>{errors.email}</Text>}
 
           <Text style={styles.label}>Password</Text>
           <View style={inputStyle("password")}>
@@ -86,7 +98,7 @@ export default function DriverStep1Personal({ onNext, onBack }) {
           <Text style={styles.label}>Confirm Password</Text>
           <View style={inputStyle("confirmPassword")}>
             <Lock size={18} color={focused.confirmPassword ? COLORS.primary : "#9ca3af"} />
-            <TextInput style={styles.input} placeholder="Re-enter password" placeholderTextColor="#aaa" value={form.confirmPassword} onChangeText={(v) => update("confirmPassword", v)} secureTextEntry={!showConfirm} autoCapitalize="none" onFocus={() => setFocused({ confirmPassword: true })} onBlur={() => setFocused({})} />
+            <TextInput style={styles.input} placeholder="Re-enter password" placeholderTextColor="#aaa" value={form.confirmPassword} onChangeText={(v) => update("confirmPassword", v)} secureTextEntry={!showConfirm} autoCapitalize="none" onFocus={() => setFocused({ confirmPassword: true })} onBlur={() => setFocused({})} pasteEnabled={false} contextMenuHidden={true} />
             <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)}>
               {showConfirm ? <EyeOff size={18} color="#888" /> : <Eye size={18} color="#888" />}
             </TouchableOpacity>
@@ -94,16 +106,21 @@ export default function DriverStep1Personal({ onNext, onBack }) {
           {errors.confirmPassword && <Text style={styles.err}>{errors.confirmPassword}</Text>}
 
           <Text style={styles.label}>Date of Birth</Text>
-          <TouchableOpacity style={inputStyle("dob")} onPress={() => {}} activeOpacity={1}>
+          <TouchableOpacity style={inputStyle("dob")} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
             <Calendar size={18} color={focused.dob ? COLORS.primary : "#9ca3af"} />
-            <TextInput style={styles.input} placeholder="DD/MM/YYYY" placeholderTextColor="#aaa" value={form.dob} onChangeText={(v) => update("dob", v)} keyboardType="numbers-and-punctuation" maxLength={10} onFocus={() => setFocused({ dob: true })} onBlur={() => setFocused({})} />
+            <TextInput style={styles.input} placeholder="DD/MM/YYYY" placeholderTextColor="#aaa" value={form.dob} editable={false} pointerEvents="none" />
           </TouchableOpacity>
           {errors.dob && <Text style={styles.err}>{errors.dob}</Text>}
 
           <Text style={styles.label}>Gender</Text>
           <View style={styles.genderRow}>
             {GENDERS.map((g) => (
-              <TouchableOpacity key={g} style={[styles.genderPill, form.gender === g && styles.genderPillActive]} onPress={() => update("gender", g)} activeOpacity={0.7}>
+              <TouchableOpacity
+                key={g}
+                style={[styles.genderPill, form.gender === g && styles.genderPillActive]}
+                onPress={() => update("gender", g)}
+                activeOpacity={0.7}
+              >
                 <Text style={[styles.genderText, form.gender === g && styles.genderTextActive]}>{g}</Text>
               </TouchableOpacity>
             ))}
@@ -112,8 +129,19 @@ export default function DriverStep1Personal({ onNext, onBack }) {
 
           <View style={{ height: 80 }} />
         </ScrollView>
-        <BottomStickyButton label="Continue to Vehicle" onPress={() => { if (validate()) onNext(form); }} />
+        <BottomStickyButton
+          label="Continue to Vehicle"
+          disabled={!form.fullName || !form.email || !form.password || !form.dob || !form.gender}
+          onPress={() => onNext(form)}
+        />
       </KeyboardAvoidingView>
+
+      <DatePickerModal
+        visible={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+        onSelect={(date) => update("dob", date)}
+        selectedDate={form.dob}
+      />
     </SafeAreaView>
   );
 }
@@ -134,9 +162,9 @@ const styles = StyleSheet.create({
   inputError: { borderColor: "#ef4444", backgroundColor: "#fef2f2" },
   input: { flex: 1, fontSize: 15, color: COLORS.text, padding: 0 },
   err: { fontSize: 12, color: "#ef4444", marginTop: 4, marginBottom: 4, marginLeft: 4 },
-  genderRow: { flexDirection: "row", gap: 10, marginBottom: 8 },
+  genderRow: { flexDirection: "row", gap: 10, marginTop: 4 },
   genderPill: { flex: 1, height: 44, borderRadius: 12, borderWidth: 1.5, borderColor: "#e5e7eb", alignItems: "center", justifyContent: "center", backgroundColor: "#fafafa" },
-  genderPillActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primary },
-  genderText: { fontSize: 14, fontWeight: "600", color: COLORS.textMuted },
-  genderTextActive: { color: "#fff" },
+  genderPillActive: { borderColor: COLORS.primary, backgroundColor: "#f0faf2" },
+  genderText: { fontSize: 14, fontWeight: "500", color: "#9ca3af" },
+  genderTextActive: { color: COLORS.primary, fontWeight: "700" },
 });

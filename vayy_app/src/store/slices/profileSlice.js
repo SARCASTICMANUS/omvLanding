@@ -42,6 +42,39 @@ export const updateProfile = createAsyncThunk(
   }
 );
 
+export const fetchVerificationStatus = createAsyncThunk(
+  "profile/fetchVerificationStatus",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get(AUTH.verificationStatus);
+      return response.data?.data || response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || "Failed to fetch verification status");
+    }
+  }
+);
+
+export const uploadDocument = createAsyncThunk(
+  "profile/uploadDocument",
+  async ({ documentType, fileUri, fileName }, { rejectWithValue }) => {
+    try {
+      const formData = new FormData();
+      formData.append("document_type", documentType);
+      formData.append("file", {
+        uri: fileUri,
+        name: fileName || fileUri.split("/").pop(),
+        type: "image/jpeg",
+      });
+      const response = await api.post(AUTH.driverDocuments, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return response.data?.data || response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || "Failed to upload document");
+    }
+  }
+);
+
 const profileSlice = createSlice({
   name: "profile",
   initialState: {
@@ -49,12 +82,15 @@ const profileSlice = createSlice({
     type: null,
     loading: false,
     error: null,
+    verification: null,
+    verificationLoading: false,
   },
   reducers: {
     clearProfile: (state) => {
       state.data = null;
       state.type = null;
       state.error = null;
+      state.verification = null;
     },
   },
   extraReducers: (builder) => {
@@ -84,6 +120,21 @@ const profileSlice = createSlice({
       .addCase(updateProfile.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      .addCase(fetchVerificationStatus.pending, (state) => {
+        state.verificationLoading = true;
+      })
+      .addCase(fetchVerificationStatus.fulfilled, (state, action) => {
+        state.verificationLoading = false;
+        state.verification = action.payload;
+      })
+      .addCase(fetchVerificationStatus.rejected, (state) => {
+        state.verificationLoading = false;
+      })
+      .addCase(uploadDocument.fulfilled, (state, action) => {
+        if (state.verification?.documents) {
+          state.verification.documents.push(action.payload);
+        }
       });
   },
 });

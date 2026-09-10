@@ -79,7 +79,7 @@ const RegisterPage = ({ navigation }) => {
             </TouchableOpacity>
             <View>
               <Text style={styles.title}>Create Account</Text>
-              <Text style={styles.subtitle}>Join VAYY to start your journey</Text>
+              <Text style={styles.subtitle}>Join OMV to start your journey</Text>
             </View>
           </View>
 
