@@ -24,7 +24,7 @@ const DUMMY_ALERTS = [
   {
     id: "1",
     title: "Bus Approaching",
-    message: "Bus #VAYY-101 is 500m away from your stop (Sector 12).",
+    message: "Bus #OMV-101 is 500m away from your stop (Sector 12).",
     created_at: new Date(Date.now() - 2 * 60000).toISOString(),
     read: false,
     notification_type: "info",
@@ -32,7 +32,7 @@ const DUMMY_ALERTS = [
   {
     id: "2",
     title: "Bus Arrived",
-    message: "Bus #VAYY-101 has arrived at Sector 12 stop. Please board promptly.",
+    message: "Bus #OMV-101 has arrived at Sector 12 stop. Please board promptly.",
     created_at: new Date(Date.now() - 1 * 60000).toISOString(),
     read: false,
     notification_type: "info",
@@ -48,7 +48,7 @@ const DUMMY_ALERTS = [
   {
     id: "4",
     title: "Trip Delay",
-    message: "Bus #VAYY-205 is delayed by 10 minutes due to heavy traffic.",
+    message: "Bus #OMV-205 is delayed by 10 minutes due to heavy traffic.",
     created_at: new Date(Date.now() - 3 * 3600000).toISOString(),
     read: true,
     notification_type: "warning",

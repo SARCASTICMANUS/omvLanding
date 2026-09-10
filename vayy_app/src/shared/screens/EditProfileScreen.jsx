@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -10,11 +10,13 @@ import {
   Platform,
   Alert,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import * as ImagePicker from "expo-image-picker";
-import { updateProfile } from "../../store/slices/profileSlice";
+import { Ionicons } from "@expo/vector-icons";
+import { updateProfile, fetchVerificationStatus, uploadDocument } from "../../store/slices/profileSlice";
 
 import COLORS from "../constants/colors";
 import RADIUS from "../constants/radius";
@@ -27,10 +29,30 @@ const VEHICLE_TYPES = [
   { label: "Auto", value: "auto" },
 ];
 
+const DOC_TYPES = [
+  { key: "LICENSE", label: "Driving License", icon: "card-outline" },
+  { key: "RC", label: "Vehicle RC", icon: "document-text-outline" },
+  { key: "INSURANCE", label: "Insurance", icon: "shield-checkmark-outline" },
+  { key: "IDENTITY", label: "ID Proof", icon: "finger-print-outline" },
+];
+
+const DRIVER_DOC_TYPES = [
+  { key: "LICENSE", label: "DL Number", icon: "card-outline" },
+  { key: "RC", label: "Vehicle RC", icon: "document-text-outline" },
+  { key: "INSURANCE", label: "Insurance", icon: "shield-checkmark-outline" },
+  { key: "IDENTITY", label: "ID - Company/College I-Card", icon: "finger-print-outline" },
+];
+
+const STATUS_COLORS = {
+  PENDING: { bg: "#fffbeb", text: "#d97706", border: "#fde68a" },
+  VERIFIED: { bg: "#f0fdf4", text: "#16a34a", border: "#bbf7d0" },
+  REJECTED: { bg: "#fef2f2", text: "#dc2626", border: "#fecaca" },
+};
+
 export default function EditProfileScreen({ navigation }) {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
-  const { data: profile, loading } = useSelector((state) => state.profile);
+  const { data: profile, loading, verification } = useSelector((state) => state.profile);
 
   const isDriver = DRIVER_ROLES.includes(user?.role);
 
@@ -49,6 +71,22 @@ export default function EditProfileScreen({ navigation }) {
         }
       : {}),
   });
+
+  const [uploadingDoc, setUploadingDoc] = useState(null);
+
+  useEffect(() => {
+    if (isDriver) {
+      dispatch(fetchVerificationStatus());
+    }
+  }, [dispatch, isDriver]);
+
+  // Re-fetch verification status when coming back from image picker or returning to screen
+  useEffect(() => {
+    const unsub = navigation.addListener("focus", () => {
+      dispatch(fetchVerificationStatus());
+    });
+    return unsub;
+  }, [navigation, dispatch]);
 
   const updateField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -69,6 +107,32 @@ export default function EditProfileScreen({ navigation }) {
     if (!result.canceled && result.assets?.[0]?.uri) {
       updateField("profile_photo", result.assets[0].uri);
     }
+  };
+
+  const handleUploadDocument = async (docType) => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission needed", "Please allow access to your photos.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      setUploadingDoc(docType);
+      const fileUri = result.assets[0].uri;
+      const fileName = fileUri.split("/").pop();
+      await dispatch(uploadDocument({ documentType: docType, fileUri, fileName }));
+      dispatch(fetchVerificationStatus());
+      setUploadingDoc(null);
+    }
+  };
+
+  const getDocStatus = (docType) => {
+    const docs = verification?.documents || [];
+    return docs.find((d) => d.document_type === docType);
   };
 
   const handleSave = async () => {
@@ -227,6 +291,47 @@ export default function EditProfileScreen({ navigation }) {
             </>
           )}
 
+          {isDriver && (
+            <View style={styles.sectionWrap}>
+              <Text style={styles.sectionLabel}>Documents & Verification</Text>
+              {(isDriver ? DRIVER_DOC_TYPES : DOC_TYPES).map((doc) => {
+                const docStatus = getDocStatus(doc.key);
+                const statusKey = docStatus?.status || null;
+                const statusColor = statusKey ? STATUS_COLORS[statusKey] : null;
+                const isUploading = uploadingDoc === doc.key;
+                const isUploaded = !!statusKey;
+                return (
+                  <TouchableOpacity
+                    key={doc.key}
+                    style={styles.docRow}
+                    onPress={() => handleUploadDocument(doc.key)}
+                    activeOpacity={0.7}
+                    disabled={isUploading}
+                  >
+                    <View style={styles.docLeft}>
+                      <Ionicons name={doc.icon} size={20} color={COLORS.textLight} />
+                      <Text style={styles.docLabel}>{doc.label}</Text>
+                    </View>
+                    <View style={styles.docRight}>
+                      {isUploading ? (
+                        <ActivityIndicator size="small" color={COLORS.primary} />
+                      ) : isUploaded ? (
+                        <View style={styles.docUploaded}>
+                          <Ionicons name="checkmark-circle" size={20} color="#16a34a" />
+                          <View style={[styles.docBadge, { backgroundColor: statusColor.bg, borderColor: statusColor.border }]}>
+                            <Text style={[styles.docBadgeText, { color: statusColor.text }]}>{statusKey}</Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <Ionicons name="cloud-upload-outline" size={18} color={COLORS.primary} />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
           <View style={styles.spacer} />
 
           <VayyButton
@@ -344,6 +449,60 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     marginTop: SPACING.md,
+  },
+  sectionWrap: {
+    marginTop: SPACING.lg,
+    paddingTop: SPACING.lg,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.md,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  docRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  docLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  docLabel: {
+    fontSize: 14,
+    color: COLORS.text,
+    fontWeight: "600",
+  },
+  docRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  docUploaded: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  docBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  docBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
   },
   photoPicker: {
     width: 120,

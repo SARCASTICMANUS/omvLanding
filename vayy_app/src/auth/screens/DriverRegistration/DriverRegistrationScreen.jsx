@@ -1,11 +1,10 @@
 import React, { useState } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import DriverStep1Personal from "./DriverStep1Personal";
 import DriverStep2Vehicle from "./DriverStep2Vehicle";
 import DriverStep3VehicleInfo from "./DriverStep3VehicleInfo";
 import DriverStep4Documents from "./DriverStep4Documents";
 import DriverStep5Bank from "./DriverStep5Bank";
-import DriverStep6OTP from "./DriverStep6OTP";
 import ApplicationSubmittedScreen from "../ApplicationSubmittedScreen";
 import { registerUser, loginUser } from "../../authSlice";
 import { ROLE, OPERATIONS, AUTH } from "../../../constants";
@@ -13,6 +12,8 @@ import api from "../../../shared/lib/api";
 
 export default function DriverRegistrationScreen({ navigation }) {
   const dispatch = useDispatch();
+  const { isAuthenticated, user } = useSelector((state) => state.auth);
+  const onboardingRole = useSelector((state) => state.onboarding.fields.role);
   const [step, setStep] = useState(1);
   const [data, setData] = useState({});
   const [registerError, setRegisterError] = useState(null);
@@ -22,14 +23,14 @@ export default function DriverRegistrationScreen({ navigation }) {
     const merged = { ...data, ...payload };
     setData(merged);
 
-    if (step === 2) {
-      const role = merged.vehicleType === "auto" ? ROLE.AUTO_DRIVER : ROLE.BIKE_DRIVER;
+    if (step === 1) {
       setRegistering(true);
+      const roleValue = merged.vehicleType === "auto" ? ROLE.AUTO_DRIVER : ROLE.BIKE_DRIVER;
       const result = await dispatch(
         registerUser({
           email: merged.email,
           password: merged.password,
-          role,
+          role: roleValue,
           first_name: merged.fullName || "",
           last_name: "",
         }),
@@ -45,44 +46,42 @@ export default function DriverRegistrationScreen({ navigation }) {
         return;
       }
       setRegisterError(null);
+      setStep(2);
+      return;
     }
 
-    setStep((s) => s + 1);
+    if (step === 2) setStep(3);
+    if (step === 3) setStep(4);
+    if (step === 4) setStep(5);
+    if (step === 5) {
+      handleSubmit(merged);
+    }
   };
 
-  const onOtpComplete = async () => {
+  const handleSubmit = async (mergedData) => {
     try {
-      // 0. Auto-login to get auth token (required for subsequent API calls)
       const loginResult = await dispatch(
-        loginUser({ email: data.email, password: data.password }),
+        loginUser({ email: mergedData.email, password: mergedData.password }),
       );
-      if (!loginUser.fulfilled.match(loginResult)) {
-        // Login failed but OTP was verified — driver can login manually later
-        setStep(7);
-        return;
-      }
 
-      // 1. Register vehicle
       if (data.vehicleNumber) {
         await api.post(OPERATIONS.vehicleRegister, {
           vehicle_number: data.vehicleNumber,
           vehicle_type: data.vehicleType,
-        });
+        }).catch(() => {});
       }
 
-      // 2. Update driver profile
       await api.put(AUTH.driverProfile, {
-        display_name: data.fullName,
-        phone_number: data.mobile,
-        license_number: data.rcNumber || "",
-        vehicle_number: data.vehicleNumber || "",
-        vehicle_type: data.vehicleType || "auto",
-      });
+        display_name: mergedData.fullName,
+        phone_number: mergedData.mobile,
+        license_number: mergedData.rcNumber || "",
+        vehicle_number: mergedData.vehicleNumber || "",
+        vehicle_type: mergedData.vehicleType || "auto",
+      }).catch(() => {});
 
-      // 3. Upload documents (fire-and-forget, files upload async)
       const docMap = {
-        LICENSE: [data.dlFront, data.dlBack],
-        IDENTITY: [data.selfie],
+        LICENSE: [mergedData.dlFront, mergedData.dlBack],
+        IDENTITY: [mergedData.selfie],
       };
       const fileEntries = Object.entries(docMap).flatMap(([type, files]) =>
         files.filter(Boolean).map((file) => ({ type, file }))
@@ -99,13 +98,20 @@ export default function DriverRegistrationScreen({ navigation }) {
           headers: { "Content-Type": "multipart/form-data" },
         }).catch(() => {});
       }
-    } catch {
-      // Registration succeeded even if profile/doc upload fails
-      // Driver can complete profile later
-    }
 
-    setStep(7);
+      if (DRIVER_ROLES.includes(onboardingRole || "")) {
+        await api.post(AUTH.submitForReview, {
+          role: onboardingRole || "",
+        }).catch(() => {});
+      }
+
+      setStep(7);
+    } catch {
+      setStep(7);
+    }
   };
+
+  const DRIVER_ROLES = [ROLE.AUTO_DRIVER, ROLE.BIKE_DRIVER];
 
   const onBack = () => {
     if (step === 1) navigation.goBack();
@@ -136,13 +142,6 @@ export default function DriverRegistrationScreen({ navigation }) {
       )}
       {step === 4 && <DriverStep4Documents onNext={onNext} onBack={onBack} />}
       {step === 5 && <DriverStep5Bank onNext={onNext} onBack={onBack} />}
-      {step === 6 && (
-        <DriverStep6OTP
-          onComplete={onOtpComplete}
-          onBack={onBack}
-          email={data.email}
-        />
-      )}
     </>
   );
 }

@@ -5,18 +5,10 @@ import { ArrowLeft, Bike } from "lucide-react-native";
 import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import BottomStickyButton from "../../components/BottomStickyButton";
+import { useSelector, useDispatch } from "react-redux";
+import { setField } from "../../../store/slices/onboardingSlice";
 
 const VEHICLES = [
-  {
-    key: "auto",
-    title: "Auto Rickshaw",
-    subtitle: "Drive passengers on fixed routes",
-    icon: (active) => (
-      <View style={[styles.vIcon, active && styles.vIconActive]}>
-        <Image source={require("../../../../assets/vayyFrontAuto.webp")} style={{ width: 36, height: 36 }} resizeMode="contain" />
-      </View>
-    ),
-  },
   {
     key: "bike",
     title: "Motorcycle",
@@ -30,7 +22,9 @@ const VEHICLES = [
 ];
 
 export default function DriverStep2Vehicle({ onNext, onBack, loading, error }) {
-  const [selected, setSelected] = useState(null);
+  const dispatch = useDispatch();
+  const fields = useSelector((state) => state.onboarding.fields);
+  const selected = fields.vehicleType || "bike";
 
   return (
     <SafeAreaView style={styles.root}>
@@ -39,7 +33,7 @@ export default function DriverStep2Vehicle({ onNext, onBack, loading, error }) {
       </TouchableOpacity>
       <View style={styles.header}>
         <Text style={styles.title}>Choose Your Vehicle</Text>
-        <Text style={styles.sub}>Select how you want to drive with VAYY</Text>
+        <Text style={styles.sub}>Select how you want to drive with OMV</Text>
       </View>
       <ProgressBar current={2} total={6} />
       {error ? (
@@ -51,7 +45,10 @@ export default function DriverStep2Vehicle({ onNext, onBack, loading, error }) {
         {VEHICLES.map((v) => {
           const active = selected === v.key;
           return (
-            <TouchableOpacity key={v.key} style={[styles.card, active && styles.cardActive]} onPress={() => setSelected(v.key)} activeOpacity={0.85}>
+            <TouchableOpacity key={v.key} style={[styles.card, active && styles.cardActive]} onPress={() => {
+              dispatch(setField({ field: "vehicleType", value: v.key }));
+              setSelected(v.key);
+            }} activeOpacity={0.85}>
               {active && <View style={styles.badge}><Text style={styles.badgeText}>✓</Text></View>}
               {v.icon(active)}
               <Text style={[styles.cardTitle, active && { color: COLORS.primary }]}>{v.title}</Text>
@@ -60,7 +57,7 @@ export default function DriverStep2Vehicle({ onNext, onBack, loading, error }) {
           );
         })}
       </View>
-      <BottomStickyButton label={`Continue with ${selected ? (selected === "auto" ? "Auto" : "Bike") : "..."}`} onPress={() => selected && onNext({ vehicleType: selected })} disabled={!selected} loading={loading} />
+      <BottomStickyButton label={`Continue with Bike`} onPress={() => selected && onNext({ vehicleType: selected })} disabled={!selected} loading={loading} />
     </SafeAreaView>
   );
 }

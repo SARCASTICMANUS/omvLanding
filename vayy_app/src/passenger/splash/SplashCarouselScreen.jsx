@@ -21,7 +21,7 @@ const SLIDES = [
   {
     key: "waiting",
     title: "Tired of Waiting?",
-    subtitle: "Long ETAs, ride cancellations, surge pricing. Traditional ride-hailing wastes your time. VAYY is different.",
+    subtitle: "Long ETAs, ride cancellations, surge pricing. Traditional ride-hailing wastes your time. OMV is different.",
   },
   {
     key: "discover",
@@ -36,7 +36,7 @@ const SLIDES = [
   {
     key: "benefit",
     title: "Smart Commuting, Lower Fares",
-    subtitle: "Predictable shared fares starting at ₹15. Live tracking, route-based matching. Smarter daily commutes with VAYY.",
+    subtitle: "Predictable shared fares starting at ₹15. Live tracking, route-based matching. Smarter daily commutes with OMV.",
   },
 ];
 

@@ -17,6 +17,7 @@ import autoRideReducer from "./slices/autoRideSlice";
 import bikeRideReducer from "./slices/bikeRideSlice";
 import rideFlowReducer from "./slices/rideFlowSlice";
 import adminReducer from "../admin/adminSlice";
+import onboardingReducer from "./slices/onboardingSlice";
 import { configureAuthHandlers } from "../shared/lib/api";
 
 export const store = configureStore({
@@ -34,6 +35,7 @@ export const store = configureStore({
     bikeRide: bikeRideReducer,
     rideFlow: rideFlowReducer,
     admin: adminReducer,
+    onboarding: onboardingReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

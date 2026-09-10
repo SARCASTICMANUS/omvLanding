@@ -13,7 +13,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { logout as logoutUser } from "../../auth/authSlice";
-import { fetchProfile } from "../../store/slices/profileSlice";
+import { fetchProfile, fetchVerificationStatus } from "../../store/slices/profileSlice";
 
 import COLORS from "../constants/colors";
 import { DRIVER_ROLES } from "../../constants";
@@ -56,10 +56,11 @@ export default function ProfileScreen({ navigation }) {
   const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
   const { user } = useSelector((state) => state.auth);
-  const { data: profile } = useSelector((state) => state.profile);
+  const { data: profile, verification } = useSelector((state) => state.profile);
 
   useEffect(() => {
     dispatch(fetchProfile());
+    dispatch(fetchVerificationStatus());
   }, [dispatch]);
 
   const handleLogout = () => {
@@ -114,6 +115,9 @@ export default function ProfileScreen({ navigation }) {
 
   const settings = [
     { icon: "create-outline", label: "Edit Profile", screen: "EditProfile" },
+    ...(isDriver && verification?.status !== "verified"
+      ? [{ icon: "cloud-upload-outline", label: "Upload Documents", screen: "EditProfile" }]
+      : []),
     { icon: "shield-checkmark-outline", label: "Privacy Policy", value: "View", screen: "PrivacyPolicy" },
     { icon: "help-circle-outline", label: "Help & Support", screen: "HelpSupport" },
     { icon: "information-circle-outline", label: "About", value: APP_VERSION },
@@ -149,6 +153,18 @@ export default function ProfileScreen({ navigation }) {
               <MaterialIcons name={isDriver ? "directions-car" : "person"} size={12} color="#FFFFFF" />
               <Text style={styles.roleText}>{roleLabel}</Text>
             </View>
+            {isDriver && verification && (
+              <View style={[styles.verifyBadge, verification.status === "verified" && styles.verifyBadgeGreen]}>
+                <Ionicons
+                  name={verification.status === "verified" ? "checkmark-circle" : verification.status === "pending" ? "time-outline" : "alert-circle"}
+                  size={12}
+                  color={verification.status === "verified" ? "#34d399" : verification.status === "pending" ? "#fbbf24" : "#f87171"}
+                />
+                <Text style={[styles.verifyText, verification.status === "verified" && styles.verifyTextGreen]}>
+                  {verification.status === "verified" ? "Verified" : verification.status === "pending" ? "Pending" : "Not Verified"}
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.headerStatsRow}>
@@ -230,7 +246,7 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.versionText}>Vayy App v{APP_VERSION}</Text>
+        <Text style={styles.versionText}>OMV App v{APP_VERSION}</Text>
       </ScrollView>
     </View>
   );
@@ -354,6 +370,27 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
     color: "#FFFFFF",
+  },
+  verifyBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: "rgba(248,113,113,0.2)",
+    marginTop: 6,
+  },
+  verifyBadgeGreen: {
+    backgroundColor: "rgba(52,211,153,0.2)",
+  },
+  verifyText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#f87171",
+  },
+  verifyTextGreen: {
+    color: "#34d399",
   },
   headerStatsRow: {
     flexDirection: "row",

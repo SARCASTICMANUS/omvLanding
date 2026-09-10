@@ -89,7 +89,7 @@ const LoginPage = ({ navigation }) => {
           <View style={styles.dragHandle} />
 
           <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to your onmyvayy account</Text>
+          <Text style={styles.subtitle}>Sign in to your OMV account</Text>
 
           {error ? (
             <View style={styles.errorBox}>
@@ -189,14 +189,6 @@ const LoginPage = ({ navigation }) => {
               <Text style={styles.createLink}>Create free account</Text>
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.splashBtn}
-            onPress={() => navigation.navigate("SplashPreview")}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.splashBtnText}>View Splash</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

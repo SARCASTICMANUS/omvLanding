@@ -8,6 +8,7 @@ import ProgressBar from "../../components/ProgressBar";
 import OTPInput from "../../components/OTPInput";
 import BottomStickyButton from "../../components/BottomStickyButton";
 import { verifyOtp, resendOtp } from "../../authSlice";
+import { setField } from "../../../store/slices/onboardingSlice";
 
 export default function DriverStep6OTP({ onComplete, onBack, email }) {
   const dispatch = useDispatch();
@@ -39,6 +40,7 @@ export default function DriverStep6OTP({ onComplete, onBack, email }) {
     if (otp.length !== 6) return;
     dispatch(verifyOtp({ email, otp })).then((result) => {
       if (verifyOtp.fulfilled.match(result)) {
+        dispatch(setField({ field: "verifiedEmail", value: email }));
         onComplete?.();
       } else {
         setOtpError(true);
