@@ -1,0 +1,55 @@
+from django.db import migrations, models
+import uuid
+
+
+class Migration(migrations.Migration):
+
+    initial = True
+
+    dependencies = []
+
+    operations = [
+        migrations.CreateModel(
+            name="PageView",
+            fields=[
+                ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ("platform", models.CharField(choices=[("web", "Website"), ("app", "Mobile App")], db_index=True, max_length=10)),
+                ("page", models.CharField(db_index=True, max_length=255)),
+                ("visitor_id", models.CharField(blank=True, default="", max_length=255)),
+                ("ip_address", models.GenericIPAddressField(blank=True, null=True)),
+                ("user_agent", models.TextField(blank=True, default="")),
+                ("referrer", models.URLField(blank=True, default="")),
+                ("country", models.CharField(blank=True, default="", max_length=100)),
+                ("city", models.CharField(blank=True, default="", max_length=100)),
+                ("device_type", models.CharField(blank=True, default="", max_length=50)),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True)),
+            ],
+            options={
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(fields=["platform", "created_at"], name="kpi_page_plat_created_idx"),
+                    models.Index(fields=["page", "created_at"], name="kpi_page_page_created_idx"),
+                ],
+            },
+        ),
+        migrations.CreateModel(
+            name="KPISnapshot",
+            fields=[
+                ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ("date", models.DateField(db_index=True, unique=True)),
+                ("total_users", models.IntegerField(default=0)),
+                ("total_passengers", models.IntegerField(default=0)),
+                ("total_drivers", models.IntegerField(default=0)),
+                ("total_routes", models.IntegerField(default=0)),
+                ("total_stops", models.IntegerField(default=0)),
+                ("total_trips", models.IntegerField(default=0)),
+                ("total_cities", models.IntegerField(default=0)),
+                ("web_visits", models.IntegerField(default=0)),
+                ("app_visits", models.IntegerField(default=0)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+            ],
+            options={
+                "ordering": ["-date"],
+            },
+        ),
+    ]

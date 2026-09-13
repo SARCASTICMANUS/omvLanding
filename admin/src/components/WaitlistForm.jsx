@@ -9,7 +9,7 @@ export default function WaitlistForm({
   submittingLabel = "Joining…",
   placeholder = "you@example.com",
   successTitle = "You're on the waitlist.",
-  successBody = "We'll email you when VAYY launches near you.",
+  successBody = "We'll email you when OMV launches near you.",
   addAnotherLabel = "Add another email",
   duplicateError = "This email is already on the waitlist.",
   genericError = "Something went wrong. Please try again.",

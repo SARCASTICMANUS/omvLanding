@@ -43,7 +43,7 @@ export default function Login({ onLogin }) {
           <div className="w-16 h-16 bg-brand-600 rounded-2xl flex items-center justify-center font-black text-2xl text-white mx-auto mb-4">
             V
           </div>
-          <h1 className="text-3xl font-black text-white">Vayy Admin</h1>
+          <h1 className="text-3xl font-black text-white">OMV Admin</h1>
           <p className="text-slate-400 mt-2">Sign in to manage your platform</p>
         </div>
 
@@ -66,7 +66,7 @@ export default function Login({ onLogin }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="admin@vayy.com"
+              placeholder="admin@omv.com"
               className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 outline-none transition"
             />
           </div>

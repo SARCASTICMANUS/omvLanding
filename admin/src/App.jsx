@@ -10,6 +10,8 @@ const Login = lazy(() => import("./pages/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Cities = lazy(() => import("./pages/Cities"));
 const RoutesPage = lazy(() => import("./pages/Routes"));
+const RouteExplorerPage = lazy(() => import("./pages/RouteExplorer"));
+const KPIPage = lazy(() => import("./pages/KPI"));
 const Stops = lazy(() => import("./pages/Stops"));
 const TripSchedules = lazy(() => import("./pages/TripSchedules"));
 const Users = lazy(() => import("./pages/Users"));
@@ -30,7 +32,9 @@ function AdminLayout({ onLogout }) {
 
   const tabs = [
     { id: "dashboard", label: "Dashboard" },
+    { id: "kpi", label: "KPI & Analytics" },
     { id: "cities", label: "Cities" },
+    { id: "route-explorer", label: "Route Explorer" },
     { id: "routes", label: "Routes" },
     { id: "stops", label: "Stops" },
     { id: "zones", label: "Zone" },
@@ -50,7 +54,9 @@ function AdminLayout({ onLogout }) {
       <main className="flex-1 overflow-hidden">
         <Suspense fallback={<PageLoader />}>
           {activeTab === "dashboard" && <Dashboard />}
+          {activeTab === "kpi" && <KPIPage />}
           {activeTab === "cities" && <Cities />}
+          {activeTab === "route-explorer" && <RouteExplorerPage />}
           {activeTab === "routes" && <RoutesPage />}
           {activeTab === "stops" && <Stops />}
           {activeTab === "zones" && <Zones />}

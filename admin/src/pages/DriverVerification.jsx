@@ -17,6 +17,7 @@ import {
 import api from "../api/client";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
+const MEDIA_BASE = API_BASE.replace(/\/api\/?$/, "") || "";
 
 export default function DriverVerification() {
   const [drivers, setDrivers] = useState([]);
@@ -260,46 +261,72 @@ export default function DriverVerification() {
                         {driver.documents.map((doc) => (
                           <div
                             key={doc.id}
-                            className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3"
+                            className="bg-slate-50 rounded-xl px-4 py-3"
                           >
-                            <div className="flex items-center gap-3">
-                              <FileText size={16} className="text-slate-400" />
-                              <div>
-                                <span className="text-sm font-semibold text-slate-700">
-                                  {doc.document_type}
-                                </span>
-                                {doc.rejection_reason && (
-                                  <p className="text-xs text-red-500 mt-0.5">
-                                    {doc.rejection_reason}
-                                  </p>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <FileText size={16} className="text-slate-400" />
+                                <div>
+                                  <span className="text-sm font-semibold text-slate-700">
+                                    {doc.document_type}
+                                  </span>
+                                  {doc.rejection_reason && (
+                                    <p className="text-xs text-red-500 mt-0.5">
+                                      {doc.rejection_reason}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                {docStatusLabel(doc.status)}
+                                {doc.status === "pending" && (
+                                  <div className="flex gap-1">
+                                    <button
+                                      disabled={processing === doc.id}
+                                      onClick={() =>
+                                        handleDocAction(doc.id, "approve")
+                                      }
+                                      className="px-3 py-1.5 text-xs font-bold bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-50 transition"
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      disabled={processing === doc.id}
+                                      onClick={() =>
+                                        handleDocAction(doc.id, "reject")
+                                      }
+                                      className="px-3 py-1.5 text-xs font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 transition"
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              {docStatusLabel(doc.status)}
-                              {doc.status === "pending" && (
-                                <div className="flex gap-1">
-                                  <button
-                                    disabled={processing === doc.id}
-                                    onClick={() =>
-                                      handleDocAction(doc.id, "approve")
-                                    }
-                                    className="px-3 py-1.5 text-xs font-bold bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-50 transition"
-                                  >
-                                    Approve
-                                  </button>
-                                  <button
-                                    disabled={processing === doc.id}
-                                    onClick={() =>
-                                      handleDocAction(doc.id, "reject")
-                                    }
-                                    className="px-3 py-1.5 text-xs font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 transition"
-                                  >
-                                    Reject
-                                  </button>
-                                </div>
-                              )}
-                            </div>
+                            {doc.file && (
+                              <div className="mt-3">
+                                <a
+                                  href={doc.file.startsWith("http") ? doc.file : `${MEDIA_BASE}${doc.file}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block"
+                                >
+                                  <img
+                                    src={doc.file.startsWith("http") ? doc.file : `${MEDIA_BASE}${doc.file}`}
+                                    alt={doc.document_type}
+                                    className="max-h-48 rounded-lg border border-slate-200 object-contain hover:shadow-md transition cursor-pointer"
+                                    onError={(e) => {
+                                      e.target.style.display = "none";
+                                      e.target.nextSibling.style.display = "flex";
+                                    }}
+                                  />
+                                  <div className="hidden items-center gap-2 mt-2 text-xs text-slate-500">
+                                    <FileText size={14} />
+                                    <span>File: {doc.file.split("/").pop()}</span>
+                                  </div>
+                                </a>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
