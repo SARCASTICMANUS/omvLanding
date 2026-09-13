@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import os
 import environ
+from celery.schedules import crontab
 from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -274,6 +275,10 @@ CELERY_BEAT_SCHEDULE = {
     "flush-hybrid-logs": {
         "task": "tracking.tasks.flush_hybrid_logs",
         "schedule": 5.0,  # every 5 seconds
+    },
+    "create-kpi-snapshot": {
+        "task": "kpi.tasks.create_daily_kpi_snapshot",
+        "schedule": crontab(hour=1, minute=0),  # 1 AM daily
     },
 }
 

@@ -1,7 +1,7 @@
 import logging
 from datetime import timedelta
 from django.utils import timezone
-from django.db.models import Count, Sum, Q
+from django.db.models import Count
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -94,7 +94,6 @@ class KPIOverviewAPI(APIView):
         )
 
         # Bounce rate: single-page sessions (visitor_id with only 1 view)
-        from django.db.models import Subquery, OuterRef
         visitor_views = qs.values("visitor_id").annotate(view_count=Count("id"))
         single_page = visitor_views.filter(view_count=1).count()
         bounce_rate = round((single_page / max(unique_visitors, 1)) * 100, 1)
