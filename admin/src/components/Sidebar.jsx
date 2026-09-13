@@ -2,17 +2,21 @@ import {
   LayoutDashboard,
   MapPin,
   Route,
+  Compass,
   StopCircle,
   CalendarClock,
   Users,
   Layers,
   ShieldCheck,
+  BarChart3,
   LogOut,
 } from "lucide-react";
 
 const iconMap = {
   dashboard: LayoutDashboard,
+  kpi: BarChart3,
   cities: MapPin,
+  "route-explorer": Compass,
   routes: Route,
   stops: StopCircle,
   schedules: CalendarClock,
@@ -30,7 +34,7 @@ export default function Sidebar({ tabs, activeTab, onTabChange, onLogout }) {
             V
           </div>
           <div>
-            <h1 className="font-bold text-lg tracking-tight">Vayy Admin</h1>
+            <h1 className="font-bold text-lg tracking-tight">OMV Admin</h1>
             <p className="text-xs text-slate-500 font-medium">Control Panel</p>
           </div>
         </div>

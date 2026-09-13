@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
-import { Users as UsersIcon, UserCheck, Search, Mail, ShieldCheck, Eye, Phone, MapPin, Wallet, Truck, Star, Settings, Plus, Edit3, Trash2, Save, X } from "lucide-react";
+import { Users as UsersIcon, UserCheck, Search, Mail, ShieldCheck, Eye, Phone, MapPin, Wallet, Truck, Star, Settings, Plus, Edit3, Trash2, Save, X, FileText, ExternalLink } from "lucide-react";
 import api from "../api/client";
+
+const API_BASE = import.meta.env.VITE_API_URL || "";
+const MEDIA_BASE = API_BASE.replace(/\/api\/?$/, "") || "";
 
 function InfoRow({ label, value, icon }) {
   return (
@@ -477,25 +480,52 @@ export default function Users() {
                       <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
                         <ShieldCheck size={20} /> KYC Documents
                       </h3>
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {userDetails.documents.map((doc) => (
-                          <div key={doc.id} className="flex items-center justify-between bg-white rounded-lg px-4 py-3 border border-slate-200">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
-                                <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                          <div key={doc.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                            <div className="flex items-center justify-between px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
+                                  <FileText size={16} className="text-slate-400" />
+                                </div>
+                                <div>
+                                  <span className="font-semibold text-slate-800">{doc.document_type}</span>
+                                  <p className="text-xs text-slate-500">{doc.file ? "Uploaded" : "Not uploaded"}</p>
+                                </div>
                               </div>
-                              <div>
-                                <span className="font-semibold text-slate-800">{doc.document_type}</span>
-                                <p className="text-xs text-slate-500">{doc.file ? "Uploaded" : "Not uploaded"}</p>
-                              </div>
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                                doc.status === "verified" ? "bg-emerald-100 text-emerald-700" :
+                                doc.status === "rejected" ? "bg-red-100 text-red-700" :
+                                "bg-amber-100 text-amber-700"
+                              }`}>
+                                {doc.status}
+                              </span>
                             </div>
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                              doc.status === "verified" ? "bg-emerald-100 text-emerald-700" :
-                              doc.status === "rejected" ? "bg-red-100 text-red-700" :
-                              "bg-amber-100 text-amber-700"
-                            }`}>
-                              {doc.status}
-                            </span>
+                            {doc.file && (
+                              <div className="px-4 pb-3">
+                                <a
+                                  href={doc.file.startsWith("http") ? doc.file : `${MEDIA_BASE}${doc.file}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block"
+                                >
+                                  <img
+                                    src={doc.file.startsWith("http") ? doc.file : `${MEDIA_BASE}${doc.file}`}
+                                    alt={doc.document_type}
+                                    className="max-h-40 rounded-lg border border-slate-100 object-contain hover:shadow-md transition cursor-pointer"
+                                    onError={(e) => {
+                                      e.target.style.display = "none";
+                                      e.target.nextSibling.style.display = "flex";
+                                    }}
+                                  />
+                                  <div className="hidden items-center gap-2 mt-1 text-xs text-slate-500">
+                                    <FileText size={14} />
+                                    <span>{doc.file.split("/").pop()}</span>
+                                    <ExternalLink size={10} />
+                                  </div>
+                                </a>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

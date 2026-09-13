@@ -65,7 +65,8 @@ INSTALLED_APPS = [
     'operations',
     'tracking',
     'transport',
-    "common"
+    "common",
+    'kpi',
 ]
 
 MIDDLEWARE = [
@@ -317,6 +318,10 @@ STATIC_ROOT =  BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = (
     "whitenoise.storage.CompressedManifestStaticFilesStorage"
 )
+
+# Media files (uploads)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # HTTPS is opt-in (ENABLE_HTTPS=True) so the stack works over plain HTTP
 # until a TLS certificate is provisioned. Without this gate, SECURE_SSL_REDIRECT

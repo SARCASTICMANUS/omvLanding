@@ -5,7 +5,7 @@ import api from "../api/client";
 import LocationSearch from "../components/LocationSearch";
 import {
   Plus, Save, Trash2, XCircle,
-  ArrowUp, ArrowDown, Bus, Compass, Box, Edit3,
+  ArrowUp, ArrowDown, Bike, Compass, Box, Edit3,
   Route as RouteIcon,
 } from "lucide-react";
 
@@ -420,7 +420,7 @@ export default function Routes() {
                     <button onClick={() => { fetchRouteDetail(r); setTab("library"); }}
                       className="flex-1 p-4 text-left flex items-start gap-3">
                       <div className="w-10 h-10 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
-                        <Bus size={18} />
+                        <Bike size={18} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <h4 className="font-bold text-sm text-slate-900 truncate">{r.name}</h4>
