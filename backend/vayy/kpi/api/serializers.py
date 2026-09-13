@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import PageView, KPISnapshot
+from kpi.models import PageView, KPISnapshot
 
 
 class PageViewSerializer(serializers.ModelSerializer):
