@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import * as XLSX from "xlsx";
 import api from "../api/client";
 import LocationSearch from "../components/LocationSearch";
 import {
   Plus, Save, Trash2, XCircle,
   ArrowUp, ArrowDown, Bike, Compass, Box, Edit3,
-  Route as RouteIcon,
+  Route as RouteIcon, Upload, FileSpreadsheet, ChevronRight, Check,
 } from "lucide-react";
 
 const DEFAULT_CENTER = [78.9629, 20.5937];
@@ -18,6 +19,92 @@ const geoJsonify = (coords) => ({
     ? [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } }]
     : [],
 });
+
+function parseFileClientSide(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const buf = e.target.result;
+        const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
+        let workbook;
+        if (isExcel) {
+          workbook = XLSX.read(new Uint8Array(buf), { type: "array", cellDates: false });
+        } else {
+          const text = new TextDecoder("utf-8").decode(buf);
+          workbook = XLSX.read(text, { type: "string", cellDates: false });
+        }
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        if (raw.length < 2) {
+          resolve({ columns: [], rows: [], totalRows: 0 });
+          return;
+        }
+
+        const knownHeaders = [
+          "direction", "type", "stop seq", "role", "traced name",
+          "verified map name", "verified address", "nearby landmark",
+          "landmark address", "latitude", "longitude", "plus code",
+          "full plus code", "complete road path"
+        ];
+
+        let bestIdx = 0;
+        let bestHits = 0;
+        for (let i = 0; i < raw.length; i++) {
+          const cells = raw[i].map((c) => String(c ?? "").toLowerCase().trim());
+          let hits = 0;
+          for (const cell of cells) {
+            for (const kw of knownHeaders) {
+              if (cell === kw || cell.includes(kw)) {
+                hits++;
+                break;
+              }
+            }
+          }
+          if (hits > bestHits) {
+            bestHits = hits;
+            bestIdx = i;
+          }
+        }
+
+        if (bestHits < 2) {
+          resolve({ columns: [], rows: [], totalRows: 0, error: "Could not find stop data table in file" });
+          return;
+        }
+
+        const headerIdx = bestIdx;
+        const headers = raw[headerIdx].map((h) => String(h ?? "").trim());
+        const rows = raw.slice(headerIdx + 1)
+          .filter((r) => r && r.length > 0 && r.some((c) => String(c ?? "").trim() !== ""))
+          .map((r) => {
+            const obj = {};
+            headers.forEach((h, i) => { obj[h] = String(r[i] ?? "").trim(); });
+            return obj;
+          });
+
+        const meta = {};
+        for (let i = 0; i < headerIdx; i++) {
+          const cells = raw[i].map((c) => String(c ?? "").trim());
+          for (let j = 0; j < cells.length - 1; j += 2) {
+            const key = cells[j].toLowerCase();
+            const val = cells[j + 1];
+            if (key.includes("route name")) meta.routeName = val;
+            if (key.includes("route id")) meta.routeCode = val;
+            if (key === "start") meta.startName = val;
+            if (key === "end") meta.endName = val;
+          }
+        }
+
+        resolve({ columns: headers.filter(Boolean), rows, totalRows: rows.length, meta });
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsArrayBuffer(file);
+  });
+}
 
 export default function Routes() {
   const mapContainer = useRef(null);
@@ -52,10 +139,27 @@ export default function Routes() {
   const [pitch, setPitch] = useState(0);
   const [bearing, setBearing] = useState(0);
 
+  const [importStep, setImportStep] = useState(0);
+  const [importColumns, setImportColumns] = useState([]);
+  const [importRows, setImportRows] = useState([]);
+  const [importTotalRows, setImportTotalRows] = useState(0);
+  const [importMapping, setImportMapping] = useState({ name: "", latitude: "", longitude: "", order: "", plusCode: "", nearbyLandmark: "", roadPath: "" });
+  const [importRoadPath, setImportRoadPath] = useState([]);
+  const [importRouteName, setImportRouteName] = useState("");
+  const [importRouteCode, setImportRouteCode] = useState("");
+  const [importPreviewStops, setImportPreviewStops] = useState([]);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState("");
+  const fileInputRef = useRef(null);
+
   useEffect(() => { api.get("/transport/cities/").then((r) => {
     const d = Array.isArray(r.data) ? r.data : r.data.results || [];
     setCities(d);
-    if (d.length) setSelectedCity(d[0].id);
+    if (d.length) {
+      setSelectedCity(d[0].id);
+      const loc = d[0].location?.coordinates;
+      if (loc && map.current) map.current.flyTo({ center: [loc[0], loc[1]], zoom: 12, duration: 1000 });
+    }
   }).catch(() => {}); }, []);
 
   useEffect(() => {
@@ -78,7 +182,9 @@ export default function Routes() {
       container: mapContainer.current,
       style: MAP_STYLE_URL,
       center: DEFAULT_CENTER,
-      zoom: 5,
+      zoom: 12,
+      maxZoom: 22,
+      renderWorldCopies: true,
     });
 
     map.current.on("load", () => {
@@ -137,6 +243,14 @@ export default function Routes() {
       map.current.off("click", clickHandler);
     };
   }, [tab, isAddingStop]);
+
+  const zoomToCity = (cityId) => {
+    const city = cities.find((c) => c.id === cityId);
+    if (!city?.location?.coordinates) return;
+    const [lng, lat] = city.location.coordinates;
+    if (!map.current) return;
+    map.current.flyTo({ center: [lng, lat], zoom: 12, duration: 1000 });
+  };
 
   const reverseGeocode = async (lat, lon, cb) => {
     try {
@@ -376,6 +490,170 @@ export default function Routes() {
     }
   };
 
+  const handleImportFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportError("");
+    setImportStep(1);
+    try {
+      const { columns, rows, totalRows, meta, error } = await parseFileClientSide(file);
+      if (error || !columns.length) {
+        setImportError(error || "No columns found in file");
+        setImportStep(0);
+        return;
+      }
+      setImportColumns(columns);
+      setImportRows(rows);
+      setImportTotalRows(totalRows);
+      if (meta?.routeName) setImportRouteName(meta.routeName);
+      if (meta?.routeCode) setImportRouteCode(meta.routeCode);
+
+      const lowerCols = columns.map((c) => c.toLowerCase());
+      const autoMap = { name: "", latitude: "", longitude: "", order: "", plusCode: "", nearbyLandmark: "", roadPath: "" };
+      const latIdx = lowerCols.findIndex((c) => c.includes("lat"));
+      if (latIdx >= 0) autoMap.latitude = columns[latIdx];
+      const lonIdx = lowerCols.findIndex((c) => c.includes("lon") || c.includes("lng"));
+      if (lonIdx >= 0) autoMap.longitude = columns[lonIdx];
+      const nameIdx = lowerCols.findIndex((c) => c.includes("verified map name") || c.includes("traced name"));
+      if (nameIdx >= 0) autoMap.name = columns[nameIdx];
+      const orderIdx = lowerCols.findIndex((c) => c.includes("stop seq") || c.includes("order") || c.includes("sequence"));
+      if (orderIdx >= 0) autoMap.order = columns[orderIdx];
+      const pcIdx = lowerCols.findIndex((c) => c.includes("plus code"));
+      if (pcIdx >= 0) autoMap.plusCode = columns[pcIdx];
+      const lmIdx = lowerCols.findIndex((c) => c.includes("nearby landmark") || c.includes("landmark"));
+      if (lmIdx >= 0) autoMap.nearbyLandmark = columns[lmIdx];
+      const rpIdx = lowerCols.findIndex((c) => c.includes("complete road path") || c.includes("road path"));
+      if (rpIdx >= 0) autoMap.roadPath = columns[rpIdx];
+      setImportMapping(autoMap);
+    } catch (err) {
+      setImportError("Failed to parse file: " + err.message);
+      setImportStep(0);
+    }
+  };
+
+  const generateImportPreview = useCallback(() => {
+    if (!importMapping.latitude || !importMapping.longitude) {
+      setImportPreviewStops([]);
+      setImportRoadPath([]);
+      return;
+    }
+    const stops = [];
+    importRows.forEach((row, i) => {
+      const lat = parseFloat(row[importMapping.latitude]);
+      const lon = parseFloat(row[importMapping.longitude]);
+      if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
+      const seqVal = importMapping.order ? row[importMapping.order] : "";
+      const hasSeq = seqVal !== undefined && seqVal !== null && String(seqVal).trim() !== "" && !isNaN(parseInt(String(seqVal).trim()));
+      if (!hasSeq) return;
+      let order = parseInt(String(seqVal).trim()) || i;
+      const name = importMapping.name ? (row[importMapping.name] || `Stop ${order}`) : `Stop ${order}`;
+      const plusCode = importMapping.plusCode ? (row[importMapping.plusCode] || "") : "";
+      const nearbyLandmark = importMapping.nearbyLandmark ? (row[importMapping.nearbyLandmark] || "") : "";
+      stops.push({ lat, lon, name, order, plus_code: plusCode, nearby_landmark: nearbyLandmark });
+    });
+    stops.sort((a, b) => a.order - b.order);
+    setImportPreviewStops(stops);
+
+    let roadPath = [];
+    if (importMapping.roadPath) {
+      for (const row of importRows) {
+        const raw = String(row[importMapping.roadPath] || "").trim();
+        if (raw.length < 10) continue;
+        const numbers = raw.match(/-?\d+\.?\d*/g);
+        if (numbers && numbers.length >= 4) {
+          for (let i = 0; i < numbers.length - 1; i += 2) {
+            const rlat = parseFloat(numbers[i]);
+            const rlon = parseFloat(numbers[i + 1]);
+            if (rlat >= -90 && rlat <= 90 && rlon >= -180 && rlon <= 180) {
+              roadPath.push([rlon, rlat]);
+            }
+          }
+          if (roadPath.length >= 2) break;
+        }
+      }
+    }
+    setImportRoadPath(roadPath);
+  }, [importRows, importMapping]);
+
+  useEffect(() => {
+    if (importStep === 2) generateImportPreview();
+  }, [importStep, importMapping, generateImportPreview]);
+
+  useEffect(() => {
+    if (importStep !== 3 || !map.current || !mapLoaded) return;
+    const m = map.current;
+
+    Object.values(markers.current).forEach((mk) => mk.remove());
+    markers.current = {};
+
+    const stopCoords = importPreviewStops.map((s) => [s.lon, s.lat]);
+    const lineCoords = importRoadPath.length >= 2 ? importRoadPath : stopCoords;
+    const src = m.getSource("route-path");
+    if (src) src.setData(geoJsonify(lineCoords));
+
+    if (lineCoords.length > 1) {
+      const bounds = lineCoords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(lineCoords[0], lineCoords[0]));
+      m.fitBounds(bounds, { padding: 80, duration: 1000 });
+    }
+
+    importPreviewStops.forEach((s, i) => {
+      const el = document.createElement("div");
+      el.className = "flex items-center justify-center bg-brand-600 text-white w-7 h-7 rounded-full border-2 border-white shadow-md text-[11px] font-bold";
+      el.innerHTML = i + 1;
+      const mk = new maplibregl.Marker({ element: el })
+        .setLngLat([s.lon, s.lat])
+        .setPopup(new maplibregl.Popup({ offset: 15 }).setText(s.name))
+        .addTo(m);
+      markers.current[`import-${i}`] = mk;
+    });
+  }, [importStep, importPreviewStops, importRoadPath, mapLoaded]);
+
+  const handleImportSave = async () => {
+    if (!selectedCity || !importRouteName || importPreviewStops.length < 2) return;
+    setImportLoading(true);
+    setImportError("");
+    try {
+      const res = await api.post("/admin/route-import/", {
+        city: selectedCity,
+        route_name: importRouteName,
+        route_code: importRouteCode,
+        stops: importPreviewStops.map((s) => ({ lat: s.lat, lon: s.lon, name: s.name, order: s.order, plus_code: s.plus_code || "", nearby_landmark: s.nearby_landmark || "" })),
+      });
+      const d = res.data?.data || res.data;
+      const msg = d.message || "Route imported successfully";
+      const extra = d.road_snapped ? `\nRoad-snapped: ${d.geometry_points} geometry points` : "";
+      alert(msg + extra);
+      resetImport();
+      api.get(`/transport/routes/?city_id=${selectedCity}`).then((r) => {
+        setRoutes(Array.isArray(r.data) ? r.data : r.data.results || []);
+      });
+    } catch (err) {
+      const msg = err.response?.data?.message || err.response?.data?.detail || err.message || "Failed to import";
+      setImportError(typeof msg === "string" ? msg : JSON.stringify(msg));
+    }
+    setImportLoading(false);
+  };
+
+  const resetImport = () => {
+    setImportStep(0);
+    setImportColumns([]);
+    setImportRows([]);
+    setImportTotalRows(0);
+    setImportMapping({ name: "", latitude: "", longitude: "", order: "", plusCode: "", nearbyLandmark: "", roadPath: "" });
+    setImportRouteName("");
+    setImportRouteCode("");
+    setImportPreviewStops([]);
+    setImportRoadPath([]);
+    setImportError("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (map.current) {
+      const src = map.current.getSource("route-path");
+      if (src) src.setData(geoJsonify([]));
+      Object.values(markers.current).forEach((mk) => mk.remove());
+      markers.current = {};
+    }
+  };
+
   const endStopCount = (start ? 1 : 0) + (end ? 1 : 0);
 
   return (
@@ -387,7 +665,7 @@ export default function Routes() {
           </h2>
           <select
             value={selectedCity}
-            onChange={(e) => { setSelectedCity(e.target.value); resetForm(); }}
+            onChange={(e) => { setSelectedCity(e.target.value); resetForm(); zoomToCity(e.target.value); }}
             className="w-full bg-slate-800 text-white text-sm rounded-lg p-3 outline-none focus:ring-2 focus:ring-brand-500"
           >
             <option value="">Select City</option>
@@ -397,14 +675,18 @@ export default function Routes() {
 
         <div className="px-5 py-3 border-b border-slate-100">
           <div className="flex bg-slate-100 p-1 rounded-xl">
-            <button onClick={() => { setTab("library"); setSelectedRoute(null); }}
+            <button onClick={() => { setTab("library"); setSelectedRoute(null); resetImport(); }}
               className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
                 tab === "library" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
               }`}>Routes</button>
-            <button onClick={() => { setTab("create"); setSelectedRoute(null); }}
+            <button onClick={() => { setTab("create"); setSelectedRoute(null); resetImport(); }}
               className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
                 tab === "create" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
               }`}>Create</button>
+            <button onClick={() => { setTab("import"); setSelectedRoute(null); resetForm(); }}
+              className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
+                tab === "import" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+              }`}>Import</button>
           </div>
         </div>
 
@@ -609,6 +891,220 @@ export default function Routes() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {tab === "import" && !selectedRoute && (
+            <div className="space-y-5">
+              <div className="flex items-center gap-1 flex-wrap">
+                {["Upload", "Map", "Config", "Save"].map((label, i) => (
+                  <div key={label} className="flex items-center gap-1">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                      importStep > i ? "bg-brand-600 text-white" :
+                      importStep === i ? "bg-brand-100 text-brand-700 border-2 border-brand-500" :
+                      "bg-slate-100 text-slate-400"
+                    }`}>
+                      {importStep > i ? <Check size={12} /> : i + 1}
+                    </div>
+                    <span className={`text-[10px] font-bold ${importStep === i ? "text-slate-900" : "text-slate-400"}`}>{label}</span>
+                    {i < 3 && <ChevronRight size={10} className="text-slate-300" />}
+                  </div>
+                ))}
+              </div>
+
+              {importError && (
+                <div className="bg-red-50 border border-red-200 p-3 rounded-lg text-xs text-red-700">{importError}</div>
+              )}
+
+              {importStep === 0 && (
+                <div className="space-y-4">
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center cursor-pointer hover:border-brand-400 hover:bg-brand-50/30 transition"
+                  >
+                    <FileSpreadsheet size={32} className="mx-auto text-slate-400 mb-3" />
+                    <p className="text-sm font-bold text-slate-700">Click to upload CSV or Excel file</p>
+                    <p className="text-[11px] text-slate-400 mt-1">Parsed locally in your browser</p>
+                  </div>
+                  <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleImportFileUpload} className="hidden" />
+                </div>
+              )}
+
+              {importStep === 1 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      {importTotalRows} rows found
+                    </p>
+                    <button onClick={resetImport} className="text-[11px] font-bold text-red-500 hover:text-red-700">Cancel</button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Stop Name *</label>
+                      <select value={importMapping.name} onChange={(e) => setImportMapping({ ...importMapping, name: e.target.value })}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        <option value="">-- Select column --</option>
+                        {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Latitude *</label>
+                      <select value={importMapping.latitude} onChange={(e) => setImportMapping({ ...importMapping, latitude: e.target.value })}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        <option value="">-- Select column --</option>
+                        {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Longitude *</label>
+                      <select value={importMapping.longitude} onChange={(e) => setImportMapping({ ...importMapping, longitude: e.target.value })}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        <option value="">-- Select column --</option>
+                        {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Stop Order</label>
+                      <select value={importMapping.order} onChange={(e) => setImportMapping({ ...importMapping, order: e.target.value })}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        <option value="">-- Select column (optional) --</option>
+                        {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Plus Code</label>
+                      <select value={importMapping.plusCode} onChange={(e) => setImportMapping({ ...importMapping, plusCode: e.target.value })}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        <option value="">-- Select column (optional) --</option>
+                        {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Nearby Landmark</label>
+                      <select value={importMapping.nearbyLandmark} onChange={(e) => setImportMapping({ ...importMapping, nearbyLandmark: e.target.value })}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        <option value="">-- Select column (optional) --</option>
+                        {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Complete Road Path</label>
+                      <select value={importMapping.roadPath} onChange={(e) => setImportMapping({ ...importMapping, roadPath: e.target.value })}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        <option value="">-- Select column (optional) --</option>
+                        {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      {importRoadPath.length > 0 ? (
+                        <p className="text-[10px] text-emerald-600 mt-1 font-medium">
+                          {importRoadPath.length.toLocaleString()} road-path geometry points parsed
+                        </p>
+                      ) : importMapping.roadPath ? (
+                        <p className="text-[10px] text-amber-600 mt-1 font-medium">
+                          No coordinates found in this column
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {importRows.length > 0 && (
+                    <div className="overflow-x-auto rounded-xl border border-slate-100">
+                      <table className="w-full text-[11px]">
+                        <thead>
+                          <tr className="bg-slate-50">
+                            {importColumns.slice(0, 8).map((c) => <th key={c} className="p-2 text-left font-bold text-slate-500 whitespace-nowrap">{c}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importRows.slice(0, 3).map((row, i) => (
+                            <tr key={i} className="border-t border-slate-100">
+                              {importColumns.slice(0, 8).map((c) => <td key={c} className="p-2 text-slate-600 whitespace-nowrap">{row[c]}</td>)}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <button onClick={() => setImportStep(2)}
+                    disabled={!importMapping.latitude || !importMapping.longitude}
+                    className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
+                    Continue <ChevronRight size={16} />
+                  </button>
+                </div>
+              )}
+
+              {importStep === 2 && (
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Route Name *</label>
+                    <input value={importRouteName} onChange={(e) => setImportRouteName(e.target.value)}
+                      placeholder="e.g. Downtown Express"
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Route Code</label>
+                    <input value={importRouteCode} onChange={(e) => setImportRouteCode(e.target.value)}
+                      placeholder="e.g. R001"
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      Preview ({importPreviewStops.length} stops)
+                    </p>
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {importPreviewStops.map((s, i) => (
+                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-100">
+                          <div className="w-5 h-5 rounded bg-brand-50 text-brand-600 flex items-center justify-center font-bold text-[9px] shrink-0">{i + 1}</div>
+                          <span className="text-[11px] font-medium text-slate-700 truncate flex-1">{s.name}</span>
+                          <span className="text-[10px] text-slate-400">{s.lat.toFixed(4)}, {s.lon.toFixed(4)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={() => setImportStep(1)}
+                      className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition text-sm">
+                      Back
+                    </button>
+                    <button onClick={() => setImportStep(3)}
+                      disabled={!importRouteName}
+                      className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
+                      Preview Map <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {importStep === 3 && (
+                <div className="space-y-4">
+                  <div className="bg-brand-50 border border-brand-200 p-3 rounded-lg">
+                    <p className="text-xs font-bold text-brand-800">{importRouteName}</p>
+                    <p className="text-[11px] text-brand-600">
+                      {importPreviewStops.length} stops | OSRM road-snap routing | {importPreviewStops[0]?.name} → {importPreviewStops[importPreviewStops.length - 1]?.name}
+                    </p>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500">
+                    {importRoadPath.length >= 2
+                      ? "Route will be road-snapped via OSRM using all stops as ordered waypoints."
+                      : "Route will be road-snapped via OSRM using all stops as ordered waypoints."}
+                  </p>
+
+                  <div className="flex gap-2">
+                    <button onClick={() => setImportStep(2)}
+                      className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition text-sm">
+                      Back
+                    </button>
+                    <button onClick={handleImportSave} disabled={importLoading || !selectedCity}
+                      className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
+                      <Save size={16} /> {importLoading ? "Routing via OSRM..." : "Import Route"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
