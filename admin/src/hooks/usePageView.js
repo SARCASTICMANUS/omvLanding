@@ -2,15 +2,6 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import api from "../api/client";
 
-function getVisitorId() {
-  let id = localStorage.getItem("kpi_visitor_id");
-  if (!id) {
-    id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    localStorage.setItem("kpi_visitor_id", id);
-  }
-  return id;
-}
-
 function detectDeviceType() {
   const ua = navigator.userAgent;
   if (/tablet|ipad|playbook|silk/i.test(ua)) return "tablet";
@@ -23,14 +14,10 @@ export default function usePageView() {
 
   useEffect(() => {
     const page = location.pathname + location.search;
-    const lastPage = sessionStorage.getItem("kpi_last_page");
-    if (page === lastPage) return;
-    sessionStorage.setItem("kpi_last_page", page);
 
     api.post("/kpi/track/", {
       platform: "web",
       page,
-      visitor_id: getVisitorId(),
       user_agent: navigator.userAgent,
       referrer: document.referrer || "",
       device_type: detectDeviceType(),

@@ -33,9 +33,6 @@ function AdminLayout({ onLogout }) {
 
   useEffect(() => {
     const page = `/zxcv/${activeTab}`;
-    const lastPage = sessionStorage.getItem("kpi_last_page");
-    if (page === lastPage) return;
-    sessionStorage.setItem("kpi_last_page", page);
 
     const ua = navigator.userAgent;
     let deviceType = "desktop";
@@ -45,7 +42,6 @@ function AdminLayout({ onLogout }) {
     api.post("/kpi/track/", {
       platform: "web",
       page,
-      visitor_id: localStorage.getItem("kpi_visitor_id") || "unknown",
       user_agent: ua,
       referrer: document.referrer || "",
       device_type: deviceType,

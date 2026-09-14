@@ -1,6 +1,9 @@
 import logging
+import uuid
+import hashlib
 from datetime import timedelta
 from django.utils import timezone
+from django.http import JsonResponse
 from django.db.models import Count
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -11,6 +14,9 @@ from kpi.api.serializers import PageViewSerializer, KPISnapshotSerializer
 
 logger = logging.getLogger(__name__)
 
+VISITOR_COOKIE = "vayy_vid"
+VISITOR_COOKIE_MAX_AGE = 365 * 24 * 60 * 60  # 1 year
+
 
 class TrackPageViewAPI(APIView):
     """POST /api/kpi/track/ — Record a page view (web or app)."""
@@ -19,11 +25,29 @@ class TrackPageViewAPI(APIView):
     def post(self, request):
         serializer = PageViewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
         ip = request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
         if not ip:
             ip = request.META.get("REMOTE_ADDR", "")
-        serializer.save(ip_address=ip)
-        return Response({"success": True, "message": "Page view recorded"})
+
+        visitor_id = request.COOKIES.get(VISITOR_COOKIE)
+        if not visitor_id:
+            fingerprint = f"{ip}-{request.META.get('HTTP_USER_AGENT', '')}"
+            visitor_id = hashlib.sha256(fingerprint.encode()).hexdigest()[:32]
+
+        serializer.save(ip_address=ip, visitor_id=visitor_id)
+
+        response = JsonResponse({"success": True, "message": "Page view recorded"})
+        if not request.COOKIES.get(VISITOR_COOKIE):
+            response.set_cookie(
+                VISITOR_COOKIE,
+                visitor_id,
+                max_age=VISITOR_COOKIE_MAX_AGE,
+                httponly=True,
+                samesite="Lax",
+                path="/",
+            )
+        return response
 
 
 class KPIOverviewAPI(APIView):
