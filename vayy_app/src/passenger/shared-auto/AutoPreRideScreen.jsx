@@ -793,6 +793,7 @@ import {
   Feather,
 } from "@expo/vector-icons";
 import { fetchRouteGeometry } from "../../routes/services/routeService";
+import { walkingDistanceText } from "../../shared/utils/walkingDistance";
 import { TRACKING } from "../../constants";
 import api from "../../shared/lib/api";
 
@@ -827,6 +828,7 @@ export function AutoPreRideScreen({ navigation, route }) {
   const fare = trip?.fare ?? "—";
   const etaSeconds = trip?.eta_seconds ?? 0;
   const walkMinutes = trip?.walk_minutes ?? 0;
+  const walkDistanceMeters = trip?.walk_distance_meters ?? 0;
   const vehicleType = trip?.vehicle_type || trip?.fuel_type || "auto";
 
   const zoomIn = () => mapRef.current?.zoomIn();
@@ -1063,7 +1065,7 @@ export function AutoPreRideScreen({ navigation, route }) {
           <Text style={styles.cardStopName}>{pickupName}</Text>
           <View style={styles.walkRow}>
             <Ionicons name="walk" size={14} color="#6B7280" />
-            <Text style={styles.walkText}>{walkMinutes ? `~${walkMinutes} min walk` : "Walk to pickup"}</Text>
+            <Text style={styles.walkText}>{walkDistanceMeters ? `~${walkingDistanceText(walkDistanceMeters)}` : walkMinutes ? `~${walkMinutes} min walk` : "Walk to pickup"}</Text>
           </View>
         </View>
         <View style={styles.proximityRingActive}>

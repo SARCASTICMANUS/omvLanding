@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import DriverVerification from "./pages/DriverVerification";
 import Sidebar from "./components/Sidebar";
 import api from "./api/client";
+import usePageView from "./hooks/usePageView";
 
 const Landing = lazy(() => import("./pages/Landing"));
 const SupportPage = lazy(() => import("./pages/SupportPage"));
@@ -29,6 +30,17 @@ function PageLoader() {
 
 function AdminLayout({ onLogout }) {
   const [activeTab, setActiveTab] = useState("dashboard");
+
+  useEffect(() => {
+    api.post("/kpi/track/", {
+      platform: "web",
+      page: `/zxcv/${activeTab}`,
+      visitor_id: localStorage.getItem("kpi_visitor_id") || "unknown",
+      user_agent: navigator.userAgent,
+      referrer: document.referrer || "",
+      device_type: "desktop",
+    }).catch(() => {});
+  }, [activeTab]);
 
   const tabs = [
     { id: "dashboard", label: "Dashboard" },
@@ -73,6 +85,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  usePageView();
 
   useEffect(() => {
     const token = localStorage.getItem("admin_token");

@@ -96,8 +96,6 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
     mapRef.current.setCamera({
       center: [driverPos.longitude, driverPos.latitude],
       zoom: 17,
-      pitch: 60,
-      bearing: heading,
       duration: 1500,
     });
   }, [driverPos, heading]);
@@ -174,7 +172,6 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
           initialViewState={{
             center: [mapCenter.longitude, mapCenter.latitude],
             zoom: 17,
-            pitch: 60,
           }}
         >
           <UserLocation

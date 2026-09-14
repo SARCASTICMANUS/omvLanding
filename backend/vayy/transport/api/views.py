@@ -518,6 +518,7 @@ class RouteSearchByLocationAPIView(APIView):
                 "rating": 4.5,
                 "review_count": 128,
                 "walk_minutes": walk_pickup_min,
+                "walk_distance_meters": round(pickup_dist_m),
                 "vehicle_type": "auto",
                 "payment_method": "Cash",
                 "distance_km": stop_distance_km,

@@ -24,6 +24,7 @@ import { fetchActiveRouteTrips, createBoardingRequest, setDispatchStatus } from 
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import { cancelBoardingRequest, getNearbyVehicles } from "../services/passengerService";
+import { walkingDistanceText } from "../../shared/utils/walkingDistance";
 
 // const { width } = Dimensions.get("window");
 
@@ -308,6 +309,17 @@ export function AutoSearchingScreen({ navigation, route }) {
               </Text> avg. wait
             </Text>
           </View>
+          {trip?.walk_distance_meters ? (
+            <>
+              <View style={styles.availDivider} />
+              <View style={styles.availItem}>
+                <Ionicons name="walk" size={18} color="#009849" />
+                <Text style={styles.availText}>
+                  <Text style={styles.availBold}>~{walkingDistanceText(trip.walk_distance_meters)}</Text> to stop
+                </Text>
+              </View>
+            </>
+          ) : null}
         </View>
 
         <View style={styles.searchingInfo}>

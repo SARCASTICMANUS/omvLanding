@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { walkingDistanceText } from "../../shared/utils/walkingDistance";
 
 /* ─────────────────────────────────────────────
    ORIGINAL HELPERS — UNTOUCHED
@@ -76,6 +77,7 @@ function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggle
   const reviews  = trip?.reviews || trip?.review_count || null;
   // const fuelType = trip?.fuel_type || trip?.vehicle_type || "CNG";
   const walkMin  = trip?.walk_minutes || null;
+  const walkDist = trip?.walk_distance_meters || null;
   const fare     = trip?.fare || trip?.price || null;
   const payment  = trip?.payment_method || "Cash";
   const dist     = formatDistanceText(trip);
@@ -104,7 +106,7 @@ function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggle
             <StopDotLine
               dropLabel={toLbl}
               pickupLabel={fromLbl}
-              walkText={`${walkMin} min walk`}
+              walkText={walkDist ? walkingDistanceText(walkDist) : walkMin ? `${walkMin} min walk` : ""}
             />
           </View>
 

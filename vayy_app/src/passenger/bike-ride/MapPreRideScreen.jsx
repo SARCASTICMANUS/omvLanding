@@ -15,24 +15,11 @@ import VayyMap, { GeoJSONSource, Layer, UserLocation, Marker, ViewAnnotation } f
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { fetchRouteGeometry } from "../../routes/services/routeService";
+import { haversine, formatDistance, walkingTimeText } from "../../shared/utils/walkingDistance";
 
 const ARRIVAL_THRESHOLD = 500;
 
 const USER_TOP_IMAGE = require("../../../assets/VayyUserTop.webp");
-
-function haversine(a, b) {
-  const R = 6371e3;
-  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
-  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
-  const x = Math.sin(dLat / 2) ** 2 + Math.cos((a.latitude * Math.PI) / 180) * Math.cos((b.latitude * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
-
-function formatDistance(meters) {
-  if (meters == null) return "—";
-  if (meters < 1000) return `${Math.round(meters)} m`;
-  return `${(meters / 1000).toFixed(1)} km`;
-}
 
 export function BikeMapPreRideScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -79,7 +66,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
 
   const hasDistance = stopDistance !== "-" && Number.isFinite(Number(stopDistance));
   const liveWalkDistance = userLocation && pickupLat != null && pickupLon != null
-    ? haversine(userLocation, { latitude: pickupLat, longitude: pickupLon })
+    ? haversine(userLocation.latitude, userLocation.longitude, pickupLat, pickupLon)
     : null;
   const distNum = liveWalkDistance != null ? liveWalkDistance : (hasDistance ? Number(stopDistance) : null);
   const isNearby = distNum == null ? true : distNum <= ARRIVAL_THRESHOLD;
@@ -420,7 +407,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           <View style={{ flex: 1 }}>
             <Text style={styles.cardLabel}>Nearest stop</Text>
             <Text style={styles.cardDistance}>
-              <Text style={styles.greenText}>{formatDistance(distNum)}</Text> away
+              <Text style={styles.greenText}>{formatDistance(distNum)}</Text> away · {walkingTimeText(distNum)}
             </Text>
           </View>
           <View style={styles.etaBadge}>
@@ -490,7 +477,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
                 : "You're not at the pickup stop. Get closer to get notified."}
             </Text>
             <Text style={[styles.sheetStatusDist, isNearby ? styles.sheetStatusDistReady : styles.sheetStatusDistAway]}>
-              {formatDistance(distNum)} away
+              {formatDistance(distNum)} away · {walkingTimeText(distNum)}
             </Text>
           </View>
         </View>
