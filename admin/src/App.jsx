@@ -32,13 +32,23 @@ function AdminLayout({ onLogout }) {
   const [activeTab, setActiveTab] = useState("dashboard");
 
   useEffect(() => {
+    const page = `/zxcv/${activeTab}`;
+    const lastPage = sessionStorage.getItem("kpi_last_page");
+    if (page === lastPage) return;
+    sessionStorage.setItem("kpi_last_page", page);
+
+    const ua = navigator.userAgent;
+    let deviceType = "desktop";
+    if (/tablet|ipad|playbook|silk/i.test(ua)) deviceType = "tablet";
+    else if (/mobile|iphone|ipod|android.*mobile/i.test(ua)) deviceType = "mobile";
+
     api.post("/kpi/track/", {
       platform: "web",
-      page: `/zxcv/${activeTab}`,
+      page,
       visitor_id: localStorage.getItem("kpi_visitor_id") || "unknown",
-      user_agent: navigator.userAgent,
+      user_agent: ua,
       referrer: document.referrer || "",
-      device_type: "desktop",
+      device_type: deviceType,
     }).catch(() => {});
   }, [activeTab]);
 

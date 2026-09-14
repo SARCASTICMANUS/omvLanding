@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import api from "../api/client";
 
@@ -20,12 +20,12 @@ function detectDeviceType() {
 
 export default function usePageView() {
   const location = useLocation();
-  const lastTracked = useRef(null);
 
   useEffect(() => {
     const page = location.pathname + location.search;
-    if (page === lastTracked.current) return;
-    lastTracked.current = page;
+    const lastPage = sessionStorage.getItem("kpi_last_page");
+    if (page === lastPage) return;
+    sessionStorage.setItem("kpi_last_page", page);
 
     api.post("/kpi/track/", {
       platform: "web",
