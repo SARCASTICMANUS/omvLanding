@@ -71,7 +71,16 @@ class DispatchService:
 
     @staticmethod
     def _assign_to_driver(passenger: User, route_id: str, pickup_stop_id: str, candidate: Dict[str, Any], drop_stop_id: str = None) -> Dict[str, Any]:
-        # 2. Create Trip in 'requested' state
+        # Guard: ensure driver is still available
+        vehicle_state = VehicleState.objects.filter(vehicle=candidate['vehicle']).first()
+        if not vehicle_state:
+            return {"status": "no_vehicle", "message": "Vehicle state not found"}
+        if vehicle_state.occupancy_count > 0:
+            return {"status": "driver_busy", "message": "Driver already has an active passenger"}
+        if vehicle_state.active_trip is not None:
+            return {"status": "driver_busy", "message": "Driver is on another trip"}
+
+        # Create Trip in 'assigned' state
         route = Route.objects.get(id=route_id)
         trip = ActiveTrip.objects.create(
             vehicle=candidate['vehicle'],
@@ -138,9 +147,9 @@ class DispatchService:
             "trip_id": str(trip.id)
         })
 
-        # 5. Schedule timeout check (2 minutes)
+        # Schedule timeout check (10s per candidate, cascades to next on expiry)
         from operations.tasks import check_assignment_timeout
-        check_assignment_timeout.apply_async((str(trip.id),), countdown=120)
+        check_assignment_timeout.apply_async((str(trip.id),), countdown=10)
         
         return {"status": "assigned", "trip_id": str(trip.id), "driver_name": trip.driver.get_full_name()}
 
@@ -175,7 +184,7 @@ class DispatchService:
             drop_lat=drop_stop.location.y if drop_stop else None,
             drop_lng=drop_stop.location.x if drop_stop else None,
             notified_drivers=[str(c["driver"].id) for c in candidates],
-            expires_at=timezone.now() + timedelta(seconds=90),
+            expires_at=timezone.now() + timedelta(seconds=45),
         )
 
         # Shared request metadata for all candidate drivers
@@ -251,11 +260,11 @@ class DispatchService:
                 payload,
             )
 
-        # Schedule 90s timeout — expire if no one accepts
+        # Schedule 45s timeout — expire if no one accepts
         from operations.tasks import expire_broadcast_request
         expire_broadcast_request.apply_async(
             (str(dispatch_request.id),),
-            countdown=90,
+            countdown=45,
         )
 
         logger.info(
@@ -274,20 +283,25 @@ class DispatchService:
     def accept_broadcast_request(request_id: str, driver: User) -> Dict[str, Any]:
         """
         Driver accepts a broadcast dispatch request.
-        Uses select_for_update to prevent race conditions (only one driver wins).
+        Uses atomic UPDATE with WHERE status='pending' to guarantee exactly one winner.
         """
-        dispatch_request = DispatchRequest.objects.select_for_update().get(id=request_id)
-
-        if dispatch_request.status != DispatchRequest.STATUS_PENDING:
+        # Atomic claim — only one driver wins. The UPDATE with WHERE status='pending'
+        # is a single SQL statement; two concurrent transactions cannot both succeed.
+        updated = DispatchRequest.objects.filter(
+            id=request_id,
+            status=DispatchRequest.STATUS_PENDING,
+        ).update(
+            status=DispatchRequest.STATUS_ACCEPTED,
+            accepted_by=driver,
+        )
+        if updated == 0:
             return {
                 "status": "already_taken",
-                "message": "Request already accepted by another driver",
+                "message": "Ride no longer available",
             }
 
-        if timezone.now() > dispatch_request.expires_at:
-            dispatch_request.status = DispatchRequest.STATUS_EXPIRED
-            dispatch_request.save()
-            return {"status": "expired", "message": "Request has expired"}
+        # Re-read the claimed request (now STATUS_ACCEPTED) for downstream use
+        dispatch_request = DispatchRequest.objects.get(id=request_id)
 
         # Find driver's vehicle
         vehicle_state = VehicleState.objects.select_related("vehicle").filter(
@@ -296,15 +310,14 @@ class DispatchService:
         ).first()
 
         if not vehicle_state:
+            # Roll back — release the claim so another driver can try
+            dispatch_request.status = DispatchRequest.STATUS_PENDING
+            dispatch_request.accepted_by = None
+            dispatch_request.save()
             return {
                 "status": "no_vehicle",
                 "message": "No active vehicle found for this driver",
             }
-
-        # Mark request as accepted
-        dispatch_request.status = DispatchRequest.STATUS_ACCEPTED
-        dispatch_request.accepted_by = driver
-        dispatch_request.save()
 
         # Create ActiveTrip with OTP — status ACCEPTED since driver already accepted
         otp = f"{random.randint(1000, 9999)}"
@@ -460,76 +473,114 @@ class DispatchService:
             pass
 
     @staticmethod
-    def find_best_candidates(route_id: str, pickup_stop_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def find_best_candidates(route_id: str, pickup_stop_id: str, limit: int = 5, exclude_drivers: set = None) -> List[Dict[str, Any]]:
         """
-        Matching Engine: Finds and ranks drivers based on distance, rating, and availability.
-        Only considers VERIFIED drivers.
+        Matching Engine: Two-stage spatial filter + OSRM scoring.
+        Stage 1: Redis GEO sub-millisecond radius query (3km, fallback 5km).
+        Stage 2: DB lookup for candidate details + OSRM distance matrix.
         """
         from transport.models import Stop
         stop = Stop.objects.get(id=pickup_stop_id)
-        
-        # Find available vehicles within 10km (great-circle for initial filter)
+
+        # Stage 1: Redis GEO pre-filter (sub-millisecond)
+        nearby = RedisGeoService.get_nearby(
+            lat=stop.location.y,
+            lng=stop.location.x,
+            radius_m=3000,
+        )
+        if len(nearby) < 3:
+            # Expand to 5km if too few candidates
+            nearby = RedisGeoService.get_nearby(
+                lat=stop.location.y,
+                lng=stop.location.x,
+                radius_m=5000,
+            )
+
+        if not nearby:
+            return []
+
+        vehicle_ids = [v["vehicle_id"] for v in nearby]
+
+        # Stage 2: DB lookup for candidate details (filtered to Redis results only)
         available_vehicles = VehicleState.objects.filter(
-            vehicle__is_active=True,
-            # vehicle__driver__driver_profile__is_verified=True,
-            # active_trip__isnull=True,
-            # current_location__distance_lte=(stop.location, D(km=10))
+            vehicle_id__in=vehicle_ids,
+            occupancy_count=0,
+            active_trip__isnull=True,
+            current_location__isnull=False,
         ).annotate(
             distance=Distance('current_location', stop.location)
         ).select_related('vehicle', 'vehicle__driver', 'vehicle__driver__driver_profile')
 
-        candidates = []
-        vehicle_coords = []
-        vehicle_states = []
-        for state in available_vehicles:
-            vehicle_coords.append(
-                (state.current_location.x, state.current_location.y)
-            )
-            vehicle_states.append(state)
+        vehicle_states = list(available_vehicles)
 
+        if not vehicle_states:
+            return []
+
+        # Stage 3: OSRM distance matrix on pre-filtered set
         road_distances = {}
-        if vehicle_coords:
-            from transport.services.osrm_service import OSRMService
-            stop_coord = (stop.location.x, stop.location.y)
-            all_coords = vehicle_coords + [stop_coord]
-            sources = list(range(len(vehicle_coords)))
-            destinations = [len(vehicle_coords)]
-            matrix = OSRMService.get_distance_matrix(
-                all_coords, sources=sources, destinations=destinations
-            )
-            if matrix and matrix.get("distances"):
-                for i, state in enumerate(vehicle_states):
-                    dist_m = matrix["distances"][i][0]
-                    if dist_m is not None:
-                        road_distances[state.id] = dist_m / 1000.0
+        vehicle_coords = [
+            (s.current_location.x, s.current_location.y)
+            for s in vehicle_states if s.current_location
+        ]
 
+        if vehicle_coords:
+            try:
+                from transport.services.osrm_service import OSRMService
+                stop_coord = (stop.location.x, stop.location.y)
+                all_coords = vehicle_coords + [stop_coord]
+                sources = list(range(len(vehicle_coords)))
+                destinations = [len(vehicle_coords)]
+                matrix = OSRMService.get_distance_matrix(
+                    all_coords, sources=sources, destinations=destinations
+                )
+                if matrix and matrix.get("distances"):
+                    for i, state in enumerate(vehicle_states):
+                        if state.current_location and i < len(matrix["distances"]):
+                            dist_m = matrix["distances"][i][0]
+                            if dist_m is not None:
+                                road_distances[state.id] = dist_m / 1000.0
+            except Exception as e:
+                logger.warning(f"OSRM matrix failed, falling back to haversine: {e}")
+
+        # Stage 4: Score and rank candidates
+        candidates = []
         for state in vehicle_states:
             driver = state.vehicle.driver
-            profile = driver.driver_profile
+
+            # Skip drivers in exclusion list
+            if exclude_drivers and str(driver.id) in exclude_drivers:
+                continue
+
+            try:
+                profile = driver.driver_profile
+            except Exception:
+                continue
 
             if state.id in road_distances:
                 dist_km = road_distances[state.id]
-                dist_score = max(0, 50 - (dist_km * 5))
             else:
-                dist_score = max(0, 50 - (state.distance.km * 5))
-            
+                dist_km = state.distance.km * 1.35  # haversine with urban routing multiplier
+
+            # Hard cap: >3km gets 0 points (unprofitable for bike taxis)
+            if dist_km > 3.0:
+                dist_score = 0
+            else:
+                dist_score = max(0, 50 - (dist_km * 5))
+
             # Rating: Max 30 points (5.0 = 30, 0.0 = 0)
             rating_score = profile.rating * 6
-            
-            # Occupancy compatibility: Max 10 points (0 occupancy = 10, >5 = 0)
-            occ_score = max(0, 10 - (state.occupancy_count * 2))
 
             # Route compatibility: Max 10 points (if city matches)
             route_score = 10 if state.vehicle.city_id == stop.route.city_id else 0
-            
+
             # Total
-            total_score = dist_score + rating_score + occ_score + route_score
-            
+            total_score = dist_score + rating_score + route_score
+
             candidates.append({
                 'vehicle': state.vehicle,
                 'driver': driver,
                 'score': total_score,
-                'distance': state.distance.km
+                'distance': dist_km,
             })
 
         # Rank by score descending
@@ -555,7 +606,12 @@ class DispatchService:
         }
 
         if new_status not in valid_transitions.get(trip.status, []):
-            raise ValueError(f"Invalid transition from {trip.status} to {new_status}")
+            from common.middleware import get_correlation_id
+            corr_id = get_correlation_id()
+            raise ValueError(
+                f"Invalid transition {trip.status} → {new_status} "
+                f"[trip={trip_id}, corr_id={corr_id}]"
+            )
 
         trip.status = new_status
         

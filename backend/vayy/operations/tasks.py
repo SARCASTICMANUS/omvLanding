@@ -2,9 +2,9 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 from datetime import timedelta
-from operations.models import ActiveTrip
+from operations.models import ActiveTrip, BoardingRequest
 from operations.consumers.dispatch_consumer import DispatchConsumer
-from operations.constants import TRIP_STATUS_ASSIGNED, TRIP_STATUS_CANCELLED
+from operations.constants import TRIP_STATUS_ASSIGNED, TRIP_STATUS_CANCELLED, TRIP_STATUS_REJECTED
 
 logger = logging.getLogger(__name__)
 
@@ -12,28 +12,84 @@ logger = logging.getLogger(__name__)
 @shared_task
 def check_assignment_timeout(trip_id):
     """
-    Checks if a trip assignment has timed out.
+    Cascading timeout: if trip still ASSIGNED after 10s,
+    reject current candidate and re-dispatch to next best.
+    Cancel only after all candidates exhausted.
     """
+    from operations.services.dispatch_service import DispatchService
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
     try:
-        trip = ActiveTrip.objects.get(id=trip_id, status=TRIP_STATUS_ASSIGNED)
-        # If still assigned after timeout, cancel and notify
+        trip = ActiveTrip.objects.select_for_update().get(
+            id=trip_id, status=TRIP_STATUS_ASSIGNED
+        )
+    except ActiveTrip.DoesNotExist:
+        return  # Trip already moved to another state (accepted/rejected)
+
+    # Find the boarding request to get passenger and stop info
+    boarding = BoardingRequest.objects.filter(trip=trip).first()
+    if not boarding:
         trip.status = TRIP_STATUS_CANCELLED
         trip.ended_at = timezone.now()
         trip.save()
+        return
 
-        logger.warning(f"Trip {trip_id} timed out and was cancelled.")
-        # In a real app, trigger find_best_candidates again for a new driver
-    except ActiveTrip.DoesNotExist:
-        pass
+    route_id = str(trip.route_id)
+    pickup_stop_id = str(boarding.pickup_stop_id)
+    excluded_driver_id = str(trip.driver_id)
+
+    # Mark current trip as rejected (driver timed out)
+    trip.status = TRIP_STATUS_REJECTED
+    trip.ended_at = timezone.now()
+    trip.save()
+
+    # Find next candidates excluding the timed-out driver
+    candidates = DispatchService.find_best_candidates(
+        route_id, pickup_stop_id, limit=5, exclude_drivers={excluded_driver_id}
+    )
+
+    if candidates:
+        # Assign to next best candidate
+        result = DispatchService._assign_to_driver(
+            passenger=boarding.passenger,
+            route_id=route_id,
+            pickup_stop_id=pickup_stop_id,
+            candidate=candidates[0],
+            drop_stop_id=str(boarding.drop_stop_id) if boarding.drop_stop else None,
+        )
+        logger.info(
+            f"Trip {trip_id}: cascaded from driver {excluded_driver_id} "
+            f"to {candidates[0]['driver'].id} — status={result.get('status')}"
+        )
+    else:
+        # No more candidates — notify passenger
+        logger.warning(f"Trip {trip_id}: no more candidates after cascade, notifying passenger")
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"dispatch_{trip_id}",
+            {
+                "type": "dispatch_update",
+                "data": {
+                    "trip_id": trip_id,
+                    "status": "cancelled",
+                    "reason": "no_drivers_available",
+                },
+            },
+        )
 
 
 @shared_task
 def expire_broadcast_request(request_id):
     """
-    Expires a broadcast dispatch request after timeout (90s).
-    Notifies all drivers to dismiss popup, and notifies passenger.
+    Expires a broadcast dispatch request after timeout (45s).
+    Re-dispatches with expanded radius using hybrid approach:
+    1. Try NEW drivers within 5km (exclude previously notified).
+    2. If no new drivers, fall back to ALL available drivers.
+    3. If still none, notify passenger no drivers available.
     """
     from operations.models import DispatchRequest
+    from operations.services.dispatch_service import DispatchService
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
 
@@ -47,8 +103,47 @@ def expire_broadcast_request(request_id):
         dispatch_request.save()
 
         channel_layer = get_channel_layer()
+        notified = set(dispatch_request.notified_drivers)
 
-        # Notify all drivers → dismiss popup
+        # Stage 1: Try NEW drivers within 5km (exclude previously notified)
+        candidates = DispatchService.find_best_candidates(
+            str(dispatch_request.route_id),
+            str(dispatch_request.pickup_stop_id),
+            limit=5,
+            exclude_drivers=notified,
+        )
+
+        if candidates:
+            # Re-broadcast to new drivers only
+            DispatchService._handle_broadcast_dispatch(
+                dispatch_request.passenger,
+                str(dispatch_request.route_id),
+                str(dispatch_request.pickup_stop_id),
+                str(dispatch_request.drop_stop_id) if dispatch_request.drop_stop else None,
+                candidates,
+            )
+            logger.info(f"Broadcast {request_id}: re-dispatched to {len(candidates)} new drivers")
+            return
+
+        # Stage 2: No new drivers — fall back to ALL available drivers
+        all_candidates = DispatchService.find_best_candidates(
+            str(dispatch_request.route_id),
+            str(dispatch_request.pickup_stop_id),
+            limit=5,
+        )
+
+        if all_candidates:
+            DispatchService._handle_broadcast_dispatch(
+                dispatch_request.passenger,
+                str(dispatch_request.route_id),
+                str(dispatch_request.pickup_stop_id),
+                str(dispatch_request.drop_stop_id) if dispatch_request.drop_stop else None,
+                all_candidates,
+            )
+            logger.info(f"Broadcast {request_id}: re-dispatched to {len(all_candidates)} drivers (fallback)")
+            return
+
+        # Stage 3: No drivers available anywhere
         for driver_id_str in dispatch_request.notified_drivers:
             async_to_sync(channel_layer.group_send)(
                 f"notifications_{driver_id_str}",
@@ -61,8 +156,6 @@ def expire_broadcast_request(request_id):
                 },
             )
 
-        # Notify passenger → no drivers available
-        # Passenger listens on a broadcast_{request_id} group
         async_to_sync(channel_layer.group_send)(
             f"broadcast_{dispatch_request.id}",
             {
@@ -73,10 +166,10 @@ def expire_broadcast_request(request_id):
                 },
             },
         )
-
-        logger.info(f"Broadcast dispatch {request_id} expired — notified {len(dispatch_request.notified_drivers)} drivers")
+        logger.info(f"Broadcast {request_id}: expired, no drivers available")
 
     except DispatchRequest.DoesNotExist:
+        logger.warning(f"Broadcast dispatch {request_id} not found for expiry")
         logger.warning(f"Broadcast dispatch {request_id} not found for expiry")
 
 
