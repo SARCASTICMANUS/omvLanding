@@ -19,6 +19,7 @@ class RouteSelector:
         return (
             Route.objects
             .select_related("city")
+            .prefetch_related("stops")
             .all()
             .order_by("name")
         )
@@ -28,6 +29,7 @@ class RouteSelector:
         return (
             Route.objects
             .select_related("city")
+            .prefetch_related("stops")
             .filter(city_id=city_id)
             .order_by("name")
         )
@@ -61,6 +63,7 @@ class RouteSelector:
         return (
             Route.objects
             .select_related("city")
+            .prefetch_related("stops")
             .filter(name__icontains=query)
             .order_by("name")
         )

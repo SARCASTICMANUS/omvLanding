@@ -34,6 +34,8 @@ class StopSerializer(serializers.ModelSerializer):
             "location",
             "order",
             "short_name",
+            "plus_code",
+            "nearby_landmark",
         )
 
     def get_short_name(self, obj):
@@ -132,6 +134,8 @@ class RouteListSerializer(
         source="city.name",
         read_only=True,
     )
+    stops_count = serializers.SerializerMethodField()
+    path = serializers.SerializerMethodField()
 
     class Meta:
         model = Route
@@ -142,11 +146,22 @@ class RouteListSerializer(
             "name",
             "route_code",
             "city_name",
+            "path",
             "start_name",
             "end_name",
             "total_distance_meters",
             "is_public",
+            "stops_count",
         )
+
+    def get_stops_count(self, obj):
+        return obj.stops.count() if hasattr(obj, 'stops') else 0
+
+    def get_path(self, instance):
+        if instance.path is None:
+            return None
+        import json
+        return json.loads(instance.path.geojson)
 
 
 class RouteDetailSerializer(
@@ -161,6 +176,8 @@ class RouteDetailSerializer(
         many=True,
         read_only=True,
     )
+
+    path = serializers.SerializerMethodField()
 
     class Meta:
         model = Route
@@ -180,6 +197,12 @@ class RouteDetailSerializer(
             "created_at",
             "updated_at",
         )
+
+    def get_path(self, instance):
+        if instance.path is None:
+            return None
+        import json
+        return json.loads(instance.path.geojson)
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)

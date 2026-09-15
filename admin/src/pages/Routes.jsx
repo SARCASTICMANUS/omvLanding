@@ -7,7 +7,7 @@ import LocationSearch from "../components/LocationSearch";
 import {
   Plus, Save, Trash2, XCircle,
   ArrowUp, ArrowDown, Bike, Compass, Box, Edit3,
-  Route as RouteIcon, Upload, FileSpreadsheet, ChevronRight, Check,
+  Route as RouteIcon, Upload, FileSpreadsheet, ChevronRight, Check, RefreshCw,
 } from "lucide-react";
 
 const DEFAULT_CENTER = [78.9629, 20.5937];
@@ -575,9 +575,36 @@ export default function Routes() {
     setImportRoadPath(roadPath);
   }, [importRows, importMapping]);
 
+  const handleGenerateRoadPath = useCallback(async () => {
+    if (importPreviewStops.length < 2) return;
+    try {
+      const first = importPreviewStops[0];
+      const last = importPreviewStops[importPreviewStops.length - 1];
+      const middleStops = importPreviewStops.slice(1, -1).map((s) => ({ lat: s.lat, lon: s.lon }));
+      const res = await api.post("/transport/routes/preview/", {
+        start: { lat: first.lat, lon: first.lon },
+        end: { lat: last.lat, lon: last.lon },
+        stops: middleStops,
+      });
+      const data = res.data;
+      const preview = Array.isArray(data) ? data[0] : data?.path ? data : null;
+      if (preview?.path?.length >= 2) {
+        setImportRoadPath(preview.path);
+      }
+    } catch (err) {
+      console.warn("Road path generation failed, using straight-line preview:", err);
+    }
+  }, [importPreviewStops]);
+
   useEffect(() => {
     if (importStep === 2) generateImportPreview();
   }, [importStep, importMapping, generateImportPreview]);
+
+  useEffect(() => {
+    if (importStep === 3 && importPreviewStops.length >= 2 && importRoadPath.length < 2) {
+      handleGenerateRoadPath();
+    }
+  }, [importStep, importPreviewStops.length, handleGenerateRoadPath]);
 
   useEffect(() => {
     if (importStep !== 3 || !map.current || !mapLoaded) return;
@@ -613,7 +640,7 @@ export default function Routes() {
     setImportLoading(true);
     setImportError("");
     try {
-      const res = await api.post("/admin/route-import/", {
+      const res = await api.post("/transport/admin/route-import/", {
         city: selectedCity,
         route_name: importRouteName,
         route_code: importRouteCode,
@@ -711,6 +738,11 @@ export default function Routes() {
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
                             {r.total_distance_meters ? `${(r.total_distance_meters / 1000).toFixed(1)} km` : "N/A"}
                           </span>
+                          {r.stops_count > 0 && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-50 text-brand-600">
+                              {r.stops_count} stops
+                            </span>
+                          )}
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                             r.is_public ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
                           }`}>{r.is_public ? "Public" : "Private"}</span>
@@ -1027,7 +1059,7 @@ export default function Routes() {
                   )}
 
                   <button onClick={() => setImportStep(2)}
-                    disabled={!importMapping.latitude || !importMapping.longitude}
+                    disabled={!importMapping.latitude || !importMapping.longitude || !importMapping.order || !importMapping.plusCode || !importMapping.nearbyLandmark}
                     className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
                     Continue <ChevronRight size={16} />
                   </button>
@@ -1036,6 +1068,14 @@ export default function Routes() {
 
               {importStep === 2 && (
                 <div className="space-y-4">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                    <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-1">From CSV</p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+                      {importRouteCode && <span className="text-emerald-800"><span className="font-bold">Code:</span> {importRouteCode}</span>}
+                      {importRouteName && <span className="text-emerald-800"><span className="font-bold">Name:</span> {importRouteName}</span>}
+                      <span className="text-emerald-800"><span className="font-bold">Stops:</span> {importPreviewStops.length}</span>
+                    </div>
+                  </div>
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Route Name *</label>
                     <input value={importRouteName} onChange={(e) => setImportRouteName(e.target.value)}
@@ -1051,7 +1091,7 @@ export default function Routes() {
 
                   <div className="space-y-2">
                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      Preview ({importPreviewStops.length} stops)
+                      Stops ({importPreviewStops.length})
                     </p>
                     <div className="max-h-48 overflow-y-auto space-y-1">
                       {importPreviewStops.map((s, i) => (
@@ -1083,20 +1123,34 @@ export default function Routes() {
                   <div className="bg-brand-50 border border-brand-200 p-3 rounded-lg">
                     <p className="text-xs font-bold text-brand-800">{importRouteName}</p>
                     <p className="text-[11px] text-brand-600">
-                      {importPreviewStops.length} stops | OSRM road-snap routing | {importPreviewStops[0]?.name} → {importPreviewStops[importPreviewStops.length - 1]?.name}
+                      {importPreviewStops.length} stops | {importPreviewStops[0]?.name} → {importPreviewStops[importPreviewStops.length - 1]?.name}
                     </p>
                   </div>
 
-                  <p className="text-[11px] text-slate-500">
-                    {importRoadPath.length >= 2
-                      ? "Route will be road-snapped via OSRM using all stops as ordered waypoints."
-                      : "Route will be road-snapped via OSRM using all stops as ordered waypoints."}
-                  </p>
+                  {importRoadPath.length >= 2 ? (
+                    <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg">
+                      <p className="text-[11px] font-bold text-emerald-800">Road path generated</p>
+                      <p className="text-[11px] text-emerald-600">
+                        {importRoadPath.length} geometry points via OSRM
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg">
+                      <p className="text-[11px] font-bold text-amber-800">Generating road path...</p>
+                      <p className="text-[11px] text-amber-600">
+                        Routing via OSRM. Fallback: straight line between stops.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="flex gap-2">
                     <button onClick={() => setImportStep(2)}
                       className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition text-sm">
                       Back
+                    </button>
+                    <button onClick={handleGenerateRoadPath}
+                      className="px-3 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition text-sm">
+                      <RefreshCw size={14} />
                     </button>
                     <button onClick={handleImportSave} disabled={importLoading || !selectedCity}
                       className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition disabled:opacity-50 flex items-center justify-center gap-2">

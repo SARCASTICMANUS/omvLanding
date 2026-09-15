@@ -19,6 +19,9 @@ from transport.api.views import (
     RoadDistanceAPIView,
     GeocodeSearchAPIView,
     GeocodeReverseAPIView,
+    AdminRouteViewSet,
+    AdminStopViewSet,
+    AdminRouteImportAPIView,
 )
 
 router = DefaultRouter()
@@ -27,6 +30,10 @@ router.register(r"routes", RouteViewSet, basename="route")
 router.register(r"stops", StopViewSet, basename="stop")
 router.register(r"schedules", TripScheduleViewSet, basename="schedule")
 router.register(r"stop-times", StopTimeViewSet, basename="stop-time")
+
+admin_router = DefaultRouter()
+admin_router.register(r"routes", AdminRouteViewSet, basename="admin-route")
+admin_router.register(r"stops", AdminStopViewSet, basename="admin-stop")
 
 urlpatterns = [
     path(
@@ -89,5 +96,11 @@ urlpatterns = [
         "road-distance/",
         RoadDistanceAPIView.as_view(),
         name="road-distance",
+    ),
+    path("admin/", include(admin_router.urls)),
+    path(
+        "admin/route-import/",
+        AdminRouteImportAPIView.as_view(),
+        name="admin-route-import",
     ),
 ]

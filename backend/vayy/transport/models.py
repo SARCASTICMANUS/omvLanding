@@ -138,6 +138,18 @@ class Stop(models.Model):
         help_text="Cumulative travel time from the first stop to this stop along the route.",
     )
 
+    plus_code = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Plus code (e.g. PVJ3+Q55 Lucknow)",
+    )
+
+    nearby_landmark = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Nearby landmark name",
+    )
+
     class Meta:
         ordering = ["order"]
         unique_together = [("route", "order")]

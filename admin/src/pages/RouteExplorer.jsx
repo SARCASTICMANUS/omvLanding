@@ -146,9 +146,13 @@ function RouteDetail({ route, onBack }) {
     if (mapRef.current || !mapContainer.current) return;
 
     const stops = editing ? editStops : (detail?.stops || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
-    const coords = stops.length > 0
-      ? stops.map((s) => [s.lon || s.location?.coordinates?.[0], s.lat || s.location?.coordinates?.[1]]).filter((c) => c[0] && c[1])
-      : (route.path?.coordinates || []);
+
+    const savedPath = detail?.path?.coordinates;
+    const coords = savedPath && savedPath.length >= 2
+      ? savedPath
+      : stops.length > 0
+        ? stops.map((s) => [s.lon || s.location?.coordinates?.[0], s.lat || s.location?.coordinates?.[1]]).filter((c) => c[0] && c[1])
+        : [];
 
     const center = coords.length > 0
       ? coords[Math.floor(coords.length / 2)]
