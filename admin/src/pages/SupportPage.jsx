@@ -19,6 +19,8 @@ const FAQS = [
 const SUPPORT_CONTACTS = [
   { label: "Email", value: "info@onmyvayy.com", href: "mailto:info@onmyvayy.com",
     icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg> },
+  { label: "WhatsApp Channel", value: "Join OMV Channel", href: "https://whatsapp.com/channel/0029Vb9MUM6DZ4Lj10tX8A20",
+    icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> },
   { label: "LinkedIn", value: "linkedin.com/company/onmyvayy", href: "https://www.linkedin.com/company/onmyvayy",
     icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg> },
   { label: "Instagram", value: "@onmyvayyy", href: "https://www.instagram.com/onmyvayyy",
@@ -39,60 +41,10 @@ export default function SupportPage() {
   }, [searchParams]);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#003923] via-[#00653a] to-[#009849] font-manrope">
-      {/* Abstract background patterns */}
-      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-        {/* Large soft glows */}
-        <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-[#22C55E]/30 blur-3xl" />
-        <div className="absolute -bottom-48 -right-48 h-[500px] w-[500px] rounded-full bg-[#003923]/60 blur-3xl" />
-        <div className="absolute left-1/2 top-1/4 h-72 w-72 -translate-x-1/2 rounded-full bg-[#22C55E]/20 blur-3xl" />
-
-        {/* Geometric shapes */}
-        <svg className="absolute right-12 top-20 h-40 w-40 text-white/10" viewBox="0 0 200 200" fill="none">
-          <circle cx="100" cy="100" r="80" stroke="currentColor" strokeWidth="1.5" />
-          <circle cx="100" cy="100" r="55" stroke="currentColor" strokeWidth="1" />
-          <circle cx="100" cy="100" r="30" stroke="currentColor" strokeWidth="0.5" />
-        </svg>
-
-        <svg className="absolute -left-10 bottom-40 h-56 w-56 text-white/8" viewBox="0 0 200 200" fill="none">
-          <rect x="30" y="30" width="140" height="140" rx="8" stroke="currentColor" strokeWidth="1.5" transform="rotate(15 100 100)" />
-          <rect x="50" y="50" width="100" height="100" rx="6" stroke="currentColor" strokeWidth="1" transform="rotate(30 100 100)" />
-        </svg>
-
-        <svg className="absolute right-1/4 bottom-16 h-32 w-32 text-white/10" viewBox="0 0 200 200" fill="none">
-          <polygon points="100,10 190,150 10,150" stroke="currentColor" strokeWidth="1.5" />
-        </svg>
-
-        <svg className="absolute left-1/3 top-1/3 h-48 w-48 text-[#22C55E]/15" viewBox="0 0 200 200" fill="none">
-          <path d="M100 20 L180 100 L100 180 L20 100 Z" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M100 50 L150 100 L100 150 L50 100 Z" stroke="currentColor" strokeWidth="1" />
-        </svg>
-
-        {/* Wavy lines */}
-        <svg className="absolute bottom-0 left-0 h-48 w-full text-white/8" viewBox="0 0 1440 200" fill="none" preserveAspectRatio="none">
-          <path d="M0 100 Q360 20 720 100 T1440 100" stroke="currentColor" strokeWidth="2" />
-          <path d="M0 130 Q360 50 720 130 T1440 130" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M0 160 Q360 80 720 160 T1440 160" stroke="currentColor" strokeWidth="1" />
-        </svg>
-
-        <svg className="absolute top-0 left-0 h-40 w-full text-white/6" viewBox="0 0 1440 200" fill="none" preserveAspectRatio="none">
-          <path d="M0 60 Q360 140 720 60 T1440 60" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M0 30 Q360 110 720 30 T1440 30" stroke="currentColor" strokeWidth="1" />
-        </svg>
-
-        {/* Dot grid */}
-        <svg className="absolute inset-0 h-full w-full text-white/8" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
-              <circle cx="2" cy="2" r="1.5" fill="currentColor" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#dots)" />
-        </svg>
-      </div>
-      {/* Header */}
-      <div className="sticky top-0 z-20 border-b border-white/10 bg-[#003923]/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-3xl items-center gap-4 px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+      <div className="relative flex h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0a1f15]/75 text-white shadow-2xl backdrop-blur-lg">
+        {/* Header */}
+        <div className="flex shrink-0 items-center gap-4 border-b border-white/10 px-5 py-4">
           <button
             onClick={() => navigate(-1)}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
@@ -101,149 +53,152 @@ export default function SupportPage() {
           </button>
           <h1 className="text-lg font-bold text-white">Support</h1>
         </div>
-      </div>
 
-      <div className="relative z-10 mx-auto max-w-3xl px-5 py-6">
         {/* Tabs */}
-        <div className="flex gap-1 rounded-xl bg-white/10 p-1 backdrop-blur-sm">
-          {[
-            { id: "privacy", label: "Privacy" },
-            { id: "terms", label: "Terms" },
-            { id: "faq", label: "FAQ" },
-            { id: "contact", label: "Contact" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setOpenFaq(null); }}
-              className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-                activeTab === tab.id
-                  ? "bg-white text-[#003923] shadow-sm"
-                  : "text-white/60 hover:text-white"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="shrink-0 px-5 pt-4">
+          <div className="flex gap-1 rounded-xl bg-white/10 p-1">
+            {[
+              { id: "privacy", label: "Privacy" },
+              { id: "terms", label: "Terms" },
+              { id: "faq", label: "FAQ" },
+              { id: "contact", label: "Contact" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id); setOpenFaq(null); }}
+                className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+                  activeTab === tab.id
+                    ? "bg-white text-[#003923] shadow-sm"
+                    : "text-white/60 hover:text-white"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Privacy */}
-        {activeTab === "privacy" && (
-          <div className="mt-6 space-y-5">
-            <p className="text-xs font-medium text-white/40">Last updated: July 2026</p>
-            <p className="text-sm leading-relaxed text-white/70">
-              OMV is committed to protecting your privacy. This policy explains how we collect, use, and safeguard your information.
-            </p>
-            {PRIVACY_SECTIONS.map((s, i) => (
-              <div key={i} className="rounded-xl bg-white/5 p-4 backdrop-blur-sm">
-                <h3 className="text-sm font-bold text-white">{s.title}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-white/60">{s.text}</p>
-              </div>
-            ))}
-            <p className="text-xs text-white/40">
-              Contact: <span className="font-semibold text-white/70">info@onmyvayy.com</span> — OMV, onmyvayy, Lucknow, UP, India
-            </p>
-          </div>
-        )}
-
-        {/* Terms */}
-        {activeTab === "terms" && (
-          <div className="mt-6 space-y-5">
-            <p className="text-xs font-medium text-white/40">Last updated: 9 September 2026</p>
-            <p className="text-sm leading-relaxed text-white/70">
-              These Terms of Service govern your access to and use of the OMV — On My Vayy platform. By creating an account, accessing, or using OMV, you agree to these Terms.
-            </p>
-            <div className="rounded-xl bg-white/5 p-4 backdrop-blur-sm">
-              <h3 className="text-sm font-bold text-white">Important</h3>
-              <p className="mt-1 text-sm leading-relaxed text-white/60">
-                OMV is designed as a technology platform for coordinating shared journeys between individuals who are already travelling along substantially similar routes. These Terms describe the intended operating model; they do not determine or guarantee the legal classification of the service. Users are responsible for complying with applicable law.
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-5 scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-white/20">
+          {/* Privacy */}
+          {activeTab === "privacy" && (
+            <div className="space-y-5">
+              <p className="text-xs font-medium text-white/40">Last updated: July 2026</p>
+              <p className="text-sm leading-relaxed text-white/70">
+                OMV is committed to protecting your privacy. This policy explains how we collect, use, and safeguard your information.
+              </p>
+              {PRIVACY_SECTIONS.map((s, i) => (
+                <div key={i} className="rounded-xl bg-white/5 p-4">
+                  <h3 className="text-sm font-bold text-white">{s.title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-white/70">{s.text}</p>
+                </div>
+              ))}
+              <p className="text-xs text-white/50">
+                Contact: <span className="font-semibold text-white/80">info@onmyvayy.com</span> — OMV, onmyvayy, Lucknow, UP, India
               </p>
             </div>
-            {[
-              { title: "1. Definitions", text: "Buddy — a verified User seeking to join a shared journey offered by a Marshal. Marshal — a verified User who has declared a personal journey and makes an available seat on their personal vehicle available for a shared journey. Verified User — a User whose account has completed the verification process specified by OMV. Verification may include digital, institutional, corporate, or other checks. Verification does not constitute a police or criminal-background check, character certificate, driving certification, or guarantee of safety. Shared Journey — a journey in which a Marshal is already travelling, or intends to travel, substantially along a declared route and a Buddy joins that journey. Fuel Share Contribution — an estimated contribution toward shared running expenses of a Shared Journey. It is intended as cost sharing and is not a fare, transportation charge, commission, salary, reward, or payment for providing transportation. Pickup/Drop Stop — a designated OMV meeting point along a route." },
-              { title: "2. Nature of the Platform", text: "OMV provides technology infrastructure that enables Users to discover and coordinate Shared Journeys. OMV does not itself provide transportation, operate vehicles, employ Marshals, or dispatch vehicles as a transportation operator. OMV does not create an independent transportation trip for every Buddy. The intended model is that a Marshal has already declared a personal journey and a Buddy joins a substantially similar route. OMV may provide route matching, stop suggestions, navigation, tracking, verification, notifications, and other technology features. The legal classification of any activity and the applicability of transportation, motor-vehicle, insurance, tax, data-protection, or other laws shall be determined under applicable law." },
-              { title: "3. Eligibility", text: "You must: Provide accurate and current account information. Meet the minimum age requirement displayed by OMV and applicable law. Use the Platform only for lawful purposes. Maintain the confidentiality of your account credentials. Not create an account on behalf of another person without authorization. Not use OMV for commercial passenger transportation unless OMV expressly enables and legally supports such use. OMV may suspend or terminate accounts that provide false information or violate these Terms." },
-              { title: "4. Marshal Requirements", text: "A Marshal using a personal vehicle must: Be legally permitted to operate the vehicle. Hold a valid driving licence applicable to the vehicle. Maintain all legally required vehicle documents and insurance. Ensure the vehicle is roadworthy and safely maintained. Follow applicable traffic and motor-vehicle laws. Declare the route and journey information accurately. Not materially change a journey solely to generate trips or obtain compensation from Buddies. Not pressure, discriminate against, or mislead Buddies. A Marshal remains responsible for their vehicle, driving conduct, route decisions, and compliance with applicable law." },
-              { title: "5. Buddy Requirements", text: "Buddies must: Provide accurate account information. Follow the designated pickup and drop arrangements. Respect the Marshal and other Users. Follow applicable safety instructions. Not request unsafe driving, illegal stops, route deviations, or other unlawful conduct. Not use OMV to transport prohibited or unlawful items. A Buddy is responsible for their own conduct during the Shared Journey." },
-              { title: "6. Shared Journey and Cost Sharing", text: "OMV is intended to facilitate cost sharing between individuals who are travelling along substantially similar routes. Any Fuel Share Contribution shown by the Platform is an estimate of shared running expenses based on factors such as route distance, applicable fuel assumptions, tolls, or other permitted journey costs. The Fuel Share Contribution: is not a transportation fare, is not intended to create a driver-passenger employment relationship, is not intended as a profit or commercial reward for the Marshal, and should not exceed the applicable shared running costs permitted under law. OMV may change or disable contribution calculations where required by law, policy, or operational considerations. During the current version of the Platform, OMV does not charge a commission or transaction fee for facilitating cost-sharing arrangements. Future commercial features, if introduced, will be subject to applicable law and updated terms." },
-              { title: "7. Usage Safeguards", text: "OMV may apply safeguards intended to discourage commercial or on-demand transportation activity, including: Limits on the number or frequency of pooling journeys. Restrictions on repeated or suspicious route patterns. Detection of unusual trip or account activity. Restrictions on excessive route deviations. Suspension or review of accounts showing characteristics inconsistent with personal shared journeys. These safeguards are internal platform policies and are not a representation that compliance with a particular threshold alone makes an activity legally permissible." },
-              { title: "8. Routes, Stops, and Matching", text: "OMV may use declared routes, designated pickup/drop stops, geolocation, route data, and timing information to match Marshals and Buddies. Route recommendations and estimated arrival times are informational and may change because of traffic, road closures, GPS limitations, weather, or other factors. Users must not rely on OMV route information as a substitute for their own safe driving decisions or legal obligations. OMV may add, remove, modify, or temporarily disable routes and stops." },
-              { title: "9. Verification and Safety", text: "OMV may use account verification, Safety Code verification, location tracking, trip information, user feedback, and other technology-based safeguards. A \"Verified Marshal\" or \"Verified Buddy\" means that the account has completed the verification process specified by OMV. It does not mean that OMV has independently guaranteed the person's identity, character, driving ability, or safety. Users should exercise reasonable caution, verify the person and vehicle at pickup, and avoid sharing unnecessary personal information. If a User feels unsafe, they should end or avoid the journey where reasonably possible and contact appropriate emergency or law-enforcement services." },
-              { title: "10. Real-Time Tracking and Location Data", text: "When enabled, OMV may collect and process location information during a Shared Journey to provide matching, navigation, tracking, safety, and related functionality. Users are responsible for ensuring that location permissions are enabled when required for the relevant feature. Location accuracy may be affected by device settings, GPS availability, network conditions, buildings, weather, or other technical factors." },
-              { title: "11. Prohibited Uses", text: "Users must not: Use OMV for unlawful activities. Misrepresent their identity, vehicle, route, or journey. Attempt to commercially operate passenger transportation through OMV where such activity is not permitted. Create fake bookings, accounts, trips, or locations. Circumvent platform safeguards or verification. Harass, threaten, discriminate against, or abuse another User. Manipulate ratings, reviews, fuel shares, route data, or other Platform information. Use OMV while impaired or in a manner that creates an unreasonable safety risk. Use the Platform to transport prohibited goods or substances." },
-              { title: "12. Platform Availability", text: "OMV is provided on an \"as available\" basis. We do not guarantee that: A suitable Marshal or Buddy will always be available. A Shared Journey will always occur as scheduled. GPS, route, tracking, or notification services will always be accurate or uninterrupted. The Platform will be available without errors or downtime. OMV may modify, suspend, or discontinue any Platform feature at any time." },
-              { title: "13. User Conduct and Disputes", text: "Users are responsible for resolving ordinary interpersonal issues respectfully. OMV may assist with reports, complaints, safety incidents, or disputes at its discretion, but OMV is not a party to the transportation arrangement between Users. OMV may review relevant Platform information where reasonably necessary to investigate safety, fraud, abuse, policy violations, or legal requests." },
-              { title: "14. Safety Incidents", text: "If an emergency occurs, Users should first contact the appropriate emergency service or local authority. OMV may provide safety features such as trip tracking, emergency contacts, reporting, or incident assistance where available. OMV does not guarantee that any safety feature will prevent an accident, crime, injury, loss, or other incident." },
-              { title: "15. Insurance and Vehicle Responsibility", text: "The Marshal is responsible for maintaining all legally required vehicle insurance and ensuring that the intended use of the vehicle is covered as required by applicable law. OMV does not provide vehicle insurance or personal accident insurance unless expressly stated for a particular product or feature. Users should independently understand the scope and limitations of their own insurance coverage." },
-              { title: "16. Intellectual Property", text: "All Platform software, branding, logos, designs, content, interfaces, and related intellectual property belong to OMV or its licensors unless otherwise stated. You may not copy, reproduce, modify, distribute, reverse engineer, or commercially exploit OMV's intellectual property without written permission." },
-              { title: "17. Privacy and Personal Data", text: "OMV may collect and process information necessary to provide the Platform, including account details, verification information, route information, location data, device information, trip information, and communications or reports submitted through the Platform. OMV processes personal data in accordance with applicable privacy and data-protection laws, including the Digital Personal Data Protection Act, 2023, to the extent applicable. Please refer to OMV's Privacy Policy for details regarding collection, use, retention, sharing, and deletion of personal data." },
-              { title: "18. Limitation of Liability", text: "To the maximum extent permitted by applicable law, OMV shall not be responsible for: Accidents, injuries, death, or property damage arising from a Shared Journey. The conduct, negligence, or unlawful acts of Users. Vehicle condition or driving decisions. Route deviations, traffic delays, or missed pickups. Losses resulting from inaccurate information provided by Users. Technical failures, GPS inaccuracies, network failures, or third-party service interruptions. Nothing in these Terms excludes or limits liability that cannot legally be excluded or limited under applicable law." },
-              { title: "19. Indemnification", text: "To the extent permitted by law, you agree to indemnify and hold harmless OMV, its officers, employees, contractors, and affiliates from claims, losses, liabilities, damages, costs, and expenses arising from: Your breach of these Terms. Your unlawful or negligent conduct. Your use of the Platform or participation in a Shared Journey. Your violation of another person's rights or applicable law." },
-              { title: "20. Suspension and Termination", text: "OMV may suspend, restrict, or terminate access where it reasonably believes that a User: Violated these Terms. Created a safety, fraud, or legal risk. Provided false or misleading information. Attempted to commercially misuse the Platform. Circumvented verification or other safeguards. Users may stop using OMV and request account closure subject to applicable law and OMV's retention obligations." },
-              { title: "21. Changes to These Terms", text: "OMV may update these Terms from time to time. Material changes may be communicated through the Platform or other appropriate channels. Continued use of OMV after updated Terms become effective constitutes acceptance of the revised Terms, to the extent permitted by law." },
-              { title: "22. Governing Law and Jurisdiction", text: "These Terms shall be governed by the laws of India, subject to applicable law. Subject to mandatory legal requirements, disputes shall be subject to the jurisdiction of the courts having appropriate jurisdiction over OMV's registered office." },
-              { title: "23. Contact", text: "For questions, complaints, safety concerns, or legal notices, contact: OMV — On My Vayy. Email: info@onmyvayy.com" },
-            ].map((s, i) => (
-              <div key={i} className="rounded-xl bg-white/5 p-4 backdrop-blur-sm">
-                <h3 className="text-sm font-bold text-white">{s.title}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-white/60">{s.text}</p>
-              </div>
-            ))}
-          </div>
-        )}
+          )}
 
-        {/* FAQ */}
-        {activeTab === "faq" && (
-          <div className="mt-6 space-y-2">
-            {FAQS.map((f, i) => (
-              <div key={i} className="overflow-hidden rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
-                <button
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="flex w-full items-center justify-between p-4 text-left"
-                >
-                  <span className="text-sm font-bold text-white">{f.q}</span>
-                  <svg
-                    width="16" height="16" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                    className={`flex-shrink-0 text-white/40 transition-transform ${openFaq === i ? "rotate-180" : ""}`}
-                  >
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </button>
-                {openFaq === i && (
-                  <div className="px-4 pb-4">
-                    <p className="text-sm leading-relaxed text-white/60">{f.a}</p>
-                  </div>
-                )}
+          {/* Terms */}
+          {activeTab === "terms" && (
+            <div className="space-y-5">
+              <p className="text-xs font-medium text-white/40">Last updated: 9 September 2026</p>
+              <p className="text-sm leading-relaxed text-white/70">
+                These Terms of Service govern your access to and use of the OMV — On My Vayy platform. By creating an account, accessing, or using OMV, you agree to these Terms.
+              </p>
+              <div className="rounded-xl bg-white/5 p-4">
+                <h3 className="text-sm font-bold text-white">Important</h3>
+                <p className="mt-1 text-sm leading-relaxed text-white/70">
+                  OMV is designed as a technology platform for coordinating shared journeys between individuals who are already travelling along substantially similar routes. These Terms describe the intended operating model; they do not determine or guarantee the legal classification of the service. Users are responsible for complying with applicable law.
+                </p>
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* Contact */}
-        {activeTab === "contact" && (
-          <div className="mt-6 space-y-3">
-            {SUPPORT_CONTACTS.map((s, i) => (
-              <div key={i} className="flex items-center gap-4 rounded-xl bg-white/5 p-4 backdrop-blur-sm">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white">{s.icon}</span>
-                <div className="flex-1">
-                  <p className="text-xs font-bold uppercase tracking-wider text-white/40">{s.label}</p>
-                  <p className="text-sm font-bold text-white">{s.value}</p>
+              {[
+                { title: "1. Definitions", text: "Buddy — a verified User seeking to join a shared journey offered by a Marshal. Marshal — a verified User who has declared a personal journey and makes an available seat on their personal vehicle available for a shared journey. Verified User — a User whose account has completed the verification process specified by OMV. Verification may include digital, institutional, corporate, or other checks. Verification does not constitute a police or criminal-background check, character certificate, driving certification, or guarantee of safety. Shared Journey — a journey in which a Marshal is already travelling, or intends to travel, substantially along a declared route and a Buddy joins that journey. Fuel Share Contribution — an estimated contribution toward shared running expenses of a Shared Journey. It is intended as cost sharing and is not a fare, transportation charge, commission, salary, reward, or payment for providing transportation. Pickup/Drop Stop — a designated OMV meeting point along a route." },
+                { title: "2. Nature of the Platform", text: "OMV provides technology infrastructure that enables Users to discover and coordinate Shared Journeys. OMV does not itself provide transportation, operate vehicles, employ Marshals, or dispatch vehicles as a transportation operator. OMV does not create an independent transportation trip for every Buddy. The intended model is that a Marshal has already declared a personal journey and a Buddy joins a substantially similar route. OMV may provide route matching, stop suggestions, navigation, tracking, verification, notifications, and other technology features. The legal classification of any activity and the applicability of transportation, motor-vehicle, insurance, tax, data-protection, or other laws shall be determined under applicable law." },
+                { title: "3. Eligibility", text: "You must: Provide accurate and current account information. Meet the minimum age requirement displayed by OMV and applicable law. Use the Platform only for lawful purposes. Maintain the confidentiality of your account credentials. Not create an account on behalf of another person without authorization. Not use OMV for commercial passenger transportation unless OMV expressly enables and legally supports such use. OMV may suspend or terminate accounts that provide false information or violate these Terms." },
+                { title: "4. Marshal Requirements", text: "A Marshal using a personal vehicle must: Be legally permitted to operate the vehicle. Hold a valid driving licence applicable to the vehicle. Maintain all legally required vehicle documents and insurance. Ensure the vehicle is roadworthy and safely maintained. Follow applicable traffic and motor-vehicle laws. Declare the route and journey information accurately. Not materially change a journey solely to generate trips or obtain compensation from Buddies. Not pressure, discriminate against, or mislead Buddies. A Marshal remains responsible for their vehicle, driving conduct, route decisions, and compliance with applicable law." },
+                { title: "5. Buddy Requirements", text: "Buddies must: Provide accurate account information. Follow the designated pickup and drop arrangements. Respect the Marshal and other Users. Follow applicable safety instructions. Not request unsafe driving, illegal stops, route deviations, or other unlawful conduct. Not use OMV to transport prohibited or unlawful items. A Buddy is responsible for their own conduct during the Shared Journey." },
+                { title: "6. Shared Journey and Cost Sharing", text: "OMV is intended to facilitate cost sharing between individuals who are travelling along substantially similar routes. Any Fuel Share Contribution shown by the Platform is an estimate of shared running expenses based on factors such as route distance, applicable fuel assumptions, tolls, or other permitted journey costs. The Fuel Share Contribution: is not a transportation fare, is not intended to create a driver-passenger employment relationship, is not intended as a profit or commercial reward for the Marshal, and should not exceed the applicable shared running costs permitted under law. OMV may change or disable contribution calculations where required by law, policy, or operational considerations. During the current version of the Platform, OMV does not charge a commission or transaction fee for facilitating cost-sharing arrangements. Future commercial features, if introduced, will be subject to applicable law and updated terms." },
+                { title: "7. Usage Safeguards", text: "OMV may apply safeguards intended to discourage commercial or on-demand transportation activity, including: Limits on the number or frequency of pooling journeys. Restrictions on repeated or suspicious route patterns. Detection of unusual trip or account activity. Restrictions on excessive route deviations. Suspension or review of accounts showing characteristics inconsistent with personal shared journeys. These safeguards are internal platform policies and are not a representation that compliance with a particular threshold alone makes an activity legally permissible." },
+                { title: "8. Routes, Stops, and Matching", text: "OMV may use declared routes, designated pickup/drop stops, geolocation, route data, and timing information to match Marshals and Buddies. Route recommendations and estimated arrival times are informational and may change because of traffic, road closures, GPS limitations, weather, or other factors. Users must not rely on OMV route information as a substitute for their own safe driving decisions or legal obligations. OMV may add, remove, modify, or temporarily disable routes and stops." },
+                { title: "9. Verification and Safety", text: "OMV may use account verification, Safety Code verification, location tracking, trip information, user feedback, and other technology-based safeguards. A \"Verified Marshal\" or \"Verified Buddy\" means that the account has completed the verification process specified by OMV. It does not mean that OMV has independently guaranteed the person's identity, character, driving ability, or safety. Users should exercise reasonable caution, verify the person and vehicle at pickup, and avoid sharing unnecessary personal information. If a User feels unsafe, they should end or avoid the journey where reasonably possible and contact appropriate emergency or law-enforcement services." },
+                { title: "10. Real-Time Tracking and Location Data", text: "When enabled, OMV may collect and process location information during a Shared Journey to provide matching, navigation, tracking, safety, and related functionality. Users are responsible for ensuring that location permissions are enabled when required for the relevant feature. Location accuracy may be affected by device settings, GPS availability, network conditions, buildings, weather, or other technical factors." },
+                { title: "11. Prohibited Uses", text: "Users must not: Use OMV for unlawful activities. Misrepresent their identity, vehicle, route, or journey. Attempt to commercially operate passenger transportation through OMV where such activity is not permitted. Create fake bookings, accounts, trips, or locations. Circumvent platform safeguards or verification. Harass, threaten, discriminate against, or abuse another User. Manipulate ratings, reviews, fuel shares, route data, or other Platform information. Use OMV while impaired or in a manner that creates an unreasonable safety risk. Use the Platform to transport prohibited goods or substances." },
+                { title: "12. Platform Availability", text: "OMV is provided on an \"as available\" basis. We do not guarantee that: A suitable Marshal or Buddy will always be available. A Shared Journey will always occur as scheduled. GPS, route, tracking, or notification services will always be accurate or uninterrupted. The Platform will be available without errors or downtime. OMV may modify, suspend, or discontinue any Platform feature at any time." },
+                { title: "13. User Conduct and Disputes", text: "Users are responsible for resolving ordinary interpersonal issues respectfully. OMV may assist with reports, complaints, safety incidents, or disputes at its discretion, but OMV is not a party to the transportation arrangement between Users. OMV may review relevant Platform information where reasonably necessary to investigate safety, fraud, abuse, policy violations, or legal requests." },
+                { title: "14. Safety Incidents", text: "If an emergency occurs, Users should first contact the appropriate emergency service or local authority. OMV may provide safety features such as trip tracking, emergency contacts, reporting, or incident assistance where available. OMV does not guarantee that any safety feature will prevent an accident, crime, injury, loss, or other incident." },
+                { title: "15. Insurance and Vehicle Responsibility", text: "The Marshal is responsible for maintaining all legally required vehicle insurance and ensuring that the intended use of the vehicle is covered as required by applicable law. OMV does not provide vehicle insurance or personal accident insurance unless expressly stated for a particular product or feature. Users should independently understand the scope and limitations of their own insurance coverage." },
+                { title: "16. Intellectual Property", text: "All Platform software, branding, logos, designs, content, interfaces, and related intellectual property belong to OMV or its licensors unless otherwise stated. You may not copy, reproduce, modify, distribute, reverse engineer, or commercially exploit OMV's intellectual property without written permission." },
+                { title: "17. Privacy and Personal Data", text: "OMV may collect and process information necessary to provide the Platform, including account details, verification information, route information, location data, device information, trip information, and communications or reports submitted through the Platform. OMV processes personal data in accordance with applicable privacy and data-protection laws, including the Digital Personal Data Protection Act, 2023, to the extent applicable. Please refer to OMV's Privacy Policy for details regarding collection, use, retention, sharing, and deletion of personal data." },
+                { title: "18. Limitation of Liability", text: "To the maximum extent permitted by applicable law, OMV shall not be responsible for: Accidents, injuries, death, or property damage arising from a Shared Journey. The conduct, negligence, or unlawful acts of Users. Vehicle condition or driving decisions. Route deviations, traffic delays, or missed pickups. Losses resulting from inaccurate information provided by Users. Technical failures, GPS inaccuracies, network failures, or third-party service interruptions. Nothing in these Terms excludes or limits liability that cannot legally be excluded or limited under applicable law." },
+                { title: "19. Indemnification", text: "To the extent permitted by law, you agree to indemnify and hold harmless OMV, its officers, employees, contractors, and affiliates from claims, losses, liabilities, damages, costs, and expenses arising from: Your breach of these Terms. Your unlawful or negligent conduct. Your use of the Platform or participation in a Shared Journey. Your violation of another person's rights or applicable law." },
+                { title: "20. Suspension and Termination", text: "OMV may suspend, restrict, or terminate access where it reasonably believes that a User: Violated these Terms. Created a safety, fraud, or legal risk. Provided false or misleading information. Attempted to commercially misuse the Platform. Circumvented verification or other safeguards. Users may stop using OMV and request account closure subject to applicable law and OMV's retention obligations." },
+                { title: "21. Changes to These Terms", text: "OMV may update these Terms from time to time. Material changes may be communicated through the Platform or other appropriate channels. Continued use of OMV after updated Terms become effective constitutes acceptance of the revised Terms, to the extent permitted by law." },
+                { title: "22. Governing Law and Jurisdiction", text: "These Terms shall be governed by the laws of India, subject to applicable law. Subject to mandatory legal requirements, disputes shall be subject to the jurisdiction of the courts having appropriate jurisdiction over OMV's registered office." },
+                { title: "23. Contact", text: "For questions, complaints, safety concerns, or legal notices, contact: OMV — On My Vayy. Email: info@onmyvayy.com" },
+              ].map((s, i) => (
+                <div key={i} className="rounded-xl bg-white/5 p-4">
+                  <h3 className="text-sm font-bold text-white">{s.title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-white/70">{s.text}</p>
                 </div>
-                {s.href && (
-                  <a
-                    href={s.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-full bg-white/10 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/20"
+              ))}
+            </div>
+          )}
+
+          {/* FAQ */}
+          {activeTab === "faq" && (
+            <div className="space-y-2">
+              {FAQS.map((f, i) => (
+                <div key={i} className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
+                  <button
+                    onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                    className="flex w-full items-center justify-between p-4 text-left"
                   >
-                    Visit
-                  </a>
-                )}
-              </div>
-            ))}
-            <p className="text-center text-xs text-white/40">We typically respond within 24 hours</p>
-          </div>
-        )}
+                    <span className="text-sm font-bold text-white">{f.q}</span>
+                    <svg
+                      width="16" height="16" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                      className={`flex-shrink-0 text-white/40 transition-transform ${openFaq === i ? "rotate-180" : ""}`}
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                  {openFaq === i && (
+                    <div className="px-4 pb-4">
+                      <p className="text-sm leading-relaxed text-white/70">{f.a}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Contact */}
+          {activeTab === "contact" && (
+            <div className="space-y-3">
+              {SUPPORT_CONTACTS.map((s, i) => (
+                <div key={i} className="flex items-center gap-4 rounded-xl bg-white/5 p-4">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white">{s.icon}</span>
+                  <div className="flex-1">
+                    <p className="text-xs font-bold uppercase tracking-wider text-white/50">{s.label}</p>
+                    <p className="text-sm font-bold text-white">{s.value}</p>
+                  </div>
+                  {s.href && (
+                    <a
+                      href={s.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-full bg-white/10 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/20"
+                    >
+                      Visit
+                    </a>
+                  )}
+                </div>
+              ))}
+              <p className="text-center text-xs text-white/50">We typically respond within 24 hours</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

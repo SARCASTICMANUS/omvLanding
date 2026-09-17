@@ -250,7 +250,7 @@ export default function LandingPageAnimated() {
           </p>
 
           {/* Music player — below description */}
-          <div key={`player-${contentKey}`} className="animate-lang-fade mx-auto mt-5 flex justify-center md:mt-6">
+          <div className="animate-lang-fade mx-auto mt-5 flex justify-center md:mt-6">
             <MusicPlayer
               ctaButton={
                 <a

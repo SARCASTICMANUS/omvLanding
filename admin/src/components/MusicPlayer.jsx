@@ -44,7 +44,17 @@ export function MusicPlayer({ ctaButton }) {
         events: {
           onReady: () => {
             setIsReady(true);
-            playerRef.current?.playVideo();
+            const tryPlay = () => {
+              playerRef.current?.playVideo();
+            };
+            tryPlay();
+            const handler = () => {
+              tryPlay();
+              document.removeEventListener("click", handler);
+              document.removeEventListener("touchstart", handler);
+            };
+            document.addEventListener("click", handler);
+            document.addEventListener("touchstart", handler);
           },
           onStateChange: (e) => {
             if (e.data === PLAYER_STATES.ENDED) {
