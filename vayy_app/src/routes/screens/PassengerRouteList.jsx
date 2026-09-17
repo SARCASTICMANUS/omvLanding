@@ -79,7 +79,7 @@ function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggle
   const walkMin  = trip?.walk_minutes || null;
   const walkDist = trip?.walk_distance_meters || null;
   const fare     = trip?.fare || trip?.price || null;
-  const payment  = trip?.payment_method || "Cash";
+  const payment  = trip?.payment_method || "Fuel Share";
   const dist     = formatDistanceText(trip);
   const dur      = formatDurationText(trip);
   const stops    = trip?.stops || [];
@@ -112,7 +112,7 @@ function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggle
 
           <View style={s.rightCol}>
             <View style={[s.statsBox, isBest && s.statsBoxBest]}>
-              <Ionicons name="cash" size={16} color={isBest ? "#009849" : "#374151"} />
+              <Ionicons name="leaf" size={16} color={isBest ? "#009849" : "#374151"} />
               <Text style={[s.statsNum, isBest && s.statsNumBest]}>₹{fare}</Text>
               <Text style={s.statsLabel}>{payment}</Text>
             </View>

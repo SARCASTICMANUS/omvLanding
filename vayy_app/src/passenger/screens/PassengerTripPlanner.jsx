@@ -22,8 +22,8 @@ import SHADOW from "../../shared/constants/shadow";
 
 const { width } = Dimensions.get("window");
 
-const heroImage = require("../../../assets/vayynewbg.webp");
-const heroBikeBg = require("../../../assets/vayynewbg2.webp");
+const heroImage = require("../../../assets/new-bg1.png");
+const heroBikeBg = require("../../../assets/new-bg1.png");
 
 const AUTO_VARIANTS = [
   require("../../../assets/vayyWithPassengerAuto.webp"),
@@ -267,7 +267,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
       <Image source={require("../../../assets/vayyAutoBoarding.webp")} style={styles.comingSoonImage} resizeMode="contain" />
       <Text style={styles.comingSoonTitle}>Coming Soon</Text>
       <Text style={styles.comingSoonText}>
-        Shared Auto ride booking is coming soon. Please try Bike Ride for now.
+        Shared Auto matching is coming soon. Please try Bike Ride for now.
       </Text>
     </View>
   );

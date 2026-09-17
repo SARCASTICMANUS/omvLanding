@@ -119,7 +119,7 @@ class AuthService:
 
         if not success:
             raise ValidationError(
-                "Invalid or expired OTP."
+                "Invalid or expired Safety Code."
             )
 
         OTPService.clear_otp(user)
@@ -197,7 +197,7 @@ class AuthService:
 
         if not success:
             raise ValidationError(
-                "Invalid or expired OTP."
+                "Invalid or expired Safety Code."
             )
 
         validate_password(password)

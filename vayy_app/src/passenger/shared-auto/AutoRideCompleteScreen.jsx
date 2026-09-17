@@ -37,7 +37,7 @@ export function AutoRideCompleteScreen({ navigation, route }) {
   const distance = route?.params?.distance || "";
   const duration = route?.params?.duration || "";
   const fare = route?.params?.fare || 0;
-  const paymentMethod = route?.params?.paymentMethod || "Cash";
+  const paymentMethod = route?.params?.paymentMethod || "Fuel Share";
 
   const now = new Date();
   const timeStr = `${now.toLocaleDateString("en-IN", { weekday: "short" })}, ${now.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`;
@@ -122,18 +122,18 @@ export function AutoRideCompleteScreen({ navigation, route }) {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Fare</Text>
+          <Text style={styles.sectionTitle}>Fuel Share</Text>
           <View style={styles.fareDisplay}>
             <Text style={styles.fareAmount}>₹{fare || "—"}</Text>
-            <Text style={styles.fareNote}>Shared auto fare</Text>
+            <Text style={styles.fareNote}>Shared auto fuel share</Text>
             <View style={styles.paymentBadge}>
-              <Ionicons name="cash" size={14} color="#009849" />
+              <Ionicons name="leaf" size={14} color="#009849" />
               <Text style={styles.paymentText}>Paid via {paymentMethod}</Text>
             </View>
           </View>
           <View style={styles.fareBreakdown}>
             <View style={styles.fareRow}>
-              <Text style={styles.fareRowLabel}>Estimated fare</Text>
+              <Text style={styles.fareRowLabel}>Estimated fuel share</Text>
               <Text style={styles.fareRowValue}>₹{fare || "—"}</Text>
             </View>
             <View style={styles.fareRow}>

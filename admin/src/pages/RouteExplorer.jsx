@@ -23,8 +23,34 @@ const ROUTE_COLORS = [
   { line: "#65a30d", bg: "#f7fee7", text: "#4d7c0f", dot: "#84cc16" },
 ];
 
-function getRouteColor(idx) {
-  return ROUTE_COLORS[idx % ROUTE_COLORS.length];
+function getRouteColorKey(startName, endName) {
+  if (!startName || !endName) return null;
+  const a = startName.trim().toLowerCase();
+  const b = endName.trim().toLowerCase();
+  return a < b ? `${a}__${b}` : `${b}__${a}`;
+}
+
+function buildRouteColorMap(routes) {
+  const pairKeys = new Map();
+  let colorIdx = 0;
+
+  routes.forEach((r) => {
+    const key = getRouteColorKey(r.start_name, r.end_name);
+    if (key && !pairKeys.has(key)) {
+      pairKeys.set(key, colorIdx % ROUTE_COLORS.length);
+      colorIdx++;
+    }
+  });
+
+  return (r) => {
+    const key = getRouteColorKey(r.start_name, r.end_name);
+    if (key && pairKeys.has(key)) {
+      return ROUTE_COLORS[pairKeys.get(key)];
+    }
+    const fallback = colorIdx % ROUTE_COLORS.length;
+    colorIdx++;
+    return ROUTE_COLORS[fallback];
+  };
 }
 
 function RoutePolyline({ coordinates, color = "#16a34a", width = 400, height = 80 }) {
@@ -506,6 +532,8 @@ export default function RouteExplorer() {
 
   const selectedCityName = cities.find((c) => c.id === selectedCity)?.name || "Select City";
 
+  const getRouteColor = buildRouteColorMap(filtered);
+
   if (viewRoute) {
     return <RouteDetail route={viewRoute} onBack={() => { setViewRoute(null); }} />;
   }
@@ -570,8 +598,8 @@ export default function RouteExplorer() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {filtered.map((r, idx) => {
-            const c = getRouteColor(idx);
+          {filtered.map((r) => {
+            const c = getRouteColor(r);
             return (
               <div
                 key={r.id}

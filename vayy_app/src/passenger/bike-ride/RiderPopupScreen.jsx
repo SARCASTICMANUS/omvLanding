@@ -345,7 +345,7 @@ export function RiderPopupScreen({ navigation, route }) {
 
         <View style={styles.otpContainer}>
           <View>
-            <Text style={styles.otpLabel}>Handshake OTP</Text>
+            <Text style={styles.otpLabel}>Safety Code</Text>
             <Text style={styles.otpSub}>Share with Marshal to start ride</Text>
           </View>
           <View style={styles.otpRow}>
@@ -360,7 +360,7 @@ export function RiderPopupScreen({ navigation, route }) {
         <View style={styles.arrivalNote}>
           <Text style={styles.arrivalNoteText}>
             {arrivedPhase === "waiting"
-              ? "Your Marshal has arrived. Share the OTP below to start the ride."
+              ? "Your Marshal has arrived. Share the Safety Code below to start the ride."
               : `Your Marshal is ${distance} away • Arriving in ${eta}`}
           </Text>
         </View>

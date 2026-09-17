@@ -84,7 +84,7 @@ function RouteCard({ item }) {
         </View>
         <View style={styles.metaDivider} />
         <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Fare</Text>
+          <Text style={styles.metaLabel}>Fuel Share</Text>
           <Text style={styles.fareValue}>{item.fare}</Text>
         </View>
       </View>

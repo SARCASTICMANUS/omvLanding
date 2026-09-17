@@ -80,7 +80,7 @@ export default function EmailVerificationScreen({ navigation, route }) {
       dispatch(setField({ field: "role", value: role }));
       dispatch(setField({ field: "verifiedEmail", value: email.trim().toLowerCase() }));
     } else {
-      setErrors({ otp: "Invalid OTP. Try 0000 for testing." });
+      setErrors({ otp: "Invalid Safety Code. Try 0000 for testing." });
     }
   };
 
@@ -175,14 +175,14 @@ export default function EmailVerificationScreen({ navigation, route }) {
                 </Text>
               </TouchableOpacity>
               <View style={{ marginTop: 12 }}>
-                <BottomStickyButton label="Send OTP" onPress={handleSendOtp} loading={loading} disabled={!name.trim() || !email.trim() || !tosAccepted} />
+                <BottomStickyButton label="Send Safety Code" onPress={handleSendOtp} loading={loading} disabled={!name.trim() || !email.trim() || !tosAccepted} />
               </View>
             </>
           )}
 
           {otpSent && !isVerified && (
             <>
-              <Text style={styles.label}>Enter OTP sent to {email}</Text>
+              <Text style={styles.label}>Enter the Safety Code sent to {email}</Text>
               <View style={styles.otpRow}>
                 {otp.map((digit, i) => (
                   <TextInput
@@ -204,7 +204,7 @@ export default function EmailVerificationScreen({ navigation, route }) {
                   <Text style={styles.resendTimer}>Resend in 00:{resendTimer.toString().padStart(2, "0")}</Text>
                 ) : (
                   <TouchableOpacity onPress={handleResend} activeOpacity={0.7}>
-                    <Text style={styles.resendText}>Resend OTP</Text>
+                    <Text style={styles.resendText}>Resend Safety Code</Text>
                   </TouchableOpacity>
                 )}
               </View>

@@ -113,7 +113,7 @@ export default function ZoneCard({ stops, zones, zoneIndex, zone, distances, onZ
             </p>
           </div>
           <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Flat Fare</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Flat Fuel Share</p>
             <div className="mt-1">
               <ZoneFareInput value={zone.flatFareINR} onChange={(v) => onZoneChange(zoneIndex, { flatFareINR: v })} invalid={fareInvalid} />
             </div>
@@ -121,7 +121,7 @@ export default function ZoneCard({ stops, zones, zoneIndex, zone, distances, onZ
         </div>
 
         <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-          Passengers pay the zone fare based on where their journey ends.
+          Passengers pay the zone fuel share based on where their journey ends.
         </p>
       </div>
     </div>

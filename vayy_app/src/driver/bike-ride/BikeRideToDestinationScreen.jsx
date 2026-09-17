@@ -481,7 +481,7 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
               <Ionicons name="warning" size={28} color="#EF4444" />
             </View>
             <Text style={styles.modalTitle}>End Ride Early?</Text>
-            <Text style={styles.modalSub}>You haven&apos;t reached the destination yet. The passenger may not be charged the full fare and your rating could be affected.</Text>
+            <Text style={styles.modalSub}>You haven&apos;t reached the destination yet. The passenger may not be charged the full fuel share and your rating could be affected.</Text>
 
             <TouchableOpacity style={[styles.modalPrimaryBtn, { backgroundColor: "#EF4444" }]} onPress={confirmEarlyEnd} activeOpacity={0.9}>
               <Ionicons name="stop-circle" size={20} color="#fff" />

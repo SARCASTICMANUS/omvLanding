@@ -677,7 +677,7 @@ class DispatchService:
                 NotificationService.create(
                     user=request.passenger,
                     title="Ride Completed",
-                    message=f"Hope you enjoyed your ride! {passenger_fare} has been deducted from your wallet.",
+                    message=f"Your fuel share of {passenger_fare} has been deducted from your wallet.",
                     metadata={"trip_id": str(trip.id), "fare": passenger_fare}
                 )
             except Exception as e:
@@ -701,7 +701,7 @@ class DispatchService:
         if trip.driver != driver:
             raise ValueError("Not your trip")
         if trip.otp and otp and trip.otp != otp:
-            raise ValueError("Invalid OTP")
+            raise ValueError("Invalid Safety Code")
         return DispatchService.update_trip_status(trip_id, TRIP_STATUS_ACTIVE, driver)
 
     @staticmethod

@@ -18,7 +18,7 @@ export default function DriverLoginScreen({ navigation, mode = "auto" }) {
         <Text style={styles.heroSmall}>{isBike ? "Bike Marshal Login" : "Marshal Login"}</Text>
         <View style={styles.inputPanel}>
           <TextInput style={styles.input} placeholder="+91 Phone number" placeholderTextColor={colors.textMuted} keyboardType="phone-pad" />
-          <PrimaryButton label="Send OTP" accent={accent} />
+          <PrimaryButton label="Send Safety Code" accent={accent} />
           <OTPInput accent={accent} />
           <TextInput style={styles.input} placeholder="Vehicle No." placeholderTextColor={colors.textMuted} />
           <TextInput style={styles.input} value={isBike ? "Bike Type · Standard" : "Auto Type · Shared"} placeholderTextColor={colors.textMuted} />

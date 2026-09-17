@@ -113,7 +113,7 @@ export default function RegisterPage() {
 
       setStep(2);
     } catch {
-      setError("Failed to send OTP. Please check your email and try again.");
+      setError("Failed to send Safety Code. Please check your email and try again.");
     } finally {
       setLoading(false);
     }
@@ -123,7 +123,7 @@ export default function RegisterPage() {
     setError("");
 
     if (!formData.otp) {
-      setError("Enter the OTP sent to your email");
+      setError("Enter the Safety Code sent to your email");
       return;
     }
 
@@ -137,7 +137,7 @@ export default function RegisterPage() {
 
       setStep(3);
     } catch {
-      setError("Invalid or expired OTP. Please try again.");
+      setError("Invalid or expired Safety Code. Please try again.");
     } finally {
       setLoading(false);
     }

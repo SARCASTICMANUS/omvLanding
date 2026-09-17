@@ -129,7 +129,7 @@ OMV may add, remove, modify, or temporarily disable routes and stops.
 
 ## 9. Verification and Safety
 
-OMV may use account verification, OTP verification, location tracking, trip information, user feedback, and other technology-based safeguards.
+OMV may use account verification, Safety Code verification, location tracking, trip information, user feedback, and other technology-based safeguards.
 
 A "Verified Marshal" or "Verified Buddy" means that the account has completed the verification process specified by OMV. It does not mean that OMV has independently guaranteed the person's identity, character, driving ability, or safety.
 
@@ -159,7 +159,7 @@ Users must not:
 - Create fake bookings, accounts, trips, or locations.
 - Circumvent platform safeguards or verification.
 - Harass, threaten, discriminate against, or abuse another User.
-- Manipulate ratings, reviews, fares, route data, or other Platform information.
+- Manipulate ratings, reviews, fuel shares, route data, or other Platform information.
 - Use OMV while impaired or in a manner that creates an unreasonable safety risk.
 - Use the Platform to transport prohibited goods or substances.
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 
 export default function Login({ onLogin }) {
@@ -6,6 +7,7 @@ export default function Login({ onLogin }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -93,6 +95,13 @@ export default function Login({ onLogin }) {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
+
+        <button
+          onClick={() => navigate("/splash-preview")}
+          className="mt-4 w-full bg-white/10 text-white py-3 rounded-xl font-bold text-sm hover:bg-white/20 transition border border-white/10"
+        >
+          View Splash Screen
+        </button>
       </div>
     </div>
   );

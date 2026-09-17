@@ -105,7 +105,7 @@ const OtpVerificationPage = ({ navigation, route }) => {
             >
               <ArrowLeft size={24} color={COLORS.black} />
             </TouchableOpacity>
-            <Text style={styles.title}>Verify OTP</Text>
+            <Text style={styles.title}>Verify Safety Code</Text>
           </View>
 
           <View style={styles.content}>
@@ -121,7 +121,7 @@ const OtpVerificationPage = ({ navigation, route }) => {
             {error ? (
               <View style={styles.errorBox}>
                 <Text style={styles.errorText}>
-                  {error.otp?.[0] || error.error || "Invalid OTP. Please try again."}
+                  {error.otp?.[0] || error.error || "Invalid Safety Code. Please try again."}
                 </Text>
               </View>
             ) : null}
@@ -170,7 +170,7 @@ const OtpVerificationPage = ({ navigation, route }) => {
               {loading ? (
                 <ActivityIndicator color={COLORS.white} />
               ) : (
-                <Text style={styles.verifyText}>Verify OTP  →</Text>
+                <Text style={styles.verifyText}>Verify Safety Code  →</Text>
               )}
             </TouchableOpacity>
 
@@ -182,7 +182,7 @@ const OtpVerificationPage = ({ navigation, route }) => {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.resendLink, resendDisabled && styles.resendLinkDisabled]}>
-                  {resendDisabled ? `Resend in ${resendTimer}s` : "Resend OTP"}
+                  {resendDisabled ? `Resend in ${resendTimer}s` : "Resend Safety Code"}
                 </Text>
               </TouchableOpacity>
             </View>

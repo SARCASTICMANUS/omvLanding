@@ -12,7 +12,7 @@ export const getRideEstimate = async (pickupLat, pickupLng, dropLat, dropLng, ve
     });
     return response.data?.data || response.data;
   } catch (error) {
-    throw normalizeApiError(error, "Unable to get fare estimate.");
+    throw normalizeApiError(error, "Unable to get fuel share estimate.");
   }
 };
 

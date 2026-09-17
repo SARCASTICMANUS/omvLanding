@@ -56,7 +56,7 @@ export default function DriverStep6OTP({ onComplete, onBack, email }) {
         <ArrowLeft size={22} color={COLORS.text} />
       </TouchableOpacity>
       <View style={styles.header}>
-        <Text style={styles.title}>Verify OTP</Text>
+        <Text style={styles.title}>Verify Safety Code</Text>
         <Text style={styles.sub}>Enter the code sent to {email}</Text>
         <TouchableOpacity onPress={onBack}><Text style={styles.editLink}>Edit email?</Text></TouchableOpacity>
       </View>
@@ -64,12 +64,12 @@ export default function DriverStep6OTP({ onComplete, onBack, email }) {
       <View style={styles.body}>
         <OTPInput length={6} onComplete={(v) => { setOtp(v); setOtpError(false); }} error={otpError} />
         {otpError ? (
-          <Text style={styles.errorText}>{apiError || "Invalid OTP. Try again."}</Text>
+          <Text style={styles.errorText}>{apiError || "Invalid Safety Code. Try again."}</Text>
         ) : null}
         {timer > 0 ? (
-          <Text style={styles.timer}>Resend OTP in 00:{timer.toString().padStart(2, "0")}</Text>
+          <Text style={styles.timer}>Resend Safety Code in 00:{timer.toString().padStart(2, "0")}</Text>
         ) : (
-          <TouchableOpacity onPress={handleResend}><Text style={styles.resend}>Resend OTP</Text></TouchableOpacity>
+          <TouchableOpacity onPress={handleResend}><Text style={styles.resend}>Resend Safety Code</Text></TouchableOpacity>
         )}
       </View>
       <BottomStickyButton label="Verify & Submit" onPress={handleVerify} disabled={otp.length < 6} loading={loading} />

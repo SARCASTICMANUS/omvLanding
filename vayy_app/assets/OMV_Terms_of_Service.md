@@ -169,7 +169,7 @@ Users must not:
 - Create fake bookings, accounts, trips, or locations.
 - Circumvent platform safeguards or verification.
 - Harass, threaten, discriminate against, or abuse another User.
-- Manipulate ratings, reviews, fares, route data, or other Platform information.
+- Manipulate ratings, reviews, fuel shares, route data, or other Platform information.
 - Use OMV while impaired or in a manner that creates an unreasonable safety risk.
 - Use the Platform to transport prohibited goods or substances.
 

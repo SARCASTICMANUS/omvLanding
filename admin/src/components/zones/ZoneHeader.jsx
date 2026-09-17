@@ -8,7 +8,7 @@ export default function ZoneHeader({ dirty, valid, saving, onSave, onReset }) {
       <div>
         <h1 className="text-3xl font-black text-slate-800">Zone Management</h1>
         <p className="text-slate-500 mt-1 font-medium">
-          Configure stop-based fare zones for your routes.
+          Configure stop-based fuel share zones for your routes.
         </p>
         <div className="mt-2 flex items-center gap-2">
           {dirty && (

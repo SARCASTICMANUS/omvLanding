@@ -43,7 +43,7 @@ const formatAmount = (amount) => {
 };
 
 const txTitle = (tx) => {
-  if (tx.type === "credit") return "Trip Fare";
+  if (tx.type === "credit") return "Trip Fuel Share";
   if (tx.type === "debit") return "Withdrawal";
   return "Wallet";
 };

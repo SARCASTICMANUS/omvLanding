@@ -33,8 +33,8 @@ def send_notification(self, payload):
 def send_otp_task(user_id, otp):
     try:
         user = User.objects.get(id=user_id)
-        subject = "Your VAYY OTP Code"
-        message = f"Your OTP for VAYY account verification is: {otp}. It expires in 10 minutes."
+        subject = "Your VAYY Safety Code"
+        message = f"Your Safety Code for VAYY account verification is: {otp}. It expires in 10 minutes."
         EmailService.send(subject, message, user.email)
     except User.DoesNotExist:
         logger.error(f"User {user_id} not found for OTP sending")
@@ -47,7 +47,7 @@ def send_password_reset_otp_task(user_id, otp):
     try:
         user = User.objects.get(id=user_id)
         subject = "Your VAYY Password Reset Code"
-        message = f"Your OTP for password reset is: {otp}. It expires in 10 minutes."
+        message = f"Your Safety Code for password reset is: {otp}. It expires in 10 minutes."
         EmailService.send(subject, message, user.email)
     except User.DoesNotExist:
         logger.error(f"User {user_id} not found for password reset OTP")
