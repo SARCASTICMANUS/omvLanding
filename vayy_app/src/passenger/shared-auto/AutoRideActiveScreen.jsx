@@ -74,7 +74,7 @@ export function AutoRideActiveScreen({ navigation, route }) {
         distance: distanceLeft,
         duration: eta,
         fare,
-        paymentMethod: "Cash",
+        paymentMethod: "Fuel Share",
         route_id,
       });
     }
@@ -131,7 +131,7 @@ export function AutoRideActiveScreen({ navigation, route }) {
       distance: distanceLeft,
       duration: eta,
       fare,
-      paymentMethod: "Cash",
+      paymentMethod: "Fuel Share",
       route_id,
     });
   };

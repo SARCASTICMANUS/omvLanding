@@ -6,6 +6,7 @@ import api from "./api/client";
 import usePageView from "./hooks/usePageView";
 
 const Landing = lazy(() => import("./pages/Landing"));
+const LandingPageAnimated = lazy(() => import("./pages/LandingPageAnimated"));
 const SupportPage = lazy(() => import("./pages/SupportPage"));
 const Login = lazy(() => import("./pages/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -136,6 +137,7 @@ export default function App() {
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/" element={<Landing />} />
+        <Route path="/landing-animated" element={<LandingPageAnimated />} />
         <Route path="/support" element={<SupportPage />} />
         <Route
           path={ADMIN_PATH}

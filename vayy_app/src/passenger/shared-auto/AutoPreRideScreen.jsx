@@ -1124,7 +1124,7 @@ export function AutoPreRideScreen({ navigation, route }) {
           <View style={styles.availDot} />
           <View style={styles.availItem}>
             <Ionicons name="cash-outline" size={16} color="#009849" />
-            <Text style={styles.availText}><Text style={styles.availBold}>₹{fare}</Text> fare</Text>
+            <Text style={styles.availText}><Text style={styles.availBold}>₹{fare}</Text> fuel share</Text>
           </View>
         </View>
 

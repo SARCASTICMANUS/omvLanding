@@ -123,7 +123,7 @@ export function RideStatsScreen({ navigation, route }) {
         duration: eta,
         fare: fare,
         driverRating: 0,
-        paymentMethod: "Cash",
+        paymentMethod: "Fuel Share",
         route_id,
       });
     }
@@ -227,7 +227,7 @@ export function RideStatsScreen({ navigation, route }) {
       duration: eta,
       fare: fare,
       driverRating: 0,
-      paymentMethod: "Cash",
+      paymentMethod: "Fuel Share",
       route_id,
     });
   }

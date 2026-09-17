@@ -36,7 +36,7 @@ export function SharedAutoMapScreen({ navigation, route }) {
         <View style={styles.mapBottom}>
           <RaiseHandButton accent={colors.primary} />
           <StatBar accent={colors.primary} stats={[
-            { label: "Local fare", value: localFare ? `₹${localFare}` : "—" },
+            { label: "Local fuel share", value: localFare ? `₹${localFare}` : "—" },
             { label: "Autos nearby", value: autosNearby || "—" },
             { label: "Auto distance", value: autoDistance || "—" },
             { label: "Next stop", value: nextStop || "—" },

@@ -35,8 +35,8 @@ const SLIDES = [
   },
   {
     key: "benefit",
-    title: "Smart Commuting, Lower Fares",
-    subtitle: "Predictable shared fares starting at ₹15. Live tracking, route-based matching. Smarter daily commutes with OMV.",
+    title: "Smart Commuting, Lower Fuel Shares",
+    subtitle: "Predictable shared fuel shares starting at ₹15. Live tracking, route-based matching. Smarter daily commutes with OMV.",
   },
 ];
 

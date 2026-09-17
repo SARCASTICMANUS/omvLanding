@@ -28,9 +28,9 @@ export default function FareExamples({ stops, zones }) {
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-6">
-      <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Fare Examples</h3>
+      <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Fuel Share Examples</h3>
       <p className="text-xs text-slate-400 font-medium mt-1">
-        Passengers pay the zone fare based on where their journey ends. Demo only — no pricing logic runs here.
+        Passengers pay the zone fuel share based on where their journey ends. Demo only — no pricing logic runs here.
       </p>
 
       <div className="mt-4 space-y-2">

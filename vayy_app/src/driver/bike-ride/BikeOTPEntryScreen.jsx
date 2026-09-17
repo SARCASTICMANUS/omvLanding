@@ -104,7 +104,7 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={22} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Verify Handshake</Text>
+        <Text style={styles.headerTitle}>Verify Safety Code</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -132,7 +132,7 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
               <Text style={styles.metaText}>{buddy?.rating || null}</Text>
             </View>
             <View style={styles.metaItem}>
-              <Ionicons name="cash" size={12} color={COLORS.primary} />
+              <Ionicons name="leaf" size={12} color={COLORS.primary} />
               <Text style={styles.metaText}>{buddy?.fare ? `₹${buddy.fare}` : null}</Text>
             </View>
             <View style={styles.metaItem}>
@@ -180,7 +180,7 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
           <View style={styles.successCircle}>
             <Ionicons name="checkmark" size={48} color="#fff" />
           </View>
-          <Text style={styles.successText}>Handshake Verified!</Text>
+          <Text style={styles.successText}>Verified!</Text>
         </Animated.View>
       )}
     </View>

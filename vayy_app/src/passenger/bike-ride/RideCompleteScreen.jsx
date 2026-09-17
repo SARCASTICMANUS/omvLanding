@@ -39,7 +39,7 @@ export function RideCompleteScreen({ navigation, route }) {
   const duration = route?.params?.duration || "";
   const fare = route?.params?.fare || 0;
   const driverRating = route?.params?.driverRating || 0;
-  const paymentMethod = route?.params?.paymentMethod || "Cash";
+  const paymentMethod = route?.params?.paymentMethod || "Fuel Share";
 
   useEffect(() => {
     if (!tripId) return;
@@ -154,10 +154,10 @@ export function RideCompleteScreen({ navigation, route }) {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Fare Breakdown</Text>
+          <Text style={styles.sectionTitle}>Fuel Share Breakdown</Text>
 
           <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Base Fare</Text>
+            <Text style={styles.fareLabel}>Base Fuel Share</Text>
             <Text style={styles.fareValue}>₹{baseFare}</Text>
           </View>
           <View style={styles.fareRow}>

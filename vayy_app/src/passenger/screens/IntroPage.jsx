@@ -262,7 +262,7 @@ export default function PassengerHomeScreen({ navigation }) {
           <ModeCard
             title="Bike Ride"
             subtitle="Fast point-to-point ride."
-            badgeText="Quick booking"
+            badgeText="Quick match"
             badgeIcon={<MaterialIcons name="bolt" size={12} color="#F5A623" />}
             onPress={handleBikeBook}
             image={BIKE_IMG}

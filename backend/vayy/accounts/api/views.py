@@ -84,7 +84,7 @@ class RegisterAPIView(APIView):
 
         resp = success_response(
             data=UserSerializer(user).data,
-            message="Registration successful. OTP sent.",
+            message="Registration successful. Safety Code sent.",
             status_code=status.HTTP_201_CREATED
         )
         return resp
@@ -151,7 +151,7 @@ class ResendOTPAPIView(APIView):
             email=serializer.validated_data["email"]
         )
         resp = success_response(
-            message="OTP resent successfully."
+            message="Safety Code resent successfully."
         )
         return resp
 
@@ -170,7 +170,7 @@ class ForgotPasswordAPIView(APIView):
             email=serializer.validated_data["email"]
         )
         resp = success_response(
-            message="Password reset OTP sent."
+            message="Password reset Safety Code sent."
         )
         return resp
 

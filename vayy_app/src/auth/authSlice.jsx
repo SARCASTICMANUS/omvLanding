@@ -110,7 +110,7 @@ export const verifyOtp = createAsyncThunk(
       return { user, email };
     } catch (error) {
       return thunkAPI.rejectWithValue(
-        error.response?.data || { error: "OTP verification failed" },
+        error.response?.data || { error: "Safety Code verification failed" },
       );
     }
   },
@@ -126,7 +126,7 @@ export const resendOtp = createAsyncThunk(
       return { email };
     } catch (error) {
       return thunkAPI.rejectWithValue(
-        error.response?.data || { error: "Failed to resend OTP" },
+        error.response?.data || { error: "Failed to resend Safety Code" },
       );
     }
   },

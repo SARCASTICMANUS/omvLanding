@@ -108,7 +108,7 @@ export default function AutoOTPEntryScreen({ navigation, route }) {
               <Ionicons name="shield-checkmark" size={28} color={COLORS.primary} />
             </View>
           </View>
-          <Text style={styles.checkOnMapText}>Verify OTP</Text>
+          <Text style={styles.checkOnMapText}>Verify Safety Code</Text>
         </View>
 
         <View style={[styles.mapHeader]}>
@@ -178,7 +178,7 @@ export default function AutoOTPEntryScreen({ navigation, route }) {
             <View style={styles.successCircle}>
               <Ionicons name="checkmark" size={40} color="#fff" />
             </View>
-            <Text style={styles.successTitle}>Handshake Verified!</Text>
+            <Text style={styles.successTitle}>Verified!</Text>
             <Text style={styles.successSub}>Starting your ride</Text>
           </View>
         </View>

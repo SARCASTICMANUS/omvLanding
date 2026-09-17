@@ -76,7 +76,7 @@ function RouteCard({ item, index, expanded, onToggleExpand, onSelect }) {
 
         <View style={s.rightCol}>
           <View style={[s.statsBox, index === 0 && s.statsBoxBest]}>
-            <Ionicons name="cash" size={16} color={index === 0 ? "#009849" : "#374151"} />
+            <Ionicons name="leaf" size={16} color={index === 0 ? "#009849" : "#374151"} />
             <Text style={[s.statsNum, index === 0 && s.statsNumBest]}>{item.fare ? `\u20B9${item.fare}` : "--"}</Text>
             <Text style={s.statsLabel}>est.</Text>
           </View>

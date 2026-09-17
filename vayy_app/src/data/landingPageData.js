@@ -54,33 +54,33 @@ export const PRIVACY_POLICY = {
 
 export const FAQS = [
   {
-    q: "How do I book a ride?",
-    a: "Enter your destination on the home screen, select a route or auto match, then confirm your booking.",
+    q: "How do I find a shared journey?",
+    a: "Enter your destination on the home screen, and OMV will match you with Marshals already travelling along a similar route. You can then join their shared journey.",
   },
   {
     q: "How does route matching work?",
-    a: "VAYY uses route-based matching. We connect you with Marshals going your way, making rides affordable and efficient.",
+    a: "OMV uses route-based matching. We connect you with Marshals going your way — it's shared commuting, not ride-hailing.",
   },
   {
     q: "What is Hand Raise?",
     a: "Hand Raise lets Marshals know you're waiting at a nearby stop. Once raised, they'll see you and pick you up along the route.",
   },
   {
-    q: "How do I track my ride?",
-    a: "Once your ride starts, you can see the live location of your Marshal on the map with real-time ETA updates.",
+    q: "How do I track my shared journey?",
+    a: "Once your shared journey starts, you can see the live location of your Marshal on the map with real-time ETA updates.",
   },
   {
-    q: "How do I pay?",
-    a: "Payments are processed via UPI or cash. Your fare is calculated based on distance and route.",
+    q: "How does the fuel share work?",
+    a: "The fuel share is a cost-sharing contribution toward shared running expenses. It is calculated based on distance and route — OMV does not charge a commission.",
   },
   {
     q: "What if I lose something?",
-    a: "Contact us at support@vayy.app with your trip details, and we'll help connect you with the Marshal.",
+    a: "Contact us at info@onmyvayy.com with your trip details, and we'll help connect you with the Marshal.",
   },
 ];
 
 export const SUPPORT_INFO = {
-  email: "support@vayy.app",
+  email: "info@onmyvayy.com",
   phone: "+91 1800-123-4567",
   liveChat: "Available 9 AM - 9 PM",
   responseTime: "We typically respond within 24 hours",

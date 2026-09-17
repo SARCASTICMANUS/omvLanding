@@ -133,7 +133,7 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
           <Text style={styles.sectionTitle}>Earnings</Text>
 
           <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Base Fare</Text>
+            <Text style={styles.fareLabel}>Base Fuel Share</Text>
             <Text style={styles.fareValue}>₹{baseFare || "—"}</Text>
           </View>
           <View style={styles.fareRow}>

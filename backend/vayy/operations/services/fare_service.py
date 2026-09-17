@@ -1,9 +1,9 @@
 """
 Centralized fare calculation service.
 
-Single source of truth for ride fares across the platform so the price a
-passenger is quoted (estimate), the price shown on a route search, and the
-price charged on completion are always identical.
+Single source of truth for ride fuel shares across the platform so the fuel share a
+passenger is quoted (estimate), the fuel share shown on a route search, and the
+fuel share charged on completion are always identical.
 
 Formula: fare = base_fare + (distance_km * per_km_rate)
 """
