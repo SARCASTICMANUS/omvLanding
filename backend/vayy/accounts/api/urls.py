@@ -16,6 +16,7 @@ from accounts.api.views import (
     WalletAPIView,
     AddFundsAPIView,
     DriverDocumentAPIView,
+    DriverBankDetailAPIView,
     VerificationStatusAPIView,
     RecentSearchAPIView,
     UserViewSet,
@@ -57,6 +58,7 @@ urlpatterns = [
 
     # KYC
     path("driver/documents/", DriverDocumentAPIView.as_view()),
+    path("driver/bank-details/", DriverBankDetailAPIView.as_view()),
     path("verification-status/", VerificationStatusAPIView.as_view()),
 
     # Recent Searches

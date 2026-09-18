@@ -53,7 +53,7 @@ from transport.api.serializers import (
 )
 from transport.models import StopTime
 from operations.models import ActiveTrip, DispatchRequest, VehicleState
-from operations.constants import (
+from common.constants import (
     TRIP_STATUS_REQUESTED,
     TRIP_STATUS_ACCEPTED,
     TRIP_STATUS_CANCELLED,
@@ -1355,10 +1355,11 @@ class VehicleRegistrationAPIView(APIView):
 
     def post(self, request):
         from operations.models import Vehicle
-        from operations.constants import VEHICLE_STATUS_PENDING
+        from common.constants import VEHICLE_STATUS_PENDING
 
         vehicle_number = request.data.get("vehicle_number", "").strip().upper()
         vehicle_type = request.data.get("vehicle_type", "").strip()
+        vehicle_photo = request.data.get("vehicle_photo", "")
 
         if not vehicle_number:
             return Response(
@@ -1385,6 +1386,7 @@ class VehicleRegistrationAPIView(APIView):
             defaults={
                 "vehicle_number": vehicle_number,
                 "vehicle_type": vehicle_type,
+                "vehicle_photo": vehicle_photo,
                 "status": VEHICLE_STATUS_PENDING,
                 "is_active": False,
             },

@@ -1,5 +1,0 @@
-docker run -t -v ${PWD}/osrm-data:/data osrm/osrm-backend osrm-extract -p /opt/car.lua /data/map.osm.pbf
-docker run -t -v ${PWD}/osrm-data:/data osrm/osrm-backend osrm-partition /data/map.osrm
-docker run -t -v ${PWD}/osrm-data:/data osrm/osrm-backend osrm-customize /data/map.osrm
-
-docker-compose up -d --build

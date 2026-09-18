@@ -10,6 +10,7 @@ from accounts.models import (
     PaymentMethod,
     DriverDocument,
     RecentSearch,
+    DriverBankDetail,
 )
 from common.constants import ROLE_CHOICES
 
@@ -337,6 +338,8 @@ class MergedDriverProfileSerializer(serializers.Serializer):
     license_number = serializers.CharField(allow_null=True, allow_blank=True, default=None)
     vehicle_number = serializers.CharField(required=False, allow_blank=True, default="")
     vehicle_type = serializers.CharField()
+    dob = serializers.DateField(required=False, allow_null=True, default=None)
+    gender = serializers.CharField(required=False, allow_blank=True, default="")
     is_verified = serializers.BooleanField(read_only=True)
     rating = serializers.FloatField(read_only=True)
     total_trips = serializers.IntegerField(read_only=True)
@@ -354,6 +357,9 @@ class MergedDriverProfileSerializer(serializers.Serializer):
         data = super().to_representation(instance)
         data["id"] = str(instance["user"].id)
         data["profile_id"] = str(instance["profile"].id)
+        dob = instance["profile"].dob
+        data["dob"] = dob.isoformat() if dob else None
+        data["gender"] = instance["profile"].gender
         return data
 
 
@@ -370,6 +376,8 @@ class MergedDriverProfileUpdateSerializer(serializers.Serializer):
     license_number = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     vehicle_number = serializers.CharField(required=False, allow_blank=True)
     vehicle_type = serializers.CharField(required=False)
+    dob = serializers.DateField(required=False, allow_null=True)
+    gender = serializers.CharField(required=False, allow_blank=True)
 
 
 # DRIVER REGISTRATION
@@ -441,9 +449,23 @@ class RecentSearchSerializer(serializers.ModelSerializer):
         }
 
 class RecentSearchCreateSerializer(serializers.Serializer):
-    pickup_name = serializers.CharField(allow_blank=True, default="")
+    pickup_name = serializers.CharField(required=False, allow_blank=True, default="")
     pickup_lat = serializers.FloatField()
     pickup_lon = serializers.FloatField()
-    destination_name = serializers.CharField(allow_blank=True, default="")
+    destination_name = serializers.CharField(required=False, allow_blank=True, default="")
     destination_lat = serializers.FloatField()
     destination_lon = serializers.FloatField()
+
+
+class DriverBankDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DriverBankDetail
+        fields = ("id", "holder_name", "account_number", "ifsc", "upi", "created_at", "updated_at")
+        read_only_fields = ("id", "created_at", "updated_at")
+
+
+class DriverBankDetailUpdateSerializer(serializers.Serializer):
+    holder_name = serializers.CharField(required=False, allow_blank=True)
+    account_number = serializers.CharField(required=False, allow_blank=True)
+    ifsc = serializers.CharField(required=False, allow_blank=True)
+    upi = serializers.CharField(required=False, allow_blank=True)

@@ -10,7 +10,7 @@ from channels.db import database_sync_to_async
 from channels.layers import get_channel_layer
 
 from operations.models import Vehicle, ActiveTrip, VehicleState, BoardingRequest
-from operations.constants import BOARDING_PENDING, BOARDING_APPROACHING
+from common.constants import BOARDING_PENDING, BOARDING_APPROACHING
 from tracking.models import HybridLog
 from tracking.services.geo_service import GeoService
 from tracking.services.redis_geo_service import RedisGeoService

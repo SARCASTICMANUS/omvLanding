@@ -19,7 +19,7 @@ class TestRideExperience:
         route = Route.objects.create(name="Route 1", city=city, path="LINESTRING(77.5946 12.9716, 77.6046 12.9816)")
         stop = Stop.objects.create(route=route, name="Stop 1", location=Point(77.5946, 12.9716, srid=4326), order=1)
         passenger = User.objects.create_user(username="passenger", password="password", role="passenger")
-        driver = User.objects.create_user(username="driver", password="password", role="driver")
+        driver = User.objects.create_user(username="driver", password="password", role="bikedriver")
         vehicle = Vehicle.objects.create(vehicle_number="KA-01-1234", vehicle_type="bike", city=city, driver=driver)
         state = VehicleState.objects.create(vehicle=vehicle, current_location=Point(77.5956, 12.9726, srid=4326))
         return {

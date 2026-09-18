@@ -103,7 +103,7 @@ jobs:
           ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p /home/azureuser/vayy/backend/vayy"
           rsync -avz --delete -e "ssh" \
             --exclude ".venv" --exclude "__pycache__" --exclude "*.pyc" \
-            --exclude "staticfiles" --exclude ".env" --exclude "osrm" \
+            --exclude "staticfiles" --exclude ".env" \
             backend/vayy/ \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/azureuser/vayy/backend/vayy/
 

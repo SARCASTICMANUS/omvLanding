@@ -5,7 +5,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
 from communication.models import Notification
-from communication.constants import (
+from common.constants import (
     NOTIFICATION_SENT,
     EXCHANGE_NOTIFICATION,
     RK_NOTIFICATION_SMS,

@@ -4,7 +4,7 @@ from typing import Dict, Any
 from operations.services.dispatch_service import DispatchService
 from accounts.models import User
 from operations.models import ActiveTrip
-from operations.constants import (
+from common.constants import (
     TRIP_STATUS_ASSIGNED, TRIP_STATUS_REQUESTED
 )
 

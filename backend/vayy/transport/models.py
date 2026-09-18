@@ -3,7 +3,7 @@ import uuid
 from django.db import models
 from django.contrib.gis.db import models as gis_models
 
-from transport.constants import ROUTE_PUBLIC
+from common.constants import ROUTE_PUBLIC
 
 
 class City(models.Model):
@@ -213,3 +213,5 @@ class StopTime(models.Model):
             f"{self.stop.name} - "
             f"{self.arrival_time}"
         )
+
+

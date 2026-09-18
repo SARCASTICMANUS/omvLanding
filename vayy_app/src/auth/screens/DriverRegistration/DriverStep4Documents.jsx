@@ -14,6 +14,8 @@ const { width } = Dimensions.get("window");
 
 const SECTIONS = [
   { key: "dl", label: "Driving Licence" },
+  { key: "rc", label: "RC Book" },
+  { key: "insurance", label: "Vehicle Insurance" },
   { key: "aadhaar", label: "Aadhaar Card" },
   { key: "selfie", label: "Selfie Verification" },
 ];
@@ -21,9 +23,21 @@ const SECTIONS = [
 export default function DriverStep4Documents({ onNext, onBack }) {
   const dispatch = useDispatch();
   const fields = useSelector((state) => state.onboarding.fields);
-  const [docs, setDocs] = useState({ dlFront: null, dlBack: null, aadhaarFront: null, aadhaarBack: null, selfie: null });
+  const [docs, setDocs] = useState({
+    dlFront: null, dlBack: null,
+    rcFront: null, rcBack: null,
+    insuranceFront: null, insuranceBack: null,
+    aadhaarFront: null, aadhaarBack: null,
+    selfie: null,
+  });
   const [errors, setErrors] = useState({});
-  const [uploadStatus, setUploadStatus] = useState({ dlFront: "idle", dlBack: "idle", aadhaarFront: "idle", aadhaarBack: "idle", selfie: "idle" });
+  const [uploadStatus, setUploadStatus] = useState({
+    dlFront: "idle", dlBack: "idle",
+    rcFront: "idle", rcBack: "idle",
+    insuranceFront: "idle", insuranceBack: "idle",
+    aadhaarFront: "idle", aadhaarBack: "idle",
+    selfie: "idle",
+  });
 
   const upload = async (field) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -47,29 +61,29 @@ export default function DriverStep4Documents({ onNext, onBack }) {
     }
   };
 
-  const completed = SECTIONS.reduce((acc, s) => {
-    const docKey = `doc_${s.key}`;
-    const sliceValue = fields[docKey];
-    const localValue = docs[s.key];
-    if (s.key === "dl") acc[s.key] = !!(localValue.dlFront && localValue.dlBack) || !!sliceValue.dlFront;
-    else if (s.key === "aadhaar") acc[s.key] = !!(localValue.aadhaarFront && localValue.aadhaarBack) || !!sliceValue.aadhaarFront;
-    else acc[s.key] = !!localValue.selfie || !!sliceValue.selfie;
-    return acc;
-  }, {});
+  const completed = {};
+  for (const s of SECTIONS) {
+    if (s.key === "dl") completed.dl = !!(docs.dlFront && docs.dlBack);
+    else if (s.key === "rc") completed.rc = !!(docs.rcFront && docs.rcBack);
+    else if (s.key === "insurance") completed.insurance = !!(docs.insuranceFront && docs.insuranceBack);
+    else if (s.key === "aadhaar") completed.aadhaar = !!(docs.aadhaarFront && docs.aadhaarBack);
+    else if (s.key === "selfie") completed.selfie = !!docs.selfie;
+  }
+
+  const completedCount = Object.values(completed).filter(Boolean).length;
 
   const validate = () => {
     const e = {};
-    const dlOk = !!(docs.dlFront && docs.dlBack) || !!fields.doc_dlFront;
-    const aadhaarOk = !!(docs.aadhaarFront && docs.aadhaarBack) || !!fields.doc_aadhaarFront;
-    const selfieOk = !!docs.selfie || !!fields.doc_selfie;
-    if (!dlOk) e.dl = "Upload both sides of your Driving Licence";
-    if (!aadhaarOk) e.aadhaar = "Upload both sides of your Aadhaar";
-    if (!selfieOk) e.selfie = "Take a selfie for verification";
+    if (!completed.dl) e.dl = "Upload both sides of your Driving Licence";
+    if (!completed.rc) e.rc = "Upload both sides of your RC Book";
+    if (!completed.insurance) e.insurance = "Upload both sides of your Insurance";
+    if (!completed.aadhaar) e.aadhaar = "Upload both sides of your Aadhaar";
+    if (!completed.selfie) e.selfie = "Take a selfie for verification";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const canProceed = Object.values(completed).reduce((acc, val) => acc && val, true);
+  const canProceed = completedCount === SECTIONS.length;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -83,9 +97,9 @@ export default function DriverStep4Documents({ onNext, onBack }) {
       <ProgressBar current={4} total={6} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.summary}>
-          <Text style={styles.summaryText}>Documents {Object.values(completed).filter(Boolean).length}/3 completed</Text>
+          <Text style={styles.summaryText}>Documents {completedCount}/{SECTIONS.length} completed</Text>
           <View style={styles.summaryTrack}>
-            <View style={[styles.summaryFill, { width: `${(Object.values(completed).filter(Boolean).length / 3) * 100}%` }]} />
+            <View style={[styles.summaryFill, { width: `${(completedCount / SECTIONS.length) * 100}%` }]} />
           </View>
         </View>
 
@@ -93,22 +107,35 @@ export default function DriverStep4Documents({ onNext, onBack }) {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Driving Licence</Text>
             {completed.dl && <CheckCircle size={18} color={COLORS.primary} />}
-            {errors.dl && <Text style={styles.err}>dl error</Text>}
           </View>
-          {errors.dl && <Text style={styles.err}>dl error</Text>}
+          {errors.dl && <Text style={styles.err}>{errors.dl}</Text>}
           <View style={styles.uploadRow}>
-            <ImageUploadCard
-              label="Upload Front"
-              uri={docs.dlFront}
-              onPress={() => upload("dlFront")}
-              status={uploadStatus.dlFront}
-            />
-            <ImageUploadCard
-              label="Upload Back"
-              uri={docs.dlBack}
-              onPress={() => upload("dlBack")}
-              status={uploadStatus.dlBack}
-            />
+            <ImageUploadCard label="Upload Front" uri={docs.dlFront} onPress={() => upload("dlFront")} status={uploadStatus.dlFront} />
+            <ImageUploadCard label="Upload Back" uri={docs.dlBack} onPress={() => upload("dlBack")} status={uploadStatus.dlBack} />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>RC Book</Text>
+            {completed.rc && <CheckCircle size={18} color={COLORS.primary} />}
+          </View>
+          {errors.rc && <Text style={styles.err}>{errors.rc}</Text>}
+          <View style={styles.uploadRow}>
+            <ImageUploadCard label="Upload Front" uri={docs.rcFront} onPress={() => upload("rcFront")} status={uploadStatus.rcFront} />
+            <ImageUploadCard label="Upload Back" uri={docs.rcBack} onPress={() => upload("rcBack")} status={uploadStatus.rcBack} />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Vehicle Insurance</Text>
+            {completed.insurance && <CheckCircle size={18} color={COLORS.primary} />}
+          </View>
+          {errors.insurance && <Text style={styles.err}>{errors.insurance}</Text>}
+          <View style={styles.uploadRow}>
+            <ImageUploadCard label="Upload Front" uri={docs.insuranceFront} onPress={() => upload("insuranceFront")} status={uploadStatus.insuranceFront} />
+            <ImageUploadCard label="Upload Back" uri={docs.insuranceBack} onPress={() => upload("insuranceBack")} status={uploadStatus.insuranceBack} />
           </View>
         </View>
 
@@ -116,22 +143,11 @@ export default function DriverStep4Documents({ onNext, onBack }) {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Aadhaar Card</Text>
             {completed.aadhaar && <CheckCircle size={18} color={COLORS.primary} />}
-            {errors.aadhaar && <Text style={styles.err}>aadhaar error</Text>}
           </View>
-          {errors.aadhaar && <Text style={styles.err}>aadhaar error</Text>}
+          {errors.aadhaar && <Text style={styles.err}>{errors.aadhaar}</Text>}
           <View style={styles.uploadRow}>
-            <ImageUploadCard
-              label="Upload Front"
-              uri={docs.aadhaarFront}
-              onPress={() => upload("aadhaarFront")}
-              status={uploadStatus.aadhaarFront}
-            />
-            <ImageUploadCard
-              label="Upload Back"
-              uri={docs.aadhaarBack}
-              onPress={() => upload("aadhaarBack")}
-              status={uploadStatus.aadhaarBack}
-            />
+            <ImageUploadCard label="Upload Front" uri={docs.aadhaarFront} onPress={() => upload("aadhaarFront")} status={uploadStatus.aadhaarFront} />
+            <ImageUploadCard label="Upload Back" uri={docs.aadhaarBack} onPress={() => upload("aadhaarBack")} status={uploadStatus.aadhaarBack} />
           </View>
         </View>
 
@@ -139,15 +155,9 @@ export default function DriverStep4Documents({ onNext, onBack }) {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Selfie Verification</Text>
             {completed.selfie && <CheckCircle size={18} color={COLORS.primary} />}
-            {errors.selfie && <Text style={styles.err}>selfie error</Text>}
           </View>
-          {errors.selfie && <Text style={styles.err}>selfie error</Text>}
-          <ImageUploadCard
-            label="Take Selfie"
-            uri={docs.selfie}
-            onPress={() => upload("selfie")}
-            status={uploadStatus.selfie}
-          />
+          {errors.selfie && <Text style={styles.err}>{errors.selfie}</Text>}
+          <ImageUploadCard label="Take Selfie" uri={docs.selfie} onPress={() => upload("selfie")} status={uploadStatus.selfie} />
         </View>
 
         <View style={{ height: 80 }} />

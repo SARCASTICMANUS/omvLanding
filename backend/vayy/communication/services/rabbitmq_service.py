@@ -87,7 +87,7 @@ class RabbitMQService:
         """
         Setup exchanges, queues and DLQs as per vayy_correct.xml
         """
-        from communication.constants import (
+        from common.constants import (
             EXCHANGE_LOCATION, EXCHANGE_DISPATCH, EXCHANGE_NOTIFICATION,
             EXCHANGE_BOARDING, EXCHANGE_TRIP, EXCHANGE_MATCHING,
             QUEUE_LOCATION_AUTO, QUEUE_LOCATION_BIKE, QUEUE_LOCATION_PASSENGER,

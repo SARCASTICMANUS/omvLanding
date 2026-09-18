@@ -211,7 +211,7 @@ class MatchingService:
         try:
             # Publish to the dispatch exchange, routed to the specific vehicle
             from communication.services.rabbitmq_service import RabbitMQService
-            from communication.constants import EXCHANGE_DISPATCH, RK_DISPATCH_ASSIGN
+            from common.constants import EXCHANGE_DISPATCH, RK_DISPATCH_ASSIGN
 
             RabbitMQService.publish(
                 exchange=EXCHANGE_DISPATCH,

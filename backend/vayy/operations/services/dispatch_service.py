@@ -22,8 +22,8 @@ from accounts.services.wallet_service import WalletService
 from operations.services.ride_service import RideService
 from operations.services.fare_service import FareService
 from tracking.services.redis_geo_service import RedisGeoService
-from communication.constants import EXCHANGE_DISPATCH, RK_DISPATCH_ASSIGN, RK_DISPATCH_CANCEL
-from operations.constants import (
+from common.constants import (
+    EXCHANGE_DISPATCH, RK_DISPATCH_ASSIGN, RK_DISPATCH_CANCEL,
     BOARDING_PENDING,
     TRIP_STATUS_REQUESTED, TRIP_STATUS_ASSIGNED, TRIP_STATUS_ACCEPTED,
     TRIP_STATUS_REJECTED, TRIP_STATUS_ARRIVED, TRIP_STATUS_ACTIVE,

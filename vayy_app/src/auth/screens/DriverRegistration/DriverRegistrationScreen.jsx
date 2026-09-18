@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { Alert } from "react-native";
 import DriverStep1Personal from "./DriverStep1Personal";
 import DriverStep2Vehicle from "./DriverStep2Vehicle";
 import DriverStep3VehicleInfo from "./DriverStep3VehicleInfo";
@@ -9,6 +10,7 @@ import ApplicationSubmittedScreen from "../ApplicationSubmittedScreen";
 import { registerUser, loginUser } from "../../authSlice";
 import { ROLE, OPERATIONS, AUTH } from "../../../constants";
 import api from "../../../shared/lib/api";
+import { uriToBase64 } from "../../../shared/lib/base64";
 
 export default function DriverRegistrationScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -59,50 +61,106 @@ export default function DriverRegistrationScreen({ navigation }) {
   };
 
   const handleSubmit = async (mergedData) => {
+    const errors = [];
+
     try {
+      // 1. Login to get JWT token
       const loginResult = await dispatch(
         loginUser({ email: mergedData.email, password: mergedData.password }),
       );
 
-      if (data.vehicleNumber) {
-        await api.post(OPERATIONS.vehicleRegister, {
-          vehicle_number: data.vehicleNumber,
-          vehicle_type: data.vehicleType,
-        }).catch(() => {});
+      if (!loginUser.fulfilled.match(loginResult)) {
+        Alert.alert("Registration", "Account created but login failed. Please login manually.");
+        setStep(7);
+        return;
       }
 
-      await api.put(AUTH.driverProfile, {
-        display_name: mergedData.fullName,
-        phone_number: mergedData.mobile,
-        license_number: mergedData.rcNumber || "",
-        vehicle_number: mergedData.vehicleNumber || "",
-        vehicle_type: mergedData.vehicleType || "auto",
-      }).catch(() => {});
+      // 2. Register vehicle (with base64 photo)
+      if (mergedData.vehicleNumber) {
+        const vehiclePhotoBase64 = mergedData.photo
+          ? await uriToBase64(mergedData.photo)
+          : "";
 
+        try {
+          await api.post(OPERATIONS.vehicleRegister, {
+            vehicle_number: mergedData.vehicleNumber,
+            vehicle_type: mergedData.vehicleType,
+            vehicle_photo: vehiclePhotoBase64 || "",
+          });
+        } catch (e) {
+          errors.push("Vehicle: " + (e.response?.data?.message || e.message));
+        }
+      }
+
+      // 3. Update driver profile (name, phone, license, vehicle, dob, gender)
+      try {
+        const profileData = {
+          display_name: mergedData.fullName,
+          phone_number: mergedData.mobile,
+          license_number: mergedData.rcNumber || "",
+          vehicle_number: mergedData.vehicleNumber || "",
+          vehicle_type: mergedData.vehicleType || "auto",
+        };
+        if (mergedData.dob) profileData.dob = mergedData.dob;
+        if (mergedData.gender) profileData.gender = mergedData.gender;
+
+        await api.put(AUTH.driverProfile, profileData);
+      } catch (e) {
+        errors.push("Profile: " + (e.response?.data?.message || e.message));
+      }
+
+      // 4. Upload documents as base64
       const docMap = {
         LICENSE: [mergedData.dlFront, mergedData.dlBack],
-        IDENTITY: [mergedData.selfie],
+        RC: [mergedData.rcFront, mergedData.rcBack],
+        INSURANCE: [mergedData.insuranceFront, mergedData.insuranceBack],
+        IDENTITY: [
+          mergedData.selfie,
+          mergedData.aadhaarFront,
+          mergedData.aadhaarBack,
+        ].filter(Boolean),
       };
-      const fileEntries = Object.entries(docMap).flatMap(([type, files]) =>
-        files.filter(Boolean).map((file) => ({ type, file }))
-      );
-      for (const { type, file } of fileEntries) {
-        const formData = new FormData();
-        formData.append("document_type", type);
-        formData.append("file", {
-          uri: file,
-          name: file.split("/").pop(),
-          type: "image/jpeg",
-        });
-        api.post(AUTH.driverDocuments, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        }).catch(() => {});
+
+      for (const [type, files] of Object.entries(docMap)) {
+        for (const fileUri of files) {
+          if (!fileUri) continue;
+          try {
+            const base64 = await uriToBase64(fileUri);
+            if (!base64) {
+              errors.push(`${type}: Failed to encode image`);
+              continue;
+            }
+            const fileName = fileUri.split("/").pop() || `${type.toLowerCase()}.jpg`;
+            await api.post(AUTH.driverDocuments, {
+              document_type: type,
+              file_base64: base64,
+              file_name: fileName,
+            });
+          } catch (e) {
+            errors.push(`${type}: ` + (e.response?.data?.message || e.message));
+          }
+        }
       }
 
-      if (DRIVER_ROLES.includes(onboardingRole || "")) {
-        await api.post(AUTH.submitForReview, {
-          role: onboardingRole || "",
-        }).catch(() => {});
+      // 5. Save bank details
+      if (mergedData.holderName || mergedData.accountNumber || mergedData.ifsc) {
+        try {
+          await api.post(AUTH.driverBankDetails, {
+            holder_name: mergedData.holderName || "",
+            account_number: mergedData.accountNumber || "",
+            ifsc: mergedData.ifsc || "",
+            upi: mergedData.upi || "",
+          });
+        } catch (e) {
+          errors.push("Bank: " + (e.response?.data?.message || e.message));
+        }
+      }
+
+      if (errors.length > 0) {
+        Alert.alert(
+          "Some items failed",
+          errors.join("\n") + "\n\nYou can retry from your profile.",
+        );
       }
 
       setStep(7);

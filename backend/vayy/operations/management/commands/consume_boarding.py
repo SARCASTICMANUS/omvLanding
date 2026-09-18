@@ -4,7 +4,7 @@ import pika
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from communication.services.rabbitmq_service import RabbitMQService
-from communication.constants import QUEUE_BOARDING
+from common.constants import QUEUE_BOARDING
 
 logger = logging.getLogger(__name__)
 

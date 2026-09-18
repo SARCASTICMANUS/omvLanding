@@ -296,3 +296,4 @@ class DriverRouteSerializer(serializers.ModelSerializer):
 
     def get_eta_minutes(self, obj):
         return self.get_duration_minutes(obj)
+

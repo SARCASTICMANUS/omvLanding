@@ -13,8 +13,7 @@ from transport.models import (
     Stop,
     TripSchedule,
 )
-from common.constants import VEHICLE_TYPE_CHOICES
-from operations.constants import VEHICLE_TYPE_AUTO
+from common.constants import VEHICLE_TYPE_CHOICES, VEHICLE_TYPE_AUTO
 
 class VehicleSerializer(
     serializers.ModelSerializer
@@ -285,7 +284,7 @@ class BoardingRequestCreateSerializer(
     drop_stop = serializers.UUIDField(required=False, allow_null=True)
 
     def validate(self, attrs):
-        from operations.constants import TRIP_STATUS_ACTIVE
+        from common.constants import TRIP_STATUS_ACTIVE
 
         trip_id = attrs["trip"]
         trip = None

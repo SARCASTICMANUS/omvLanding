@@ -13,7 +13,7 @@ from transport.models import (
     TripSchedule,
 )
 
-from operations.constants import (
+from common.constants import (
     VEHICLE_TYPE_CHOICES,
     VEHICLE_STATUS_CHOICES,
     VEHICLE_STATUS_PENDING,
@@ -66,6 +66,12 @@ class Vehicle(models.Model):
     vehicle_type = models.CharField(
         max_length=20,
         choices=VEHICLE_TYPE_CHOICES,
+    )
+
+    vehicle_photo = models.TextField(
+        default="",
+        blank=True,
+        help_text="Base64-encoded vehicle photo",
     )
 
     status = models.CharField(

@@ -654,7 +654,7 @@ class PassengersAlongRouteAPIView(APIView):
             last_active_at__gte=cutoff,
             current_location__within=bbox,
         ).select_related("user").exclude(
-            user__role="driver",
+            user__role__in=["bikedriver", "autodriver"],
         )
 
         results = []

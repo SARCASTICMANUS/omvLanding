@@ -184,6 +184,7 @@ services:
   osrm:
     image: osrm/osrm-backend:latest
     container_name: vayy-osrm
+    user: root
     volumes:
       - ./osrm:/data
     ports:
@@ -191,26 +192,27 @@ services:
     depends_on:
       osrm-download:
         condition: service_completed_successfully
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        if [ ! -f /data/map.osrm ]; then
-          echo 'Extracting map (one-time, may take a while)...';
-          osrm-extract -p /opt/car.lua /data/map.osm.pbf &&
-          osrm-partition /data/map.osrm &&
-          osrm-customize /data/map.osrm &&
-          echo 'Map extracted.';
-        else
-          echo 'map.osrm already present, skipping extraction';
-        fi
-        exec osrm-routed --algorithm mld /data/map.osrm
+    command: >
+      sh -c "if [ ! -f /data/map.osrm ]; then
+               echo 'Extracting map (one-time, may take a while)...';
+               osrm-extract -p /opt/car.lua /data/map.osm.pbf &&
+               osrm-partition /data/map.osrm &&
+               osrm-customize /data/map.osrm &&
+               echo 'Map extracted.';
+             fi &&
+             exec osrm-routed --algorithm mld /data/map.osrm"
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/5000' 2>/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
-    cpus: 2
-    mem_limit: 4g
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          memory: 2G  # Allows 4G RAM + 4G Swap space
 
 volumes:
   postgres_data:

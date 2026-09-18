@@ -2,7 +2,7 @@ from operations.models import (
     BoardingRequest,
 )
 
-from operations.constants import (
+from common.constants import (
     BOARDING_PENDING,
 )
 

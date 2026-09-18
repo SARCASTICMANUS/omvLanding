@@ -2,7 +2,7 @@ from operations.models import (
     ActiveTrip,
 )
 
-from operations.constants import (
+from common.constants import (
     TRIP_STATUS_ACTIVE,
 )
 

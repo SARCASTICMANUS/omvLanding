@@ -19,6 +19,7 @@ from accounts.models import (
     PaymentMethod,
     DriverDocument,
     RecentSearch,
+    DriverBankDetail,
 )
 
 from accounts.api.serializers import (
@@ -44,6 +45,8 @@ from accounts.api.serializers import (
     DriverDocumentSerializer,
     RecentSearchSerializer,
     RecentSearchCreateSerializer,
+    DriverBankDetailSerializer,
+    DriverBankDetailUpdateSerializer,
 )
 
 from accounts.services.auth_service import AuthService
@@ -391,6 +394,8 @@ class DriverProfileAPIView(APIView):
             "license_number": profile.license_number,
             "vehicle_number": profile.vehicle_number,
             "vehicle_type": profile.vehicle_type,
+            "dob": profile.dob.isoformat() if profile.dob else None,
+            "gender": profile.gender,
             "is_verified": profile.is_verified,
             "rating": profile.rating,
             "total_trips": profile.total_trips,
@@ -450,6 +455,7 @@ class DriverProfileAPIView(APIView):
         profile_fields = [
             "display_name", "phone_number", "bio",
             "license_number", "vehicle_number", "vehicle_type",
+            "dob", "gender",
         ]
         for f in profile_fields:
             if f in attrs:
@@ -509,11 +515,81 @@ class DriverDocumentAPIView(APIView):
         return resp
 
     def post(self, request):
-        serializer = DriverDocumentSerializer(data=request.data)
+        import base64
+        import uuid as uuid_mod
+        from django.core.files.base import ContentFile
+
+        document_type = request.data.get("document_type", "")
+        file_obj = request.data.get("file")
+        file_base64 = request.data.get("file_base64")
+        file_name = request.data.get("file_name", "upload.jpg")
+
+        if not document_type:
+            return Response(
+                {"success": False, "message": "document_type is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if file_base64:
+            # Accept base64-encoded image
+            if "," in file_base64:
+                file_base64 = file_base64.split(",", 1)[1]
+            try:
+                decoded = base64.b64decode(file_base64)
+            except Exception:
+                return Response(
+                    {"success": False, "message": "Invalid base64 data"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            ext = file_name.rsplit(".", 1)[-1] if "." in file_name else "jpg"
+            unique_name = f"{uuid_mod.uuid4().hex}.{ext}"
+            content = ContentFile(decoded, name=unique_name)
+            doc = DriverDocument.objects.create(
+                driver=request.user,
+                document_type=document_type,
+                file=content,
+            )
+            return Response(
+                DriverDocumentSerializer(doc).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        if file_obj:
+            serializer = DriverDocumentSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(driver=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(
+            {"success": False, "message": "file or file_base64 is required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+# DRIVER BANK DETAILS
+class DriverBankDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsDriver]
+
+    def get(self, request):
+        detail, _ = DriverBankDetail.objects.get_or_create(driver=request.user)
+        serializer = DriverBankDetailSerializer(detail)
+        return success_response(data=serializer.data)
+
+    def post(self, request):
+        serializer = DriverBankDetailUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save(driver=request.user)
-        resp = Response(serializer.data, status=status.HTTP_201_CREATED)
-        return resp
+        attrs = serializer.validated_data
+
+        detail, _ = DriverBankDetail.objects.get_or_create(driver=request.user)
+        for f in ["holder_name", "account_number", "ifsc", "upi"]:
+            if f in attrs:
+                setattr(detail, f, attrs[f])
+        detail.save()
+
+        return success_response(
+            data=DriverBankDetailSerializer(detail).data,
+            message="Bank details saved",
+        )
 
 
 # VERIFICATION STATUS

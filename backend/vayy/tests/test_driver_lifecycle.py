@@ -6,7 +6,7 @@ from accounts.models import User
 from operations.models import Vehicle, ActiveTrip, VehicleState
 from transport.models import Route, City, Stop
 from django.contrib.gis.geos import Point
-from operations.constants import (
+from common.constants import (
     TRIP_STATUS_ASSIGNED, TRIP_STATUS_ACCEPTED, TRIP_STATUS_ARRIVED,
     TRIP_STATUS_ACTIVE, TRIP_STATUS_COMPLETED
 )
@@ -21,7 +21,7 @@ class TestDriverLifecycle:
     def test_data(self):
         city = City.objects.create(name="Bangalore")
         route = Route.objects.create(name="Route 1", city=city, path="LINESTRING(0 0, 1 1)")
-        driver = User.objects.create_user(username="driver", password="password", role="driver")
+        driver = User.objects.create_user(username="driver", password="password", role="bikedriver")
         vehicle = Vehicle.objects.create(vehicle_number="KA-01-1234", vehicle_type="bike", city=city, driver=driver)
         state = VehicleState.objects.create(vehicle=vehicle)
         trip = ActiveTrip.objects.create(vehicle=vehicle, route=route, driver=driver, status=TRIP_STATUS_ASSIGNED)

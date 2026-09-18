@@ -5,15 +5,14 @@ from operations.models import (
     ActiveTrip,
 )
 
-from operations.constants import (
+from common.constants import (
     TRIP_STATUS_ACTIVE,
     TRIP_STATUS_COMPLETED,
     TRIP_STARTED,
     TRIP_COMPLETED,
     TRIP_LOCATION,
+    EXCHANGE_TRIP,
 )
-
-from communication.constants import EXCHANGE_TRIP
 
 from operations.selectors.trip_selector import (
     TripSelector,

@@ -12,6 +12,7 @@ export const AUTH = {
   walletAddFunds: "/api/accounts/wallet/add-funds/",
   pushToken: "/api/accounts/push-token/",
   driverDocuments: "/api/accounts/driver/documents/",
+  driverBankDetails: "/api/accounts/driver/bank-details/",
   verificationStatus: "/api/accounts/verification-status/",
 };
 

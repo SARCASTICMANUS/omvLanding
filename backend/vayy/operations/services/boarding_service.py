@@ -7,25 +7,17 @@ from operations.models import (
     BoardingRequest,
 )
 
-from operations.constants import (
+from common.constants import (
     BOARDING_PENDING,
     BOARDING_CANCELLED,
-)
-
-from operations.selectors.boarding_selector import (
-    BoardingSelector,
-)
-
-from communication.services.rabbitmq_service import (
-    RabbitMQService,
-)
-
-from communication.constants import (
     EXCHANGE_BOARDING,
     RK_BOARDING_CREATED,
     RK_BOARDING_CANCELLED,
     RK_BOARDING_BOARDED,
 )
+
+from operations.selectors.boarding_selector import BoardingSelector
+from communication.services.rabbitmq_service import RabbitMQService
 
 logger = logging.getLogger(__name__)
 

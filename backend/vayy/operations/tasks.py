@@ -4,7 +4,7 @@ from django.utils import timezone
 from datetime import timedelta
 from operations.models import ActiveTrip, BoardingRequest
 from operations.consumers.dispatch_consumer import DispatchConsumer
-from operations.constants import TRIP_STATUS_ASSIGNED, TRIP_STATUS_CANCELLED, TRIP_STATUS_REJECTED
+from common.constants import TRIP_STATUS_ASSIGNED, TRIP_STATUS_CANCELLED, TRIP_STATUS_REJECTED
 
 logger = logging.getLogger(__name__)
 

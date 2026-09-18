@@ -174,6 +174,15 @@ class PublicDriverProfile(models.Model):
         choices=VEHICLE_TYPE_CHOICES,
         default="auto",
     )
+    dob = models.DateField(
+        null=True,
+        blank=True,
+    )
+    gender = models.CharField(
+        max_length=20,
+        default="",
+        blank=True,
+    )
     is_verified = models.BooleanField(default=False)
     rating = models.FloatField(default=5.0)
     total_trips = models.PositiveIntegerField(default=0)
@@ -389,3 +398,29 @@ class RecentSearch(models.Model):
 
     def __str__(self):
         return f"{self.pickup_name} → {self.destination_name}"
+
+
+class DriverBankDetail(models.Model):
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    driver = models.OneToOneField(
+        UserModel,
+        on_delete=models.CASCADE,
+        related_name="bank_detail",
+    )
+    holder_name = models.CharField(max_length=255, default="", blank=True)
+    account_number = models.CharField(max_length=50, default="", blank=True)
+    ifsc = models.CharField(max_length=20, default="", blank=True)
+    upi = models.CharField(max_length=100, default="", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Driver Bank Detail"
+        verbose_name_plural = "Driver Bank Details"
+
+    def __str__(self):
+        return f"BankDetail: {self.driver.email}"

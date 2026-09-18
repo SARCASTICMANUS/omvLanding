@@ -1,7 +1,7 @@
 import uuid
 from django.db import models
 from accounts.models import User
-from communication.constants import (
+from common.constants import (
     NOTIFICATION_TYPE_CHOICES,
     NOTIFICATION_STATUS_CHOICES,
     NOTIFICATION_PENDING,
