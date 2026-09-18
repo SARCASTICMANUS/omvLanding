@@ -7,11 +7,7 @@ import LocationSearch from "../components/LocationSearch";
 import {
   Plus, Save, Trash2, XCircle,
   ArrowUp, ArrowDown, Bike, Compass, Box, Edit3,
-<<<<<<< HEAD
   Route as RouteIcon, Upload, FileSpreadsheet, ChevronRight, Check, RefreshCw,
-=======
-  Route as RouteIcon, Upload, FileSpreadsheet, ChevronRight, Check,
->>>>>>> 2b4ae87d9847126104356edd62c284d17624eab6
 } from "lucide-react";
 
 const DEFAULT_CENTER = [78.9629, 20.5937];
@@ -579,7 +575,6 @@ export default function Routes() {
     setImportRoadPath(roadPath);
   }, [importRows, importMapping]);
 
-<<<<<<< HEAD
   const handleGenerateRoadPath = useCallback(async () => {
     if (importPreviewStops.length < 2) return;
     try {
@@ -601,22 +596,17 @@ export default function Routes() {
     }
   }, [importPreviewStops]);
 
-=======
->>>>>>> 2b4ae87d9847126104356edd62c284d17624eab6
   useEffect(() => {
     if (importStep === 2) generateImportPreview();
   }, [importStep, importMapping, generateImportPreview]);
 
   useEffect(() => {
-<<<<<<< HEAD
     if (importStep === 3 && importPreviewStops.length >= 2 && importRoadPath.length < 2) {
       handleGenerateRoadPath();
     }
   }, [importStep, importPreviewStops.length, handleGenerateRoadPath]);
 
   useEffect(() => {
-=======
->>>>>>> 2b4ae87d9847126104356edd62c284d17624eab6
     if (importStep !== 3 || !map.current || !mapLoaded) return;
     const m = map.current;
 
@@ -650,11 +640,7 @@ export default function Routes() {
     setImportLoading(true);
     setImportError("");
     try {
-<<<<<<< HEAD
       const res = await api.post("/transport/admin/route-import/", {
-=======
-      const res = await api.post("/admin/route-import/", {
->>>>>>> 2b4ae87d9847126104356edd62c284d17624eab6
         city: selectedCity,
         route_name: importRouteName,
         route_code: importRouteCode,
@@ -1073,11 +1059,7 @@ export default function Routes() {
                   )}
 
                   <button onClick={() => setImportStep(2)}
-<<<<<<< HEAD
                     disabled={!importMapping.latitude || !importMapping.longitude || !importMapping.order || !importMapping.plusCode || !importMapping.nearbyLandmark}
-=======
-                    disabled={!importMapping.latitude || !importMapping.longitude}
->>>>>>> 2b4ae87d9847126104356edd62c284d17624eab6
                     className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
                     Continue <ChevronRight size={16} />
                   </button>
@@ -1086,7 +1068,6 @@ export default function Routes() {
 
               {importStep === 2 && (
                 <div className="space-y-4">
-<<<<<<< HEAD
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
                     <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-1">From CSV</p>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
@@ -1095,8 +1076,6 @@ export default function Routes() {
                       <span className="text-emerald-800"><span className="font-bold">Stops:</span> {importPreviewStops.length}</span>
                     </div>
                   </div>
-=======
->>>>>>> 2b4ae87d9847126104356edd62c284d17624eab6
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Route Name *</label>
                     <input value={importRouteName} onChange={(e) => setImportRouteName(e.target.value)}
@@ -1112,11 +1091,7 @@ export default function Routes() {
 
                   <div className="space-y-2">
                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-<<<<<<< HEAD
                       Stops ({importPreviewStops.length})
-=======
-                      Preview ({importPreviewStops.length} stops)
->>>>>>> 2b4ae87d9847126104356edd62c284d17624eab6
                     </p>
                     <div className="max-h-48 overflow-y-auto space-y-1">
                       {importPreviewStops.map((s, i) => (
@@ -1148,7 +1123,6 @@ export default function Routes() {
                   <div className="bg-brand-50 border border-brand-200 p-3 rounded-lg">
                     <p className="text-xs font-bold text-brand-800">{importRouteName}</p>
                     <p className="text-[11px] text-brand-600">
-<<<<<<< HEAD
                       {importPreviewStops.length} stops | {importPreviewStops[0]?.name} → {importPreviewStops[importPreviewStops.length - 1]?.name}
                     </p>
                   </div>
@@ -1168,30 +1142,16 @@ export default function Routes() {
                       </p>
                     </div>
                   )}
-=======
-                      {importPreviewStops.length} stops | OSRM road-snap routing | {importPreviewStops[0]?.name} → {importPreviewStops[importPreviewStops.length - 1]?.name}
-                    </p>
-                  </div>
-
-                  <p className="text-[11px] text-slate-500">
-                    {importRoadPath.length >= 2
-                      ? "Route will be road-snapped via OSRM using all stops as ordered waypoints."
-                      : "Route will be road-snapped via OSRM using all stops as ordered waypoints."}
-                  </p>
->>>>>>> 2b4ae87d9847126104356edd62c284d17624eab6
 
                   <div className="flex gap-2">
                     <button onClick={() => setImportStep(2)}
                       className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition text-sm">
                       Back
                     </button>
-<<<<<<< HEAD
                     <button onClick={handleGenerateRoadPath}
                       className="px-3 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition text-sm">
                       <RefreshCw size={14} />
                     </button>
-=======
->>>>>>> 2b4ae87d9847126104356edd62c284d17624eab6
                     <button onClick={handleImportSave} disabled={importLoading || !selectedCity}
                       className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
                       <Save size={16} /> {importLoading ? "Routing via OSRM..." : "Import Route"}

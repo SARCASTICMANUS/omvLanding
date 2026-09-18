@@ -7,7 +7,6 @@ import usePageView from "./hooks/usePageView";
 
 const LandingPageAnimated = lazy(() => import("./pages/LandingPageAnimated"));
 const SupportPage = lazy(() => import("./pages/SupportPage"));
-const SplashPreview = lazy(() => import("./pages/SplashPreview"));
 const Login = lazy(() => import("./pages/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Cities = lazy(() => import("./pages/Cities"));
@@ -137,7 +136,6 @@ export default function App() {
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/" element={<LandingPageAnimated />} />
-        <Route path="/splash-preview" element={<SplashPreview />} />
         <Route path="/support" element={
           <>
             <LandingPageAnimated />
