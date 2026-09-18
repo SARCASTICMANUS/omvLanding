@@ -100,16 +100,16 @@ jobs:
 
       - name: Sync backend to VM
         run: |
-          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p /home/azureuser/vayy/backend/vayy && chmod -R 777 /home/azureuser/vayy/backend/vayy"
+          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p /home/azureuser/vayy/backend/vayy && chmod -R 777 /home/azureuser/vayy/backend/vayy 2>/dev/null || true"
           rsync -avz --delete -e "ssh" \
             --exclude ".venv" --exclude "__pycache__" --exclude "*.pyc" \
-            --exclude "staticfiles" --exclude ".env" \
+            --exclude "staticfiles" --exclude ".env" --exclude "osrm" \
             backend/vayy/ \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/azureuser/vayy/backend/vayy/
 
       - name: Sync admin to VM
         run: |
-          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p /home/azureuser/vayy/admin && chmod -R 777 /home/azureuser/vayy/admin"
+          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p /home/azureuser/vayy/admin && chmod -R 777 /home/azureuser/vayy/admin 2>/dev/null || true"
           rsync -avz --delete -e "ssh" \
             --exclude "node_modules" --exclude "dist" \
             admin/ \
