@@ -101,7 +101,7 @@ jobs:
       - name: Sync backend to VM
         run: |
           ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p /home/azureuser/vayy/backend/vayy"
-          rsync -avz --delete -e "ssh" \
+          rsync -avz --delete --rsync-path="sudo rsync" -e "ssh" \
             --exclude ".venv" --exclude "__pycache__" --exclude "*.pyc" \
             --exclude "staticfiles" --exclude ".env" \
             backend/vayy/ \
@@ -110,7 +110,7 @@ jobs:
       - name: Sync admin to VM
         run: |
           ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p /home/azureuser/vayy/admin"
-          rsync -avz --delete -e "ssh" \
+          rsync -avz --delete --rsync-path="sudo rsync" -e "ssh" \
             --exclude "node_modules" --exclude "dist" \
             admin/ \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/azureuser/vayy/admin/
