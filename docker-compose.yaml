@@ -58,7 +58,7 @@ services:
       start_period: 40s
 
   celery:
-    image: vayy-web
+    build: ./backend/vayy
     container_name: vayy-celery
     command: >
       sh -c "celery -A vayy worker -l info -Q celery,tracking,dispatch,matching,notifications &

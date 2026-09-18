@@ -10,10 +10,12 @@ Formula: fare = base_fare + (distance_km * per_km_rate)
 
 from typing import Optional
 
+from common.constants import VEHICLE_BIKE, VEHICLE_AUTO
+
 # Vehicle-type fare rates. Any vehicle type not listed falls back to "default".
 VEHICLE_FARE_RATES = {
-    "auto": {"base_fare": 30, "per_km_rate": 10},
-    "bike": {"base_fare": 20, "per_km_rate": 5},
+    VEHICLE_AUTO: {"base_fare": 30, "per_km_rate": 10},
+    VEHICLE_BIKE: {"base_fare": 20, "per_km_rate": 5},
     "default": {"base_fare": 50, "per_km_rate": 15},
 }
 

@@ -4,7 +4,8 @@ from django.utils import timezone
 
 from accounts.models import User, DriverDocument, PublicDriverProfile
 from common.constants import (
-    DOC_STATUS_VERIFIED, DOC_STATUS_REJECTED
+    DOC_STATUS_VERIFIED, DOC_STATUS_REJECTED,
+    DOC_TYPE_LICENSE, DOC_TYPE_RC,
 )
 from communication.services.notification_service import NotificationService
 
@@ -70,7 +71,7 @@ class VerificationService:
         Verifies the driver profile if all required documents are verified.
         Required: LICENSE, RC
         """
-        required_types = ["LICENSE", "RC"]
+        required_types = [DOC_TYPE_LICENSE, DOC_TYPE_RC]
         verified_count = DriverDocument.objects.filter(
             driver=user,
             document_type__in=required_types,

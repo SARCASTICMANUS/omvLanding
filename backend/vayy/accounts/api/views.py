@@ -22,6 +22,16 @@ from accounts.models import (
     DriverBankDetail,
 )
 
+from common.constants import (
+    DOC_STATUS_PENDING,
+    DOC_STATUS_VERIFIED,
+    DOC_STATUS_REJECTED,
+    ROLE_ADMIN,
+    ROLE_PASSENGER,
+    ROLE_BIKE_DRIVER,
+    ROLE_AUTO_DRIVER,
+)
+
 from accounts.api.serializers import (
     UserSerializer,
     UserCreateUpdateSerializer,
@@ -297,7 +307,7 @@ class PassengerProfileAPIView(APIView):
 
     def _get_target_user(self, request):
         user_id = request.query_params.get("user_id")
-        if user_id and request.user.role == "admin":
+        if user_id and request.user.role == ROLE_ADMIN:
             from accounts.models import User
             try:
                 return User.objects.get(id=user_id)
@@ -325,7 +335,7 @@ class PassengerProfileAPIView(APIView):
         # Support admin updating another user's profile via ?user_id
         user = request.user
         user_id = request.query_params.get("user_id")
-        if user_id and request.user.role == "admin":
+        if user_id and request.user.role == ROLE_ADMIN:
             from accounts.models import User
             try:
                 user = User.objects.get(id=user_id)
@@ -403,7 +413,7 @@ class DriverProfileAPIView(APIView):
 
     def _get_target_user(self, request):
         user_id = request.query_params.get("user_id")
-        if user_id and request.user.role == "admin":
+        if user_id and request.user.role == ROLE_ADMIN:
             from accounts.models import User
             try:
                 return User.objects.get(id=user_id)
@@ -431,7 +441,7 @@ class DriverProfileAPIView(APIView):
         # Support admin updating another user's profile via ?user_id
         user = request.user
         user_id = request.query_params.get("user_id")
-        if user_id and request.user.role == "admin":
+        if user_id and request.user.role == ROLE_ADMIN:
             from accounts.models import User
             try:
                 user = User.objects.get(id=user_id)
@@ -598,7 +608,7 @@ class VerificationStatusAPIView(APIView):
 
     def get(self, request):
         user = request.user
-        is_driver = user.role in ("bikedriver", "autodriver")
+        is_driver = user.role in (ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER)
 
         if not is_driver:
             return success_response(data={
@@ -618,9 +628,9 @@ class VerificationStatusAPIView(APIView):
             verification_status = "verified"
         elif not doc_list:
             verification_status = "not_submitted"
-        elif "REJECTED" in statuses:
+        elif DOC_STATUS_REJECTED in statuses:
             verification_status = "rejected"
-        elif all(s == "VERIFIED" for s in statuses):
+        elif all(s == DOC_STATUS_VERIFIED for s in statuses):
             verification_status = "verified"
         else:
             verification_status = "pending"

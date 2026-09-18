@@ -6,7 +6,7 @@ from django.contrib.gis.db import models as gis_models
 
 from .managers import UserManager
 from common.constants import (
-    ROLE_CHOICES, VEHICLE_TYPE_CHOICES,
+    ROLE_CHOICES, ROLE_PASSENGER, VEHICLE_TYPE_CHOICES, VEHICLE_AUTO,
     TX_TYPE_CHOICES, TX_STATUS_CHOICES, TX_STATUS_PENDING,
     DOC_TYPE_CHOICES, DOC_STATUS_CHOICES, DOC_STATUS_PENDING
 )
@@ -17,7 +17,7 @@ class User(AbstractUser):
     role = models.CharField(
         max_length=20,
         choices=ROLE_CHOICES,
-        default="passenger",
+        default=ROLE_PASSENGER,
         db_index=True,
     )
     city = models.ForeignKey(
@@ -172,7 +172,7 @@ class PublicDriverProfile(models.Model):
     vehicle_type = models.CharField(
         max_length=20,
         choices=VEHICLE_TYPE_CHOICES,
-        default="auto",
+        default=VEHICLE_AUTO,
     )
     dob = models.DateField(
         null=True,

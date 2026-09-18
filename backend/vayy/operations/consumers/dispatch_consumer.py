@@ -5,7 +5,8 @@ from operations.services.dispatch_service import DispatchService
 from accounts.models import User
 from operations.models import ActiveTrip
 from common.constants import (
-    TRIP_STATUS_ASSIGNED, TRIP_STATUS_REQUESTED
+    TRIP_STATUS_ASSIGNED,
+    DISPATCH_MODE_DIRECT,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,7 @@ class DispatchConsumer:
         passenger_id = payload.get("passenger_id")
         route_id = payload.get("route_id")
         pickup_stop_id = payload.get("pickup_stop_id")
-        mode = payload.get("mode", "direct")
+        mode = payload.get("mode", DISPATCH_MODE_DIRECT)
 
         logger.info(f"Processing ride request: passenger={passenger_id}, route={route_id}, mode={mode}")
 

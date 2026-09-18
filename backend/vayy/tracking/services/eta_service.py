@@ -2,6 +2,7 @@ import logging
 from typing import List, Dict, Any
 from abc import ABC, abstractmethod
 from django.core.cache import cache
+from common.constants import TRIP_STATUS_ACTIVE
 from operations.models import ActiveTrip
 from transport.models import Stop
 from tracking.services.event_publisher import TrackingEventPublisher
@@ -78,7 +79,7 @@ class ETAService:
             target_stop = Stop.objects.get(id=stop_id)
             active_trips = ActiveTrip.objects.filter(
                 route=target_stop.route,
-                status="active",
+                status=TRIP_STATUS_ACTIVE,
                 current_location__isnull=False
             ).select_related('vehicle')
 

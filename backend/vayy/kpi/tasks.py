@@ -2,6 +2,7 @@ import logging
 from datetime import timedelta
 from django.utils import timezone
 from celery import shared_task
+from common.constants import ROLE_PASSENGER, ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER, TRIP_STATUS_COMPLETED
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +19,12 @@ def create_daily_kpi_snapshot(self):
     yesterday = today - timedelta(days=1)
 
     total_users = User.objects.count()
-    total_passengers = User.objects.filter(role="passenger").count()
-    total_drivers = User.objects.filter(role__in=["bikedriver", "autodriver"]).count()
+    total_passengers = User.objects.filter(role=ROLE_PASSENGER).count()
+    total_drivers = User.objects.filter(role__in=[ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER]).count()
     total_cities = City.objects.count()
     total_routes = Route.objects.count()
     total_stops = Stop.objects.count()
-    total_trips = ActiveTrip.objects.filter(status="completed").count()
+    total_trips = ActiveTrip.objects.filter(status=TRIP_STATUS_COMPLETED).count()
 
     web_visits = PageView.objects.filter(
         platform="web", created_at__date=yesterday

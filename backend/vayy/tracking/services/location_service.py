@@ -10,7 +10,7 @@ from channels.db import database_sync_to_async
 from channels.layers import get_channel_layer
 
 from operations.models import Vehicle, ActiveTrip, VehicleState, BoardingRequest
-from common.constants import BOARDING_PENDING, BOARDING_APPROACHING
+from common.constants import BOARDING_PENDING, BOARDING_APPROACHING, TRIP_STATUS_ACCEPTED, TRIP_STATUS_ARRIVED, TRIP_STATUS_ACTIVE
 from tracking.models import HybridLog
 from tracking.services.geo_service import GeoService
 from tracking.services.redis_geo_service import RedisGeoService
@@ -383,7 +383,7 @@ class LocationService:
         def _get_trip():
             try:
                 return ActiveTrip.objects.get(
-                    id=trip_id, status__in=["accepted", "arrived", "active"]
+                    id=trip_id, status__in=[TRIP_STATUS_ACCEPTED, TRIP_STATUS_ARRIVED, TRIP_STATUS_ACTIVE]
                 )
             except ActiveTrip.DoesNotExist:
                 return None
@@ -423,7 +423,7 @@ class LocationService:
         the next GPS ping.
         """
         try:
-            trip = ActiveTrip.objects.get(id=trip_id, status__in=["accepted", "arrived", "active"])
+            trip = ActiveTrip.objects.get(id=trip_id, status__in=[TRIP_STATUS_ACCEPTED, TRIP_STATUS_ARRIVED, TRIP_STATUS_ACTIVE])
         except ActiveTrip.DoesNotExist:
             return None
         except Exception as e:
@@ -487,7 +487,7 @@ class LocationService:
 
                 if not active_trip:
                     active_trip = ActiveTrip.objects.filter(
-                        vehicle=vehicle, status__in=["accepted", "arrived", "active"]
+                        vehicle=vehicle, status__in=[TRIP_STATUS_ACCEPTED, TRIP_STATUS_ARRIVED, TRIP_STATUS_ACTIVE]
                     ).first()
 
                 # ── 3. Enqueue HybridLog to Redis (zero DB lock) ─
@@ -740,7 +740,7 @@ class LocationService:
         try:
             trip = ActiveTrip.objects.get(
                 id=trip_id,
-                status__in=["accepted", "arrived", "active"]
+                status__in=[TRIP_STATUS_ACCEPTED, TRIP_STATUS_ARRIVED, TRIP_STATUS_ACTIVE]
             )
             cache.set(cache_key, trip, timeout=60)
             return trip

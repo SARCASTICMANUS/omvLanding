@@ -13,7 +13,7 @@ from transport.models import (
     Stop,
     TripSchedule,
 )
-from common.constants import VEHICLE_TYPE_CHOICES, VEHICLE_TYPE_AUTO
+from common.constants import VEHICLE_TYPE_CHOICES, VEHICLE_TYPE_AUTO, DISPATCH_MODE_DIRECT, DISPATCH_MODE_BROADCAST
 
 class VehicleSerializer(
     serializers.ModelSerializer
@@ -352,7 +352,7 @@ class DispatchRequestSerializer(serializers.Serializer):
     route_id = serializers.UUIDField()
     pickup_stop_id = serializers.UUIDField()
     drop_stop_id = serializers.UUIDField(required=False, allow_null=True)
-    mode = serializers.ChoiceField(choices=["direct", "broadcast"], default="broadcast")
+    mode = serializers.ChoiceField(choices=[DISPATCH_MODE_DIRECT, DISPATCH_MODE_BROADCAST], default=DISPATCH_MODE_BROADCAST)
 
 
 class DispatchAssignSerializer(serializers.Serializer):

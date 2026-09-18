@@ -20,6 +20,7 @@ from common.constants import (
     TRIP_STATUS_CHOICES,
     TRIP_STATUS_ACTIVE,
     BOARDING_STATUS_CHOICES,
+    BOARDING_PENDING,
 )
 
 
@@ -408,7 +409,7 @@ class BoardingRequest(models.Model):
     status = models.CharField(
         max_length=20,
         choices=BOARDING_STATUS_CHOICES,
-        default="pending",
+        default=BOARDING_PENDING,
         db_index=True,
     )
 
@@ -430,7 +431,7 @@ class BoardingRequest(models.Model):
                     "trip",
                 ],
                 condition=models.Q(
-                    status="pending"
+                    status=BOARDING_PENDING
                 ),
                 name="unique_pending_boarding_request",
             )

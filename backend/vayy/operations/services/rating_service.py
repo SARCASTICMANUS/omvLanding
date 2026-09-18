@@ -3,6 +3,7 @@ from django.db import transaction
 from django.db.models import Avg
 
 from accounts.models import User, PublicDriverProfile
+from common.constants import TRIP_STATUS_COMPLETED
 from operations.models import ActiveTrip, TripRating
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ class RatingService:
         """
         trip = ActiveTrip.objects.get(id=trip_id)
         
-        if trip.status != "completed":
+        if trip.status != TRIP_STATUS_COMPLETED:
             raise ValueError("Only completed trips can be rated")
 
         if hasattr(trip, "rating_record"): # Check if already rated

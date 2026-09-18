@@ -7,6 +7,10 @@ from channels.layers import get_channel_layer
 from communication.models import Notification
 from common.constants import (
     NOTIFICATION_SENT,
+    NOTIFICATION_FAILED,
+    NOTIFICATION_PUSH,
+    NOTIFICATION_SMS,
+    NOTIFICATION_EMAIL,
     EXCHANGE_NOTIFICATION,
     RK_NOTIFICATION_SMS,
     RK_NOTIFICATION_EMAIL,
@@ -38,7 +42,7 @@ class NotificationService:
         user,
         title: str,
         message: str,
-        notification_type: str = "push",
+        notification_type: str = NOTIFICATION_PUSH,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Notification:
         """
@@ -65,9 +69,9 @@ class NotificationService:
 
         # 2. Publish to RabbitMQ for external delivery (SMS, Email, Push)
         routing_key = RK_NOTIFICATION_PUSH
-        if notification_type == "sms":
+        if notification_type == NOTIFICATION_SMS:
             routing_key = RK_NOTIFICATION_SMS
-        elif notification_type == "email":
+        elif notification_type == NOTIFICATION_EMAIL:
             routing_key = RK_NOTIFICATION_EMAIL
 
         try:
@@ -103,7 +107,7 @@ class NotificationService:
         """
         Marks a notification as failed.
         """
-        notification.status = "failed"
+        notification.status = NOTIFICATION_FAILED
         notification.save(update_fields=["status"])
         logger.error(f"Notification {notification.id} marked as failed")
         return notification

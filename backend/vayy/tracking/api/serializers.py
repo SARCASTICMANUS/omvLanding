@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from common.constants import TRIP_STATUS_ACTIVE
 from tracking.models import HybridLog
 from operations.models import (
     ActiveTrip,
@@ -172,7 +173,7 @@ class StartRouteTripSerializer(serializers.Serializer):
         attrs["_route"] = route
 
         # Verify vehicle is not already on an active trip
-        if ActiveTrip.objects.filter(vehicle=vehicle, status="active").exists():
+        if ActiveTrip.objects.filter(vehicle=vehicle, status=TRIP_STATUS_ACTIVE).exists():
             raise serializers.ValidationError(
                 "Vehicle already has an active trip."
             )

@@ -5,6 +5,7 @@ from common.constants import (
     NOTIFICATION_TYPE_CHOICES,
     NOTIFICATION_STATUS_CHOICES,
     NOTIFICATION_PENDING,
+    NOTIFICATION_PUSH,
 )
 
 
@@ -30,7 +31,7 @@ class Notification(models.Model):
     notification_type = models.CharField(
         max_length=20,
         choices=NOTIFICATION_TYPE_CHOICES,
-        default="push",
+        default=NOTIFICATION_PUSH,
     )
 
     status = models.CharField(

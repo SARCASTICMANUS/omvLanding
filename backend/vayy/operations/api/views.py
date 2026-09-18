@@ -57,6 +57,15 @@ from common.constants import (
     TRIP_STATUS_REQUESTED,
     TRIP_STATUS_ACCEPTED,
     TRIP_STATUS_CANCELLED,
+    TRIP_STATUS_COMPLETED,
+    ROLE_BIKE_DRIVER,
+    ROLE_AUTO_DRIVER,
+    ROLE_ADMIN,
+    ROLE_PASSENGER,
+    VEHICLE_BIKE,
+    VEHICLE_AUTO,
+    DISPATCH_MODE_BROADCAST,
+    BOARDING_PENDING,
 )
 from django.utils import timezone
 from channels.layers import get_channel_layer
@@ -130,7 +139,7 @@ class DispatchRequestAPIView(APIView):
                 route_id=str(serializer.validated_data["route_id"]),
                 pickup_stop_id=str(serializer.validated_data["pickup_stop_id"]),
                 drop_stop_id=str(serializer.validated_data["drop_stop_id"]) if serializer.validated_data.get("drop_stop_id") else None,
-                mode=serializer.validated_data.get("mode", "broadcast")
+                mode=serializer.validated_data.get("mode", DISPATCH_MODE_BROADCAST)
             )
             resp = Response(result, status=status.HTTP_202_ACCEPTED)
             return resp
@@ -249,7 +258,7 @@ class DriverInitiateRideAPIView(APIView):
                 passenger=passenger,
                 trip=trip,
                 pickup_stop=pickup_stop,
-                status="pending",
+                status=BOARDING_PENDING,
             )
 
             payload = {
@@ -410,9 +419,8 @@ class PassengerRejectRideAPIView(APIView):
             return Response({"success": False, "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 DRIVER_ROLES = [
-    "driver",
-    "bikedriver",
-    "autodriver",
+    ROLE_BIKE_DRIVER,
+    ROLE_AUTO_DRIVER,
 ]
 
 class VehicleListAPIView(APIView):
@@ -1122,7 +1130,7 @@ class TripHistoryAPIView(APIView):
         if status_filter:
             query &= Q(status=status_filter)
         else:
-            query &= Q(status__in=["completed", "cancelled"])
+            query &= Q(status__in=[TRIP_STATUS_COMPLETED, TRIP_STATUS_CANCELLED])
 
         trips = ActiveTrip.objects.filter(query).distinct().order_by("-started_at")
         
@@ -1156,7 +1164,7 @@ class DriverEarningsAPIView(APIView):
 
         trips = ActiveTrip.objects.filter(
             driver=user,
-            status="completed",
+            status=TRIP_STATUS_COMPLETED,
         ).select_related("route", "vehicle").order_by("-ended_at")
 
         now = timezone.now()
@@ -1286,7 +1294,7 @@ class TripFareDetailAPIView(APIView):
         except ActiveTrip.DoesNotExist:
             return Response({"detail": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        vehicle_type = trip.vehicle.vehicle_type if trip.vehicle else "bike"
+        vehicle_type = trip.vehicle.vehicle_type if trip.vehicle else VEHICLE_BIKE
 
         # Try to find the passenger's boarding request for per-passenger fare
         boarding_request = BoardingRequest.objects.filter(
@@ -1366,7 +1374,7 @@ class VehicleRegistrationAPIView(APIView):
                 {"success": False, "message": "vehicle_number is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if vehicle_type not in ("bike", "auto"):
+        if vehicle_type not in (VEHICLE_BIKE, VEHICLE_AUTO):
             return Response(
                 {"success": False, "message": "vehicle_type must be 'bike' or 'auto'"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1415,41 +1423,84 @@ class VehicleRegistrationAPIView(APIView):
 
 from accounts.models import DriverDocument, PublicDriverProfile, User
 from accounts.api.serializers import DriverDocumentSerializer
+from common.constants import (
+    DOC_STATUS_PENDING, DOC_STATUS_VERIFIED, DOC_STATUS_REJECTED,
+    VEHICLE_STATUS_PENDING, VEHICLE_STATUS_APPROVED, VEHICLE_STATUS_REJECTED,
+)
 from rest_framework.permissions import BasePermission
 
 
 class IsAdminUser(BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and (
-            request.user.role == "admin" or request.user.is_staff
+            request.user.role == ROLE_ADMIN or request.user.is_staff
         )
 
 
 class AdminPendingDriversAPIView(APIView):
     """
     GET /api/operations/admin/drivers/pending/
-    Returns drivers with pending vehicle approval (pending_approval status).
+    Returns drivers with pending vehicle approval OR pending documents.
     """
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def get(self, request):
         from operations.models import Vehicle
+        from django.db.models import Q
 
-        # Get drivers whose vehicle is pending admin approval
+        # Drivers with vehicle pending approval
         pending_vehicles = Vehicle.objects.filter(
-            status="pending_approval",
+            status=VEHICLE_STATUS_PENDING,
         ).select_related("driver", "driver__driver_profile")
 
+        pending_driver_ids = set()
         result = []
-        seen_driver_ids = set()
+
         for vehicle in pending_vehicles:
             driver = vehicle.driver
-            if not driver or driver.id in seen_driver_ids:
+            if not driver or driver.id in pending_driver_ids:
                 continue
-            seen_driver_ids.add(driver.id)
+            pending_driver_ids.add(driver.id)
 
             profile = getattr(driver, "driver_profile", None)
             docs = DriverDocument.objects.filter(driver=driver)
+
+            result.append({
+                "id": str(driver.id),
+                "email": driver.email,
+                "first_name": driver.first_name,
+                "last_name": driver.last_name,
+                "role": driver.role,
+                "is_verified": profile.is_verified if profile else False,
+                "date_joined": driver.date_joined.isoformat() if driver.date_joined else None,
+                "profile": {
+                    "display_name": getattr(profile, "display_name", None),
+                    "phone_number": getattr(profile, "phone_number", None),
+                    "license_number": getattr(profile, "license_number", None),
+                    "vehicle_number": getattr(profile, "vehicle_number", None),
+                    "vehicle_type": getattr(profile, "vehicle_type", None),
+                } if profile else None,
+                "vehicle": {
+                    "id": str(vehicle.id),
+                    "vehicle_number": vehicle.vehicle_number,
+                    "vehicle_type": vehicle.vehicle_type,
+                    "status": vehicle.status,
+                } if vehicle else None,
+                "documents": DriverDocumentSerializer(docs, many=True).data,
+            })
+
+        # Also include drivers with PENDING documents who have no pending vehicle
+        drivers_with_pending_docs = User.objects.filter(
+            role__in=[ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER],
+            driverdocument__status=DOC_STATUS_PENDING,
+        ).exclude(
+            id__in=pending_driver_ids
+        ).select_related("driver_profile").distinct()
+
+        for driver in drivers_with_pending_docs:
+            profile = getattr(driver, "driver_profile", None)
+            docs = DriverDocument.objects.filter(driver=driver)
+            vehicle = Vehicle.objects.filter(driver=driver).first()
 
             result.append({
                 "id": str(driver.id),
@@ -1520,13 +1571,13 @@ class AdminDriverVerifyAPIView(APIView):
 
             # Approve vehicle too
             Vehicle.objects.filter(driver=driver).update(
-                status="approved",
+                status=VEHICLE_STATUS_APPROVED,
                 is_active=True,
             )
 
             # Mark all documents as verified
-            DriverDocument.objects.filter(driver=driver, status="pending").update(
-                status="verified",
+            DriverDocument.objects.filter(driver=driver, status=DOC_STATUS_PENDING).update(
+                status=DOC_STATUS_VERIFIED,
                 verified_by=request.user,
                 verified_at=timezone.now(),
             )
@@ -1546,7 +1597,7 @@ class AdminDriverVerifyAPIView(APIView):
             message = "Driver approved"
         else:
             # Reject: mark vehicle as rejected
-            Vehicle.objects.filter(driver=driver).update(status="rejected")
+            Vehicle.objects.filter(driver=driver).update(status=VEHICLE_STATUS_REJECTED)
             message = "Driver rejected"
 
         return Response(
@@ -1579,7 +1630,7 @@ class AdminDocumentVerifyAPIView(APIView):
             )
 
         if action == "approve":
-            doc.status = "verified"
+            doc.status = DOC_STATUS_VERIFIED
             doc.verified_by = request.user
             doc.verified_at = timezone.now()
             doc.rejection_reason = ""
@@ -1589,7 +1640,7 @@ class AdminDocumentVerifyAPIView(APIView):
             from accounts.services.verification_service import VerificationService
             VerificationService.check_and_verify_profile(doc.driver)
         else:
-            doc.status = "rejected"
+            doc.status = DOC_STATUS_REJECTED
             doc.rejection_reason = request.data.get("rejection_reason", "")
             doc.verified_by = request.user
             doc.verified_at = timezone.now()

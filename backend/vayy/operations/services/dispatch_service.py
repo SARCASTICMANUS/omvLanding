@@ -24,10 +24,12 @@ from operations.services.fare_service import FareService
 from tracking.services.redis_geo_service import RedisGeoService
 from common.constants import (
     EXCHANGE_DISPATCH, RK_DISPATCH_ASSIGN, RK_DISPATCH_CANCEL,
-    BOARDING_PENDING,
+    BOARDING_PENDING, BOARDING_BOARDED, BOARDING_COMPLETED, BOARDING_CANCELLED,
     TRIP_STATUS_REQUESTED, TRIP_STATUS_ASSIGNED, TRIP_STATUS_ACCEPTED,
     TRIP_STATUS_REJECTED, TRIP_STATUS_ARRIVED, TRIP_STATUS_ACTIVE,
-    TRIP_STATUS_COMPLETED, TRIP_STATUS_CANCELLED
+    TRIP_STATUS_COMPLETED, TRIP_STATUS_CANCELLED,
+    VEHICLE_BIKE,
+    DISPATCH_MODE_BROADCAST,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,7 +52,7 @@ class DispatchService:
         )
 
     @staticmethod
-    def request_dispatch(passenger: User, route_id: str, pickup_stop_id: str, drop_stop_id: str = None, mode: str = "broadcast") -> Dict[str, Any]:
+    def request_dispatch(passenger: User, route_id: str, pickup_stop_id: str, drop_stop_id: str = None, mode: str = DISPATCH_MODE_BROADCAST) -> Dict[str, Any]:
         """
         Initiates a ride request and triggers the matching engine.
         Supports 'direct' and 'broadcast' modes.
@@ -63,7 +65,7 @@ class DispatchService:
         if not candidates:
             return {"status": "no_drivers_available", "message": "No drivers found nearby"}
 
-        if mode == "broadcast":
+        if mode == DISPATCH_MODE_BROADCAST:
             return DispatchService._handle_broadcast_dispatch(passenger, route_id, pickup_stop_id, drop_stop_id, candidates)
 
         best_candidate = candidates[0]
@@ -135,7 +137,7 @@ class DispatchService:
         # 3. Publish to RabbitMQ for workers
         RabbitMQService.publish(
             exchange=EXCHANGE_DISPATCH,
-            routing_key="dispatch.assign",
+            routing_key=RK_DISPATCH_ASSIGN,
             payload=payload
         )
 
@@ -273,7 +275,7 @@ class DispatchService:
         )
 
         return {
-            "status": "pending",
+            "status": BOARDING_PENDING,
             "request_id": str(dispatch_request.id),
             "drivers_notified": len(candidates),
         }
@@ -651,10 +653,10 @@ class DispatchService:
         Handles financial settlement for all passengers on the trip.
         Calculates per-passenger fare based on their actual pickup and drop stops.
         """
-        vehicle_type = trip.vehicle.vehicle_type if trip.vehicle else "bike"
+        vehicle_type = trip.vehicle.vehicle_type if trip.vehicle else VEHICLE_BIKE
         
         # Find all boarded passengers
-        boarding_requests = BoardingRequest.objects.filter(trip=trip, status="boarded")
+        boarding_requests = BoardingRequest.objects.filter(trip=trip, status=BOARDING_BOARDED)
         
         for request in boarding_requests:
             try:
@@ -671,7 +673,7 @@ class DispatchService:
                     reference=f"trip_{trip.id}",
                     metadata={"trip_id": str(trip.id), "route": trip.route.name}
                 )
-                request.status = "completed"
+                request.status = BOARDING_COMPLETED
                 request.save()
                 
                 NotificationService.create(
@@ -726,7 +728,7 @@ class DispatchService:
                     trip.total_distance_m = dist_m
                     trip.total_duration_s = dur_s
                     dist_km = dist_m / 1000
-                    vtype = trip.vehicle.vehicle_type if trip.vehicle else "bike"
+                    vtype = trip.vehicle.vehicle_type if trip.vehicle else VEHICLE_BIKE
                     trip.total_fare = FareService.calculate_fare(dist_km, vtype)
                     trip.save(update_fields=["total_distance_m", "total_duration_s", "total_fare"])
         # Update driver stats after status update succeeds
@@ -770,4 +772,4 @@ class DispatchService:
             )
 
         logger.info(f"Broadcast dispatch {request_id} cancelled by passenger {user.id}")
-        return {"status": "cancelled"}
+        return {"status": BOARDING_CANCELLED}

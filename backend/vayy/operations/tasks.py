@@ -72,7 +72,7 @@ def check_assignment_timeout(trip_id):
                 "type": "dispatch_update",
                 "data": {
                     "trip_id": trip_id,
-                    "status": "cancelled",
+                    "status": TRIP_STATUS_CANCELLED,
                     "reason": "no_drivers_available",
                 },
             },

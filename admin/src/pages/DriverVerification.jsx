@@ -67,7 +67,7 @@ export default function DriverVerification() {
           ...d,
           documents: d.documents.map((doc) =>
             doc.id === docId
-              ? { ...doc, status: action === "approve" ? "verified" : "rejected" }
+              ? { ...doc, status: action === "approve" ? "VERIFIED" : "REJECTED" }
               : doc
           ),
         }))
@@ -86,13 +86,13 @@ export default function DriverVerification() {
   );
 
   const docStatusLabel = (status) => {
-    if (status === "verified")
+    if (status === "VERIFIED" || status === "verified")
       return (
         <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
           <CheckCircle size={12} /> Verified
         </span>
       );
-    if (status === "rejected")
+    if (status === "REJECTED" || status === "rejected")
       return (
         <span className="text-xs font-bold text-red-600 flex items-center gap-1">
           <XCircle size={12} /> Rejected
@@ -279,7 +279,7 @@ export default function DriverVerification() {
                               </div>
                               <div className="flex items-center gap-3">
                                 {docStatusLabel(doc.status)}
-                                {doc.status === "pending" && (
+                                {(doc.status === "PENDING" || doc.status === "pending") && (
                                   <div className="flex gap-1">
                                     <button
                                       disabled={processing === doc.id}

@@ -30,6 +30,7 @@ from tracking.tasks import (
     process_ride_request,
     process_ride_lifecycle,
 )
+from common.constants import TRIP_STATUS_ACTIVE, TRIP_STATUS_COMPLETED, BOARDING_PENDING
 from transport.models import Route, Stop
 
 logger = logging.getLogger(__name__)
@@ -373,7 +374,7 @@ class StartRouteTripView(APIView):
                 vehicle=vehicle,
                 route=route,
                 driver=request.user,
-                status="active",
+                status=TRIP_STATUS_ACTIVE,
                 direction=direction,
                 current_stop=start_stop,
                 current_segment_index=start_stop.order,
@@ -458,7 +459,7 @@ class EndRouteTripView(APIView):
             )
 
         try:
-            trip = ActiveTrip.objects.get(id=trip_id, driver=request.user, status="active")
+            trip = ActiveTrip.objects.get(id=trip_id, driver=request.user, status=TRIP_STATUS_ACTIVE)
         except ActiveTrip.DoesNotExist:
             return Response(
                 {"success": False, "message": "Active trip not found"},
@@ -466,7 +467,7 @@ class EndRouteTripView(APIView):
             )
 
         from django.utils import timezone
-        trip.status = "completed"
+        trip.status = TRIP_STATUS_COMPLETED
         trip.ended_at = timezone.now()
         trip.save(update_fields=["status", "ended_at"])
 
@@ -525,7 +526,7 @@ class PassengerRaiseHandView(APIView):
             # Check for existing pending request on this route
             existing = BoardingRequest.objects.filter(
                 passenger=request.user,
-                status="pending",
+                status=BOARDING_PENDING,
                 pickup_stop__route_id=route_id,
             ).exists()
             if existing:
@@ -536,7 +537,7 @@ class PassengerRaiseHandView(APIView):
 
             # Find an active trip on this route to associate with
             active_trip = ActiveTrip.objects.filter(
-                route_id=route_id, status="active"
+                route_id=route_id, status=TRIP_STATUS_ACTIVE
             ).select_related("vehicle").first()
 
             if not active_trip:
@@ -549,7 +550,7 @@ class PassengerRaiseHandView(APIView):
                 passenger=request.user,
                 trip=active_trip,
                 pickup_stop=pickup_stop,
-                status="pending",
+                status=BOARDING_PENDING,
             )
 
             # Dispatch async matching
@@ -662,7 +663,7 @@ class ActiveRouteTripsView(APIView):
             )
 
         trips = ActiveTrip.objects.filter(
-            route=route, status="active"
+            route=route, status=TRIP_STATUS_ACTIVE
         ).select_related("vehicle", "vehicle__driver", "current_stop")
 
         trip_data = []
@@ -754,7 +755,7 @@ class NearbyRoutesView(APIView):
         if route_map:
             counts = (
                 ActiveTrip.objects.filter(
-                    route_id__in=route_map.keys(), status="active"
+                    route_id__in=route_map.keys(), status=TRIP_STATUS_ACTIVE
                 )
                 .values("route_id")
                 .annotate(n=Count("id"))

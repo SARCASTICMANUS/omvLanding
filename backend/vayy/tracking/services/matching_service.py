@@ -2,6 +2,7 @@ import logging
 import time
 from typing import Dict, Any, List, Optional
 
+from common.constants import TRIP_STATUS_ACTIVE, BOARDING_CANCELLED, BOARDING_COMPLETED, BOARDING_BOARDED
 from operations.models import ActiveTrip, Vehicle, VehicleState, BoardingRequest
 from transport.models import Stop, Route
 from tracking.services.redis_route_service import RedisRouteService
@@ -169,7 +170,7 @@ class MatchingService:
         """DB fallback when Redis has no vehicles for the route."""
         active_trips = ActiveTrip.objects.filter(
             route_id=route_id,
-            status="active",
+            status=TRIP_STATUS_ACTIVE,
         ).select_related("vehicle", "vehicle__driver").prefetch_related("vehicle__state")
 
         results = []
@@ -230,7 +231,7 @@ class MatchingService:
         try:
             # Update boarding request in DB
             boarding = BoardingRequest.objects.get(id=request_id)
-            boarding.status = "accepted"
+            boarding.status = BOARDING_BOARDED
             boarding.save(update_fields=["status", "updated_at"])
 
             # Broadcast acceptance to passenger
@@ -250,7 +251,7 @@ class MatchingService:
         """Driver rejects the ride; re-match with next candidate."""
         try:
             boarding = BoardingRequest.objects.get(id=request_id)
-            boarding.status = "cancelled"
+            boarding.status = BOARDING_CANCELLED
             boarding.save(update_fields=["status", "updated_at"])
 
             # Remove from Redis
@@ -267,7 +268,7 @@ class MatchingService:
         """Passenger boards the vehicle."""
         try:
             boarding = BoardingRequest.objects.get(id=request_id)
-            boarding.status = "boarded"
+            boarding.status = BOARDING_BOARDED
             boarding.save(update_fields=["status", "updated_at"])
 
             # Update occupancy
@@ -286,7 +287,7 @@ class MatchingService:
         """Ride completed (passenger dropped off)."""
         try:
             boarding = BoardingRequest.objects.get(id=request_id)
-            boarding.status = "completed"
+            boarding.status = BOARDING_COMPLETED
             boarding.save(update_fields=["status", "updated_at"])
 
             # Decrement occupancy

@@ -11,6 +11,7 @@ from rest_framework.permissions import AllowAny
 
 from kpi.models import PageView, KPISnapshot
 from kpi.api.serializers import PageViewSerializer, KPISnapshotSerializer
+from common.constants import ROLE_PASSENGER, ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER, TRIP_STATUS_COMPLETED, TRIP_STATUS_ACTIVE, TRIP_STATUS_ARRIVED
 
 logger = logging.getLogger(__name__)
 
@@ -149,9 +150,9 @@ class KPIOverviewAPI(APIView):
 
         # User stats
         total_users = User.objects.count()
-        total_passengers = User.objects.filter(role="passenger").count()
-        total_bike_drivers = User.objects.filter(role="bikedriver").count()
-        total_auto_drivers = User.objects.filter(role="autodriver").count()
+        total_passengers = User.objects.filter(role=ROLE_PASSENGER).count()
+        total_bike_drivers = User.objects.filter(role=ROLE_BIKE_DRIVER).count()
+        total_auto_drivers = User.objects.filter(role=ROLE_AUTO_DRIVER).count()
         new_users_period = User.objects.filter(date_joined__gte=cutoff).count()
 
         # Route & infrastructure
@@ -161,9 +162,9 @@ class KPIOverviewAPI(APIView):
         total_schedules = TripSchedule.objects.count()
 
         # Trip stats
-        total_trips = ActiveTrip.objects.filter(status="completed").count()
-        trips_period = ActiveTrip.objects.filter(status="completed", ended_at__gte=cutoff).count()
-        active_trips = ActiveTrip.objects.filter(status__in=["active", "arrived"]).count()
+        total_trips = ActiveTrip.objects.filter(status=TRIP_STATUS_COMPLETED).count()
+        trips_period = ActiveTrip.objects.filter(status=TRIP_STATUS_COMPLETED, ended_at__gte=cutoff).count()
+        active_trips = ActiveTrip.objects.filter(status__in=[TRIP_STATUS_ACTIVE, TRIP_STATUS_ARRIVED]).count()
 
         # Vehicle stats
         total_vehicles = Vehicle.objects.count()
@@ -175,7 +176,7 @@ class KPIOverviewAPI(APIView):
 
         # Daily trip breakdown
         daily_trips = list(
-            ActiveTrip.objects.filter(status="completed", ended_at__gte=cutoff)
+            ActiveTrip.objects.filter(status=TRIP_STATUS_COMPLETED, ended_at__gte=cutoff)
             .extra(select={"day": "date(ended_at)"})
             .values("day")
             .annotate(trips=Count("id"))

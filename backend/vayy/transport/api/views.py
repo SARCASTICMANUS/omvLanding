@@ -11,6 +11,7 @@ from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point, LineString
 from django.contrib.gis.measure import D
 
+from common.constants import VEHICLE_AUTO, ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER
 from accounts.permissions import IsAdmin
 from transport.api.serializers import (
     CitySerializer,
@@ -488,7 +489,7 @@ class RouteSearchByLocationAPIView(APIView):
                 )
 
             from operations.services.fare_service import FareService
-            fare = int(FareService.calculate_fare(stop_distance_km, "auto"))
+            fare = int(FareService.calculate_fare(stop_distance_km, VEHICLE_AUTO))
 
             walk_pickup_min = max(1, round(pickup_dist_m / 80))
             walk_dropoff_min = max(1, round(dropoff_dist_m / 80))
@@ -521,7 +522,7 @@ class RouteSearchByLocationAPIView(APIView):
                 "review_count": 128,
                 "walk_minutes": walk_pickup_min,
                 "walk_distance_meters": round(pickup_dist_m),
-                "vehicle_type": "auto",
+                "vehicle_type": VEHICLE_AUTO,
                 "payment_method": "Cash",
                 "distance_km": stop_distance_km,
                 "is_route_only": False,
@@ -654,7 +655,7 @@ class PassengersAlongRouteAPIView(APIView):
             last_active_at__gte=cutoff,
             current_location__within=bbox,
         ).select_related("user").exclude(
-            user__role__in=["bikedriver", "autodriver"],
+            user__role__in=[ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER],
         )
 
         results = []

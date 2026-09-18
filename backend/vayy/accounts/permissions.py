@@ -1,4 +1,10 @@
 from rest_framework.permissions import BasePermission
+from common.constants import (
+    ROLE_ADMIN,
+    ROLE_PASSENGER,
+    ROLE_BIKE_DRIVER,
+    ROLE_AUTO_DRIVER,
+)
 
 
 class IsAdmin(BasePermission):
@@ -12,7 +18,7 @@ class IsAdmin(BasePermission):
         return (
             request.user.is_authenticated
             and (
-                request.user.role == "admin"
+                request.user.role == ROLE_ADMIN
                 or request.user.is_staff
             )
         )
@@ -43,7 +49,7 @@ class IsDriver(BasePermission):
         return (
             request.user.is_authenticated
             and request.user.role
-            in ["bikedriver", "autodriver"]
+            in [ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER]
         )
 
 
@@ -57,7 +63,7 @@ class IsPassenger(BasePermission):
     def has_permission(self, request, view):
         return (
             request.user.is_authenticated
-            and request.user.role == "passenger"
+            and request.user.role == ROLE_PASSENGER
         )
 
 
@@ -71,7 +77,7 @@ class IsAdminOrCityAdmin(BasePermission):
     def has_permission(self, request, view):
         return (
             request.user.is_authenticated
-            and request.user.role in ["admin", "city_admin"]
+            and request.user.role in [ROLE_ADMIN, "city_admin"]
         )
 
 
@@ -86,7 +92,7 @@ class IsDriverOrAdmin(BasePermission):
         return (
             request.user.is_authenticated
             and request.user.role
-            in ["bikedriver", "autodriver", "admin"]
+            in [ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER, ROLE_ADMIN]
         )
 
 
@@ -100,5 +106,5 @@ class IsPassengerOrAdmin(BasePermission):
     def has_permission(self, request, view):
         return (
             request.user.is_authenticated
-            and request.user.role in ["passenger", "admin"]
+            and request.user.role in [ROLE_PASSENGER, ROLE_ADMIN]
         )
