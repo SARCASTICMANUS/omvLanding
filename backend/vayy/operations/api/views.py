@@ -1492,7 +1492,7 @@ class AdminPendingDriversAPIView(APIView):
         # Also include drivers with PENDING documents who have no pending vehicle
         drivers_with_pending_docs = User.objects.filter(
             role__in=[ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER],
-            driverdocument__status=DOC_STATUS_PENDING,
+            documents__status=DOC_STATUS_PENDING,
         ).exclude(
             id__in=pending_driver_ids
         ).select_related("driver_profile").distinct()

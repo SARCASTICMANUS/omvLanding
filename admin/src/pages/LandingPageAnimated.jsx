@@ -275,34 +275,34 @@ export default function LandingPageAnimated() {
       </div>
 
       {/* Moving vehicles — 4s crossing, 6s apart, one by one */}
-      <div className="pointer-events-none absolute bottom-20 left-0 right-0 z-30 md:bottom-16">
+      <div className="pointer-events-none absolute inset-0 z-30">
         <img
           src={bikeStyled}
           alt=""
           aria-hidden
-          className="absolute md:bottom-3 bottom-48 h-[230px] w-auto md:h-[200px]"
-          style={{ animation: "vehicle1 24s linear infinite" }}
+          className="absolute h-[18vh] min-h-[100px] w-auto max-h-[200px] md:h-[16vh] md:min-h-[120px]"
+          style={{ top: "68vh", animation: "vehicle1 24s linear infinite" }}
         />
         <img
           src={bikeWithBuddy}
           alt=""
           aria-hidden
-          className="absolute md:bottom-3 bottom-48 h-[230px] w-auto md:h-[200px]"
-          style={{ animation: "vehicle2 24s linear infinite" }}
+          className="absolute h-[18vh] min-h-[100px] w-auto max-h-[200px] md:h-[16vh] md:min-h-[120px]"
+          style={{ top: "68vh", animation: "vehicle2 24s linear infinite" }}
         />
         <img
           src={girlScooty}
           alt=""
           aria-hidden
-          className="absolute md:bottom-3 bottom-48 h-[230px] w-auto md:h-[200px]"
-          style={{ animation: "vehicle3 24s linear infinite" }}
+          className="absolute h-[18vh] min-h-[100px] w-auto max-h-[200px] md:h-[16vh] md:min-h-[120px]"
+          style={{ top: "68vh", animation: "vehicle3 24s linear infinite" }}
         />
         <img
           src={girlScooty2}
           alt=""
           aria-hidden
-          className="absolute md:bottom-3 bottom-48 h-[230px] w-auto md:h-[200px]"
-          style={{ animation: "vehicle4 24s linear infinite" }}
+          className="absolute h-[18vh] min-h-[100px] w-auto max-h-[200px] md:h-[16vh] md:min-h-[120px]"
+          style={{ top: "68vh", animation: "vehicle4 24s linear infinite" }}
         />
       </div>
     </div>
