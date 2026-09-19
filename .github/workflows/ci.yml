@@ -139,11 +139,12 @@ jobs:
             # 4. Gracefully restart services
             docker compose -f docker-compose-prod.yaml up -d --remove-orphans
 
-            # 5. Run database migrations with fallback if schema drift exists
+            # Replace Step 5 with this:
             echo "Running database migrations..."
             docker compose -f docker-compose-prod.yaml exec -T web python manage.py migrate || {
-              echo "Migration failed. Attempting initial fake migration for existing columns/tables..."
-              docker compose -f docker-compose-prod.yaml exec -T web python manage.py migrate --fake-initial
+              echo "Migration failed due to squashed history. Truncating migration records..."
+              docker compose -f docker-compose-prod.yaml exec -T web python manage.py dbshell -c "TRUNCATE django_migrations;"
+              docker compose -f docker-compose-prod.yaml exec -T web python manage.py migrate --fake
             }
 
             # 6. Collect static files

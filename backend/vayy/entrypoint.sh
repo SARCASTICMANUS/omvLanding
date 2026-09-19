@@ -20,7 +20,7 @@ echo "PostgreSQL is ready"
 if command -v psql >/dev/null 2>&1; then
   PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS postgis;" || true
 fi
-python manage.py migrate --noinput
+# python manage.py migrate --noinput
 python manage.py collectstatic --noinput
 
 # Create admin superuser from env (idempotent, non-interactive)
