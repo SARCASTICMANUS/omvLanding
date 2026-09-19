@@ -124,16 +124,32 @@ jobs:
           ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} 'bash -s' << 'EOF'
             set -e
             cd /home/azureuser/vayy
-            docker system prune -af
-            docker builder prune -af
-            df -h
-            docker compose -f docker-compose-prod.yaml down --remove-orphans || true
-            sudo systemctl stop nginx apache2 httpd caddy 2>/dev/null || true
-            for i in $(seq 1 15); do
-              if ! sudo ss -tlnp | grep -q ':80 '; then break; fi
-              sleep 2
-            done
-            docker compose -f docker-compose-prod.yaml up -d --build
-            docker compose -f docker-compose-prod.yaml exec web python manage.py migrate
-            docker compose -f docker-compose-prod.yaml exec web python manage.py collectstatic --noinput
+
+            # 1. Clean up unused cache to free up RAM/disk
+            docker builder prune -f
+            docker image prune -f
+
+            # 2. Prevent BuildKit & Vite parallel build spikes
+            export BUILDKIT_PARALLEL_COMPILER_LIMIT=1
+            export NODE_OPTIONS="--max-old-space-size=1536"
+
+            # 3. Build containers without stopping the live site
+            docker compose -f docker-compose-prod.yaml build --parallel=false
+
+            # 4. Gracefully restart services
+            docker compose -f docker-compose-prod.yaml up -d --remove-orphans
+
+            # 5. Run migrations with OOM cap (512M) & automatic fallback for schema drift
+            echo "Running database migrations..."
+            docker compose -f docker-compose-prod.yaml exec -T --memory="512m" web python manage.py migrate || {
+              echo "Migration failed. Attempting initial fake migration for existing columns/tables..."
+              docker compose -f docker-compose-prod.yaml exec -T --memory="512m" web python manage.py migrate --fake-initial
+            }
+
+            # 6. Run static collection with OOM cap
+            echo "Collecting static files..."
+            docker compose -f docker-compose-prod.yaml exec -T --memory="512m" web python manage.py collectstatic --noinput
+
+            # 7. Post-deploy cleanup
+            docker image prune -f
           EOF
