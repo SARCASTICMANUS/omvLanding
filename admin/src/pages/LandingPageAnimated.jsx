@@ -89,7 +89,7 @@ function RotatingHook({ lang }) {
 
   return (
     <span
-      className="relative inline-flex h-[3em] Md:mt-0 mt-5  items-center overflow-hidden md:h-[5.5em]"
+      className="relative inline-flex h-[3em] mt-5 md:mt-0 items-center overflow-hidden md:h-[5.5em]"
       aria-live="polite"
     >
       <span
@@ -222,12 +222,12 @@ export default function LandingPageAnimated() {
       </div>
 
       {/* Hero content */}
-      <div className="relative z-10 w-full px-5 pb-[130px] pt-16 md:flex md:min-h-screen  md:flex-col md:items-center md:justify-center md:px-1 md:pb-0 md:pt-0 md:pb-24">
+      <div className="relative z-10 w-full px-5 pb-[130px] pt-16 md:flex md:min-h-screen md:flex-col md:items-center md:justify-center md:px-1 md:pb-24 md:pt-0">
         <main className="w-full max-w-6xl text-center">
           {/* Headline — centered */}
           <h1
             key={`h1-${contentKey}`}
-            className="animate-lang-fade mx-auto mt-2 max-w-[300px] text-balance text-center text-[23px] font-bold leading-[1.15] tracking-[-0.02em] text-white sm:text-[32px] sm:max-w-[360px] md:mt-[-15rem] md:max-w-2xl md:text-3xl"
+            className="animate-lang-fade mx-auto mt-2 max-w-[300px] text-balance text-center text-[23px] font-bold leading-[1.15] tracking-[-0.02em] text-white sm:text-[32px] sm:max-w-[360px] md:mt-[-40vh] md:max-w-2xl md:text-3xl"
           >
             {copy.line1}
           </h1>
@@ -280,29 +280,29 @@ export default function LandingPageAnimated() {
           src={bikeStyled}
           alt=""
           aria-hidden
-          className="absolute h-[18vh] min-h-[100px] w-auto max-h-[200px] md:h-[16vh] md:min-h-[120px]"
-          style={{ top: "68vh", animation: "vehicle1 24s linear infinite" }}
+          className="absolute bottom-[22vh] h-[30vh] min-h-[20vh] w-auto max-h-[150px] md:bottom-[18vh] md:h-[16vh] md:min-h-[32vh] xl:bottom-[10vh]"
+          style={{ animation: "vehicle1 15s linear infinite" }}
         />
         <img
           src={bikeWithBuddy}
           alt=""
           aria-hidden
-          className="absolute h-[18vh] min-h-[100px] w-auto max-h-[200px] md:h-[16vh] md:min-h-[120px]"
-          style={{ top: "68vh", animation: "vehicle2 24s linear infinite" }}
+          className="absolute bottom-[22vh] h-[30vh] min-h-[20vh] w-auto max-h-[150px] md:bottom-[18vh] md:h-[16vh] md:min-h-[32vh] xl:bottom-[10vh]"
+          style={{ animation: "vehicle2 9s linear infinite" }}
         />
         <img
           src={girlScooty}
           alt=""
           aria-hidden
-          className="absolute h-[18vh] min-h-[100px] w-auto max-h-[200px] md:h-[16vh] md:min-h-[120px]"
-          style={{ top: "68vh", animation: "vehicle3 24s linear infinite" }}
+          className="absolute bottom-[22vh] h-[30vh] min-h-[20vh ] w-auto max-h-[150px] md:bottom-[18vh] md:h-[16vh] md:min-h-[32vh] xl:bottom-[10vh]"
+          style={{ animation: "vehicle3 15s linear infinite" }}
         />
         <img
           src={girlScooty2}
           alt=""
           aria-hidden
-          className="absolute h-[18vh] min-h-[100px] w-auto max-h-[200px] md:h-[16vh] md:min-h-[120px]"
-          style={{ top: "68vh", animation: "vehicle4 24s linear infinite" }}
+          className="absolute bottom-[22vh] h-[30vh] min-h-[20vh ] w-auto max-h-[150px] md:bottom-[18vh] md:h-[16vh] md:min-h-[32vh] xl:bottom-[10vh]"
+          style={{ animation: "vehicle4 10s linear infinite" }}
         />
       </div>
     </div>

@@ -177,11 +177,11 @@ export default function SupportPage() {
           {activeTab === "contact" && (
             <div className="space-y-3">
               {SUPPORT_CONTACTS.map((s, i) => (
-                <div key={i} className="flex items-center gap-4 rounded-xl bg-white/5 p-4">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white">{s.icon}</span>
-                  <div className="flex-1">
+                <div key={i} className="flex items-center gap-3 overflow-hidden rounded-xl bg-white/5 p-4">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white">{s.icon}</span>
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs font-bold uppercase tracking-wider text-white/50">{s.label}</p>
-                    <p className="text-sm font-bold text-white">{s.value}</p>
+                    <p className="truncate text-sm font-bold text-white">{s.value}</p>
                   </div>
                   {s.href && (
                     <a

@@ -7,6 +7,11 @@ const YOUTUBE_IFRAME_API =
 
 const PLAYLIST = playlistData;
 
+const INITIAL_INDEX =
+  typeof window !== "undefined"
+    ? Math.floor(Math.random() * PLAYLIST.length)
+    : 0;
+
 const PLAYER_STATES = {
   ENDED: 0,
   PLAYING: 1,
@@ -16,7 +21,7 @@ const PLAYER_STATES = {
 };
 
 export function MusicPlayer({ ctaButton }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(INITIAL_INDEX);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -34,7 +39,7 @@ export function MusicPlayer({ ctaButton }) {
       if (!hostRef.current || !window.YT?.Player) return;
 
       playerRef.current = new window.YT.Player(hostRef.current, {
-        videoId: PLAYLIST[0].id,
+        videoId: PLAYLIST[INITIAL_INDEX].id,
         playerVars: {
           playsinline: 1,
           rel: 0,
