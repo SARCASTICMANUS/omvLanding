@@ -124,6 +124,9 @@ jobs:
           ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} 'bash -s' << 'EOF'
             set -e
             cd /home/azureuser/vayy
+            docker system prune -af
+            docker builder prune -af
+            df -h
             docker compose -f docker-compose-prod.yaml down --remove-orphans || true
             sudo systemctl stop nginx apache2 httpd caddy 2>/dev/null || true
             for i in $(seq 1 15); do
