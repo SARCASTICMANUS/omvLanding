@@ -125,31 +125,31 @@ jobs:
             set -e
             cd /home/azureuser/vayy
 
-            # 1. Clean up unused cache to free up RAM/disk
+            # 1. Clean up unused build cache and images
             docker builder prune -f
             docker image prune -f
 
-            # 2. Prevent BuildKit & Vite parallel build spikes
+            # 2. Limit memory and CPU overhead during image build
             export BUILDKIT_PARALLEL_COMPILER_LIMIT=1
             export NODE_OPTIONS="--max-old-space-size=1536"
 
-            # 3. Build containers without stopping the live site
+            # 3. Build containers without shutting down live site
             docker compose -f docker-compose-prod.yaml build --parallel=false
 
             # 4. Gracefully restart services
             docker compose -f docker-compose-prod.yaml up -d --remove-orphans
 
-            # 5. Run migrations with OOM cap (512M) & automatic fallback for schema drift
+            # 5. Run database migrations with fallback if schema drift exists
             echo "Running database migrations..."
-            docker compose -f docker-compose-prod.yaml exec -T --memory="512m" web python manage.py migrate || {
+            docker compose -f docker-compose-prod.yaml exec -T web python manage.py migrate || {
               echo "Migration failed. Attempting initial fake migration for existing columns/tables..."
-              docker compose -f docker-compose-prod.yaml exec -T --memory="512m" web python manage.py migrate --fake-initial
+              docker compose -f docker-compose-prod.yaml exec -T web python manage.py migrate --fake-initial
             }
 
-            # 6. Run static collection with OOM cap
+            # 6. Collect static files
             echo "Collecting static files..."
-            docker compose -f docker-compose-prod.yaml exec -T --memory="512m" web python manage.py collectstatic --noinput
+            docker compose -f docker-compose-prod.yaml exec -T web python manage.py collectstatic --noinput
 
-            # 7. Post-deploy cleanup
+            # 7. Cleanup dangling images
             docker image prune -f
           EOF
