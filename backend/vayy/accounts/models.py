@@ -331,8 +331,14 @@ class DriverDocument(models.Model):
         max_length=20,
         choices=DOC_TYPE_CHOICES,
     )
-    file = models.FileField(
-        upload_to="driver_docs/",
+    file_data = models.TextField(
+        default="",
+        blank=True,
+        help_text="Base64-encoded file content",
+    )
+    file_name = models.CharField(
+        max_length=255,
+        default="upload.jpg",
     )
     status = models.CharField(
         max_length=20,

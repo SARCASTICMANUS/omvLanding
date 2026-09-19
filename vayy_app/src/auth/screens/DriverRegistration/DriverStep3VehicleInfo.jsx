@@ -10,7 +10,6 @@ import BottomStickyButton from "../../components/BottomStickyButton";
 import { useSelector, useDispatch } from "react-redux";
 import { setField } from "../../../store/slices/onboardingSlice";
 import { VALIDATORS, VALIDATION_MESSAGES } from "../../validators";
-import { uriToBase64 } from "../../../shared/lib/base64";
 
 export default function DriverStep3VehicleInfo({ onNext, onBack, vehicleType }) {
   const dispatch = useDispatch();

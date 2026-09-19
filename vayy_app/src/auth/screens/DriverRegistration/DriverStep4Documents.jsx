@@ -7,7 +7,6 @@ import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import ImageUploadCard from "../../components/ImageUploadCard";
 import BottomStickyButton from "../../components/BottomStickyButton";
-import { uriToBase64 } from "../../../shared/lib/base64";
 
 const SECTIONS = [
   { key: "dl", label: "Driving Licence" },

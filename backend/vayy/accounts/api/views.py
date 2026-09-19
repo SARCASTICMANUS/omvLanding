@@ -114,9 +114,6 @@ class CompleteDriverRegistrationAPIView(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
 
     def post(self, request):
-        import base64 as b64mod
-        import uuid as uuid_mod
-        from django.core.files.base import ContentFile
         from operations.models import Vehicle
         from common.constants import (
             VEHICLE_STATUS_PENDING,
@@ -158,7 +155,7 @@ class CompleteDriverRegistrationAPIView(APIView):
             },
         )
 
-        # 3. Upload documents (idempotent: clear existing first)
+        # 3. Save documents as base64 strings (idempotent: clear existing first)
         DriverDocument.objects.filter(driver=user).delete()
         for doc_input in data.get("documents", []):
             file_base64 = doc_input.get("file_base64", "")
@@ -166,19 +163,11 @@ class CompleteDriverRegistrationAPIView(APIView):
             doc_type = doc_input["document_type"]
 
             if file_base64:
-                if "," in file_base64:
-                    file_base64 = file_base64.split(",", 1)[1]
-                try:
-                    decoded = b64mod.b64decode(file_base64)
-                except Exception:
-                    continue
-                ext = file_name.rsplit(".", 1)[-1] if "." in file_name else "jpg"
-                unique_name = f"{uuid_mod.uuid4().hex}.{ext}"
-                content = ContentFile(decoded, name=unique_name)
                 DriverDocument.objects.create(
                     driver=user,
                     document_type=doc_type,
-                    file=content,
+                    file_data=file_base64,
+                    file_name=file_name,
                 )
 
         # 4. Save bank details
