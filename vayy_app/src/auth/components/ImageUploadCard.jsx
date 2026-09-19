@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, Image, StyleSheet, ActivityIndicator } from "react-native";
+import { XCircle } from "lucide-react-native";
 import COLORS from "../../shared/constants/colors";
 
 export default function ImageUploadCard({ label, uri, onPress, status }) {

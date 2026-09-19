@@ -22,6 +22,9 @@ import BikeFindPassengerScreen from "../driver/bike-ride/BikeFindPassengerScreen
 import VerificationPopup from "../shared/components/VerificationPopup";
 import { fetchVerificationStatus } from "../store/slices/profileSlice";
 
+// Profile Completion Screen
+import DriverProfileCompletionScreen from "../auth/screens/DriverRegistration/DriverProfileCompletionScreen";
+
 // Auto Flow Screens
 import DriverAutoHomeScreen from "../driver/shared-auto/DriverAutoHomeScreen";
 import AutoFindPassengerScreen from "../driver/shared-auto/AutoFindPassengerScreen";
@@ -153,6 +156,7 @@ export default function DriverNavigator() {
         <Stack.Screen name="DriverTripHistoryScreen" component={DriverTripHistoryScreen} />
         <Stack.Screen name="VehicleSelectionScreen" component={VehicleSelectionScreen} />
         <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+        <Stack.Screen name="DriverProfileCompletion" component={DriverProfileCompletionScreen} />
         <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
         <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
         <Stack.Screen name="FindPassenger" component={BikeFindPassengerScreen} />

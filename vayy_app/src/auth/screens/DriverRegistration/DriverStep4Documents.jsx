@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Dimensions } from "react-native";
+import React, { useState } from "react";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, CheckCircle } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
@@ -7,9 +7,7 @@ import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import ImageUploadCard from "../../components/ImageUploadCard";
 import BottomStickyButton from "../../components/BottomStickyButton";
-import { useSelector } from "react-redux";
-
-const { width } = Dimensions.get("window");
+import { uriToBase64 } from "../../../shared/lib/base64";
 
 const SECTIONS = [
   { key: "dl", label: "Driving Licence" },
@@ -20,8 +18,14 @@ const SECTIONS = [
 ];
 
 export default function DriverStep4Documents({ onNext, onBack }) {
-  const fields = useSelector((state) => state.onboarding.fields);
   const [docs, setDocs] = useState({
+    dlFront: null, dlBack: null,
+    rcFront: null, rcBack: null,
+    insuranceFront: null, insuranceBack: null,
+    aadhaarFront: null, aadhaarBack: null,
+    selfie: null,
+  });
+  const [docUris, setDocUris] = useState({
     dlFront: null, dlBack: null,
     rcFront: null, rcBack: null,
     insuranceFront: null, insuranceBack: null,
@@ -38,22 +42,43 @@ export default function DriverStep4Documents({ onNext, onBack }) {
   });
 
   const upload = async (field) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission Required", "Please grant gallery access to upload documents.");
-      return;
-    }
-    setUploadStatus((prev) => ({ ...prev, [field]: "uploading" }));
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setDocs((p) => ({ ...p, [field]: result.assets[0].uri }));
-      setUploadStatus((prev) => ({ ...prev, [field]: "success" }));
-    } else {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Required", "Please grant gallery access to upload documents.");
+        return;
+      }
+      setUploadStatus((prev) => ({ ...prev, [field]: "uploading" }));
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: true,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        const uri = result.assets[0].uri;
+        setDocUris((p) => ({ ...p, [field]: uri }));
+        const base64 = result.assets[0].base64;
+        if (base64) {
+          setDocs((p) => ({ ...p, [field]: base64 }));
+          setUploadStatus((prev) => ({ ...prev, [field]: "success" }));
+          setErrors((prev) => {
+            const next = { ...prev };
+            delete next[field];
+            const sectionKey = field.replace("Front", "").replace("Back", "");
+            delete next[sectionKey];
+            return next;
+          });
+        } else {
+          Alert.alert("Conversion Failed", "Could not process the image. Please try selecting it again.");
+          setUploadStatus((prev) => ({ ...prev, [field]: "idle" }));
+          setDocUris((p) => ({ ...p, [field]: null }));
+        }
+      } else {
+        setUploadStatus((prev) => ({ ...prev, [field]: "idle" }));
+      }
+    } catch {
       setUploadStatus((prev) => ({ ...prev, [field]: "idle" }));
     }
   };
@@ -107,8 +132,8 @@ export default function DriverStep4Documents({ onNext, onBack }) {
           </View>
           {errors.dl && <Text style={styles.err}>{errors.dl}</Text>}
           <View style={styles.uploadRow}>
-            <ImageUploadCard label="Upload Front" uri={docs.dlFront} onPress={() => upload("dlFront")} status={uploadStatus.dlFront} />
-            <ImageUploadCard label="Upload Back" uri={docs.dlBack} onPress={() => upload("dlBack")} status={uploadStatus.dlBack} />
+            <ImageUploadCard label="Upload Front" uri={docUris.dlFront} onPress={() => upload("dlFront")} status={uploadStatus.dlFront} />
+            <ImageUploadCard label="Upload Back" uri={docUris.dlBack} onPress={() => upload("dlBack")} status={uploadStatus.dlBack} />
           </View>
         </View>
 
@@ -119,8 +144,8 @@ export default function DriverStep4Documents({ onNext, onBack }) {
           </View>
           {errors.rc && <Text style={styles.err}>{errors.rc}</Text>}
           <View style={styles.uploadRow}>
-            <ImageUploadCard label="Upload Front" uri={docs.rcFront} onPress={() => upload("rcFront")} status={uploadStatus.rcFront} />
-            <ImageUploadCard label="Upload Back" uri={docs.rcBack} onPress={() => upload("rcBack")} status={uploadStatus.rcBack} />
+            <ImageUploadCard label="Upload Front" uri={docUris.rcFront} onPress={() => upload("rcFront")} status={uploadStatus.rcFront} />
+            <ImageUploadCard label="Upload Back" uri={docUris.rcBack} onPress={() => upload("rcBack")} status={uploadStatus.rcBack} />
           </View>
         </View>
 
@@ -131,8 +156,8 @@ export default function DriverStep4Documents({ onNext, onBack }) {
           </View>
           {errors.insurance && <Text style={styles.err}>{errors.insurance}</Text>}
           <View style={styles.uploadRow}>
-            <ImageUploadCard label="Upload Front" uri={docs.insuranceFront} onPress={() => upload("insuranceFront")} status={uploadStatus.insuranceFront} />
-            <ImageUploadCard label="Upload Back" uri={docs.insuranceBack} onPress={() => upload("insuranceBack")} status={uploadStatus.insuranceBack} />
+            <ImageUploadCard label="Upload Front" uri={docUris.insuranceFront} onPress={() => upload("insuranceFront")} status={uploadStatus.insuranceFront} />
+            <ImageUploadCard label="Upload Back" uri={docUris.insuranceBack} onPress={() => upload("insuranceBack")} status={uploadStatus.insuranceBack} />
           </View>
         </View>
 
@@ -143,8 +168,8 @@ export default function DriverStep4Documents({ onNext, onBack }) {
           </View>
           {errors.aadhaar && <Text style={styles.err}>{errors.aadhaar}</Text>}
           <View style={styles.uploadRow}>
-            <ImageUploadCard label="Upload Front" uri={docs.aadhaarFront} onPress={() => upload("aadhaarFront")} status={uploadStatus.aadhaarFront} />
-            <ImageUploadCard label="Upload Back" uri={docs.aadhaarBack} onPress={() => upload("aadhaarBack")} status={uploadStatus.aadhaarBack} />
+            <ImageUploadCard label="Upload Front" uri={docUris.aadhaarFront} onPress={() => upload("aadhaarFront")} status={uploadStatus.aadhaarFront} />
+            <ImageUploadCard label="Upload Back" uri={docUris.aadhaarBack} onPress={() => upload("aadhaarBack")} status={uploadStatus.aadhaarBack} />
           </View>
         </View>
 
@@ -154,7 +179,7 @@ export default function DriverStep4Documents({ onNext, onBack }) {
             {completed.selfie && <CheckCircle size={18} color={COLORS.primary} />}
           </View>
           {errors.selfie && <Text style={styles.err}>{errors.selfie}</Text>}
-          <ImageUploadCard label="Take Selfie" uri={docs.selfie} onPress={() => upload("selfie")} status={uploadStatus.selfie} />
+          <ImageUploadCard label="Take Selfie" uri={docUris.selfie} onPress={() => upload("selfie")} status={uploadStatus.selfie} />
         </View>
 
         <View style={{ height: 80 }} />
@@ -162,7 +187,7 @@ export default function DriverStep4Documents({ onNext, onBack }) {
       <BottomStickyButton
         label="Continue to Bank Details"
         disabled={!canProceed}
-        onPress={() => { if (validate()) onNext(docs); }}
+        onPress={() => { if (validate()) onNext({ ...docs, dlFrontUri: docUris.dlFront, dlBackUri: docUris.dlBack, rcFrontUri: docUris.rcFront, rcBackUri: docUris.rcBack, insuranceFrontUri: docUris.insuranceFront, insuranceBackUri: docUris.insuranceBack, aadhaarFrontUri: docUris.aadhaarFront, aadhaarBackUri: docUris.aadhaarBack, selfieUri: docUris.selfie }); }}
       />
     </SafeAreaView>
   );

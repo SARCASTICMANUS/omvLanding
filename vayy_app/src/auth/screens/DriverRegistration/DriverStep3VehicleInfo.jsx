@@ -10,13 +10,16 @@ import BottomStickyButton from "../../components/BottomStickyButton";
 import { useSelector, useDispatch } from "react-redux";
 import { setField } from "../../../store/slices/onboardingSlice";
 import { VALIDATORS, VALIDATION_MESSAGES } from "../../validators";
+import { uriToBase64 } from "../../../shared/lib/base64";
 
 export default function DriverStep3VehicleInfo({ onNext, onBack, vehicleType }) {
   const dispatch = useDispatch();
   const fields = useSelector((state) => state.onboarding.fields);
   const isAuto = vehicleType === "auto";
   const [form, setForm] = useState({ vehicleNumber: "", rcNumber: "", autoType: "Standard" });
-  const [photo, setPhoto] = useState(null);
+  const [photoBase64, setPhotoBase64] = useState(null);
+  const [photoUri, setPhotoUri] = useState(null);
+  const [converting, setConverting] = useState(false);
   const [focused, setFocused] = useState({});
   const [errors, setErrors] = useState({});
 
@@ -37,7 +40,7 @@ export default function DriverStep3VehicleInfo({ onNext, onBack, vehicleType }) 
     const e = {};
     if (!VALIDATORS.vehicleNumber(form.vehicleNumber)) e.vehicleNumber = VALIDATION_MESSAGES.vehicleNumber;
     if (!form.rcNumber || form.rcNumber.length < 6) e.rcNumber = "Enter a valid RC number (min 6 characters)";
-    if (!photo) e.photo = `Upload ${isAuto ? "auto" : "bike"} photo`;
+    if (!photoBase64) e.photo = `Upload ${isAuto ? "auto" : "bike"} photo`;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -55,9 +58,21 @@ export default function DriverStep3VehicleInfo({ onNext, onBack, vehicleType }) 
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.8,
+      base64: true,
     });
     if (!result.canceled && result.assets?.[0]?.uri) {
-      setPhoto(result.assets[0].uri);
+      const uri = result.assets[0].uri;
+      setPhotoUri(uri);
+      setConverting(true);
+      const base64 = result.assets[0].base64;
+      setConverting(false);
+      if (base64) {
+        setPhotoBase64(base64);
+        setErrors((prev) => ({ ...prev, photo: undefined }));
+      } else {
+        Alert.alert("Conversion Failed", "Could not process the image. Please try selecting it again.");
+        setPhotoUri(null);
+      }
     }
   };
 
@@ -97,12 +112,12 @@ export default function DriverStep3VehicleInfo({ onNext, onBack, vehicleType }) 
           )}
           <Text style={styles.label}>{isAuto ? "Vehicle Photo" : "Bike Photo"}</Text>
           <View style={styles.uploadRow}>
-            <ImageUploadCard label={`Tap to upload ${isAuto ? "auto" : "bike"} photo`} uri={photo} onPress={handleUpload} />
+            <ImageUploadCard label={converting ? "Converting..." : `Tap to upload ${isAuto ? "auto" : "bike"} photo`} uri={photoUri} onPress={handleUpload} />
           </View>
           {errors.photo && <Text style={styles.err}>{errors.photo}</Text>}
           <View style={{ height: 80 }} />
         </ScrollView>
-        <BottomStickyButton label="Continue to Documents" onPress={() => { if (validate()) onNext({ vehicleNumber: form.vehicleNumber, rcNumber: form.rcNumber, photo }); }} />
+        <BottomStickyButton label="Continue to Documents" onPress={() => { if (validate()) onNext({ vehicleNumber: form.vehicleNumber, rcNumber: form.rcNumber, photo: photoBase64 }); }} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

@@ -1,9 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, Modal, BackHandler, StyleSheet } from "react-native";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import { ShieldCheck, Clock, AlertTriangle, Upload } from "lucide-react-native";
 import COLORS from "../../shared/constants/colors";
-import { fetchVerificationStatus } from "../../store/slices/profileSlice";
 
 const STATUS_CONFIG = {
   verified: {
@@ -44,10 +43,10 @@ const STATUS_CONFIG = {
     iconColor: COLORS.primary,
     bgColor: "#E0F5E8",
     borderColor: "#BBF7D0",
-    title: "Upload Documents",
-    message: "Please upload your driving license and RC to get verified and start using the platform.",
-    dismissLabel: "Upload Documents",
-    action: "editProfile",
+    title: "Complete Your Profile",
+    message: "Please complete your vehicle details, documents, and bank information to start using the platform.",
+    dismissLabel: "Complete Profile",
+    action: "completeRegistration",
     dismissable: false,
   },
   unverified: {
@@ -58,13 +57,12 @@ const STATUS_CONFIG = {
     title: "Complete Verification",
     message: "Verify your account to unlock all features and start riding.",
     dismissLabel: "Get Verified",
-    action: "editProfile",
+    action: "completeRegistration",
     dismissable: false,
   },
 };
 
 export default function VerificationPopup({ visible, onDismiss, navigation }) {
-  const dispatch = useDispatch();
   const { verification } = useSelector((state) => state.profile);
   const prevStatusRef = useRef(null);
 
@@ -96,6 +94,9 @@ export default function VerificationPopup({ visible, onDismiss, navigation }) {
     } else if (config.action === "editProfile" && navigation) {
       onDismiss?.();
       navigation.navigate("EditProfile");
+    } else if (config.action === "completeRegistration" && navigation) {
+      onDismiss?.();
+      navigation.navigate("DriverProfileCompletion");
     }
   };
 

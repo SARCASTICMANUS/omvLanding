@@ -83,23 +83,25 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.refreshToken);
 
-      if (refreshToken) {
-        try {
-          const res = await axios.post(`${API_URL}${AUTH.tokenRefresh}`, {
-            refresh: refreshToken,
-          });
-          const nextToken = res.data.access || res.data.token;
+      if (!refreshToken) {
+        return Promise.reject(error);
+      }
 
-          if (nextToken) {
-            await AsyncStorage.setItem(STORAGE_KEYS.accessToken, nextToken);
-            await AsyncStorage.setItem(STORAGE_KEYS.token, nextToken);
-            authHandlers.onRefreshToken?.({ token: nextToken });
-            originalRequest.headers.Authorization = `Bearer ${nextToken}`;
-            return api(originalRequest);
-          }
-        } catch {
-          // Logout below when refresh cannot recover the session.
+      try {
+        const res = await axios.post(`${API_URL}${AUTH.tokenRefresh}`, {
+          refresh: refreshToken,
+        });
+        const nextToken = res.data.access || res.data.token;
+
+        if (nextToken) {
+          await AsyncStorage.setItem(STORAGE_KEYS.accessToken, nextToken);
+          await AsyncStorage.setItem(STORAGE_KEYS.token, nextToken);
+          authHandlers.onRefreshToken?.({ token: nextToken });
+          originalRequest.headers.Authorization = `Bearer ${nextToken}`;
+          return api(originalRequest);
         }
+      } catch {
+        // Refresh failed — fall through to logout
       }
 
       authHandlers.onUnauthorized?.();

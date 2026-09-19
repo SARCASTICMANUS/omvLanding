@@ -11,7 +11,8 @@ export async function uriToBase64(uri) {
       encoding: FileSystem.EncodingType.Base64,
     });
     return base64;
-  } catch {
+  } catch (err) {
+    console.warn("[uriToBase64] FAILED:", uri?.substring(0, 80), err?.message);
     return null;
   }
 }

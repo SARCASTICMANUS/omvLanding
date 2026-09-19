@@ -57,6 +57,7 @@ from accounts.api.serializers import (
     RecentSearchCreateSerializer,
     DriverBankDetailSerializer,
     DriverBankDetailUpdateSerializer,
+    CompleteDriverRegistrationSerializer,
 )
 
 from accounts.services.auth_service import AuthService
