@@ -174,6 +174,11 @@ class PublicDriverProfile(models.Model):
         choices=VEHICLE_TYPE_CHOICES,
         default=VEHICLE_AUTO,
     )
+    rc_number = models.CharField(
+        max_length=50,
+        default="",
+        blank=True,
+    )
     dob = models.DateField(
         null=True,
         blank=True,

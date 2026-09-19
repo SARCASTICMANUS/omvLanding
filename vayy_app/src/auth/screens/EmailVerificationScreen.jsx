@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Platform, KeyboardAvoidingView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, User, Mail, ShieldCheck } from "lucide-react-native";
@@ -6,35 +6,17 @@ import COLORS from "../../shared/constants/colors";
 import BottomStickyButton from "../components/BottomStickyButton";
 import { useDispatch } from "react-redux";
 import { setField } from "../../store/slices/onboardingSlice";
-import { resendOtp } from "../authSlice";
 
-const ROLE_LABEL = { passenger: "Buddy", driver: "Marshal" };
+const ROLE_LABEL = { passenger: "Buddy", bikedriver: "Marshal", autodriver: "Marshal" };
 
 export default function EmailVerificationScreen({ navigation, route }) {
   const dispatch = useDispatch();
   const role = route?.params?.role || "passenger";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState(["", "", "", ""]);
-  const [otpSent, setOtpSent] = useState(false);
-  const [isVerified, setIsVerified] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [resendDisabled, setResendDisabled] = useState(true);
-  const [resendTimer, setResendTimer] = useState(60);
   const [errors, setErrors] = useState({});
   const [focused, setFocused] = useState({});
   const [tosAccepted, setTosAccepted] = useState(false);
-  const otpRefs = useRef([]);
-
-  useEffect(() => {
-    let interval;
-    if (resendDisabled && resendTimer > 0) {
-      interval = setInterval(() => setResendTimer((p) => p - 1), 1000);
-    } else if (resendTimer === 0) {
-      setResendDisabled(false);
-    }
-    return () => clearInterval(interval);
-  }, [resendDisabled, resendTimer]);
 
   const validate = () => {
     const errs = {};
@@ -45,54 +27,11 @@ export default function EmailVerificationScreen({ navigation, route }) {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSendOtp = () => {
-    if (!validate()) return;
-    setOtpSent(true);
-    setResendTimer(60);
-    setResendDisabled(true);
-    setOtp(["", "", "", ""]);
-    setErrors({});
-    setTimeout(() => otpRefs.current[0]?.focus(), 300);
-  };
-
-  const handleOtpChange = (text, index) => {
-    const digit = text.replace(/[^0-9]/g, "");
-    if (digit.length > 1) return;
-    const next = [...otp];
-    next[index] = digit;
-    setOtp(next);
-    if (digit && index < 3) otpRefs.current[index + 1]?.focus();
-  };
-
-  const handleOtpKeyPress = (e, index) => {
-    if (e.nativeEvent.key === "Backspace" && !otp[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleVerify = () => {
-    const code = otp.join("");
-    if (code.length !== 4) return;
-    if (code === "0000") {
-      setIsVerified(true);
-      dispatch(setField({ field: "fullName", value: name.trim() }));
-      dispatch(setField({ field: "email", value: email.trim().toLowerCase() }));
-      dispatch(setField({ field: "role", value: role }));
-      dispatch(setField({ field: "verifiedEmail", value: email.trim().toLowerCase() }));
-    } else {
-      setErrors({ otp: "Invalid Safety Code. Try 0000 for testing." });
-    }
-  };
-
-  const handleResend = () => {
-    setOtp(["", "", "", ""]);
-    setErrors({});
-    setResendTimer(60);
-    setResendDisabled(true);
-    setTimeout(() => otpRefs.current[0]?.focus(), 300);
-  };
-
   const handleContinue = () => {
+    if (!validate()) return;
+    dispatch(setField({ field: "fullName", value: name.trim() }));
+    dispatch(setField({ field: "email", value: email.trim().toLowerCase() }));
+    dispatch(setField({ field: "role", value: role }));
     if (role === "passenger") {
       navigation.navigate("PassengerRegistration");
     } else {
@@ -113,8 +52,8 @@ export default function EmailVerificationScreen({ navigation, route }) {
           <ArrowLeft size={22} color={COLORS.text} />
         </TouchableOpacity>
         <View style={styles.header}>
-          <Text style={styles.title}>Verify Your Email</Text>
-          <Text style={styles.sub}>Set up your {ROLE_LABEL[role]} account</Text>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.sub}>Set up your {ROLE_LABEL[role] || "Buddy"} account</Text>
         </View>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.infoBox}>
@@ -132,7 +71,6 @@ export default function EmailVerificationScreen({ navigation, route }) {
               value={name}
               onChangeText={setName}
               autoCapitalize="words"
-              editable={!isVerified}
               onFocus={() => setFocused({ name: true })}
               onBlur={() => setFocused({})}
             />
@@ -150,76 +88,35 @@ export default function EmailVerificationScreen({ navigation, route }) {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
-              editable={!isVerified && !otpSent}
               onFocus={() => setFocused({ email: true })}
               onBlur={() => setFocused({})}
             />
           </View>
           {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
 
-          {!otpSent && !isVerified && (
-            <>
-              <TouchableOpacity
-                style={styles.tosRow}
-                onPress={() => setTosAccepted(!tosAccepted)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.checkbox, tosAccepted && styles.checkboxChecked]}>
-                  {tosAccepted && <Text style={styles.checkmark}>{"\u2713"}</Text>}
-                </View>
-                <Text style={styles.tosText}>
-                  I agree to the{" "}
-                  <Text style={styles.tosLink} onPress={() => navigation.navigate("TermsOfService")}>
-                    Terms of Service
-                  </Text>
-                </Text>
-              </TouchableOpacity>
-              <View style={{ marginTop: 12 }}>
-                <BottomStickyButton label="Send Safety Code" onPress={handleSendOtp} loading={loading} disabled={!name.trim() || !email.trim() || !tosAccepted} />
-              </View>
-            </>
-          )}
+          <TouchableOpacity
+            style={styles.tosRow}
+            onPress={() => setTosAccepted(!tosAccepted)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.checkbox, tosAccepted && styles.checkboxChecked]}>
+              {tosAccepted && <Text style={styles.checkmark}>{"\u2713"}</Text>}
+            </View>
+            <Text style={styles.tosText}>
+              I agree to the{" "}
+              <Text style={styles.tosLink} onPress={() => navigation.navigate("TermsOfService")}>
+                Terms of Service
+              </Text>
+            </Text>
+          </TouchableOpacity>
 
-          {otpSent && !isVerified && (
-            <>
-              <Text style={styles.label}>Enter the Safety Code sent to {email}</Text>
-              <View style={styles.otpRow}>
-                {otp.map((digit, i) => (
-                  <TextInput
-                    key={i}
-                    ref={(r) => { otpRefs.current[i] = r; }}
-                    style={[styles.otpInput, digit ? styles.otpInputFilled : null]}
-                    value={digit}
-                    onChangeText={(t) => handleOtpChange(t, i)}
-                    onKeyPress={(e) => handleOtpKeyPress(e, i)}
-                    keyboardType="number-pad"
-                    maxLength={1}
-                    selectTextOnFocus
-                  />
-                ))}
-              </View>
-              {errors.otp && <Text style={styles.errorText}>{errors.otp}</Text>}
-              <View style={styles.timerRow}>
-                {resendTimer > 0 ? (
-                  <Text style={styles.resendTimer}>Resend in 00:{resendTimer.toString().padStart(2, "0")}</Text>
-                ) : (
-                  <TouchableOpacity onPress={handleResend} activeOpacity={0.7}>
-                    <Text style={styles.resendText}>Resend Safety Code</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              <BottomStickyButton label="Verify" onPress={handleVerify} loading={loading} disabled={otp.join("").length !== 4} />
-            </>
-          )}
-
-          {isVerified && (
-            <>
-              <View style={styles.successBadge}>
-                <Text style={styles.successBadgeText}>Email Verified</Text>
-              </View>
-              <BottomStickyButton label={`Continue as ${ROLE_LABEL[role]}`} onPress={handleContinue} />
-            </>
-          )}
+          <View style={{ marginTop: 12 }}>
+            <BottomStickyButton
+              label="Continue"
+              onPress={handleContinue}
+              disabled={!name.trim() || !email.trim() || !tosAccepted}
+            />
+          </View>
 
           <View style={{ height: 80 }} />
         </ScrollView>
@@ -250,22 +147,6 @@ const styles = StyleSheet.create({
   inputError: { borderColor: "#ef4444", backgroundColor: "#fef2f2" },
   input: { flex: 1, fontSize: 15, color: COLORS.text, padding: 0 },
   errorText: { fontSize: 12, color: "#ef4444", marginTop: 4, marginBottom: 4, marginLeft: 4 },
-  otpRow: { flexDirection: "row", gap: 14, marginBottom: 16, marginTop: 8, justifyContent: "center" },
-  otpInput: {
-    width: 56, height: 60, borderWidth: 1.5, borderColor: COLORS.borderMedium,
-    borderRadius: 14, textAlign: "center", fontSize: 24, fontWeight: "700",
-    color: COLORS.text, backgroundColor: "#fafafa",
-  },
-  otpInputFilled: { borderColor: COLORS.primary, backgroundColor: "#f0faf2" },
-  timerRow: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 24 },
-  resendTimer: { fontSize: 13, color: COLORS.textMuted },
-  resendText: { fontSize: 13, color: COLORS.primary, fontWeight: "700" },
-  successBadge: {
-    backgroundColor: "#f0faf2", borderRadius: 20, paddingVertical: 10,
-    paddingHorizontal: 20, alignSelf: "center", marginTop: 8, marginBottom: 16,
-    borderWidth: 1, borderColor: "#d1fae5",
-  },
-  successBadgeText: { color: "#166534", fontSize: 14, fontWeight: "700" },
   tosRow: {
     flexDirection: "row", alignItems: "center", marginTop: 20, gap: 10,
   },

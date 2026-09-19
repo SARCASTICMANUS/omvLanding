@@ -15,7 +15,6 @@ export default function DriverStep5Bank({ onNext, onBack }) {
   const [form, setForm] = useState({
     holderName: fields.holderName || "",
     accountNumber: fields.accountNumber || "",
-    confirmAccount: fields.confirmAccount || "",
     ifsc: fields.ifsc || "",
     upi: fields.upi || "",
   });
@@ -30,7 +29,6 @@ export default function DriverStep5Bank({ onNext, onBack }) {
     const e = {};
     if (!form.holderName) e.holderName = "Enter account holder name";
     if (!VALIDATORS.accountNumber(form.accountNumber)) e.accountNumber = VALIDATION_MESSAGES.accountNumber;
-    if (form.accountNumber !== form.confirmAccount) e.confirmAccount = "Account numbers do not match";
     if (!VALIDATORS.ifsc(form.ifsc)) e.ifsc = VALIDATION_MESSAGES.ifsc;
     if (form.upi && !VALIDATORS.upi(form.upi)) e.upi = VALIDATION_MESSAGES.upi;
     setErrors(e);
@@ -41,7 +39,6 @@ export default function DriverStep5Bank({ onNext, onBack }) {
     setForm({
       holderName: fields.holderName || "",
       accountNumber: fields.accountNumber || "",
-      confirmAccount: fields.confirmAccount || "",
       ifsc: fields.ifsc || "",
       upi: fields.upi || "",
     });
@@ -60,7 +57,7 @@ export default function DriverStep5Bank({ onNext, onBack }) {
           <Text style={styles.title}>Bank Details</Text>
           <Text style={styles.sub}>Add your payout information</Text>
         </View>
-        <ProgressBar current={5} total={6} />
+        <ProgressBar current={6} total={7} />
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.label}>Account Holder Name</Text>
           <View style={inputStyle("holderName")}>
@@ -75,13 +72,6 @@ export default function DriverStep5Bank({ onNext, onBack }) {
             <TextInput style={styles.input} placeholder="Enter account number" placeholderTextColor="#aaa" value={form.accountNumber} onChangeText={(v) => update("accountNumber", v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" onFocus={() => setFocused({ accountNumber: true })} onBlur={() => setFocused({})} />
           </View>
           {errors.accountNumber && <Text style={styles.err}>{errors.accountNumber}</Text>}
-
-          <Text style={styles.label}>Confirm Account Number</Text>
-          <View style={inputStyle("confirmAccount")}>
-            <CreditCard size={18} color={iconColor("confirmAccount")} />
-            <TextInput style={styles.input} placeholder="Re-enter account number" placeholderTextColor="#aaa" value={form.confirmAccount} onChangeText={(v) => update("confirmAccount", v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" onFocus={() => setFocused({ confirmAccount: true })} onBlur={() => setFocused({})} />
-          </View>
-          {errors.confirmAccount && <Text style={styles.err}>{errors.confirmAccount}</Text>}
 
           <Text style={styles.label}>IFSC Code</Text>
           <View style={inputStyle("ifsc")}>
@@ -99,7 +89,10 @@ export default function DriverStep5Bank({ onNext, onBack }) {
 
           <View style={{ height: 80 }} />
         </ScrollView>
-        <BottomStickyButton label="Continue to Verification" onPress={() => { if (validate()) onNext(form); }} />
+        <BottomStickyButton label="Continue to Review" onPress={() => { if (validate()) onNext(form); }} />
+        <TouchableOpacity style={styles.skipBtn} onPress={() => onNext({})}>
+          <Text style={styles.skipText}>Skip for now</Text>
+        </TouchableOpacity>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -119,4 +112,6 @@ const styles = StyleSheet.create({
   inputError: { borderColor: "#ef4444", backgroundColor: "#fef2f2" },
   input: { flex: 1, fontSize: 15, color: COLORS.text, padding: 0 },
   err: { fontSize: 12, color: "#ef4444", marginTop: 4, marginBottom: 4, marginLeft: 4 },
+  skipBtn: { alignItems: "center", paddingVertical: 12, marginTop: 4 },
+  skipText: { fontSize: 14, fontWeight: "600", color: COLORS.textMuted },
 });

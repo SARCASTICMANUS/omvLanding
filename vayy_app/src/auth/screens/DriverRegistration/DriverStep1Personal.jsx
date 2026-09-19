@@ -12,7 +12,7 @@ import { setField } from "../../../store/slices/onboardingSlice";
 
 const GENDERS = ["Male", "Female", "Other"];
 
-export default function DriverStep1Personal({ onNext, onBack }) {
+export default function DriverStep1Personal({ onNext, onBack, loading }) {
   const dispatch = useDispatch();
   const fields = useSelector((state) => state.onboarding.fields);
   const [form, setForm] = useState({
@@ -62,7 +62,7 @@ export default function DriverStep1Personal({ onNext, onBack }) {
           <Text style={styles.title}>Personal Details</Text>
           <Text style={styles.sub}>Tell us about yourself</Text>
         </View>
-        <ProgressBar current={1} total={6} />
+        <ProgressBar current={1} total={7} />
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.label}>Full Name</Text>
           <View style={inputStyle("fullName")}>
@@ -104,6 +104,9 @@ export default function DriverStep1Personal({ onNext, onBack }) {
             </TouchableOpacity>
           </View>
           {errors.confirmPassword && <Text style={styles.err}>{errors.confirmPassword}</Text>}
+          {form.confirmPassword && form.password !== form.confirmPassword && (
+            <Text style={styles.err}>Passwords do not match</Text>
+          )}
 
           <Text style={styles.label}>Date of Birth</Text>
           <TouchableOpacity style={inputStyle("dob")} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
@@ -131,8 +134,9 @@ export default function DriverStep1Personal({ onNext, onBack }) {
         </ScrollView>
         <BottomStickyButton
           label="Continue to Vehicle"
-          disabled={!form.fullName || !form.email || !form.password || !form.dob || !form.gender}
+          disabled={!form.fullName || !form.email || !form.password || !form.confirmPassword || form.password !== form.confirmPassword || !form.dob || !form.gender}
           onPress={() => onNext(form)}
+          loading={loading}
         />
       </KeyboardAvoidingView>
 

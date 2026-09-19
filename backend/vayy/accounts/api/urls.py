@@ -4,6 +4,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from accounts.api.views import (
     RegisterAPIView,
+    CompleteDriverRegistrationAPIView,
     LoginAPIView,
     VerifyOTPAPIView,
     ResendOTPAPIView,
@@ -30,6 +31,7 @@ urlpatterns = [
     path("", include(router.urls)),
     # Auth
     path("register/", RegisterAPIView.as_view()),
+    path("complete-registration/", CompleteDriverRegistrationAPIView.as_view()),
     path("login/", LoginAPIView.as_view()),
     path("verify-otp/", VerifyOTPAPIView.as_view()),
     path("resend-otp/", ResendOTPAPIView.as_view()),

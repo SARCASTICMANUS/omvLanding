@@ -102,6 +102,105 @@ class RegisterAPIView(APIView):
         )
         return resp
 
+
+# COMPLETE DRIVER REGISTRATION (after OTP verify + login)
+class CompleteDriverRegistrationAPIView(APIView):
+    """
+    POST /api/accounts/complete-registration/
+    Authenticated user submits vehicle + documents + bank details.
+    Creates profile + vehicle + documents + bank + wallet atomically.
+    """
+    permission_classes = [IsAuthenticated, IsDriver]
+
+    def post(self, request):
+        import base64 as b64mod
+        import uuid as uuid_mod
+        from django.core.files.base import ContentFile
+        from operations.models import Vehicle
+        from common.constants import (
+            VEHICLE_STATUS_PENDING,
+            VEHICLE_BIKE,
+        )
+
+        serializer = CompleteDriverRegistrationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        user = request.user
+
+        # Update user role if provided
+        role = data.get("role", "")
+        if role and role in (ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER):
+            user.role = role
+            user.save(update_fields=["role"])
+
+        # 1. Create/update profile
+        profile, _ = PublicDriverProfile.objects.get_or_create(user=user)
+        profile.display_name = data.get("display_name", "") or user.first_name
+        profile.phone_number = data.get("phone_number", "")
+        profile.vehicle_number = data["vehicle_number"]
+        profile.vehicle_type = data["vehicle_type"]
+        profile.dob = data.get("dob")
+        profile.gender = data.get("gender", "")
+        profile.rc_number = data.get("rc_number", "")
+        profile.save()
+
+        # 2. Create/update vehicle
+        vehicle_photo = data.get("vehicle_photo", "")
+        vehicle, _ = Vehicle.objects.update_or_create(
+            driver=user,
+            defaults={
+                "vehicle_number": data["vehicle_number"],
+                "vehicle_type": data["vehicle_type"],
+                "vehicle_photo": vehicle_photo,
+                "status": VEHICLE_STATUS_PENDING,
+                "is_active": False,
+            },
+        )
+
+        # 3. Upload documents (idempotent: clear existing first)
+        DriverDocument.objects.filter(driver=user).delete()
+        for doc_input in data.get("documents", []):
+            file_base64 = doc_input.get("file_base64", "")
+            file_name = doc_input.get("file_name", "upload.jpg")
+            doc_type = doc_input["document_type"]
+
+            if file_base64:
+                if "," in file_base64:
+                    file_base64 = file_base64.split(",", 1)[1]
+                try:
+                    decoded = b64mod.b64decode(file_base64)
+                except Exception:
+                    continue
+                ext = file_name.rsplit(".", 1)[-1] if "." in file_name else "jpg"
+                unique_name = f"{uuid_mod.uuid4().hex}.{ext}"
+                content = ContentFile(decoded, name=unique_name)
+                DriverDocument.objects.create(
+                    driver=user,
+                    document_type=doc_type,
+                    file=content,
+                )
+
+        # 4. Save bank details
+        bank = data.get("bank_details", {})
+        if bank and any(bank.get(f) for f in ["holder_name", "account_number", "ifsc", "upi"]):
+            detail, _ = DriverBankDetail.objects.get_or_create(driver=user)
+            for f in ["holder_name", "account_number", "ifsc", "upi"]:
+                if f in bank:
+                    setattr(detail, f, bank[f])
+            detail.save()
+
+        # 5. Create wallet
+        Wallet.objects.get_or_create(
+            user=user,
+            defaults={"balance": 0, "currency": "INR"},
+        )
+
+        return success_response(
+            data=UserSerializer(user).data,
+            message="Driver registration completed successfully.",
+            status_code=status.HTTP_201_CREATED,
+        )
+
 # LOGIN
 class LoginAPIView(APIView):
     permission_classes = [AllowAny]
@@ -404,6 +503,7 @@ class DriverProfileAPIView(APIView):
             "license_number": profile.license_number,
             "vehicle_number": profile.vehicle_number,
             "vehicle_type": profile.vehicle_type,
+            "rc_number": profile.rc_number,
             "dob": profile.dob.isoformat() if profile.dob else None,
             "gender": profile.gender,
             "is_verified": profile.is_verified,
@@ -465,7 +565,7 @@ class DriverProfileAPIView(APIView):
         profile_fields = [
             "display_name", "phone_number", "bio",
             "license_number", "vehicle_number", "vehicle_type",
-            "dob", "gender",
+            "rc_number", "dob", "gender",
         ]
         for f in profile_fields:
             if f in attrs:

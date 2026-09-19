@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator, Dimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ArrowLeft, CheckCircle, XCircle } from "lucide-react-native";
+import { ArrowLeft, CheckCircle } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import ImageUploadCard from "../../components/ImageUploadCard";
 import BottomStickyButton from "../../components/BottomStickyButton";
-import { useSelector, useDispatch } from "react-redux";
-import { setField } from "../../../store/slices/onboardingSlice";
+import { useSelector } from "react-redux";
 
 const { width } = Dimensions.get("window");
 
@@ -21,7 +20,6 @@ const SECTIONS = [
 ];
 
 export default function DriverStep4Documents({ onNext, onBack }) {
-  const dispatch = useDispatch();
   const fields = useSelector((state) => state.onboarding.fields);
   const [docs, setDocs] = useState({
     dlFront: null, dlBack: null,
@@ -55,7 +53,6 @@ export default function DriverStep4Documents({ onNext, onBack }) {
     if (!result.canceled && result.assets?.[0]?.uri) {
       setDocs((p) => ({ ...p, [field]: result.assets[0].uri }));
       setUploadStatus((prev) => ({ ...prev, [field]: "success" }));
-      dispatch(setField({ field: `doc_${field}`, value: result.assets[0].uri }));
     } else {
       setUploadStatus((prev) => ({ ...prev, [field]: "idle" }));
     }
@@ -94,7 +91,7 @@ export default function DriverStep4Documents({ onNext, onBack }) {
         <Text style={styles.title}>Documents</Text>
         <Text style={styles.sub}>Upload your documents for verification</Text>
       </View>
-      <ProgressBar current={4} total={6} />
+      <ProgressBar current={5} total={7} />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.summary}>
           <Text style={styles.summaryText}>Documents {completedCount}/{SECTIONS.length} completed</Text>

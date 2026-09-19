@@ -60,7 +60,7 @@ export default function DriverStep6OTP({ onComplete, onBack, email }) {
         <Text style={styles.sub}>Enter the code sent to {email}</Text>
         <TouchableOpacity onPress={onBack}><Text style={styles.editLink}>Edit email?</Text></TouchableOpacity>
       </View>
-      <ProgressBar current={6} total={6} />
+        <ProgressBar current={2} total={7} />
       <View style={styles.body}>
         <OTPInput length={6} onComplete={(v) => { setOtp(v); setOtpError(false); }} error={otpError} />
         {otpError ? (

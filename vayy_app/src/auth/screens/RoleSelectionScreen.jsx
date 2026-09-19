@@ -1,23 +1,30 @@
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ArrowLeft, User, Navigation } from "lucide-react-native";
+import { ArrowLeft, User, Navigation, Car } from "lucide-react-native";
 import COLORS from "../../shared/constants/colors";
 import { useDispatch } from "react-redux";
+import { ROLE } from "../../constants";
 import { setField } from "../../store/slices/onboardingSlice";
 
 const ROLES = [
   {
-    key: "passenger",
+    key: ROLE.PASSENGER,
     title: "Buddy",
     subtitle: "I want to find rides.",
     icon: (active) => <User size={36} color={active ? COLORS.primary : "#9ca3af"} />,
   },
   {
-    key: "driver",
+    key: ROLE.BIKE_DRIVER,
     title: "Marshal",
     subtitle: "I want to drive and earn.",
     icon: (active) => <Navigation size={36} color={active ? COLORS.primary : "#9ca3af"} />,
+  },
+  {
+    key: ROLE.AUTO_DRIVER,
+    title: "Auto Marshal",
+    subtitle: "I want to drive an auto and earn.",
+    icon: (active) => <Car size={36} color={active ? COLORS.primary : "#9ca3af"} />,
   },
 ];
 
@@ -26,7 +33,7 @@ export default function RoleSelectionScreen({ navigation }) {
   const [selected, setSelected] = useState(null);
 
   const ctaLabel = selected
-    ? `Continue as ${selected === "passenger" ? "Buddy" : "Marshal"}`
+    ? `Continue as ${ROLES.find((r) => r.key === selected)?.title || "User"}`
     : "Select your role";
 
   const handleContinue = () => {

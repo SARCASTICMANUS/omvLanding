@@ -36,7 +36,7 @@ export default function DriverStep3VehicleInfo({ onNext, onBack, vehicleType }) 
   const validate = () => {
     const e = {};
     if (!VALIDATORS.vehicleNumber(form.vehicleNumber)) e.vehicleNumber = VALIDATION_MESSAGES.vehicleNumber;
-    if (!form.rcNumber) e.rcNumber = "Enter RC number";
+    if (!form.rcNumber || form.rcNumber.length < 6) e.rcNumber = "Enter a valid RC number (min 6 characters)";
     if (!photo) e.photo = `Upload ${isAuto ? "auto" : "bike"} photo`;
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -71,7 +71,7 @@ export default function DriverStep3VehicleInfo({ onNext, onBack, vehicleType }) 
           <Text style={styles.title}>Vehicle Information</Text>
           <Text style={styles.sub}>{isAuto ? "Tell us about your auto" : "Tell us about your bike"}</Text>
         </View>
-        <ProgressBar current={3} total={6} />
+        <ProgressBar current={4} total={7} />
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.label}>Vehicle Number</Text>
           <View style={inputStyle("vehicleNumber")}>
@@ -102,7 +102,7 @@ export default function DriverStep3VehicleInfo({ onNext, onBack, vehicleType }) 
           {errors.photo && <Text style={styles.err}>{errors.photo}</Text>}
           <View style={{ height: 80 }} />
         </ScrollView>
-        <BottomStickyButton label="Continue to Documents" onPress={() => { if (validate()) onNext({ ...form, photo }); }} />
+        <BottomStickyButton label="Continue to Documents" onPress={() => { if (validate()) onNext({ vehicleNumber: form.vehicleNumber, rcNumber: form.rcNumber, photo }); }} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

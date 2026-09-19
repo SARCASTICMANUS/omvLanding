@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ArrowLeft, Bike } from "lucide-react-native";
+import { ArrowLeft, Bike, Car } from "lucide-react-native";
 import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import BottomStickyButton from "../../components/BottomStickyButton";
@@ -16,6 +16,16 @@ const VEHICLES = [
     icon: (active) => (
       <View style={[styles.vIcon, active && styles.vIconActive]}>
         <Bike size={32} color={active ? "#fff" : COLORS.textMuted} />
+      </View>
+    ),
+  },
+  {
+    key: "auto",
+    title: "Auto",
+    subtitle: "Shared auto rides",
+    icon: (active) => (
+      <View style={[styles.vIcon, active && styles.vIconActive]}>
+        <Car size={32} color={active ? "#fff" : COLORS.textMuted} />
       </View>
     ),
   },
@@ -35,7 +45,7 @@ export default function DriverStep2Vehicle({ onNext, onBack, loading, error }) {
         <Text style={styles.title}>Choose Your Vehicle</Text>
         <Text style={styles.sub}>Select how you want to drive with OMV</Text>
       </View>
-      <ProgressBar current={2} total={6} />
+        <ProgressBar current={3} total={7} />
       {error ? (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{error}</Text>
@@ -47,7 +57,6 @@ export default function DriverStep2Vehicle({ onNext, onBack, loading, error }) {
           return (
             <TouchableOpacity key={v.key} style={[styles.card, active && styles.cardActive]} onPress={() => {
               dispatch(setField({ field: "vehicleType", value: v.key }));
-              setSelected(v.key);
             }} activeOpacity={0.85}>
               {active && <View style={styles.badge}><Text style={styles.badgeText}>✓</Text></View>}
               {v.icon(active)}
@@ -57,7 +66,7 @@ export default function DriverStep2Vehicle({ onNext, onBack, loading, error }) {
           );
         })}
       </View>
-      <BottomStickyButton label={`Continue with Bike`} onPress={() => selected && onNext({ vehicleType: selected })} disabled={!selected} loading={loading} />
+      <BottomStickyButton label={`Continue with ${selected === "auto" ? "Auto" : "Bike"}`} onPress={() => selected && onNext({ vehicleType: selected })} disabled={!selected} loading={loading} />
     </SafeAreaView>
   );
 }

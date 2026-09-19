@@ -1,6 +1,7 @@
 export const AUTH = {
   login: "/api/accounts/login/",
   register: "/api/accounts/register/",
+  completeRegistration: "/api/accounts/complete-registration/",
   verifyOtp: "/api/accounts/verify-otp/",
   resendOtp: "/api/accounts/resend-otp/",
   forgotPassword: "/api/accounts/forgot-password/",

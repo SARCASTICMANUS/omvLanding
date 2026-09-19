@@ -84,12 +84,38 @@ export const registerUser = createAsyncThunk(
       const payload = response.data.data || response.data;
       const user = normalizeUser(payload);
 
-      await AsyncStorage.setItem(STORAGE_KEYS.pendingEmail, user.email);
-
       return { user, email: user.email };
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data || { error: "Registration failed" },
+      );
+    }
+  },
+);
+
+export const completeRegistration = createAsyncThunk(
+  "auth/completeRegistration",
+  async (data, thunkAPI) => {
+    try {
+      const response = await api.post(AUTH.completeRegistration, {
+        role: data.role || "",
+        display_name: data.display_name || "",
+        phone_number: data.phone_number || "",
+        dob: data.dob || null,
+        gender: data.gender || "",
+        vehicle_type: data.vehicle_type,
+        vehicle_number: data.vehicle_number,
+        vehicle_photo: data.vehicle_photo || "",
+        rc_number: data.rc_number || "",
+        documents: data.documents || [],
+        bank_details: data.bank_details || {},
+      });
+
+      const payload = response.data.data || response.data;
+      return payload;
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data || { error: "Driver registration failed" },
       );
     }
   },
@@ -226,6 +252,18 @@ const authSlice = createSlice({
         state.otpEmail = action.payload.email;
       })
       .addCase(registerUser.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(completeRegistration.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(completeRegistration.fulfilled, (state, action) => {
+        state.loading = false;
+        if (action.payload) state.user = action.payload;
+      })
+      .addCase(completeRegistration.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

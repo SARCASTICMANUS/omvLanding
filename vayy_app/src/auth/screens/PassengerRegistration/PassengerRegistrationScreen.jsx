@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { Alert } from "react-native";
 import PassengerStep1Basic from "./PassengerStep1Basic";
 import PassengerStep2Permissions from "./PassengerStep2Permissions";
+import PassengerStep3OTP from "./PassengerStep3OTP";
 import ApplicationSubmittedScreen from "../ApplicationSubmittedScreen";
 import { useNavigation } from "@react-navigation/native";
 import { registerUser } from "../../authSlice";
-import { ROLE } from "../../../constants";
+import { ROLE, AUTH } from "../../../constants";
+import api from "../../../shared/lib/api";
 import { setField } from "../../../store/slices/onboardingSlice";
 
 export default function PassengerRegistrationScreen({ navigation }) {
@@ -37,11 +40,18 @@ export default function PassengerRegistrationScreen({ navigation }) {
       setRegistering(false);
 
       if (!registerUser.fulfilled.match(result)) {
-        setRegisterError(
-          result.payload?.email?.[0] ||
-            result.payload?.error ||
-            "Registration failed",
-        );
+        const errorMsg = result.payload?.email?.[0] || result.payload?.error || "";
+        if (errorMsg.toLowerCase().includes("already exists")) {
+          Alert.alert(
+            "Account Exists",
+            "An account already exists with this email. Please login with your existing password.",
+            [
+              { text: "Go to Login", onPress: () => navigation.navigate("LoginPage") },
+            ],
+          );
+          return;
+        }
+        setRegisterError(errorMsg || "Registration failed");
         return;
       }
       setRegisterError(null);
@@ -57,13 +67,27 @@ export default function PassengerRegistrationScreen({ navigation }) {
     }
   };
 
+  const onComplete = async () => {
+    if (data.dob || data.gender) {
+      try {
+        await api.put(AUTH.passengerProfile, {
+          dob: data.dob || undefined,
+          gender: data.gender || undefined,
+        });
+      } catch {
+        // Profile update is non-blocking
+      }
+    }
+    setStep(4);
+  };
+
   const onBack = () => {
     if (step === 1) navigation.goBack();
     else setStep((s) => s - 1);
   };
 
   useEffect(() => {
-    if (step === 3) {
+    if (step === 4) {
       const timeoutId = setTimeout(() => {
         nav.navigate("LoginPage");
       }, 2000);
@@ -71,7 +95,7 @@ export default function PassengerRegistrationScreen({ navigation }) {
     }
   }, [step, nav]);
 
-  if (step === 3) {
+  if (step === 4) {
     return (
       <ApplicationSubmittedScreen
         title="Welcome to OMV!"
@@ -93,6 +117,13 @@ export default function PassengerRegistrationScreen({ navigation }) {
         />
       )}
       {step === 2 && <PassengerStep2Permissions onNext={onNext} onBack={onBack} />}
+      {step === 3 && (
+        <PassengerStep3OTP
+          onComplete={onComplete}
+          onBack={onBack}
+          email={data.email}
+        />
+      )}
     </>
   );
 }

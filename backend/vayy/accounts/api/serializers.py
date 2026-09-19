@@ -338,6 +338,7 @@ class MergedDriverProfileSerializer(serializers.Serializer):
     license_number = serializers.CharField(allow_null=True, allow_blank=True, default=None)
     vehicle_number = serializers.CharField(required=False, allow_blank=True, default="")
     vehicle_type = serializers.CharField()
+    rc_number = serializers.CharField(required=False, allow_blank=True, default="")
     dob = serializers.DateField(required=False, allow_null=True, default=None)
     gender = serializers.CharField(required=False, allow_blank=True, default="")
     is_verified = serializers.BooleanField(read_only=True)
@@ -349,7 +350,7 @@ class MergedDriverProfileSerializer(serializers.Serializer):
             "id", "email", "role", "is_staff", "city", "city_name",
             "is_verified_user", "first_name", "last_name", "date_joined",
             "profile_id", "display_name", "phone_number", "bio",
-            "license_number", "vehicle_number", "vehicle_type",
+            "license_number", "vehicle_number", "vehicle_type", "rc_number",
             "is_verified", "rating", "total_trips",
         )
 
@@ -376,6 +377,7 @@ class MergedDriverProfileUpdateSerializer(serializers.Serializer):
     license_number = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     vehicle_number = serializers.CharField(required=False, allow_blank=True)
     vehicle_type = serializers.CharField(required=False)
+    rc_number = serializers.CharField(required=False, allow_blank=True)
     dob = serializers.DateField(required=False, allow_null=True)
     gender = serializers.CharField(required=False, allow_blank=True)
 
@@ -469,3 +471,39 @@ class DriverBankDetailUpdateSerializer(serializers.Serializer):
     account_number = serializers.CharField(required=False, allow_blank=True)
     ifsc = serializers.CharField(required=False, allow_blank=True)
     upi = serializers.CharField(required=False, allow_blank=True)
+
+
+# ── Complete driver registration (after OTP verify) ────────────
+
+class DriverDocumentInputSerializer(serializers.Serializer):
+    document_type = serializers.ChoiceField(
+        choices=["LICENSE", "RC", "INSURANCE", "IDENTITY"]
+    )
+    file_base64 = serializers.CharField(required=False, allow_blank=True, default="")
+    file_name = serializers.CharField(required=False, allow_blank=True, default="upload.jpg")
+
+
+class CompleteDriverRegistrationSerializer(serializers.Serializer):
+    # User fields
+    role = serializers.CharField(required=False, allow_blank=True, default="")
+
+    # Profile fields
+    display_name = serializers.CharField(required=False, allow_blank=True, default="")
+    phone_number = serializers.CharField(required=False, allow_blank=True, default="")
+    dob = serializers.DateField(required=False, allow_null=True, default=None)
+    gender = serializers.CharField(required=False, allow_blank=True, default="")
+
+    # Vehicle fields
+    vehicle_type = serializers.ChoiceField(choices=["bike", "auto"])
+    vehicle_number = serializers.CharField()
+    vehicle_photo = serializers.CharField(required=False, allow_blank=True, default="")
+    rc_number = serializers.CharField(required=False, allow_blank=True, default="")
+
+    # Documents (list)
+    documents = DriverDocumentInputSerializer(many=True, required=False, default=[])
+
+    # Bank details
+    bank_details = DriverBankDetailUpdateSerializer(required=False, default={})
+
+    def validate_vehicle_number(self, value):
+        return value.strip().upper()
