@@ -327,6 +327,33 @@ function WebMetrics({ data, loading }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="memphis-card p-6">
+          <h3 className="text-sm font-bold text-memphis-ink mb-4 flex items-center gap-2"><Target size={16} className="text-memphis-pink" /> UTM Sources</h3>
+          {data?.utm_source_stats?.length ? (
+            <BarChart data={data.utm_source_stats.map((s) => ({ label: s.utm_source, views: s.views }))} labelKey="label" valueKey="views" color="bg-memphis-pink" />
+          ) : (
+            <p className="text-xs text-memphis-purple/60">No UTM data yet</p>
+          )}
+        </div>
+        <div className="memphis-card p-6">
+          <h3 className="text-sm font-bold text-memphis-ink mb-4 flex items-center gap-2"><Layers size={16} className="text-memphis-teal" /> UTM Medium</h3>
+          {data?.utm_medium_stats?.length ? (
+            <BarChart data={data.utm_medium_stats.map((s) => ({ label: s.utm_medium, views: s.views }))} labelKey="label" valueKey="views" color="bg-memphis-teal" />
+          ) : (
+            <p className="text-xs text-memphis-purple/60">No UTM data yet</p>
+          )}
+        </div>
+        <div className="memphis-card p-6">
+          <h3 className="text-sm font-bold text-memphis-ink mb-4 flex items-center gap-2"><Flame size={16} className="text-memphis-yellow" /> UTM Campaigns</h3>
+          {data?.utm_campaign_stats?.length ? (
+            <BarChart data={data.utm_campaign_stats.map((s) => ({ label: s.utm_campaign, views: s.views }))} labelKey="label" valueKey="views" color="bg-memphis-yellow" />
+          ) : (
+            <p className="text-xs text-memphis-purple/60">No UTM data yet</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="memphis-card p-6">
           <h3 className="text-sm font-bold text-memphis-ink mb-4 flex items-center gap-2"><Globe size={16} className="text-memphis-pink" /> Browser Breakdown</h3>
           <DonutChart data={data?.browser_stats?.map((d) => ({ label: d.browser, views: d.views }))} labelKey="label" valueKey="views" colors={CHART_COLORS_6} />
         </div>

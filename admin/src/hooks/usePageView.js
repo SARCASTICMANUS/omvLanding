@@ -31,11 +31,17 @@ function getClientIp() {
 }
 
 function buildPayload(page, clientIp) {
+  const params = new URLSearchParams(window.location.search);
   return {
     platform: "web",
     page,
     user_agent: navigator.userAgent,
     referrer: document.referrer || "",
+    utm_source: params.get("utm_source") || "",
+    utm_medium: params.get("utm_medium") || "",
+    utm_campaign: params.get("utm_campaign") || "",
+    utm_term: params.get("utm_term") || "",
+    utm_content: params.get("utm_content") || "",
     device_type: detectDeviceType(),
     client_ip: clientIp || "",
   };

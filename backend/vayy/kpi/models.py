@@ -15,6 +15,11 @@ class PageView(models.Model):
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True, default="")
     referrer = models.URLField(blank=True, default="")
+    utm_source = models.CharField(max_length=100, blank=True, default="")
+    utm_medium = models.CharField(max_length=100, blank=True, default="")
+    utm_campaign = models.CharField(max_length=255, blank=True, default="")
+    utm_term = models.CharField(max_length=255, blank=True, default="")
+    utm_content = models.CharField(max_length=255, blank=True, default="")
     country = models.CharField(max_length=100, blank=True, default="")
     city = models.CharField(max_length=100, blank=True, default="")
     region = models.CharField(max_length=255, blank=True, default="")
@@ -32,6 +37,7 @@ class PageView(models.Model):
             models.Index(fields=["page", "created_at"]),
             models.Index(fields=["country_code"]),
             models.Index(fields=["region"]),
+            models.Index(fields=["utm_source"]),
         ]
 
     def __str__(self):

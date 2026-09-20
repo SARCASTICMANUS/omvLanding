@@ -160,6 +160,11 @@ class TrackPageViewAPI(APIView):
             "ip_address": ip,
             "user_agent": serializer.validated_data.get("user_agent", ""),
             "referrer": serializer.validated_data.get("referrer", ""),
+            "utm_source": serializer.validated_data.get("utm_source", ""),
+            "utm_medium": serializer.validated_data.get("utm_medium", ""),
+            "utm_campaign": serializer.validated_data.get("utm_campaign", ""),
+            "utm_term": serializer.validated_data.get("utm_term", ""),
+            "utm_content": serializer.validated_data.get("utm_content", ""),
             "country": geo.get("country", ""),
             "city": geo.get("city", ""),
             "region": geo.get("region", ""),
@@ -293,7 +298,7 @@ class KPIOverviewAPI(APIView):
         )
 
         referrer_stats = list(
-            live_today_qs.exclude(referrer="")
+            all_qs.exclude(referrer="")
             .values("referrer")
             .annotate(views=Count("id"))
             .order_by("-views")[:10]
@@ -366,6 +371,26 @@ class KPIOverviewAPI(APIView):
             for o, v in sorted(os_counts.items(), key=lambda x: -x[1])[:10]
         ]
 
+        # UTM stats
+        utm_source_stats = list(
+            all_qs.exclude(utm_source="")
+            .values("utm_source")
+            .annotate(views=Count("id"))
+            .order_by("-views")[:10]
+        )
+        utm_medium_stats = list(
+            all_qs.exclude(utm_medium="")
+            .values("utm_medium")
+            .annotate(views=Count("id"))
+            .order_by("-views")[:10]
+        )
+        utm_campaign_stats = list(
+            all_qs.exclude(utm_campaign="")
+            .values("utm_campaign")
+            .annotate(views=Count("id"))
+            .order_by("-views")[:10]
+        )
+
         return {
             "platform": "web",
             "summary": {
@@ -386,6 +411,9 @@ class KPIOverviewAPI(APIView):
             "timezone_stats": timezone_stats,
             "browser_stats": browser_stats,
             "os_stats": os_stats,
+            "utm_source_stats": utm_source_stats,
+            "utm_medium_stats": utm_medium_stats,
+            "utm_campaign_stats": utm_campaign_stats,
             "period_days": days,
         }
 
