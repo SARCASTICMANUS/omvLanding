@@ -40,6 +40,7 @@ services:
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
+      - geoip_data:/app/geoip
     ports:
       - "8000:8000"
     env_file:
@@ -64,6 +65,7 @@ services:
     command: sh -c "celery -A vayy worker -l info -Q celery,dispatch,matching,notifications"
     volumes:
       - static_volume:/app/staticfiles
+      - geoip_data:/app/geoip
     env_file:
       - .env
     depends_on:
@@ -93,9 +95,10 @@ services:
   celery-tracking:
     build: .
     container_name: vayy-celery-tracking
-    command: sh -c "celery -A vayy worker -l info -Q tracking --concurrency=4 --prefetch-multiplier=1 -Ofair --max-tasks-per-child=100"
+    command: sh -c "celery -A vayy worker -l info -Q tracking,geo_events --concurrency=4 --prefetch-multiplier=1 -Ofair --max-tasks-per-child=100"
     volumes:
       - static_volume:/app/staticfiles
+      - geoip_data:/app/geoip
     env_file:
       - .env
     depends_on:
@@ -220,3 +223,4 @@ volumes:
   redis_data:
   static_volume:
   media_volume:
+  geoip_data:

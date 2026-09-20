@@ -76,6 +76,7 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     'common.middleware.CorrelationIDMiddleware',
     'common.middleware.RequestResponseLoggingMiddleware',
+    'common.middleware.GeoIPMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -266,6 +267,12 @@ CELERY_TASK_REJECT_ON_WORKER_LOST = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 4
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 200
 
+CELERY_TASK_ROUTES = {
+    "tracking.tasks.consume_geo_event": {"queue": "geo_events"},
+}
+
+GEOIP_MMDB_PATH = env("GEOIP_MMDB_PATH", default=str(BASE_DIR / "geoip" / "GeoLite2-City.mmdb"))
+
 # Periodic maintenance tasks.
 CELERY_BEAT_SCHEDULE = {
     "prune-hybrid-logs": {
@@ -279,6 +286,14 @@ CELERY_BEAT_SCHEDULE = {
     "create-kpi-snapshot": {
         "task": "kpi.tasks.create_daily_kpi_snapshot",
         "schedule": crontab(hour=1, minute=0),  # 1 AM daily
+    },
+    "refresh-mv-daily-page-stats": {
+        "task": "kpi.tasks.refresh_materialized_views",
+        "schedule": crontab(hour="*/6", minute=0),  # every 6 hours
+    },
+    "refresh-geoip-db": {
+        "task": "tracking.tasks.refresh_geoip_db",
+        "schedule": 7 * 24 * 3600,  # every 7 days
     },
 }
 

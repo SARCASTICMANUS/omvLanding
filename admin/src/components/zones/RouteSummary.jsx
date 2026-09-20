@@ -17,20 +17,20 @@ export default function RouteSummary({ route, stops, distances, minutes }) {
   ];
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-6">
-      <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Route Summary</h3>
-      <p className="text-xs text-slate-400 font-medium mt-1">
+    <div className="memphis-card bg-memphis-paper p-5 md:p-6">
+      <h3 className="text-sm font-bold text-memphis-ink uppercase tracking-wider">Route Summary</h3>
+      <p className="text-xs text-memphis-ink/50 font-medium mt-1">
         {route.start_name} → {route.end_name} · read-only
       </p>
 
       <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {items.map(({ icon: Icon, label, value }) => (
-          <div key={label} className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+          <div key={label} className="rounded-xl bg-memphis-teal/10 border border-memphis-teal/20 p-3">
             <div className="flex items-center gap-1.5">
-              <Icon size={13} className="text-brand-600" />
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+              <Icon size={13} className="text-memphis-purple" />
+              <p className="text-[10px] font-bold text-memphis-ink/40 uppercase tracking-wider">{label}</p>
             </div>
-            <p className="mt-1.5 text-sm font-black text-slate-800 truncate" title={value}>
+            <p className="mt-1.5 text-sm font-black text-memphis-ink truncate" title={value}>
               {value}
             </p>
           </div>

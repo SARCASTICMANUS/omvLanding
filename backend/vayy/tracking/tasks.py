@@ -303,4 +303,78 @@ def flush_hybrid_logs(self):
 
     except Exception as exc:
         logger.error(f"Error flushing HybridLogs: {exc}")
-        raise self.retry(exc=exc)
+
+
+@shared_task
+def publish_geo_event(event):
+    """
+    Publish a geo event dict to RabbitMQ for downstream consumers.
+    Fire-and-forget: swallows all exceptions with a warning log.
+    """
+    from communication.services.rabbitmq_service import RabbitMQService
+    from common.constants import EXCHANGE_GEO, RK_GEO_EVENT
+
+    try:
+        RabbitMQService.publish(
+            exchange=EXCHANGE_GEO,
+            routing_key=RK_GEO_EVENT,
+            payload=event,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to publish geo event: {e}")
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    queue="geo_events",
+    acks_late=True,
+    ignore_result=True,
+    reject_on_worker_lost=True,
+)
+def consume_geo_event(self, payload):
+    """
+    Consumer task for geo events from RabbitMQ.
+    Deserializes and persists the event.
+    Retries with 30s countdown on failure.
+    """
+    try:
+        from tracking.services.geoip_service import persist_geo_event
+        persist_geo_event(payload)
+    except Exception as exc:
+        logger.error(f"Error consuming geo event: {exc}")
+        raise self.retry(exc=exc, countdown=30)
+
+
+@shared_task
+def refresh_geoip_db():
+    """
+    Download GeoLite2-City.mmdb from MaxMind and extract to GEOIP_MMDB_PATH.
+    Runs weekly via Celery Beat.
+    """
+    import os
+    import gzip
+    import shutil
+    import requests
+    from django.conf import settings
+
+    GEOIP_URL = "https://cdn.jsdelivr.net/npm/geolite2-city/GeoLite2-City.mmdb.gz"
+    mmdb_path = settings.GEOIP_MMDB_PATH
+
+    try:
+        os.makedirs(os.path.dirname(mmdb_path), exist_ok=True)
+
+        resp = requests.get(GEOIP_URL, timeout=120)
+        resp.raise_for_status()
+
+        gz_path = mmdb_path + ".gz"
+        with open(gz_path, "wb") as f:
+            f.write(resp.content)
+
+        with gzip.open(gz_path, "rb") as f_in, open(mmdb_path, "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+
+        os.remove(gz_path)
+        logger.info(f"GeoIP DB refreshed successfully at {mmdb_path}")
+    except Exception as e:
+        logger.error(f"GeoIP DB refresh failed: {e}")

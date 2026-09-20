@@ -1,7 +1,8 @@
- import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import DriverVerification from "./pages/DriverVerification";
 import Sidebar from "./components/Sidebar";
+import { PageLoader } from "./components/Loader";
 import api from "./api/client";
 import usePageView from "./hooks/usePageView";
 
@@ -20,32 +21,13 @@ const Zones = lazy(() => import("./pages/Zones"));
 
 const ADMIN_PATH = "/zxcv";
 
-function PageLoader() {
-  return (
-    <div className="flex items-center justify-center h-screen bg-slate-50">
-      <div className="animate-spin rounded-full h-12 w-12 border-4 border-brand-600 border-t-transparent" />
-    </div>
-  );
-}
-
 function AdminLayout({ onLogout }) {
   const [activeTab, setActiveTab] = useState("dashboard");
 
   useEffect(() => {
-    const page = `/zxcv/${activeTab}`;
-
-    const ua = navigator.userAgent;
-    let deviceType = "desktop";
-    if (/tablet|ipad|playbook|silk/i.test(ua)) deviceType = "tablet";
-    else if (/mobile|iphone|ipod|android.*mobile/i.test(ua)) deviceType = "mobile";
-
-    api.post("/kpi/track/", {
-      platform: "web",
-      page,
-      user_agent: ua,
-      referrer: document.referrer || "",
-      device_type: deviceType,
-    }).catch(() => {});
+    window.dispatchEvent(
+      new CustomEvent("kpitrack", { detail: { page: `/zxcv/${activeTab}` } })
+    );
   }, [activeTab]);
 
   const tabs = [
@@ -62,14 +44,14 @@ function AdminLayout({ onLogout }) {
   ];
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-screen bg-memphis-paper">
       <Sidebar
         tabs={tabs}
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onLogout={onLogout}
       />
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-auto">
         <Suspense fallback={<PageLoader />}>
           {activeTab === "dashboard" && <Dashboard />}
           {activeTab === "kpi" && <KPIPage />}
@@ -80,7 +62,7 @@ function AdminLayout({ onLogout }) {
           {activeTab === "zones" && <Zones />}
           {activeTab === "schedules" && <TripSchedules />}
           {activeTab === "drivers" && <DriverVerification />}
-        {activeTab === "users" && <Users />}
+          {activeTab === "users" && <Users />}
         </Suspense>
       </main>
     </div>
@@ -106,7 +88,6 @@ export default function App() {
           setUser(u);
         })
         .catch((err) => {
-          // Only clear tokens on 401 (unauthorized) — not on network errors or server issues
           if (err.response?.status === 401) {
             localStorage.removeItem("admin_token");
             localStorage.removeItem("admin_refresh");

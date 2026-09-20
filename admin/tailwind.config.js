@@ -4,44 +4,52 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: {
-          50: "#e8fdf2",
-          100: "#c7f9de",
-          200: "#91f1bf",
-          300: "#51e29a",
-          400: "#1ccb75",
-          500: "#05af60",
-          600: "#009849",
-          700: "#007b44",
-          800: "#00653a",
-          900: "#003923",
+        memphis: {
+          pink: "#FF71CE",
+          yellow: "#FFCE5C",
+          teal: "#86CCCA",
+          purple: "#6A7BB4",
+          ink: "#16121F",
+          paper: "#FAF6EE",
+          mint: "#7BE0AD",
+          coral: "#FF5D5D",
+          lime: "#C7F464",
         },
       },
       fontFamily: {
-        manrope: [
-          "Manrope",
-          "-apple-system",
-          "BlinkMacSystemFont",
-          "Segoe UI",
-          "Roboto",
-          "Helvetica",
-          "Arial",
-          "sans-serif",
-        ],
+        display: ["Archivo Black", "sans-serif"],
+        body: ["Inter", "system-ui", "-apple-system", "sans-serif"],
+        mono: ["JetBrains Mono", "monospace"],
+      },
+      boxShadow: {
+        // Card/Modal/Action — full offset (4px), the "sticker" look
+        memphis: "4px 4px 0 0 #16121F",
+        "memphis-hover": "6px 6px 0 0 #16121F",
+        // Table/Data rows — subtle offset (2px), reduces visual weight in scrolling lists
+        "memphis-table": "2px 2px 0 0 #16121F",
+        "memphis-table-hover": "3px 3px 0 0 #16121F",
+        // Small controls
+        "memphis-sm": "2px 2px 0 0 #16121F",
+        // Hero/Modal emphasis
+        "memphis-lg": "8px 8px 0 0 #16121F",
       },
       keyframes: {
-        "spin-slow": {
-          from: { transform: "rotate(0deg)" },
-          to: { transform: "rotate(360deg)" },
+        "memphis-spin": {
+          "0%": { transform: "rotate(0deg)" },
+          "100%": { transform: "rotate(360deg)" },
+        },
+        "memphis-fade-in": {
+          "0%": { opacity: "0", transform: "translateY(16px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "memphis-float": {
+          "0%, 100%": { transform: "translateY(0) rotate(0deg)" },
+          "50%": { transform: "translateY(-6px) rotate(3deg)" },
         },
         "hook-in": {
           "0%": { opacity: "0", transform: "translateY(60%)", filter: "blur(10px)" },
           "60%": { opacity: "1", transform: "translateY(-4%)", filter: "blur(0)" },
           "100%": { opacity: "1", transform: "translateY(0)", filter: "blur(0)" },
-        },
-        "gradient-shift": {
-          "0%, 100%": { backgroundPosition: "0% 50%" },
-          "50%": { backgroundPosition: "100% 50%" },
         },
         "lang-fade": {
           "0%": { opacity: "0", transform: "translateY(6px)", filter: "blur(4px)" },
@@ -51,24 +59,15 @@ export default {
           "0%": { transform: "translateX(-150%) skewX(-20deg)" },
           "60%, 100%": { transform: "translateX(250%) skewX(-20deg)" },
         },
-        "glow-pulse": {
-          "0%, 100%": {
-            boxShadow:
-              "0 6px 20px -6px rgba(0,152,73,0.6), 0 0 0 0 rgba(0,152,73,0.45)",
-          },
-          "50%": {
-            boxShadow:
-              "0 6px 30px -4px rgba(0,152,73,0.85), 0 0 0 10px rgba(0,152,73,0)",
-          },
-        },
       },
       animation: {
+        "memphis-spin": "memphis-spin 1.2s linear infinite",
+        "memphis-fade-in": "memphis-fade-in 420ms ease-out both",
+        "memphis-float": "memphis-float 3s ease-in-out infinite",
         "hook-in":
-          "hook-in 700ms cubic-bezier(0.34, 1.56, 0.64, 1) both, gradient-shift 6s ease-in-out infinite",
+          "hook-in 700ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
         "lang-fade": "lang-fade 300ms ease-out both",
-        "spin-slow": "spin-slow 6s linear infinite",
         "shine": "shine 2.6s ease-in-out infinite",
-        "glow-pulse": "glow-pulse 2s ease-in-out infinite",
       },
     },
   },

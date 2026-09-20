@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
+import MemphisShapes, { Triangle, CircleOutline, PlusSign } from "../components/MemphisShapes";
 
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -39,58 +40,63 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-memphis-ink flex items-center justify-center p-4 relative overflow-hidden">
+      <MemphisShapes variant="scattered" />
+
+      <Triangle className="absolute top-12 left-[15%] rotate-[-20deg] opacity-20" size={48} color="var(--memphis-pink)" />
+      <CircleOutline className="absolute bottom-20 right-[20%] opacity-15" size={40} color="var(--memphis-teal)" />
+      <PlusSign className="absolute top-1/3 right-[10%] rotate-[30deg] opacity-15" size={32} color="var(--memphis-yellow)" />
+      <Triangle className="absolute bottom-1/4 left-[8%] rotate-[45deg] opacity-10" size={36} color="var(--memphis-mint)" />
+
+      <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-brand-600 rounded-2xl flex items-center justify-center font-black text-2xl text-white mx-auto mb-4">
+          <div className="w-16 h-16 bg-memphis-pink border-2 border-memphis-ink rounded-xl flex items-center justify-center font-black text-2xl text-memphis-ink mx-auto mb-4 shadow-memphis">
             V
           </div>
-          <h1 className="text-3xl font-black text-white">OMV Admin</h1>
-          <p className="text-slate-400 mt-2">Sign in to manage your platform</p>
+          <h1 className="text-3xl font-black text-white" style={{ fontFamily: "Archivo Black, sans-serif", textShadow: "3px 3px 0 var(--memphis-pink)" }}>
+            OMV Admin
+          </h1>
+          <p className="text-white/50 mt-2 font-medium">Sign in to manage your platform</p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="bg-white rounded-2xl p-8 shadow-2xl space-y-5"
+          className="bg-memphis-paper border-2 border-memphis-ink rounded-xl p-8 space-y-5 shadow-memphis-lg"
         >
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm font-medium px-4 py-3 rounded-xl">
+            <div className="bg-memphis-coral/10 border-2 border-memphis-coral text-memphis-coral text-sm font-semibold px-4 py-3 rounded-lg">
               {error}
             </div>
           )}
 
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Email
-            </label>
+            <label className="memphis-label">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="admin@omv.com"
-              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 outline-none transition"
+              className="memphis-input"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Password
-            </label>
+            <label className="memphis-label">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="Enter your password"
-              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 outline-none transition"
+              className="memphis-input"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-brand-600 text-white py-4 rounded-xl font-bold text-sm hover:bg-brand-700 transition disabled:opacity-50 shadow-lg shadow-brand-600/25"
+            className="w-full memphis-btn-primary py-4 text-sm disabled:opacity-50"
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
@@ -98,7 +104,7 @@ export default function Login({ onLogin }) {
 
         <button
           onClick={() => navigate("/splash-preview")}
-          className="mt-4 w-full bg-white/10 text-white py-3 rounded-xl font-bold text-sm hover:bg-white/20 transition border border-white/10"
+          className="mt-4 w-full memphis-btn-secondary py-3 text-sm text-white"
         >
           View Splash Screen
         </button>

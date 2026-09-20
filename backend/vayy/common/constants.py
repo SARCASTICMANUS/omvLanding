@@ -235,6 +235,15 @@ RK_MATCHING_RIDE_REQUEST = "matching.ride_request"
 RK_MATCHING_RIDE_LIFECYCLE = "matching.ride_lifecycle"
 RK_MATCHING_ANY = "matching.*"
 
+# --- Exchanges: Geo ---
+EXCHANGE_GEO = "geo"
+
+# --- Queues: Geo ---
+QUEUE_GEO_EVENTS = "geo_events"
+
+# --- Routing Keys: Geo ---
+RK_GEO_EVENT = "geo.event"
+
 # --- Matching (app-level keys) ---
 
 RIDE_REQUEST_KEY = "matching.ride_request"

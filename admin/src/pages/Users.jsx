@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Users as UsersIcon, UserCheck, Search, Mail, ShieldCheck, Eye, Phone, MapPin, Wallet, Truck, Star, Settings, Plus, Edit3, Trash2, Save, X, FileText, ExternalLink } from "lucide-react";
 import api from "../api/client";
+import Loader from "../components/Loader";
+import EmptyState from "../components/EmptyState";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 const MEDIA_BASE = API_BASE.replace(/\/api\/?$/, "") || "";
@@ -8,11 +10,11 @@ const MEDIA_BASE = API_BASE.replace(/\/api\/?$/, "") || "";
 function InfoRow({ label, value, icon }) {
   return (
     <div className="space-y-1">
-      <span className="text-xs font-medium text-slate-500 flex items-center gap-1">
+      <span className="memphis-label flex items-center gap-1">
         {icon && <span>{icon}</span>}
         {label}
       </span>
-      <span className="text-sm font-semibold text-slate-800">{value}</span>
+      <span className="text-sm font-semibold text-memphis-ink">{value}</span>
     </div>
   );
 }
@@ -32,8 +34,6 @@ export default function Users() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [userDetails, setUserDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
-
-  // CRUD state
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", password: "", role: "passenger", is_staff: false });
@@ -61,12 +61,9 @@ export default function Users() {
 
   const users = tab === "passengers" ? passengers : drivers;
   const filtered = users.filter((u) =>
-    `${u.first_name} ${u.last_name} ${u.email}`
-      .toLowerCase()
-      .includes(search.toLowerCase())
+    `${u.first_name} ${u.last_name} ${u.email}`.toLowerCase().includes(search.toLowerCase())
   );
 
-  // CRUD handlers
   const openCreate = () => {
     setEditing(null);
     setForm({ first_name: "", last_name: "", email: "", password: "", role: tab === "drivers" ? "bikedriver" : "passenger", is_staff: false });
@@ -92,7 +89,6 @@ export default function Users() {
     try {
       const payload = { ...form };
       if (editing && !payload.password) delete payload.password;
-
       if (editing) {
         await api.patch(`/accounts/users/${editing.id}/`, payload);
       } else {
@@ -117,13 +113,11 @@ export default function Users() {
     }
   };
 
-  // Detail modal
   const fetchUserDetails = async (userId) => {
     setDetailsLoading(true);
     try {
       const user = [...passengers, ...drivers].find((u) => u.id === userId);
       if (!user) return;
-
       let profileData = {};
       if (user.role === "passenger") {
         const res = await api.get(`/accounts/me/passenger-profile/?user_id=${userId}`);
@@ -132,12 +126,10 @@ export default function Users() {
         const res = await api.get(`/accounts/me/driver-profile/?user_id=${userId}`);
         profileData = res.data?.data || res.data || {};
       }
-
       try {
         const walletRes = await api.get("/accounts/wallet/");
         profileData.wallet = walletRes.data?.data || walletRes.data || {};
       } catch {}
-
       setUserDetails({ ...user, ...profileData });
     } catch (err) {
       console.error("Failed to fetch user details:", err);
@@ -157,52 +149,47 @@ export default function Users() {
   };
 
   return (
-    <div className="p-8 h-full overflow-y-auto">
+    <div className="p-6 md:p-8 h-full overflow-y-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-black text-slate-800">Users</h1>
-          <p className="text-slate-500 mt-1 font-medium">
-            {tab === "passengers"
-              ? `${passengers.length} passenger(s)`
-              : `${drivers.length} driver(s)`}
+          <h1 className="memphis-title">Users</h1>
+          <p className="text-memphis-purple mt-2 font-medium">
+            {tab === "passengers" ? `${passengers.length} passenger(s)` : `${drivers.length} driver(s)`}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative">
-            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-memphis-purple" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search..."
-              className="w-64 pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none"
+              className="memphis-input pl-10 w-64"
             />
           </div>
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-2 bg-brand-600 text-white px-5 py-3 rounded-xl font-semibold hover:bg-brand-700 transition shadow-lg shadow-brand-600/25"
-          >
+          <button onClick={openCreate} className="memphis-btn-primary flex items-center gap-2">
             <Plus size={18} /> Add User
           </button>
         </div>
       </div>
 
-      <div className="flex gap-2 mb-6 bg-slate-100 p-1.5 rounded-xl w-fit">
+      <div className="flex gap-2 mb-6 bg-memphis-ink/5 p-1.5 border-2 border-memphis-ink rounded-lg w-fit">
         <button
           onClick={() => setTab("passengers")}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition ${
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
             tab === "passengers"
-              ? "bg-white text-slate-800 shadow-sm"
-              : "text-slate-500 hover:text-slate-700"
+              ? "bg-memphis-pink text-memphis-ink shadow-memphis-sm"
+              : "text-memphis-purple hover:text-memphis-ink"
           }`}
         >
           <UsersIcon size={16} /> Passengers
         </button>
         <button
           onClick={() => setTab("drivers")}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition ${
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
             tab === "drivers"
-              ? "bg-white text-slate-800 shadow-sm"
-              : "text-slate-500 hover:text-slate-700"
+              ? "bg-memphis-teal text-memphis-ink shadow-memphis-sm"
+              : "text-memphis-purple hover:text-memphis-ink"
           }`}
         >
           <UserCheck size={16} /> Drivers
@@ -210,74 +197,60 @@ export default function Users() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="animate-spin rounded-full h-10 w-10 border-4 border-brand-600 border-t-transparent" />
-        </div>
+        <Loader />
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="memphis-card overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">User</th>
-                <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Role</th>
-                <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Verified</th>
-                <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Actions</th>
+              <tr className="bg-memphis-ink/5 border-b-2 border-memphis-ink">
+                <th className="px-6 py-4 text-left memphis-label">User</th>
+                <th className="px-6 py-4 text-left memphis-label">Email</th>
+                <th className="px-6 py-4 text-left memphis-label">Role</th>
+                <th className="px-6 py-4 text-left memphis-label">Verified</th>
+                <th className="px-6 py-4 text-left memphis-label">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody>
               {filtered.map((u) => (
-                <tr key={u.id} className="hover:bg-slate-50/50 transition">
+                <tr key={u.id} className="memphis-table-row">
                   <td className="px-6 py-4 cursor-pointer" onClick={() => openUserDetails(u.id)}>
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 bg-brand-50 text-brand-600 rounded-lg flex items-center justify-center text-sm font-bold uppercase">
+                      <div className="w-11 h-11 bg-memphis-pink/20 text-memphis-ink rounded-lg border-2 border-memphis-ink flex items-center justify-center text-sm font-bold uppercase">
                         {(u.first_name?.[0] || u.email[0])}
                       </div>
-                      <span className="font-semibold text-slate-800">
+                      <span className="font-semibold text-memphis-ink">
                         {u.first_name} {u.last_name || ""}
                       </span>
                     </div>
                   </td>
                   <td className="px-6 py-4 cursor-pointer" onClick={() => openUserDetails(u.id)}>
-                    <span className="text-sm text-slate-500 flex items-center gap-2">
+                    <span className="text-sm text-memphis-purple flex items-center gap-2">
                       <Mail size={14} /> {u.email}
                     </span>
                   </td>
                   <td className="px-6 py-4 cursor-pointer" onClick={() => openUserDetails(u.id)}>
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 uppercase">
+                    <span className="memphis-badge bg-memphis-ink/5 text-memphis-ink border-memphis-ink/30 uppercase">
                       {u.role}
                     </span>
                   </td>
                   <td className="px-6 py-4 cursor-pointer" onClick={() => openUserDetails(u.id)}>
                     {u.is_verified ? (
-                      <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                      <span className="text-xs font-bold text-memphis-mint flex items-center gap-1">
                         <ShieldCheck size={14} /> Verified
                       </span>
                     ) : (
-                      <span className="text-xs font-bold text-slate-400">Pending</span>
+                      <span className="text-xs font-bold text-memphis-purple/50">Pending</span>
                     )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); openUserDetails(u.id); }}
-                        className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-brand-600 transition"
-                        title="View"
-                      >
+                      <button onClick={(e) => { e.stopPropagation(); openUserDetails(u.id); }} className="p-2 hover:bg-memphis-ink/5 rounded-lg text-memphis-purple hover:text-memphis-pink transition-all duration-200" title="View">
                         <Eye size={15} />
                       </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); openEdit(u); }}
-                        className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-blue-600 transition"
-                        title="Edit"
-                      >
+                      <button onClick={(e) => { e.stopPropagation(); openEdit(u); }} className="p-2 hover:bg-memphis-ink/5 rounded-lg text-memphis-purple hover:text-memphis-teal transition-all duration-200" title="Edit">
                         <Edit3 size={15} />
                       </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(u.id); }}
-                        className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition"
-                        title="Delete"
-                      >
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete(u.id); }} className="p-2 hover:bg-memphis-coral/10 rounded-lg text-memphis-purple hover:text-memphis-coral transition-all duration-200" title="Delete">
                         <Trash2 size={15} />
                       </button>
                     </div>
@@ -287,94 +260,58 @@ export default function Users() {
             </tbody>
           </table>
           {filtered.length === 0 && (
-            <div className="text-center py-16 text-slate-400 font-medium">
-              No {tab} found.
-            </div>
+            <EmptyState
+              icon={UsersIcon}
+              title={`No ${tab} found`}
+              description="No users match your search criteria."
+            />
           )}
         </div>
       )}
 
-      {/* Create / Edit Modal */}
       {modal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b border-slate-100">
-              <h2 className="text-xl font-bold">{editing ? "Edit User" : "New User"}</h2>
-              <button onClick={() => setModal(false)} className="text-slate-400 hover:text-slate-600">
+        <div className="fixed inset-0 bg-memphis-ink/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-memphis-paper border-2 border-memphis-ink rounded-xl w-full max-w-md shadow-memphis-lg">
+            <div className="flex items-center justify-between p-6 border-b-2 border-memphis-ink">
+              <h2 className="text-xl font-bold text-memphis-ink">{editing ? "Edit User" : "New User"}</h2>
+              <button onClick={() => setModal(false)} className="text-memphis-purple hover:text-memphis-ink transition-all duration-200">
                 <X size={20} />
               </button>
             </div>
             <form onSubmit={handleSave} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">First Name</label>
-                  <input
-                    value={form.first_name}
-                    onChange={(e) => setForm({ ...form, first_name: e.target.value })}
-                    required
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none"
-                  />
+                  <label className="memphis-label">First Name</label>
+                  <input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required className="memphis-input" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Last Name</label>
-                  <input
-                    value={form.last_name}
-                    onChange={(e) => setForm({ ...form, last_name: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none"
-                  />
+                  <label className="memphis-label">Last Name</label>
+                  <input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} className="memphis-input" />
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Email</label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  required
-                  disabled={!!editing}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none disabled:opacity-50"
-                />
+                <label className="memphis-label">Email</label>
+                <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required disabled={!!editing} className="memphis-input disabled:opacity-50" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Password {editing && <span className="text-slate-400 normal-case">(leave blank to keep current)</span>}
+                <label className="memphis-label">
+                  Password {editing && <span className="text-memphis-purple/50 normal-case">(leave blank to keep current)</span>}
                 </label>
-                <input
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  required={!editing}
-                  minLength={8}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none"
-                />
+                <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={!editing} minLength={8} className="memphis-input" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Role</label>
-                <select
-                  value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none"
-                >
+                <label className="memphis-label">Role</label>
+                <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="memphis-input">
                   {ROLE_OPTIONS.map((r) => (
                     <option key={r.value} value={r.value}>{r.label}</option>
                   ))}
                 </select>
               </div>
               <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="is_staff"
-                  checked={form.is_staff}
-                  onChange={(e) => setForm({ ...form, is_staff: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-600"
-                />
-                <label htmlFor="is_staff" className="text-sm font-medium text-slate-700">Admin access (staff)</label>
+                <input type="checkbox" id="is_staff" checked={form.is_staff} onChange={(e) => setForm({ ...form, is_staff: e.target.checked })} className="w-4 h-4 rounded border-2 border-memphis-ink text-memphis-pink focus:ring-memphis-pink" />
+                <label htmlFor="is_staff" className="text-sm font-semibold text-memphis-ink cursor-pointer">Admin access (staff)</label>
               </div>
-              <button
-                type="submit"
-                disabled={saving}
-                className="w-full bg-brand-600 text-white py-4 rounded-xl font-bold hover:bg-brand-700 transition shadow-lg shadow-brand-600/25 flex items-center justify-center gap-2 disabled:opacity-50"
-              >
+              <button type="submit" disabled={saving} className="w-full memphis-btn-primary py-4 flex items-center justify-center gap-2 disabled:opacity-50">
                 <Save size={16} /> {saving ? "Saving..." : editing ? "Update" : "Create"}
               </button>
             </form>
@@ -382,49 +319,46 @@ export default function Users() {
         </div>
       )}
 
-      {/* Detail Modal */}
       {selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-memphis-ink/60 backdrop-blur-sm p-4">
+          <div className="bg-memphis-paper border-2 border-memphis-ink rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-memphis-lg">
             {detailsLoading ? (
               <div className="p-8 text-center">
-                <div className="animate-spin rounded-full h-10 w-10 border-4 border-brand-600 border-t-transparent mx-auto" />
-                <p className="mt-4 text-slate-500">Loading user details...</p>
+                <Loader />
+                <p className="mt-4 text-memphis-purple">Loading user details...</p>
               </div>
             ) : userDetails && (
               <>
-                <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                  <h2 className="text-2xl font-bold text-slate-800">User Details</h2>
-                  <button onClick={closeUserDetails} className="text-slate-400 hover:text-slate-600">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                <div className="p-6 border-b-2 border-memphis-ink flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-memphis-ink" style={{ fontFamily: "Archivo Black, sans-serif" }}>User Details</h2>
+                  <button onClick={closeUserDetails} className="text-memphis-purple hover:text-memphis-ink transition-all duration-200">
+                    <X size={24} />
                   </button>
                 </div>
-
                 <div className="p-6 space-y-6">
-                  <div className="bg-slate-50 rounded-xl p-4">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <div className="bg-memphis-ink/5 rounded-xl p-4 border-2 border-memphis-ink/10">
+                    <h3 className="text-lg font-bold text-memphis-ink mb-4 flex items-center gap-2">
                       <UsersIcon size={20} /> Basic Information
                     </h3>
                     <div className="grid grid-cols-2 gap-4">
                       <InfoRow label="Name" value={`${userDetails.first_name} ${userDetails.last_name || ""}`} />
                       <InfoRow label="Email" value={userDetails.email} />
                       <InfoRow label="Role" value={
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${
-                          userDetails.role === "passenger" ? "bg-blue-100 text-blue-700" :
-                          userDetails.role === "bikedriver" ? "bg-green-100 text-green-700" :
-                          userDetails.role === "autodriver" ? "bg-purple-100 text-purple-700" :
-                          "bg-slate-100 text-slate-700"
+                        <span className={`memphis-badge ${
+                          userDetails.role === "passenger" ? "bg-memphis-teal/20 text-memphis-ink border-memphis-teal" :
+                          userDetails.role === "bikedriver" ? "bg-memphis-mint/20 text-memphis-ink border-memphis-mint" :
+                          "bg-memphis-purple/20 text-memphis-ink border-memphis-purple"
                         }`}>
                           {userDetails.role}
                         </span>
                       } />
                       <InfoRow label="Verified" value={
                         userDetails.is_verified ? (
-                          <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                          <span className="text-memphis-mint font-semibold flex items-center gap-1">
                             <ShieldCheck size={14} /> Yes
                           </span>
                         ) : (
-                          <span className="text-slate-400">No</span>
+                          <span className="text-memphis-purple/50">No</span>
                         )
                       } />
                       {userDetails.city_name && <InfoRow label="City" value={userDetails.city_name} />}
@@ -433,8 +367,8 @@ export default function Users() {
                   </div>
 
                   {userDetails.role === "passenger" && userDetails.phone_number !== undefined && (
-                    <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-                      <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <div className="bg-memphis-teal/10 rounded-xl p-4 border-2 border-memphis-teal/30">
+                      <h3 className="text-lg font-bold text-memphis-ink mb-4 flex items-center gap-2">
                         <UsersIcon size={20} /> Passenger Profile
                       </h3>
                       <div className="grid grid-cols-2 gap-4">
@@ -449,8 +383,8 @@ export default function Users() {
                   )}
 
                   {(userDetails.role === "bikedriver" || userDetails.role === "autodriver") && userDetails.phone_number !== undefined && (
-                    <div className="bg-green-50 rounded-xl p-4 border border-green-100">
-                      <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <div className="bg-memphis-mint/10 rounded-xl p-4 border-2 border-memphis-mint/30">
+                      <h3 className="text-lg font-bold text-memphis-ink mb-4 flex items-center gap-2">
                         <UserCheck size={20} /> Driver Profile
                       </h3>
                       <div className="grid grid-cols-2 gap-4">
@@ -461,11 +395,9 @@ export default function Users() {
                         <InfoRow label="Vehicle Type" value={userDetails.vehicle_type || "—"} />
                         <InfoRow label="KYC Verified" value={
                           userDetails.is_verified ? (
-                            <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                              <ShieldCheck size={14} /> Verified
-                            </span>
+                            <span className="text-memphis-mint font-semibold flex items-center gap-1"><ShieldCheck size={14} /> Verified</span>
                           ) : (
-                            <span className="text-amber-600 font-semibold">Pending</span>
+                            <span className="text-memphis-yellow font-semibold">Pending</span>
                           )
                         } />
                         <InfoRow label="Rating" value={userDetails.rating !== undefined ? `${userDetails.rating} ⭐` : "—"} icon={<Star size={16} />} />
@@ -476,52 +408,42 @@ export default function Users() {
                   )}
 
                   {userDetails.documents?.length > 0 && (
-                    <div className="bg-slate-50 rounded-xl p-4">
-                      <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <div className="bg-memphis-ink/5 rounded-xl p-4 border-2 border-memphis-ink/10">
+                      <h3 className="text-lg font-bold text-memphis-ink mb-4 flex items-center gap-2">
                         <ShieldCheck size={20} /> KYC Documents
                       </h3>
                       <div className="space-y-3">
                         {userDetails.documents.map((doc) => (
-                          <div key={doc.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                          <div key={doc.id} className="bg-memphis-paper rounded-xl border-2 border-memphis-ink/20 overflow-hidden">
                             <div className="flex items-center justify-between px-4 py-3">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
-                                  <FileText size={16} className="text-slate-400" />
+                                <div className="w-8 h-8 bg-memphis-ink/5 rounded-lg flex items-center justify-center">
+                                  <FileText size={16} className="text-memphis-purple" />
                                 </div>
                                 <div>
-                                  <span className="font-semibold text-slate-800">{doc.document_type}</span>
-                                  <p className="text-xs text-slate-500">{doc.file ? "Uploaded" : "Not uploaded"}</p>
+                                  <span className="font-semibold text-memphis-ink">{doc.document_type}</span>
+                                  <p className="text-xs text-memphis-purple">{doc.file ? "Uploaded" : "Not uploaded"}</p>
                                 </div>
                               </div>
-                              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                                doc.status === "verified" ? "bg-emerald-100 text-emerald-700" :
-                                doc.status === "rejected" ? "bg-red-100 text-red-700" :
-                                "bg-amber-100 text-amber-700"
+                              <span className={`memphis-badge ${
+                                doc.status === "verified" ? "bg-memphis-mint/20 text-memphis-ink border-memphis-mint" :
+                                doc.status === "rejected" ? "bg-memphis-coral/20 text-memphis-ink border-memphis-coral" :
+                                "bg-memphis-yellow/20 text-memphis-ink border-memphis-yellow"
                               }`}>
                                 {doc.status}
                               </span>
                             </div>
                             {doc.file && (
                               <div className="px-4 pb-3">
-                                <a
-                                  href={doc.file.startsWith("http") ? doc.file : `${MEDIA_BASE}${doc.file}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="block"
-                                >
+                                <a href={doc.file.startsWith("http") ? doc.file : `${MEDIA_BASE}${doc.file}`} target="_blank" rel="noopener noreferrer" className="block">
                                   <img
                                     src={doc.file.startsWith("http") ? doc.file : `${MEDIA_BASE}${doc.file}`}
                                     alt={doc.document_type}
-                                    className="max-h-40 rounded-lg border border-slate-100 object-contain hover:shadow-md transition cursor-pointer"
-                                    onError={(e) => {
-                                      e.target.style.display = "none";
-                                      e.target.nextSibling.style.display = "flex";
-                                    }}
+                                    className="max-h-40 rounded-lg border-2 border-memphis-ink/20 object-contain hover:shadow-memphis-sm transition-all duration-200 cursor-pointer"
+                                    onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
                                   />
-                                  <div className="hidden items-center gap-2 mt-1 text-xs text-slate-500">
-                                    <FileText size={14} />
-                                    <span>{doc.file.split("/").pop()}</span>
-                                    <ExternalLink size={10} />
+                                  <div className="hidden items-center gap-2 mt-1 text-xs text-memphis-purple">
+                                    <FileText size={14} /><span>{doc.file.split("/").pop()}</span><ExternalLink size={10} />
                                   </div>
                                 </a>
                               </div>

@@ -41,7 +41,7 @@ RUN pip install --no-cache-dir --timeout 300 --retries 5 -i https://pypi.org/sim
 
 COPY . .
 
-RUN mkdir -p /app/staticfiles /app/media
+RUN mkdir -p /app/staticfiles /app/media /app/geoip
 
 # Non-root runtime user (privileges dropped via gosu in entrypoint)
 RUN useradd --create-home --uid 1000 vayy \

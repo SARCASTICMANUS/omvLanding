@@ -78,3 +78,41 @@ class HybridLog(models.Model):
 
     def __str__(self):
         return f"{self.vehicle} @ {self.timestamp}"
+
+
+class GeoEvent(models.Model):
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    ip_address = models.GenericIPAddressField()
+
+    city = models.CharField(max_length=255, blank=True, default="")
+    region = models.CharField(max_length=255, blank=True, default="")
+    country = models.CharField(max_length=255, blank=True, default="")
+    country_code = models.CharField(max_length=2, blank=True, default="")
+
+    location = gis_models.PointField(
+        geography=True,
+        null=True,
+        blank=True,
+    )
+
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    timezone = models.CharField(max_length=64, blank=True, default="")
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["ip_address"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self):
+        return f"GeoEvent {self.ip_address} ({self.city}, {self.country_code})"

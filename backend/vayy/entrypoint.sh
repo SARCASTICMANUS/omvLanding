@@ -20,8 +20,9 @@ echo "PostgreSQL is ready"
 if command -v psql >/dev/null 2>&1; then
   PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS postgis;" || true
 fi
-# python manage.py migrate --noinput
+python manage.py migrate --noinput
 python manage.py collectstatic --noinput
+python manage.py download_geoip_db || true
 
 # Create admin superuser from env (idempotent, non-interactive)
 if [ -n "$DJANGO_SUPERUSER_USERNAME" ]; then
@@ -66,7 +67,7 @@ PYEOF
 fi
 
 echo "Starting Daphne Server..."
-exec gosu vayy daphne \
+exec daphne \
     -b 0.0.0.0 \
     -p 8000 \
     vayy.asgi:application

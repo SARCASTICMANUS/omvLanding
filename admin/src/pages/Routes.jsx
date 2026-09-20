@@ -4,6 +4,9 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import * as XLSX from "xlsx";
 import api from "../api/client";
 import LocationSearch from "../components/LocationSearch";
+import EmptyState from "../components/EmptyState";
+import Loader from "../components/Loader";
+import { ROUTE_COLORS } from "../colors";
 import {
   Plus, Save, Trash2, XCircle,
   ArrowUp, ArrowDown, Bike, Compass, Box, Edit3,
@@ -313,7 +316,7 @@ export default function Routes() {
         const coords = s.location?.coordinates || [];
         if (coords.length < 2) return;
         const el = document.createElement("div");
-        el.className = "flex items-center justify-center bg-brand-600 text-white w-7 h-7 rounded-full border-2 border-white shadow-md text-[11px] font-bold";
+        el.className = "flex items-center justify-center bg-memphis-pink text-memphis-ink w-7 h-7 rounded-full border-2 border-memphis-paper shadow-memphis text-[11px] font-bold";
         el.innerHTML = i + 1;
         const mk = new maplibregl.Marker({ element: el, draggable: true })
           .setLngLat(coords)
@@ -334,7 +337,7 @@ export default function Routes() {
 
     if (start) {
       const el = document.createElement("div");
-      el.className = "w-5 h-5 bg-emerald-500 rounded-full border-2 border-white shadow-lg cursor-grab";
+      el.className = "w-5 h-5 bg-memphis-mint rounded-full border-2 border-memphis-paper shadow-memphis-lg cursor-grab";
       const mk = new maplibregl.Marker({ element: el, draggable: true })
         .setLngLat([start.lon, start.lat])
         .setPopup(new maplibregl.Popup({ offset: 15 }).setText(startName || "Start"))
@@ -352,7 +355,7 @@ export default function Routes() {
 
     if (end) {
       const el = document.createElement("div");
-      el.className = "w-5 h-5 bg-red-500 rounded-full border-2 border-white shadow-lg cursor-grab";
+      el.className = "w-5 h-5 bg-memphis-coral rounded-full border-2 border-memphis-paper shadow-memphis-lg cursor-grab";
       const mk = new maplibregl.Marker({ element: el, draggable: true })
         .setLngLat([end.lon, end.lat])
         .setPopup(new maplibregl.Popup({ offset: 15 }).setText(endName || "End"))
@@ -370,7 +373,7 @@ export default function Routes() {
 
     stops.forEach((s, i) => {
       const el = document.createElement("div");
-      el.className = "flex items-center justify-center bg-indigo-600 text-white w-6 h-6 rounded-full border-2 border-white shadow-md text-[10px] font-bold cursor-grab";
+      el.className = "flex items-center justify-center bg-memphis-purple text-white w-6 h-6 rounded-full border-2 border-memphis-paper shadow-memphis text-[10px] font-bold cursor-grab";
       el.innerHTML = i + 1;
       const mk = new maplibregl.Marker({ element: el, draggable: true })
         .setLngLat([s.lon, s.lat])
@@ -625,7 +628,7 @@ export default function Routes() {
 
     importPreviewStops.forEach((s, i) => {
       const el = document.createElement("div");
-      el.className = "flex items-center justify-center bg-brand-600 text-white w-7 h-7 rounded-full border-2 border-white shadow-md text-[11px] font-bold";
+      el.className = "flex items-center justify-center bg-memphis-pink text-memphis-ink w-7 h-7 rounded-full border-2 border-memphis-paper shadow-memphis text-[11px] font-bold";
       el.innerHTML = i + 1;
       const mk = new maplibregl.Marker({ element: el })
         .setLngLat([s.lon, s.lat])
@@ -685,34 +688,34 @@ export default function Routes() {
 
   return (
     <div className="flex h-full">
-      <div className="w-[420px] bg-white border-r border-slate-200 flex flex-col shrink-0">
-        <div className="p-5 bg-slate-900 text-white space-y-3">
-          <h2 className="font-bold text-lg flex items-center gap-2">
-            <RouteIcon className="text-brand-400" size={20} /> Route Manager
+      <div className="w-[420px] bg-memphis-paper border-r-2 border-memphis-ink flex flex-col shrink-0">
+        <div className="p-5 bg-memphis-ink text-memphis-paper space-y-3">
+          <h2 className="font-bold text-lg flex items-center gap-2" style={{ fontFamily: '"Archivo Black, sans-serif"' }}>
+            <RouteIcon className="text-memphis-pink" size={20} /> Route Manager
           </h2>
           <select
             value={selectedCity}
             onChange={(e) => { setSelectedCity(e.target.value); resetForm(); zoomToCity(e.target.value); }}
-            className="w-full bg-slate-800 text-white text-sm rounded-lg p-3 outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full bg-memphis-ink text-memphis-paper text-sm rounded-xl p-3 border-2 border-memphis-purple outline-none focus:ring-2 focus:ring-memphis-pink memphis-input"
           >
             <option value="">Select City</option>
             {cities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
 
-        <div className="px-5 py-3 border-b border-slate-100">
-          <div className="flex bg-slate-100 p-1 rounded-xl">
+        <div className="px-5 py-3 border-b-2 border-memphis-ink/10">
+          <div className="bg-memphis-ink/5 p-1.5 border-2 border-memphis-ink rounded-lg flex">
             <button onClick={() => { setTab("library"); setSelectedRoute(null); resetImport(); }}
               className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
-                tab === "library" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                tab === "library" ? "bg-memphis-pink text-memphis-ink shadow-memphis" : "text-memphis-purple hover:text-memphis-ink"
               }`}>Routes</button>
             <button onClick={() => { setTab("create"); setSelectedRoute(null); resetImport(); }}
               className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
-                tab === "create" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                tab === "create" ? "bg-memphis-yellow text-memphis-ink shadow-memphis" : "text-memphis-purple hover:text-memphis-ink"
               }`}>Create</button>
             <button onClick={() => { setTab("import"); setSelectedRoute(null); resetForm(); }}
               className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
-                tab === "import" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                tab === "import" ? "bg-memphis-teal text-memphis-ink shadow-memphis" : "text-memphis-purple hover:text-memphis-ink"
               }`}>Import</button>
           </div>
         </div>
@@ -720,60 +723,68 @@ export default function Routes() {
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {tab === "library" && (
             <div className="space-y-3">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{routes.length} routes</p>
+              <p className="text-[11px] font-bold text-memphis-purple/50 uppercase tracking-wider">{routes.length} routes</p>
               {routes.map((r) => (
-                <div key={r.id} className={`group rounded-xl border overflow-hidden transition ${
-                  selectedRoute?.id === r.id ? "border-brand-300 shadow-lg" : "border-slate-100 hover:shadow-md"
+                <div key={r.id} className={`group memphis-card overflow-hidden transition ${
+                  selectedRoute?.id === r.id ? "border-memphis-pink border-l-[6px] shadow-memphis-lg" : "hover:shadow-memphis"
                 }`}>
                   <div className="flex items-stretch">
                     <button onClick={() => { fetchRouteDetail(r); setTab("library"); }}
                       className="flex-1 p-4 text-left flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+                      <div className="w-10 h-10 rounded-xl bg-memphis-teal/20 text-memphis-teal flex items-center justify-center shrink-0">
                         <Bike size={18} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h4 className="font-bold text-sm text-slate-900 truncate">{r.name}</h4>
-                        <p className="text-[11px] text-slate-400 font-medium">{r.start_name} → {r.end_name}</p>
+                        <h4 className="font-bold text-sm text-memphis-ink truncate">{r.name}</h4>
+                        <p className="text-[11px] text-memphis-purple/50 font-medium">{r.start_name} → {r.end_name}</p>
                         <div className="flex gap-2 mt-2">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-memphis-ink/5 text-memphis-purple">
                             {r.total_distance_meters ? `${(r.total_distance_meters / 1000).toFixed(1)} km` : "N/A"}
                           </span>
                           {r.stops_count > 0 && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-50 text-brand-600">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-memphis-pink/15 text-memphis-pink">
                               {r.stops_count} stops
                             </span>
                           )}
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            r.is_public ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+                            r.is_public ? "bg-memphis-mint/20 text-memphis-mint" : "bg-memphis-ink/5 text-memphis-purple/40"
                           }`}>{r.is_public ? "Public" : "Private"}</span>
                         </div>
                       </div>
                     </button>
                     <button onClick={() => handleDeleteRoute(r)}
-                      className="px-3 flex items-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition opacity-0 group-hover:opacity-100">
+                      className="px-3 flex items-center text-memphis-purple/30 hover:text-memphis-coral hover:bg-memphis-coral/10 transition opacity-0 group-hover:opacity-100">
                       <Trash2 size={15} />
                     </button>
                   </div>
                 </div>
               ))}
-              {routes.length === 0 && <p className="text-center text-slate-400 py-8 text-sm">No routes yet</p>}
+              {routes.length === 0 && (
+                <EmptyState
+                  icon={RouteIcon}
+                  title="No routes yet"
+                  description="Create your first route or import from a spreadsheet"
+                />
+              )}
             </div>
           )}
 
           {tab === "create" && !selectedRoute && (
             <div className="space-y-5">
+              {loading && <Loader size="sm" />}
+
               {previews.length > 1 && (
                 <div className="space-y-2">
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  <p className="text-[11px] font-bold text-memphis-purple/50 uppercase tracking-wider">
                     Path Alternatives ({previews.length})
                   </p>
                   <div className="grid gap-2">
                     {previews.map((p, i) => (
                       <button key={i} onClick={() => setSelectedPreview(i)}
-                        className={`p-3 rounded-xl border text-left transition ${
-                          i === selectedPreview ? "border-brand-500 bg-brand-50" : "border-slate-200"
+                        className={`p-3 rounded-xl border-2 text-left transition ${
+                          i === selectedPreview ? "border-memphis-pink bg-memphis-pink/10" : "border-memphis-ink/10 hover:border-memphis-purple/30"
                         }`}>
-                        <p className="text-xs font-bold text-slate-700">
+                        <p className="text-xs font-bold text-memphis-ink">
                           Option {i + 1}: {(p.distance / 1000).toFixed(1)} km, {Math.round(p.duration / 60)} min
                         </p>
                       </button>
@@ -783,15 +794,15 @@ export default function Routes() {
               )}
 
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Route Name</label>
+                <label className="memphis-label">Route Name</label>
                 <input value={routeName} onChange={(e) => setRouteName(e.target.value)}
                   placeholder="e.g. Downtown Express"
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none" />
+                  className="memphis-input w-full" />
               </div>
 
-              <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+              <div className="bg-memphis-ink/5 rounded-xl p-4 space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-1 h-12 bg-emerald-300 rounded-full shrink-0" />
+                  <div className="w-1 h-12 bg-memphis-mint rounded-full shrink-0" />
                   <LocationSearch
                     placeholder="Search origin location..."
                     initialValue={startName}
@@ -809,7 +820,7 @@ export default function Routes() {
                   />
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-1 h-12 bg-red-300 rounded-full shrink-0" />
+                  <div className="w-1 h-12 bg-memphis-coral rounded-full shrink-0" />
                   <LocationSearch
                     placeholder="Search destination location..."
                     initialValue={endName}
@@ -830,32 +841,32 @@ export default function Routes() {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  <p className="text-[11px] font-bold text-memphis-purple/50 uppercase tracking-wider">
                     Stops ({stops.length + endStopCount})
                   </p>
                   <button onClick={() => setIsAddingStop(!isAddingStop)}
                     disabled={!start || !end}
                     className={`flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-full transition ${
-                      !start || !end ? "bg-slate-100 text-slate-400 cursor-not-allowed" :
-                      isAddingStop ? "bg-red-100 text-red-600" : "bg-indigo-100 text-indigo-600"
+                      !start || !end ? "bg-memphis-ink/5 text-memphis-purple/30 cursor-not-allowed" :
+                      isAddingStop ? "bg-memphis-coral/15 text-memphis-coral" : "bg-memphis-purple/15 text-memphis-purple"
                     }`}>
                     {isAddingStop ? <XCircle size={14} /> : <Plus size={14} />}
                     {isAddingStop ? "Cancel" : "Add Stop"}
                   </button>
                 </div>
 
-                {isAddingStop && <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg text-xs text-amber-700 animate-pulse">Click on the map to place a stop.</div>}
+                {isAddingStop && <div className="bg-memphis-yellow/15 border-2 border-memphis-yellow p-3 rounded-lg text-xs text-memphis-ink animate-pulse">Click on the map to place a stop.</div>}
 
                 {start && (
-                  <div className="flex items-center gap-3 bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">1</div>
-                    <span className="text-sm font-semibold text-slate-700 truncate">{startName || "Origin"}</span>
+                  <div className="flex items-center gap-3 bg-memphis-mint/15 p-3 rounded-xl border-2 border-memphis-mint/30">
+                    <div className="w-7 h-7 rounded-lg bg-memphis-mint text-memphis-ink flex items-center justify-center font-bold text-xs">1</div>
+                    <span className="text-sm font-semibold text-memphis-ink truncate">{startName || "Origin"}</span>
                   </div>
                 )}
 
                 {stops.map((s, i) => (
-                  <div key={i} className="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-slate-100 group hover:shadow-sm transition">
-                    <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs shrink-0">{i + 2}</div>
+                  <div key={i} className="flex items-center gap-2 bg-memphis-paper p-2.5 rounded-xl border-2 border-memphis-ink/10 group hover:shadow-memphis transition">
+                    <div className="w-7 h-7 rounded-lg bg-memphis-purple/10 text-memphis-purple flex items-center justify-center font-bold text-xs shrink-0">{i + 2}</div>
                     <LocationSearch
                       placeholder="Search stop location..."
                       initialValue={s.name}
@@ -868,27 +879,27 @@ export default function Routes() {
                         fetchPreview(start, end, updated, startName, endName);
                       }}
                     />
-                    <button onClick={() => reorderStop(i, -1)} className="p-1 hover:bg-slate-100 rounded text-slate-400 shrink-0"><ArrowUp size={14} /></button>
-                    <button onClick={() => reorderStop(i, 1)} className="p-1 hover:bg-slate-100 rounded text-slate-400 shrink-0"><ArrowDown size={14} /></button>
+                    <button onClick={() => reorderStop(i, -1)} className="p-1 hover:bg-memphis-ink/5 rounded text-memphis-purple/40 shrink-0"><ArrowUp size={14} /></button>
+                    <button onClick={() => reorderStop(i, 1)} className="p-1 hover:bg-memphis-ink/5 rounded text-memphis-purple/40 shrink-0"><ArrowDown size={14} /></button>
                     <button onClick={() => {
                       const filtered = stops.filter((_, idx) => idx !== i);
                       setStops(filtered);
                       stopsRef.current = filtered;
                       fetchPreview(start, end, filtered, startName, endName);
-                    }} className="p-1 hover:bg-red-50 rounded text-red-400 shrink-0"><Trash2 size={14} /></button>
+                    }} className="p-1 hover:bg-memphis-coral/10 rounded text-memphis-coral/60 shrink-0"><Trash2 size={14} /></button>
                   </div>
                 ))}
 
                 {end && (
-                  <div className="flex items-center gap-3 bg-red-50 p-3 rounded-xl border border-red-100">
-                    <div className="w-7 h-7 rounded-lg bg-red-500 text-white flex items-center justify-center font-bold text-xs">{stops.length + 2}</div>
-                    <span className="text-sm font-semibold text-slate-700 truncate">{endName || "Destination"}</span>
+                  <div className="flex items-center gap-3 bg-memphis-coral/10 p-3 rounded-xl border-2 border-memphis-coral/30">
+                    <div className="w-7 h-7 rounded-lg bg-memphis-coral text-white flex items-center justify-center font-bold text-xs">{stops.length + 2}</div>
+                    <span className="text-sm font-semibold text-memphis-ink truncate">{endName || "Destination"}</span>
                   </div>
                 )}
               </div>
 
               <button onClick={saveRoute} disabled={!end || loading}
-                className="w-full bg-brand-600 text-white py-4 rounded-xl font-bold hover:bg-brand-700 transition disabled:opacity-50 shadow-lg shadow-brand-600/25 flex items-center justify-center gap-2">
+                className="memphis-btn-primary w-full py-4 flex items-center justify-center gap-2">
                 <Save size={16} /> {loading ? "Saving..." : "Save Route"}
               </button>
             </div>
@@ -896,30 +907,31 @@ export default function Routes() {
 
           {selectedRoute && (
             <div className="space-y-4">
+              {loading && <Loader size="sm" />}
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-lg text-slate-800">{selectedRoute.name}</h3>
+                <h3 className="font-bold text-lg text-memphis-ink" style={{ fontFamily: '"Archivo Black, sans-serif"' }}>{selectedRoute.name}</h3>
                 <div className="flex items-center gap-2">
                   <button onClick={() => handleDeleteRoute(selectedRoute)}
-                    className="text-xs font-bold text-red-400 hover:text-red-600 flex items-center gap-1">
+                    className="text-xs font-bold text-memphis-coral/60 hover:text-memphis-coral flex items-center gap-1">
                     <Trash2 size={14} /> Delete
                   </button>
-                  <button onClick={() => setSelectedRoute(null)} className="text-xs font-bold text-slate-400 hover:text-slate-600">Close</button>
+                  <button onClick={() => setSelectedRoute(null)} className="text-xs font-bold text-memphis-purple/40 hover:text-memphis-purple">Close</button>
                 </div>
               </div>
-              <p className="text-sm text-slate-500">{selectedRoute.start_name} → {selectedRoute.end_name}</p>
+              <p className="text-sm text-memphis-purple/60">{selectedRoute.start_name} → {selectedRoute.end_name}</p>
               {selectedRoute.total_distance_meters && (
-                <p className="text-sm font-bold text-slate-600">{(selectedRoute.total_distance_meters / 1000).toFixed(1)} km</p>
+                <p className="text-sm font-bold text-memphis-ink">{(selectedRoute.total_distance_meters / 1000).toFixed(1)} km</p>
               )}
               <div className="space-y-2">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                <p className="text-[11px] font-bold text-memphis-purple/50 uppercase tracking-wider">
                   Stops (drag to reorder on map, click to edit)
                 </p>
                 {(selectedRoute.stops || []).sort((a, b) => a.order - b.order).map((s, i) => (
-                  <div key={s.id} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 group hover:shadow-sm transition">
-                    <div className="w-7 h-7 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center font-bold text-xs">{s.order}</div>
-                    <span className="flex-1 text-sm font-semibold text-slate-700">{s.name}</span>
-                    <button onClick={() => editRouteStop(s)} className="p-1.5 hover:bg-slate-100 rounded text-slate-400 opacity-0 group-hover:opacity-100"><Edit3 size={14} /></button>
-                    <button onClick={() => deleteRouteStop(s)} className="p-1.5 hover:bg-red-50 rounded text-red-400 opacity-0 group-hover:opacity-100"><Trash2 size={14} /></button>
+                  <div key={s.id} className="flex items-center gap-3 bg-memphis-paper p-3 rounded-xl border-2 border-memphis-ink/10 group hover:shadow-memphis transition">
+                    <div className="w-7 h-7 rounded-lg bg-memphis-pink/15 text-memphis-pink flex items-center justify-center font-bold text-xs">{s.order}</div>
+                    <span className="flex-1 text-sm font-semibold text-memphis-ink">{s.name}</span>
+                    <button onClick={() => editRouteStop(s)} className="p-1.5 hover:bg-memphis-ink/5 rounded text-memphis-purple/40 opacity-0 group-hover:opacity-100"><Edit3 size={14} /></button>
+                    <button onClick={() => deleteRouteStop(s)} className="p-1.5 hover:bg-memphis-coral/10 rounded text-memphis-coral/60 opacity-0 group-hover:opacity-100"><Trash2 size={14} /></button>
                   </div>
                 ))}
               </div>
@@ -928,35 +940,37 @@ export default function Routes() {
 
           {tab === "import" && !selectedRoute && (
             <div className="space-y-5">
+              {importLoading && <Loader size="sm" />}
+
               <div className="flex items-center gap-1 flex-wrap">
                 {["Upload", "Map", "Config", "Save"].map((label, i) => (
                   <div key={label} className="flex items-center gap-1">
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                      importStep > i ? "bg-brand-600 text-white" :
-                      importStep === i ? "bg-brand-100 text-brand-700 border-2 border-brand-500" :
-                      "bg-slate-100 text-slate-400"
+                      importStep > i ? "bg-memphis-pink text-memphis-ink" :
+                      importStep === i ? "bg-memphis-yellow/20 text-memphis-ink border-2 border-memphis-yellow" :
+                      "bg-memphis-ink/5 text-memphis-purple/30"
                     }`}>
                       {importStep > i ? <Check size={12} /> : i + 1}
                     </div>
-                    <span className={`text-[10px] font-bold ${importStep === i ? "text-slate-900" : "text-slate-400"}`}>{label}</span>
-                    {i < 3 && <ChevronRight size={10} className="text-slate-300" />}
+                    <span className={`text-[10px] font-bold ${importStep === i ? "text-memphis-ink" : "text-memphis-purple/30"}`}>{label}</span>
+                    {i < 3 && <ChevronRight size={10} className="text-memphis-ink/20" />}
                   </div>
                 ))}
               </div>
 
               {importError && (
-                <div className="bg-red-50 border border-red-200 p-3 rounded-lg text-xs text-red-700">{importError}</div>
+                <div className="bg-memphis-coral/10 border-2 border-memphis-coral/30 p-3 rounded-lg text-xs text-memphis-coral">{importError}</div>
               )}
 
               {importStep === 0 && (
                 <div className="space-y-4">
                   <div
                     onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center cursor-pointer hover:border-brand-400 hover:bg-brand-50/30 transition"
+                    className="border-2 border-dashed border-memphis-ink/20 rounded-xl p-8 text-center cursor-pointer hover:border-memphis-pink hover:bg-memphis-pink/5 transition"
                   >
-                    <FileSpreadsheet size={32} className="mx-auto text-slate-400 mb-3" />
-                    <p className="text-sm font-bold text-slate-700">Click to upload CSV or Excel file</p>
-                    <p className="text-[11px] text-slate-400 mt-1">Parsed locally in your browser</p>
+                    <FileSpreadsheet size={32} className="mx-auto text-memphis-purple/30 mb-3" />
+                    <p className="text-sm font-bold text-memphis-ink">Click to upload CSV or Excel file</p>
+                    <p className="text-[11px] text-memphis-purple/40 mt-1">Parsed locally in your browser</p>
                   </div>
                   <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleImportFileUpload} className="hidden" />
                 </div>
@@ -965,74 +979,74 @@ export default function Routes() {
               {importStep === 1 && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <p className="text-[11px] font-bold text-memphis-purple/50 uppercase tracking-wider">
                       {importTotalRows} rows found
                     </p>
-                    <button onClick={resetImport} className="text-[11px] font-bold text-red-500 hover:text-red-700">Cancel</button>
+                    <button onClick={resetImport} className="text-[11px] font-bold text-memphis-coral/60 hover:text-memphis-coral">Cancel</button>
                   </div>
 
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Stop Name *</label>
+                      <label className="memphis-label mb-1 block">Stop Name *</label>
                       <select value={importMapping.name} onChange={(e) => setImportMapping({ ...importMapping, name: e.target.value })}
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        className="memphis-input w-full">
                         <option value="">-- Select column --</option>
                         {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Latitude *</label>
+                      <label className="memphis-label mb-1 block">Latitude *</label>
                       <select value={importMapping.latitude} onChange={(e) => setImportMapping({ ...importMapping, latitude: e.target.value })}
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        className="memphis-input w-full">
                         <option value="">-- Select column --</option>
                         {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Longitude *</label>
+                      <label className="memphis-label mb-1 block">Longitude *</label>
                       <select value={importMapping.longitude} onChange={(e) => setImportMapping({ ...importMapping, longitude: e.target.value })}
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        className="memphis-input w-full">
                         <option value="">-- Select column --</option>
                         {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Stop Order</label>
+                      <label className="memphis-label mb-1 block">Stop Order</label>
                       <select value={importMapping.order} onChange={(e) => setImportMapping({ ...importMapping, order: e.target.value })}
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        className="memphis-input w-full">
                         <option value="">-- Select column (optional) --</option>
                         {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Plus Code</label>
+                      <label className="memphis-label mb-1 block">Plus Code</label>
                       <select value={importMapping.plusCode} onChange={(e) => setImportMapping({ ...importMapping, plusCode: e.target.value })}
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        className="memphis-input w-full">
                         <option value="">-- Select column (optional) --</option>
                         {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Nearby Landmark</label>
+                      <label className="memphis-label mb-1 block">Nearby Landmark</label>
                       <select value={importMapping.nearbyLandmark} onChange={(e) => setImportMapping({ ...importMapping, nearbyLandmark: e.target.value })}
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        className="memphis-input w-full">
                         <option value="">-- Select column (optional) --</option>
                         {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 block">Complete Road Path</label>
+                      <label className="memphis-label mb-1 block">Complete Road Path</label>
                       <select value={importMapping.roadPath} onChange={(e) => setImportMapping({ ...importMapping, roadPath: e.target.value })}
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-brand-600/20">
+                        className="memphis-input w-full">
                         <option value="">-- Select column (optional) --</option>
                         {importColumns.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
                       {importRoadPath.length > 0 ? (
-                        <p className="text-[10px] text-emerald-600 mt-1 font-medium">
+                        <p className="text-[10px] text-memphis-mint mt-1 font-medium">
                           {importRoadPath.length.toLocaleString()} road-path geometry points parsed
                         </p>
                       ) : importMapping.roadPath ? (
-                        <p className="text-[10px] text-amber-600 mt-1 font-medium">
+                        <p className="text-[10px] text-memphis-yellow mt-1 font-medium">
                           No coordinates found in this column
                         </p>
                       ) : null}
@@ -1040,17 +1054,17 @@ export default function Routes() {
                   </div>
 
                   {importRows.length > 0 && (
-                    <div className="overflow-x-auto rounded-xl border border-slate-100">
+                    <div className="overflow-x-auto rounded-xl border-2 border-memphis-ink/10">
                       <table className="w-full text-[11px]">
                         <thead>
-                          <tr className="bg-slate-50">
-                            {importColumns.slice(0, 8).map((c) => <th key={c} className="p-2 text-left font-bold text-slate-500 whitespace-nowrap">{c}</th>)}
+                          <tr className="bg-memphis-ink/5">
+                            {importColumns.slice(0, 8).map((c) => <th key={c} className="p-2 text-left font-bold text-memphis-purple whitespace-nowrap">{c}</th>)}
                           </tr>
                         </thead>
                         <tbody>
                           {importRows.slice(0, 3).map((row, i) => (
-                            <tr key={i} className="border-t border-slate-100">
-                              {importColumns.slice(0, 8).map((c) => <td key={c} className="p-2 text-slate-600 whitespace-nowrap">{row[c]}</td>)}
+                            <tr key={i} className="border-t border-memphis-ink/10">
+                              {importColumns.slice(0, 8).map((c) => <td key={c} className="p-2 text-memphis-ink whitespace-nowrap">{row[c]}</td>)}
                             </tr>
                           ))}
                         </tbody>
@@ -1060,7 +1074,7 @@ export default function Routes() {
 
                   <button onClick={() => setImportStep(2)}
                     disabled={!importMapping.latitude || !importMapping.longitude || !importMapping.order || !importMapping.plusCode || !importMapping.nearbyLandmark}
-                    className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
+                    className="memphis-btn-primary w-full py-3 flex items-center justify-center gap-2">
                     Continue <ChevronRight size={16} />
                   </button>
                 </div>
@@ -1068,37 +1082,37 @@ export default function Routes() {
 
               {importStep === 2 && (
                 <div className="space-y-4">
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-                    <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-1">From CSV</p>
+                  <div className="bg-memphis-mint/15 border-2 border-memphis-mint/30 rounded-xl p-3">
+                    <p className="text-[10px] font-bold text-memphis-ink uppercase tracking-wider mb-1">From CSV</p>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
-                      {importRouteCode && <span className="text-emerald-800"><span className="font-bold">Code:</span> {importRouteCode}</span>}
-                      {importRouteName && <span className="text-emerald-800"><span className="font-bold">Name:</span> {importRouteName}</span>}
-                      <span className="text-emerald-800"><span className="font-bold">Stops:</span> {importPreviewStops.length}</span>
+                      {importRouteCode && <span className="text-memphis-ink"><span className="font-bold">Code:</span> {importRouteCode}</span>}
+                      {importRouteName && <span className="text-memphis-ink"><span className="font-bold">Name:</span> {importRouteName}</span>}
+                      <span className="text-memphis-ink"><span className="font-bold">Stops:</span> {importPreviewStops.length}</span>
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Route Name *</label>
+                    <label className="memphis-label">Route Name *</label>
                     <input value={importRouteName} onChange={(e) => setImportRouteName(e.target.value)}
                       placeholder="e.g. Downtown Express"
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none" />
+                      className="memphis-input w-full" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Route Code</label>
+                    <label className="memphis-label">Route Code</label>
                     <input value={importRouteCode} onChange={(e) => setImportRouteCode(e.target.value)}
                       placeholder="e.g. R001"
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none" />
+                      className="memphis-input w-full" />
                   </div>
 
                   <div className="space-y-2">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <p className="text-[11px] font-bold text-memphis-purple/50 uppercase tracking-wider">
                       Stops ({importPreviewStops.length})
                     </p>
                     <div className="max-h-48 overflow-y-auto space-y-1">
                       {importPreviewStops.map((s, i) => (
-                        <div key={i} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-100">
-                          <div className="w-5 h-5 rounded bg-brand-50 text-brand-600 flex items-center justify-center font-bold text-[9px] shrink-0">{i + 1}</div>
-                          <span className="text-[11px] font-medium text-slate-700 truncate flex-1">{s.name}</span>
-                          <span className="text-[10px] text-slate-400">{s.lat.toFixed(4)}, {s.lon.toFixed(4)}</span>
+                        <div key={i} className="flex items-center gap-2 bg-memphis-paper p-2 rounded-lg border-2 border-memphis-ink/10">
+                          <div className="w-5 h-5 rounded bg-memphis-pink/15 text-memphis-pink flex items-center justify-center font-bold text-[9px] shrink-0">{i + 1}</div>
+                          <span className="text-[11px] font-medium text-memphis-ink truncate flex-1">{s.name}</span>
+                          <span className="text-[10px] text-memphis-purple/40">{s.lat.toFixed(4)}, {s.lon.toFixed(4)}</span>
                         </div>
                       ))}
                     </div>
@@ -1106,12 +1120,12 @@ export default function Routes() {
 
                   <div className="flex gap-2">
                     <button onClick={() => setImportStep(1)}
-                      className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition text-sm">
+                      className="memphis-btn flex-1 py-3 text-sm">
                       Back
                     </button>
                     <button onClick={() => setImportStep(3)}
                       disabled={!importRouteName}
-                      className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
+                      className="memphis-btn-primary flex-1 py-3 flex items-center justify-center gap-2">
                       Preview Map <ChevronRight size={16} />
                     </button>
                   </div>
@@ -1120,24 +1134,24 @@ export default function Routes() {
 
               {importStep === 3 && (
                 <div className="space-y-4">
-                  <div className="bg-brand-50 border border-brand-200 p-3 rounded-lg">
-                    <p className="text-xs font-bold text-brand-800">{importRouteName}</p>
-                    <p className="text-[11px] text-brand-600">
+                  <div className="bg-memphis-teal/15 border-2 border-memphis-teal/30 p-3 rounded-lg">
+                    <p className="text-xs font-bold text-memphis-ink">{importRouteName}</p>
+                    <p className="text-[11px] text-memphis-purple">
                       {importPreviewStops.length} stops | {importPreviewStops[0]?.name} → {importPreviewStops[importPreviewStops.length - 1]?.name}
                     </p>
                   </div>
 
                   {importRoadPath.length >= 2 ? (
-                    <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg">
-                      <p className="text-[11px] font-bold text-emerald-800">Road path generated</p>
-                      <p className="text-[11px] text-emerald-600">
+                    <div className="bg-memphis-mint/15 border-2 border-memphis-mint/30 p-3 rounded-lg">
+                      <p className="text-[11px] font-bold text-memphis-ink">Road path generated</p>
+                      <p className="text-[11px] text-memphis-purple">
                         {importRoadPath.length} geometry points via OSRM
                       </p>
                     </div>
                   ) : (
-                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg">
-                      <p className="text-[11px] font-bold text-amber-800">Generating road path...</p>
-                      <p className="text-[11px] text-amber-600">
+                    <div className="bg-memphis-yellow/15 border-2 border-memphis-yellow/30 p-3 rounded-lg">
+                      <p className="text-[11px] font-bold text-memphis-ink">Generating road path...</p>
+                      <p className="text-[11px] text-memphis-purple">
                         Routing via OSRM. Fallback: straight line between stops.
                       </p>
                     </div>
@@ -1145,15 +1159,15 @@ export default function Routes() {
 
                   <div className="flex gap-2">
                     <button onClick={() => setImportStep(2)}
-                      className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition text-sm">
+                      className="memphis-btn flex-1 py-3 text-sm">
                       Back
                     </button>
                     <button onClick={handleGenerateRoadPath}
-                      className="px-3 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition text-sm">
+                      className="memphis-btn px-3 py-3 text-sm">
                       <RefreshCw size={14} />
                     </button>
                     <button onClick={handleImportSave} disabled={importLoading || !selectedCity}
-                      className="flex-1 bg-brand-600 text-white py-3 rounded-xl font-bold hover:bg-brand-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
+                      className="memphis-btn-primary flex-1 py-3 flex items-center justify-center gap-2">
                       <Save size={16} /> {importLoading ? "Routing via OSRM..." : "Import Route"}
                     </button>
                   </div>
@@ -1167,11 +1181,11 @@ export default function Routes() {
       <div className="flex-1 relative">
         <div ref={mapContainer} className="h-full w-full" />
         <div className="absolute top-5 right-5 flex flex-col gap-2 z-10">
-          <div className="bg-white/90 backdrop-blur-md p-2 rounded-2xl shadow-xl border flex flex-col gap-1">
-            <button onClick={() => map.current?.zoomIn()} className="w-9 h-9 hover:bg-slate-100 rounded-xl flex items-center justify-center text-slate-600"><Plus size={18} /></button>
-            <button onClick={() => map.current?.zoomOut()} className="w-9 h-9 hover:bg-slate-100 rounded-xl flex items-center justify-center text-slate-600"><ArrowDown size={18} /></button>
-            <button onClick={toggle3D} className={`w-9 h-9 rounded-xl flex items-center justify-center ${is3D ? "bg-brand-600 text-white" : "hover:bg-slate-100 text-slate-600"}`}><Box size={18} /></button>
-            <button onClick={resetView} className={`w-9 h-9 rounded-xl flex items-center justify-center ${Math.abs(pitch) > 1 ? "bg-slate-900 text-white" : "hover:bg-slate-100 text-slate-600"}`}><Compass size={18} /></button>
+          <div className="bg-memphis-paper/90 backdrop-blur-md p-2 rounded-xl shadow-memphis-lg border-2 border-memphis-ink flex flex-col gap-1">
+            <button onClick={() => map.current?.zoomIn()} className="w-9 h-9 hover:bg-memphis-ink/5 rounded-lg flex items-center justify-center text-memphis-ink"><Plus size={18} /></button>
+            <button onClick={() => map.current?.zoomOut()} className="w-9 h-9 hover:bg-memphis-ink/5 rounded-lg flex items-center justify-center text-memphis-ink"><ArrowDown size={18} /></button>
+            <button onClick={toggle3D} className={`w-9 h-9 rounded-lg flex items-center justify-center ${is3D ? "bg-memphis-pink text-memphis-ink" : "hover:bg-memphis-ink/5 text-memphis-ink"}`}><Box size={18} /></button>
+            <button onClick={resetView} className={`w-9 h-9 rounded-lg flex items-center justify-center ${Math.abs(pitch) > 1 ? "bg-memphis-ink text-memphis-paper" : "hover:bg-memphis-ink/5 text-memphis-ink"}`}><Compass size={18} /></button>
           </div>
         </div>
       </div>

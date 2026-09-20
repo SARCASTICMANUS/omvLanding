@@ -5,6 +5,13 @@ import ZoneFareInput from "./ZoneFareInput";
 
 const ZONE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
+const ZONE_HEADER_COLORS = [
+  "bg-memphis-pink/20 text-memphis-ink",
+  "bg-memphis-teal/20 text-memphis-ink",
+  "bg-memphis-yellow/20 text-memphis-ink",
+  "bg-memphis-purple/20 text-memphis-ink",
+];
+
 export default function ZoneCard({ stops, zones, zoneIndex, zone, distances, onZoneChange }) {
   const startIdx = stopIndexById(stops, zone.startStopId);
   const endIdx = stopIndexById(stops, zone.endStopId);
@@ -21,29 +28,29 @@ export default function ZoneCard({ stops, zones, zoneIndex, zone, distances, onZ
     : [];
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+    <div className="memphis-card bg-memphis-paper overflow-hidden">
+      <div className={`flex items-center justify-between px-5 py-4 border-b-2 border-memphis-ink/10 ${ZONE_HEADER_COLORS[zoneIndex % ZONE_HEADER_COLORS.length]}`}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-brand-50 text-brand-600 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-memphis-ink/10 text-memphis-ink rounded-xl flex items-center justify-center">
             <Layers size={18} />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            <p className="text-[10px] font-bold text-memphis-ink/50 uppercase tracking-wider">
               Zone {letter}
             </p>
             <input
               value={zone.name}
               onChange={(e) => onZoneChange(zoneIndex, { name: e.target.value })}
               placeholder="Zone name"
-              className={`w-36 mt-0.5 px-2 py-1 -mx-2 bg-transparent border-b-2 text-sm font-bold text-slate-800 outline-none transition focus:ring-0 ${
+              className={`w-36 mt-0.5 px-2 py-1 -mx-2 bg-transparent border-b-2 text-sm font-bold text-memphis-ink outline-none transition focus:ring-0 ${
                 nameInvalid
-                  ? "border-red-300 focus:border-red-400"
-                  : "border-transparent focus:border-brand-500"
+                  ? "border-memphis-coral focus:border-memphis-coral"
+                  : "border-transparent focus:border-memphis-purple"
               }`}
             />
           </div>
         </div>
-        <span className="shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+        <span className="shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full bg-memphis-ink/10 text-memphis-ink">
           {count} {count === 1 ? "Stop" : "Stops"} Included
         </span>
       </div>
@@ -58,8 +65,8 @@ export default function ZoneCard({ stops, zones, zoneIndex, zone, distances, onZ
         />
 
         {includedStops.length > 0 && (
-          <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
+          <div className="rounded-xl bg-memphis-mint/10 border border-memphis-mint/20 p-4">
+            <p className="text-[10px] font-bold text-memphis-ink/40 uppercase tracking-wider mb-3">
               Included Stops ({includedStops.length})
             </p>
             <div className="space-y-0">
@@ -74,23 +81,23 @@ export default function ZoneCard({ stops, zones, zoneIndex, zone, distances, onZ
                       <div
                         className={`w-2.5 h-2.5 rounded-full border-2 ${
                           isBoundary
-                            ? "bg-brand-600 border-brand-300"
-                            : "bg-white border-slate-300"
+                            ? "bg-memphis-pink border-memphis-pink/30"
+                            : "bg-memphis-paper border-memphis-ink/20"
                         }`}
                       />
-                      {!isLast && <div className="w-px h-4 bg-slate-200" />}
+                      {!isLast && <div className="w-px h-4 bg-memphis-ink/15" />}
                     </div>
                     <div className={`min-w-0 ${isLast ? "" : "pb-1"}`}>
                       <div className="flex items-baseline gap-2">
-                        <span className={`text-[11px] font-bold truncate ${isBoundary ? "text-brand-700" : "text-slate-500"}`}>
+                        <span className={`text-[11px] font-bold truncate ${isBoundary ? "text-memphis-ink" : "text-memphis-ink/60"}`}>
                           {shortStopName(stop)}
                         </span>
-                        <span className="text-[10px] text-slate-400 shrink-0">
+                        <span className="text-[10px] text-memphis-ink/40 shrink-0">
                           S{stopIdx + 1}
                         </span>
                       </div>
                       {i > 0 && (
-                        <span className="text-[10px] text-slate-400">
+                        <span className="text-[10px] text-memphis-ink/40">
                           {formatKm(distances[stopIdx])}
                         </span>
                       )}
@@ -103,24 +110,24 @@ export default function ZoneCard({ stops, zones, zoneIndex, zone, distances, onZ
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Distance</p>
-            <p className="mt-1 text-sm font-bold text-slate-700">
+          <div className="rounded-xl bg-memphis-yellow/10 border border-memphis-yellow/20 p-3">
+            <p className="text-[10px] font-bold text-memphis-ink/40 uppercase tracking-wider">Distance</p>
+            <p className="mt-1 text-sm font-bold text-memphis-ink">
               {formatKm(from)} → {formatKm(to)}
             </p>
-            <p className="text-[10px] text-slate-400 font-medium">
+            <p className="text-[10px] text-memphis-ink/40 font-medium">
               {startIdx >= 0 ? `Stop ${startIdx + 1}` : "—"} → {endIdx >= 0 ? `Stop ${endIdx + 1}` : "—"}
             </p>
           </div>
-          <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Flat Fuel Share</p>
+          <div className="rounded-xl bg-memphis-teal/10 border border-memphis-teal/20 p-3">
+            <p className="text-[10px] font-bold text-memphis-ink/40 uppercase tracking-wider">Flat Fuel Share</p>
             <div className="mt-1">
               <ZoneFareInput value={zone.flatFareINR} onChange={(v) => onZoneChange(zoneIndex, { flatFareINR: v })} invalid={fareInvalid} />
             </div>
           </div>
         </div>
 
-        <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+        <p className="text-[11px] text-memphis-ink/40 font-medium leading-relaxed">
           Passengers pay the zone fuel share based on where their journey ends.
         </p>
       </div>

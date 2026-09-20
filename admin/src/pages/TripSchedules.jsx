@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Plus, Edit3, Trash2, Save, X, CalendarClock } from "lucide-react";
 import api from "../api/client";
+import Loader from "../components/Loader";
+import EmptyState from "../components/EmptyState";
 
 export default function TripSchedules() {
   const [schedules, setSchedules] = useState([]);
@@ -71,57 +73,49 @@ export default function TripSchedules() {
   };
 
   return (
-    <div className="p-8 h-full overflow-y-auto">
+    <div className="p-6 md:p-8 h-full overflow-y-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-black text-slate-800">Trip Schedules</h1>
-          <p className="text-slate-500 mt-1 font-medium">Manage route schedules and timings</p>
+          <h1 className="memphis-title">Trip Schedules</h1>
+          <p className="text-memphis-purple mt-2 font-medium">Manage route schedules and timings</p>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 bg-brand-600 text-white px-5 py-3 rounded-xl font-semibold hover:bg-brand-700 transition shadow-lg shadow-brand-600/25"
-        >
+        <button onClick={openCreate} className="memphis-btn-primary flex items-center gap-2">
           <Plus size={18} /> Add Schedule
         </button>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="animate-spin rounded-full h-10 w-10 border-4 border-brand-600 border-t-transparent" />
-        </div>
+        <Loader />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {schedules.map((s) => (
-            <div
-              key={s.id}
-              className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition group"
-            >
+            <div key={s.id} className="memphis-card p-6">
               <div className="flex items-start justify-between mb-4">
-                <div className="w-11 h-11 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
-                  <CalendarClock size={22} />
+                <div className="memphis-icon-tile bg-memphis-yellow">
+                  <CalendarClock size={20} className="text-memphis-ink" />
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
-                  <button onClick={() => openEdit(s)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400">
+                <div className="flex gap-1">
+                  <button onClick={() => openEdit(s)} className="p-2 hover:bg-memphis-ink/5 rounded-lg text-memphis-purple transition-all duration-200">
                     <Edit3 size={15} />
                   </button>
-                  <button onClick={() => handleDelete(s.id)} className="p-2 hover:bg-red-50 rounded-lg text-red-400">
+                  <button onClick={() => handleDelete(s.id)} className="p-2 hover:bg-memphis-coral/10 rounded-lg text-memphis-coral transition-all duration-200">
                     <Trash2 size={15} />
                   </button>
                 </div>
               </div>
-              <h3 className="font-bold text-lg text-slate-800">{s.label}</h3>
-              <p className="text-sm text-slate-500 font-medium mt-1">
+              <h3 className="font-bold text-lg text-memphis-ink">{s.label}</h3>
+              <p className="text-sm text-memphis-purple font-medium mt-1">
                 {getRouteName(s.route)}
               </p>
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-50">
-                <span className="text-sm font-bold text-slate-700">
+              <div className="flex items-center justify-between mt-4 pt-4 border-t-2 border-memphis-ink/10">
+                <span className="text-sm font-bold text-memphis-ink">
                   {s.scheduled_start_time || "N/A"}
                 </span>
                 <span
-                  className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                  className={`memphis-badge ${
                     s.is_active
-                      ? "bg-emerald-50 text-emerald-600"
-                      : "bg-slate-100 text-slate-400"
+                      ? "bg-memphis-mint/20 text-memphis-mint border-memphis-mint"
+                      : "bg-memphis-purple/10 text-memphis-purple border-memphis-purple/30"
                   }`}
                 >
                   {s.is_active ? "Active" : "Inactive"}
@@ -130,30 +124,33 @@ export default function TripSchedules() {
             </div>
           ))}
           {schedules.length === 0 && (
-            <div className="col-span-full text-center py-16 text-slate-400 font-medium">
-              No schedules found.
-            </div>
+            <EmptyState
+              icon={CalendarClock}
+              title="No schedules found"
+              description="Create your first schedule to get started."
+              className="col-span-full"
+            />
           )}
         </div>
       )}
 
       {modal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b border-slate-100">
-              <h2 className="text-xl font-bold">{editing ? "Edit Schedule" : "New Schedule"}</h2>
-              <button onClick={() => setModal(false)} className="text-slate-400 hover:text-slate-600">
+        <div className="fixed inset-0 bg-memphis-ink/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-memphis-paper border-2 border-memphis-ink rounded-xl w-full max-w-md shadow-memphis-lg">
+            <div className="flex items-center justify-between p-6 border-b-2 border-memphis-ink">
+              <h2 className="text-xl font-bold text-memphis-ink">{editing ? "Edit Schedule" : "New Schedule"}</h2>
+              <button onClick={() => setModal(false)} className="text-memphis-purple hover:text-memphis-ink transition-all duration-200">
                 <X size={20} />
               </button>
             </div>
             <form onSubmit={handleSave} className="p-6 space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Route</label>
+                <label className="memphis-label">Route</label>
                 <select
                   value={form.route}
                   onChange={(e) => setForm({ ...form, route: e.target.value })}
                   required
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none"
+                  className="memphis-input"
                 >
                   <option value="">Select route...</option>
                   {routes.map((r) => (
@@ -162,38 +159,35 @@ export default function TripSchedules() {
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Label</label>
+                <label className="memphis-label">Label</label>
                 <input
                   value={form.label}
                   onChange={(e) => setForm({ ...form, label: e.target.value })}
                   required
                   placeholder="e.g. Morning Shift"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none"
+                  className="memphis-input"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Start Time</label>
+                <label className="memphis-label">Start Time</label>
                 <input
                   type="time"
                   value={form.scheduled_start_time}
                   onChange={(e) => setForm({ ...form, scheduled_start_time: e.target.value })}
                   required
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-600/20 outline-none"
+                  className="memphis-input"
                 />
               </div>
-              <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+              <label className="flex items-center gap-3 text-sm font-semibold text-memphis-ink cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.is_active}
                   onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-                  className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-600"
+                  className="w-5 h-5 rounded border-2 border-memphis-ink text-memphis-pink focus:ring-memphis-pink"
                 />
                 Active
               </label>
-              <button
-                type="submit"
-                className="w-full bg-brand-600 text-white py-4 rounded-xl font-bold hover:bg-brand-700 transition shadow-lg shadow-brand-600/25 flex items-center justify-center gap-2"
-              >
+              <button type="submit" className="w-full memphis-btn-primary py-4 flex items-center justify-center gap-2">
                 <Save size={16} /> {editing ? "Update" : "Create"}
               </button>
             </form>

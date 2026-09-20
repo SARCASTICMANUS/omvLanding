@@ -20,16 +20,16 @@ export default function ZoneStopSelector({ stops, zones, zoneIndex, zone, onZone
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <span className="w-12 shrink-0 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+        <span className="w-12 shrink-0 text-[11px] font-bold text-memphis-ink/40 uppercase tracking-wider">
           Start
         </span>
-        <div className="flex-1 flex items-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-100 rounded-xl">
-          <MapPin size={14} className="text-brand-600 shrink-0" />
-          <span className="text-sm font-semibold text-slate-700 truncate">
+        <div className="flex-1 flex items-center gap-2 px-3 py-2.5 bg-memphis-ink/5 border border-memphis-ink/10 rounded-xl">
+          <MapPin size={14} className="text-memphis-purple shrink-0" />
+          <span className="text-sm font-semibold text-memphis-ink truncate">
             {shortStopName(startStop) || "—"}
           </span>
           {startIdx === 0 && (
-            <span className="ml-auto shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 uppercase">
+            <span className="ml-auto shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-memphis-pink/20 text-memphis-ink uppercase">
               Route start
             </span>
           )}
@@ -37,16 +37,16 @@ export default function ZoneStopSelector({ stops, zones, zoneIndex, zone, onZone
       </div>
 
       <div className="flex items-center gap-3">
-        <span className="w-12 shrink-0 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+        <span className="w-12 shrink-0 text-[11px] font-bold text-memphis-ink/40 uppercase tracking-wider">
           End
         </span>
         {isLast ? (
-          <div className="flex-1 flex items-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-100 rounded-xl">
-            <MapPin size={14} className="text-brand-600 shrink-0" />
-            <span className="text-sm font-semibold text-slate-700 truncate">
+          <div className="flex-1 flex items-center gap-2 px-3 py-2.5 bg-memphis-ink/5 border border-memphis-ink/10 rounded-xl">
+            <MapPin size={14} className="text-memphis-purple shrink-0" />
+            <span className="text-sm font-semibold text-memphis-ink truncate">
               {shortStopName(endStop) || "—"}
             </span>
-            <span className="ml-auto shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 uppercase">
+            <span className="ml-auto shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-memphis-teal/20 text-memphis-ink uppercase">
               Route end
             </span>
           </div>
@@ -55,7 +55,7 @@ export default function ZoneStopSelector({ stops, zones, zoneIndex, zone, onZone
             <select
               value={endStop?.id ?? ""}
               onChange={(e) => onZoneChange(zoneIndex, { endStopId: e.target.value })}
-              className="w-full appearance-none px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-brand-600/20 cursor-pointer"
+              className="memphis-input w-full appearance-none px-3 py-2.5 text-sm font-semibold outline-none cursor-pointer"
             >
               {endOptions.map(({ idx, stop }) => (
                 <option key={stop.id} value={stop.id}>
@@ -65,7 +65,7 @@ export default function ZoneStopSelector({ stops, zones, zoneIndex, zone, onZone
             </select>
             <ChevronDown
               size={16}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-memphis-ink/40 pointer-events-none"
             />
           </div>
         )}

@@ -1,23 +1,216 @@
+@import url("https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --memphis-pink: #FF71CE;
+  --memphis-yellow: #FFCE5C;
+  --memphis-teal: #86CCCA;
+  --memphis-purple: #6A7BB4;
+  --memphis-ink: #16121F;
+  --memphis-paper: #FAF6EE;
+  --memphis-mint: #7BE0AD;
+  --memphis-coral: #FF5D5D;
+  --memphis-lime: #C7F464;
+}
+
 @layer base {
   body {
     font-family: "Inter", system-ui, -apple-system, sans-serif;
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply bg-memphis-paper text-memphis-ink antialiased;
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
   }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--memphis-purple) var(--memphis-paper);
+  }
+
+  /* Data text: font-weight 600 for legibility on Paper background */
+  td, th {
+    @apply font-semibold;
+  }
 }
 
+@layer components {
+  /* ── Card: full 4px shadow, sticker look for cards/modals/actions ── */
+  .memphis-card {
+    @apply bg-memphis-paper border-2 border-memphis-ink rounded-xl;
+    box-shadow: 4px 4px 0 0 var(--memphis-ink);
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+  .memphis-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 0 var(--memphis-ink);
+  }
+
+  /* ── Card with pattern top border: dot-dash-dot in Memphis pink ── */
+  .memphis-card-pattern {
+    @apply memphis-card relative overflow-hidden;
+  }
+  .memphis-card-pattern::before {
+    content: "";
+    @apply absolute top-0 left-0 right-0 h-[3px];
+    background: repeating-linear-gradient(
+      90deg,
+      var(--memphis-pink) 0px,
+      var(--memphis-pink) 4px,
+      transparent 4px,
+      transparent 8px,
+      var(--memphis-pink) 8px,
+      var(--memphis-pink) 10px,
+      transparent 10px,
+      transparent 16px
+    );
+  }
+
+  /* ── Button ── */
+  .memphis-btn {
+    @apply px-5 py-3 rounded-lg font-semibold border-2 border-memphis-ink cursor-pointer transition-all duration-200;
+    box-shadow: 4px 4px 0 0 var(--memphis-ink);
+  }
+  .memphis-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 0 var(--memphis-ink);
+  }
+  .memphis-btn:active {
+    transform: translate(-1px, -1px);
+    box-shadow: 2px 2px 0 0 var(--memphis-ink);
+  }
+
+  .memphis-btn-primary {
+    @apply memphis-btn bg-memphis-pink text-memphis-ink font-bold;
+  }
+  .memphis-btn-primary:hover {
+    @apply bg-[#E85BB4];
+  }
+
+  .memphis-btn-secondary {
+    @apply memphis-btn bg-transparent text-memphis-ink;
+  }
+
+  .memphis-btn-danger {
+    @apply memphis-btn bg-memphis-coral text-white;
+  }
+
+  /* ── Labels: tracking-tight to prevent long label breakage ── */
+  .memphis-label {
+    @apply text-xs font-bold uppercase tracking-tight text-memphis-purple;
+  }
+
+  .memphis-input {
+    @apply w-full bg-memphis-paper border-2 border-memphis-ink rounded-lg px-4 py-3 text-sm font-semibold text-memphis-ink placeholder-memphis-purple/50;
+  }
+  .memphis-input:focus {
+    @apply outline-none ring-2 ring-memphis-pink ring-offset-2;
+  }
+
+  /* ── Title: sub-headers 10% smaller (text-2xl vs text-3xl) ── */
+  .memphis-title {
+    @apply text-3xl font-black text-memphis-ink;
+    font-family: "Archivo Black", sans-serif;
+    text-shadow: 3px 3px 0 var(--memphis-pink);
+  }
+  .memphis-title-sm {
+    @apply text-2xl font-black text-memphis-ink;
+    font-family: "Archivo Black", sans-serif;
+    text-shadow: 2px 2px 0 var(--memphis-pink);
+  }
+
+  /* ── Badge: rounded-md (technical feel, not rounded-full) ── */
+  .memphis-badge {
+    @apply text-xs font-bold px-2.5 py-1 rounded-md border-2 border-memphis-ink;
+  }
+
+  .memphis-icon-tile {
+    @apply w-11 h-11 rounded-lg border-2 border-memphis-ink flex items-center justify-center;
+  }
+
+  .memphis-empty {
+    @apply border-2 border-dashed border-memphis-ink rounded-xl p-12 text-center;
+    background-image: radial-gradient(circle, var(--memphis-purple) 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-position: 0 0;
+  }
+
+  /* ── Table rows: subtle 2px shadow, light borders, muted hover ── */
+  .memphis-table-row {
+    @apply border-b border-memphis-ink/10 transition-all duration-200;
+    box-shadow: none;
+  }
+  .memphis-table-row:hover {
+    @apply bg-memphis-pink/5;
+    box-shadow: 2px 2px 0 0 var(--memphis-ink);
+  }
+
+  /* ── Monospace with left accent border for quick scanning ── */
+  .memphis-mono {
+    @apply font-mono text-memphis-ink border-l-2 border-memphis-pink pl-2;
+  }
+
+  /* ── Layout grid: faint dashed border to hint at structure ── */
+  .memphis-grid-layout {
+    @apply border border-dashed border-memphis-purple/10 rounded-xl;
+  }
+
+  /* ── Section divider (zigzag line between data sections) ── */
+  .memphis-divider {
+    @apply my-6;
+    border: none;
+    height: 12px;
+    background: url("data:image/svg+xml,%3Csvg width='200' height='12' viewBox='0 0 200 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='0,10 10,2 20,10 30,2 40,10 50,2 60,10 70,2 80,10 90,2 100,10 110,2 120,10 130,2 140,10 150,2 160,10 170,2 180,10 190,2 200,10' stroke='%236A7BB4' stroke-width='1.5' stroke-opacity='0.2' fill='none'/%3E%3C/svg%3E") repeat-x center;
+  }
+
+  /* ── Ticket queue grid for support dark theme ── */
+  .memphis-ticket-grid {
+    background-image:
+      linear-gradient(var(--memphis-purple) 1px, transparent 1px),
+      linear-gradient(90deg, var(--memphis-purple) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-color: rgba(106, 123, 180, 0.04);
+  }
+}
+
+/* MapLibre popup overrides */
 .maplibregl-popup-content {
   border-radius: 12px !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 4px 4px 0 0 var(--memphis-ink) !important;
+  border: 2px solid var(--memphis-ink) !important;
   padding: 12px 16px !important;
   font-family: "Inter", sans-serif !important;
 }
 
 .maplibregl-marker svg {
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(2px 2px 0 var(--memphis-ink));
+}
+
+/* Memphis squiggle pattern for sidebar */
+.memphis-squiggle-bg {
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 30 Q20 10 30 30 T50 30' stroke='%23FF71CE' stroke-width='1.5' fill='none' opacity='0.15'/%3E%3C/svg%3E");
+  background-size: 60px 60px;
+}
+
+/* Memphis diagonal stripe pattern */
+.memphis-stripe-bg {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 8px,
+    rgba(22, 18, 31, 0.03) 8px,
+    rgba(22, 18, 31, 0.03) 16px
+  );
+}
+
+/* Memphis terrazzo dots pattern — subtle at 5% for stat cards */
+.memphis-terrazzo-bg {
+  background-image:
+    radial-gradient(circle, var(--memphis-pink) 1px, transparent 1px),
+    radial-gradient(circle, var(--memphis-teal) 1px, transparent 1px),
+    radial-gradient(circle, var(--memphis-yellow) 1px, transparent 1px);
+  background-size: 40px 40px, 55px 55px, 35px 35px;
+  background-position: 0 0, 15px 20px, 8px 30px;
+  opacity: 0.05;
 }

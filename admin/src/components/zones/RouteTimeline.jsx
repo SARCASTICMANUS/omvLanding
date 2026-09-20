@@ -1,10 +1,10 @@
 import { stopIndexById, formatKm, shortStopName } from "../../utils/zoneLogic";
 
 const ZONE_BAND_COLORS = [
-  "bg-brand-50 border-brand-200 text-brand-700",
-  "bg-emerald-50 border-emerald-200 text-emerald-700",
-  "bg-teal-50 border-teal-200 text-teal-700",
-  "bg-cyan-50 border-cyan-200 text-cyan-700",
+  "bg-memphis-pink/30 border-memphis-pink text-memphis-ink",
+  "bg-memphis-teal/30 border-memphis-teal text-memphis-ink",
+  "bg-memphis-yellow/30 border-memphis-yellow text-memphis-ink",
+  "bg-memphis-purple/30 border-memphis-purple text-memphis-ink",
 ];
 
 // Horizontal route timeline. Each zone wraps its assigned stops. Purely
@@ -15,10 +15,10 @@ export default function RouteTimeline({ stops, zones, distances, minutes }) {
   const totalStops = stops.length;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 md:p-6">
+    <div className="memphis-card bg-memphis-paper p-5 md:p-6">
       <div className="flex items-center justify-between mb-5">
-        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Route Timeline</h3>
-        <span className="text-[11px] text-slate-400 font-medium">{totalStops} stops</span>
+        <h3 className="text-sm font-bold text-memphis-ink uppercase tracking-wider">Route Timeline</h3>
+        <span className="text-[11px] text-memphis-ink/40 font-medium">{totalStops} stops</span>
       </div>
 
       <div className="overflow-x-auto pb-1">
@@ -37,7 +37,7 @@ export default function RouteTimeline({ stops, zones, distances, minutes }) {
                   className="absolute top-0 px-1"
                   style={{ left: `${left}%`, width: `${width}%` }}
                 >
-                  <div className={`h-full rounded-xl border flex flex-col items-center justify-center ${ZONE_BAND_COLORS[zi % ZONE_BAND_COLORS.length]}`}>
+                  <div className={`h-full rounded-xl border-2 flex flex-col items-center justify-center ${ZONE_BAND_COLORS[zi % ZONE_BAND_COLORS.length]}`}>
                     <span className="text-[10px] font-black uppercase tracking-wider leading-tight truncate w-full text-center">
                       {zone.name} · ₹{zone.flatFareINR}
                     </span>
@@ -51,13 +51,13 @@ export default function RouteTimeline({ stops, zones, distances, minutes }) {
           </div>
 
           {/* Rail */}
-          <div className="relative my-4 h-0.5 bg-slate-200">
+          <div className="relative my-4 h-0.5 bg-memphis-ink/20">
             <div
-              className="absolute top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-brand-600 border-2 border-white shadow"
+              className="absolute top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-memphis-pink border-2 border-memphis-paper shadow"
               style={{ left: `${(0.5 / totalStops) * 100}%` }}
             />
             <div
-              className="absolute top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-brand-600 border-2 border-white shadow"
+              className="absolute top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-memphis-pink border-2 border-memphis-paper shadow"
               style={{ left: `${((totalStops - 0.5) / totalStops) * 100}%` }}
             />
           </div>
@@ -74,22 +74,22 @@ export default function RouteTimeline({ stops, zones, distances, minutes }) {
               return (
                 <div key={stop.id} className="flex-1 flex flex-col items-center gap-1.5 px-1">
                   <div
-                    className={`h-3 w-3 rounded-full border-2 border-white shadow ${
-                      isZoneStart ? "bg-brand-600" : "bg-slate-300"
+                    className={`h-3 w-3 rounded-full border-2 border-memphis-paper shadow ${
+                      isZoneStart ? "bg-memphis-pink" : "bg-memphis-ink/30"
                     }`}
                   />
-                  <span className="text-[10px] font-bold text-slate-400">S{si + 1}</span>
-                  <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight truncate w-full">
+                  <span className="text-[10px] font-bold text-memphis-ink/40">S{si + 1}</span>
+                  <span className="text-[11px] font-semibold text-memphis-ink text-center leading-tight truncate w-full">
                     {shortStopName(stop)}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-medium">
+                  <span className="text-[10px] text-memphis-ink/40 font-medium">
                     {formatKm(distances[si])}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-medium -mt-1">
+                  <span className="text-[10px] text-memphis-ink/40 font-medium -mt-1">
                     {minutes[si]} min
                   </span>
                   {activeZone && (
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-brand-600">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-memphis-purple">
                       {activeZone.name}
                     </span>
                   )}

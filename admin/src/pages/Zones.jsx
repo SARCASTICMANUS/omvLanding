@@ -142,7 +142,7 @@ export default function Zones() {
       />
 
       {saving && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-brand-600 text-white pl-4 pr-5 py-3 rounded-xl shadow-xl shadow-brand-600/30">
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-memphis-mint text-memphis-ink pl-4 pr-5 py-3 rounded-xl border-2 border-memphis-ink shadow-memphis">
           <CheckCircle2 size={18} />
           <span className="font-semibold text-sm">Zone configuration saved</span>
         </div>
@@ -153,17 +153,17 @@ export default function Zones() {
 
         {loadingRoutes && (
           <div className="flex justify-center py-16">
-            <Loader2 size={24} className="animate-spin text-brand-600" />
+            <Loader2 size={24} className="animate-spin text-memphis-purple" />
           </div>
         )}
 
         {!loadingRoutes && !route && (
-          <div className="bg-white rounded-2xl border border-dashed border-slate-200 p-12 text-center">
-            <div className="w-14 h-14 mx-auto bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center">
+          <div className="memphis-card bg-memphis-paper p-12 text-center">
+            <div className="w-14 h-14 mx-auto bg-memphis-purple/10 text-memphis-purple rounded-xl flex items-center justify-center">
               <Layers size={26} />
             </div>
-            <h3 className="mt-4 text-lg font-bold text-slate-800">Select a route to begin</h3>
-            <p className="mt-1 text-sm text-slate-400 font-medium max-w-md mx-auto">
+            <h3 className="mt-4 text-lg font-bold text-memphis-ink">Select a route to begin</h3>
+            <p className="mt-1 text-sm text-memphis-ink/50 font-medium max-w-md mx-auto">
               Choose a route above to divide it into stop-based fare zones. Boundaries always
               align to physical stops — never free-form kilometer ranges.
             </p>
@@ -174,7 +174,7 @@ export default function Zones() {
           <>
             {loadingStops ? (
               <div className="flex justify-center py-16">
-                <Loader2 size={24} className="animate-spin text-brand-600" />
+                <Loader2 size={24} className="animate-spin text-memphis-purple" />
               </div>
             ) : orderedStops.length >= 2 ? (
               <>
@@ -198,12 +198,12 @@ export default function Zones() {
                 <FareExamples stops={orderedStops} zones={zones} />
 
                 {!validation.valid && (
-                  <div className="bg-red-50 border border-red-100 rounded-2xl p-5">
-                    <h3 className="text-sm font-bold text-red-700">Fix the following before saving:</h3>
+                  <div className="bg-memphis-coral/10 border-2 border-memphis-coral/30 rounded-xl p-5">
+                    <h3 className="text-sm font-bold text-memphis-coral">Fix the following before saving:</h3>
                     <ul className="mt-2 space-y-1">
                       {validation.errors.map((err, i) => (
-                        <li key={i} className="text-xs font-medium text-red-600 flex items-start gap-2">
-                          <span className="mt-1 w-1 h-1 rounded-full bg-red-400 shrink-0" />
+                        <li key={i} className="text-xs font-medium text-memphis-coral/80 flex items-start gap-2">
+                          <span className="mt-1 w-1 h-1 rounded-full bg-memphis-coral shrink-0" />
                           {err}
                         </li>
                       ))}
@@ -212,9 +212,9 @@ export default function Zones() {
                 )}
               </>
             ) : (
-              <div className="bg-white rounded-2xl border border-dashed border-slate-200 p-12 text-center">
-                <h3 className="text-lg font-bold text-slate-800">No stops on this route</h3>
-                <p className="mt-1 text-sm text-slate-400 font-medium">
+              <div className="border-2 border-dashed border-memphis-ink rounded-xl p-12 text-center">
+                <h3 className="text-lg font-bold text-memphis-ink">No stops on this route</h3>
+                <p className="mt-1 text-sm text-memphis-ink/50 font-medium">
                   Zones are defined by stops. Add stops to this route first.
                 </p>
               </div>

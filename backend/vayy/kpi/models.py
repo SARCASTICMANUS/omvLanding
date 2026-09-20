@@ -17,6 +17,11 @@ class PageView(models.Model):
     referrer = models.URLField(blank=True, default="")
     country = models.CharField(max_length=100, blank=True, default="")
     city = models.CharField(max_length=100, blank=True, default="")
+    region = models.CharField(max_length=255, blank=True, default="")
+    country_code = models.CharField(max_length=2, blank=True, default="")
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    timezone = models.CharField(max_length=64, blank=True, default="")
     device_type = models.CharField(max_length=50, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
@@ -25,6 +30,8 @@ class PageView(models.Model):
         indexes = [
             models.Index(fields=["platform", "created_at"]),
             models.Index(fields=["page", "created_at"]),
+            models.Index(fields=["country_code"]),
+            models.Index(fields=["region"]),
         ]
 
     def __str__(self):

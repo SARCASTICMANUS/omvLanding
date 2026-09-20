@@ -1,41 +1,85 @@
-// Brand colors — matches tailwind.config.js
-export const BRAND_50 = "#e8fdf2";
-export const BRAND_100 = "#c7f9de";
-export const BRAND_200 = "#91f1bf";
-export const BRAND_300 = "#51e29a";
-export const BRAND_400 = "#1ccb75";
-export const BRAND_500 = "#05af60";
-export const BRAND_600 = "#009849";
-export const BRAND_700 = "#007b44";
-export const BRAND_800 = "#00653a";
-export const BRAND_900 = "#003923";
+// Memphis Design System — Single Source of Truth
+// =================================================
 
-// Memphis accent colors — matches tailwind.config.js
-export const MEMPHIS_PINK = "#FF6B6B";
-export const MEMPHIS_BLUE = "#4ECDC4";
-export const MEMPHIS_YELLOW = "#FFE66D";
-export const MEMPHIS_CORAL = "#FF8A65";
-export const MEMPHIS_PURPLE = "#A78BFA";
-export const MEMPHIS_BLACK = "#1A1A2E";
+// Core palette — CSS variables defined in index.css
+export const MEMPHIS_PINK = "#FF71CE";
+export const MEMPHIS_YELLOW = "#FFCE5C";
+export const MEMPHIS_TEAL = "#86CCCA";
+export const MEMPHIS_PURPLE = "#6A7BB4";
+export const MEMPHIS_INK = "#16121F";
+export const MEMPHIS_PAPER = "#FAF6EE";
+export const MEMPHIS_MINT = "#7BE0AD";
+export const MEMPHIS_CORAL = "#FF5D5D";
+export const MEMPHIS_LIME = "#C7F464";
 
-// Route colors — 14 color sets for route map display
+// Functional modifiers — controlled opacity for data-heavy contexts
+export const MEMPHIS_PINK_5 = "#FF71CE0D";    // pink/5  — table row hover
+export const MEMPHIS_PINK_10 = "#FF71CE1A";   // pink/10 — subtle tint
+export const MEMPHIS_TEAL_10 = "#86CCCA1A";   // teal/10
+export const MEMPHIS_YELLOW_10 = "#FFCE5C1A"; // yellow/10
+export const MEMPHIS_PURPLE_10 = "#6A7BB41A"; // purple/10
+export const MEMPHIS_MINT_10 = "#7BE0AD1A";   // mint/10
+export const MEMPHIS_CORAL_10 = "#FF5D5D1A";  // coral/10
+export const MEMPHIS_INK_5 = "#16121F0D";     // ink/5 — faint borders
+export const MEMPHIS_INK_10 = "#16121F1A";    // ink/10 — table borders
+export const MEMPHIS_PURPLE_20 = "#6A7BB433"; // purple/20 — chart gridlines
+
+// Status semantics
+export const STATUS_ACTIVE = "#7BE0AD";  // mint — live/active/running
+export const STATUS_PAUSED = "#FFCE5C";  // yellow — paused/pending
+export const STATUS_ERROR = "#FF5D5D";   // coral — errors/blocked/cancelled
+export const STATUS_INACTIVE = "#6A7BB480"; // purple/50 — inactive/disabled
+
+// Memphis tints (for backgrounds) — kept for backward compat
+export const MEMPHIS_PINK_TINT = MEMPHIS_PINK_10;
+export const MEMPHIS_TEAL_TINT = MEMPHIS_TEAL_10;
+export const MEMPHIS_YELLOW_TINT = MEMPHIS_YELLOW_10;
+export const MEMPHIS_PURPLE_TINT = MEMPHIS_PURPLE_10;
+export const MEMPHIS_MINT_TINT = MEMPHIS_MINT_10;
+export const MEMPHIS_CORAL_TINT = MEMPHIS_CORAL_10;
+
+// Route colors — 14 Memphis-themed color sets for route map display
 export const ROUTE_COLORS = [
-  { line: "#16a34a", bg: "#dcfce7", text: "#15803d", dot: "#22c55e" },
-  { line: "#2563eb", bg: "#dbeafe", text: "#1d4ed8", dot: "#3b82f6" },
-  { line: "#9333ea", bg: "#f3e8ff", text: "#7e22ce", dot: "#a855f7" },
-  { line: "#ea580c", bg: "#fff7ed", text: "#c2410c", dot: "#f97316" },
-  { line: "#e11d48", bg: "#fff1f2", text: "#be123c", dot: "#f43f5e" },
-  { line: "#0891b2", bg: "#ecfeff", text: "#0e7490", dot: "#06b6d4" },
-  { line: "#4f46e5", bg: "#eef2ff", text: "#4338ca", dot: "#6366f1" },
-  { line: "#ca8a04", bg: "#fefce8", text: "#a16207", dot: "#eab308" },
-  { line: "#059669", bg: "#ecfdf5", text: "#047857", dot: "#10b981" },
-  { line: "#dc2626", bg: "#fef2f2", text: "#b91c1c", dot: "#ef4444" },
-  { line: "#7c3aed", bg: "#f5f3ff", text: "#6d28d9", dot: "#8b5cf6" },
-  { line: "#0284c7", bg: "#f0f9ff", text: "#0369a1", dot: "#0ea5e9" },
-  { line: "#d946ef", bg: "#fdf4ff", text: "#a21caf", dot: "#d946ef" },
-  { line: "#65a30d", bg: "#f7fee7", text: "#4d7c0f", dot: "#84cc16" },
+  { line: "#FF71CE", bg: "#FF71CE1A", text: "#cc5aa5", dot: "#FF71CE" },
+  { line: "#86CCCA", bg: "#86CCCA1A", text: "#5e9e9c", dot: "#86CCCA" },
+  { line: "#FFCE5C", bg: "#FFCE5C1A", text: "#b8952e", dot: "#FFCE5C" },
+  { line: "#6A7BB4", bg: "#6A7BB41A", text: "#4d5a8a", dot: "#6A7BB4" },
+  { line: "#7BE0AD", bg: "#7BE0AD1A", text: "#4eb37e", dot: "#7BE0AD" },
+  { line: "#FF5D5D", bg: "#FF5D5D1A", text: "#cc3a3a", dot: "#FF5D5D" },
+  { line: "#C7F464", bg: "#C7F4641A", text: "#8aab3a", dot: "#C7F464" },
+  { line: "#E85BB4", bg: "#E85BB41A", text: "#b33d8a", dot: "#E85BB4" },
+  { line: "#6BC5D2", bg: "#6BC5D21A", text: "#429aa5", dot: "#6BC5D2" },
+  { line: "#FFB347", bg: "#FFB3471A", text: "#c8821e", dot: "#FFB347" },
+  { line: "#9B8FD4", bg: "#9B8FD41A", text: "#6e63a8", dot: "#9B8FD4" },
+  { line: "#5DD4A0", bg: "#5DD4A01A", text: "#34a873", dot: "#5DD4A0" },
+  { line: "#FF8A8A", bg: "#FF8A8A1A", text: "#cc5e5e", dot: "#FF8A8A" },
+  { line: "#D4E157", bg: "#D4E1571A", text: "#a0ad2e", dot: "#D4E157" },
 ];
 
-// Chart colors — for donut/bar charts
-export const CHART_COLORS_5 = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6"];
-export const CHART_COLORS_6 = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#ec4899"];
+// Chart colors — Memphis palette
+export const CHART_COLORS_5 = [
+  "#FF71CE",
+  "#FFCE5C",
+  "#86CCCA",
+  "#FF5D5D",
+  "#6A7BB4",
+];
+export const CHART_COLORS_6 = [
+  "#FF71CE",
+  "#FFCE5C",
+  "#86CCCA",
+  "#FF5D5D",
+  "#6A7BB4",
+  "#7BE0AD",
+];
+
+// Entity colors — used for stat cards, icons, badges
+export const ENTITY_COLORS = {
+  cities: "#86CCCA",
+  routes: "#FF71CE",
+  stops: "#6A7BB4",
+  schedules: "#FFCE5C",
+  passengers: "#7BE0AD",
+  drivers: "#FF5D5D",
+  vehicles: "#C7F464",
+};

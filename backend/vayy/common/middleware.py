@@ -119,3 +119,78 @@ class RequestResponseLoggingMiddleware:
             json.dumps(resp_body, default=str)[:2000],
             getattr(request, "correlation_id", "-"),
         )
+
+
+class GeoIPMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # Capture client_ip from request body before DRF consumes it
+        _client_ip = ""
+        if request.path.startswith("/api/kpi/track-page-view"):
+            try:
+                import json
+                body = json.loads(request.body) if request.body else {}
+                _client_ip = body.get("client_ip", "")
+            except (json.JSONDecodeError, AttributeError):
+                pass
+
+        response = self.get_response(request)
+
+        try:
+            if not _client_ip and not request.path.startswith("/api/kpi/track-page-view"):
+                return response
+
+            from tracking.services.geoip_service import lookup_geoip
+            from tracking.models import GeoEvent
+            from django.contrib.gis.geos import Point
+
+            ip_address = _client_ip or _get_client_ip(request)
+
+            geo_data = lookup_geoip(ip_address)
+            if geo_data is None:
+                return response
+
+            location = None
+            if geo_data["latitude"] is not None and geo_data["longitude"] is not None:
+                location = Point(float(geo_data["longitude"]), float(geo_data["latitude"]), srid=4326)
+
+            GeoEvent.objects.create(
+                ip_address=ip_address,
+                city=geo_data["city"],
+                region=geo_data["region"],
+                country=geo_data["country"],
+                country_code=geo_data["country_code"],
+                location=location,
+                latitude=geo_data["latitude"],
+                longitude=geo_data["longitude"],
+                timezone=geo_data["timezone"],
+            )
+
+            try:
+                from tracking.tasks import publish_geo_event
+                publish_geo_event.delay({
+                    "ip_address": ip_address,
+                    "city": geo_data["city"],
+                    "region": geo_data["region"],
+                    "country": geo_data["country"],
+                    "country_code": geo_data["country_code"],
+                    "latitude": geo_data["latitude"],
+                    "longitude": geo_data["longitude"],
+                    "timezone": geo_data["timezone"],
+                })
+            except Exception as e:
+                logger.warning(f"Failed to queue geo event: {e}")
+
+        except Exception as e:
+            logger.warning(f"GeoIP middleware error for {request.path}: {e}")
+
+        return response
+
+
+def _get_client_ip(request):
+    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+    if x_forwarded_for:
+        return x_forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "")
