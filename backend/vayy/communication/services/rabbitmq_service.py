@@ -71,16 +71,16 @@ class RabbitMQService:
             except Exception:
                 logger.warning(f"Publisher confirm timed out for {exchange} {routing_key}, message may still be delivered")
 
-        except pika.exceptions.AMQPError:
-            logger.exception(
-                "RabbitMQ publish failed: %s %s",
+        except (pika.exceptions.AMQPError, pika.exceptions.StreamLostError, ConnectionError, OSError) as e:
+            logger.warning(
+                "RabbitMQ publish failed (will reconnect): %s %s — %s",
                 exchange,
                 routing_key,
+                e,
             )
             # Reset connection on failure to force reconnect next time
             cls._connection = None
             cls._channel = None
-            raise
 
     @classmethod
     def setup_infrastructure(cls):

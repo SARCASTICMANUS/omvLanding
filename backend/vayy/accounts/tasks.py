@@ -55,8 +55,8 @@ def process_driver_registration(self, job_id, user_id):
         # 3. Vehicle
         Vehicle.objects.update_or_create(
             driver=user,
+            vehicle_number=payload["vehicle_number"],
             defaults={
-                "vehicle_number": payload["vehicle_number"],
                 "vehicle_type": payload["vehicle_type"],
                 "vehicle_photo": payload.get("vehicle_photo", ""),
                 "status": VEHICLE_STATUS_PENDING,

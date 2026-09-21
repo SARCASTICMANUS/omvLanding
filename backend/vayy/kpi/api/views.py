@@ -127,6 +127,7 @@ class TrackPageViewAPI(APIView):
     """
 
     permission_classes = [AllowAny]
+    throttle_scope = "kpi_track"
 
     def post(self, request: Request) -> Response:
         serializer = PageViewSerializer(data=request.data)

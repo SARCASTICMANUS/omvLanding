@@ -165,17 +165,18 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle"
     ],
-    "DEFAULT_THROTTLE_RATES": {
-        "anon": "100/day",
-        # Raised from 1000/day - the old cap silently killed GPS ingestion
-        # (a driver pinging every 5s for 8h needs ~5,700 requests/day);
-        # the SCOPED rates below govern the high-volume real-time endpoints.
-        "user": "10000/day",
-        "gps": "1000/min",
-        "search": "60/min",
-        "dispatch": "120/min",
-        "waitlist": "10/hour",
-    }
+    # "DEFAULT_THROTTLE_RATES": {
+    #     "anon": "100/day",
+    #     # Raised from 1000/day - the old cap silently killed GPS ingestion
+    #     # (a driver pinging every 5s for 8h needs ~5,700 requests/day);
+    #     # the SCOPED rates below govern the high-volume real-time endpoints.
+    #     "user": "10000/day",
+    #     "gps": "1000/min",
+    #     "search": "60/min",
+    #     "dispatch": "120/min",
+    #     "kpi_track": "500/min",
+    #     "waitlist": "10/hour",
+    # }
 }
 
 SPECTACULAR_SETTINGS = {
