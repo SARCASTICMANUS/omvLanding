@@ -115,9 +115,14 @@ export default function ProfileScreen({ navigation }) {
 
   const settings = [
     { icon: "create-outline", label: "Edit Profile", screen: "EditProfile" },
-    ...(isDriver && verification?.status !== "verified"
-      ? [{ icon: "cloud-upload-outline", label: "Upload Documents", screen: "DriverProfileCompletion" }]
-      : []),
+    // ...(isDriver && verification?.status !== "verified"
+    //   ? [{ icon: "cloud-upload-outline", label: "Upload Documents", screen: "DriverProfileCompletion" }]
+    //   : []),
+    // ...(isDriver && verification?.status !== "verified"
+      // ? [
+    { icon: "cloud-upload-outline", label: "Upload Documents", screen: "DriverProfileCompletion" },
+      // ]
+      // : []),
     { icon: "shield-checkmark-outline", label: "Privacy Policy", value: "View", screen: "PrivacyPolicy" },
     { icon: "help-circle-outline", label: "Help & Support", screen: "HelpSupport" },
     { icon: "information-circle-outline", label: "About", value: APP_VERSION },

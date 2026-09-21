@@ -1,10 +1,18 @@
 import json
 import logging
+from datetime import date, datetime
 
 from django.core.cache import cache
 from common.constants import REGISTRATION_PAYLOAD_PREFIX, REGISTRATION_PAYLOAD_TTL
 
 logger = logging.getLogger(__name__)
+
+
+class _DateEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, (date, datetime)):
+            return o.isoformat()
+        return super().default(o)
 
 
 class RegistrationService:
@@ -18,7 +26,7 @@ class RegistrationService:
         data = {"user_id": str(user_id), "payload": payload}
         try:
             cache.client.get_client().setex(
-                cls._key(job_id), REGISTRATION_PAYLOAD_TTL, json.dumps(data)
+                cls._key(job_id), REGISTRATION_PAYLOAD_TTL, json.dumps(data, cls=_DateEncoder)
             )
         except Exception:
             logger.warning("[RegistrationService] Failed to save payload for job %s", job_id, exc_info=True)

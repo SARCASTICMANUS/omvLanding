@@ -425,6 +425,13 @@ class DriverDocumentSerializer(serializers.ModelSerializer):
         fields = ("id", "document_type", "file_data", "file_name", "status", "rejection_reason", "created_at")
         read_only_fields = ("id", "status", "rejection_reason", "created_at")
 
+
+class DriverDocumentListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DriverDocument
+        fields = ("id", "document_type", "file_name", "status", "rejection_reason", "created_at")
+        read_only_fields = ("id", "status", "rejection_reason", "created_at")
+
 class RecentSearchSerializer(serializers.ModelSerializer):
     pickup = serializers.SerializerMethodField()
     destination = serializers.SerializerMethodField()

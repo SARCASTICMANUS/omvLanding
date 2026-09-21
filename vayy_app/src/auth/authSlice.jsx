@@ -34,14 +34,17 @@ const normalizeAuthPayload = (data) => {
 export const loginUser = createAsyncThunk(
   "auth/login",
   async (creds, thunkAPI) => {
+    const email = creds.email?.trim().toLowerCase();
+    console.log("[Auth] loginUser:", email);
     try {
       const response = await api.post(AUTH.login, {
-        email: creds.email?.trim().toLowerCase(),
+        email,
         password: creds.password,
       });
 
       const payload = response.data.data || response.data;
       const data = normalizeAuthPayload(payload);
+      console.log("[Auth] loginUser success: user role=", data.user?.role, "hasToken=", !!data.token);
 
       if (data.token) {
         await AsyncStorage.setItem(STORAGE_KEYS.token, data.token);
@@ -57,6 +60,7 @@ export const loginUser = createAsyncThunk(
       return data;
     } catch (error) {
       const data = error.response?.data;
+      console.error("[Auth] loginUser error:", error.response?.status, data);
       if (typeof data === "string" && data.includes("<!DOCTYPE html>")) {
         return thunkAPI.rejectWithValue({
           error: `Backend returned HTML instead of JSON. Check your URL. Current BaseURL: ${API_URL}`,
@@ -96,16 +100,19 @@ export const registerUser = createAsyncThunk(
 export const sendRegistrationOtp = createAsyncThunk(
   "auth/sendRegistrationOtp",
   async (data, thunkAPI) => {
+    const payload = {
+      email: data.email?.trim().toLowerCase(),
+      password: data.password,
+      role: data.role,
+      first_name: data.first_name || "",
+    };
+    console.log("[Auth] sendRegistrationOtp payload:", JSON.stringify({ ...payload, password: "***" }));
     try {
-      const response = await api.post(AUTH.sendRegistrationOtp, {
-        email: data.email?.trim().toLowerCase(),
-        password: data.password,
-        role: data.role,
-        first_name: data.first_name || "",
-      });
-
+      const response = await api.post(AUTH.sendRegistrationOtp, payload);
+      console.log("[Auth] sendRegistrationOtp success:", response.data);
       return { email: data.email?.trim().toLowerCase() };
     } catch (error) {
+      console.error("[Auth] sendRegistrationOtp error:", error.response?.status, error.response?.data);
       return thunkAPI.rejectWithValue(
         error.response?.data || { error: "Failed to send Safety Code" },
       );
@@ -116,17 +123,16 @@ export const sendRegistrationOtp = createAsyncThunk(
 export const verifyAndRegister = createAsyncThunk(
   "auth/verifyAndRegister",
   async ({ email, otp }, thunkAPI) => {
+    const payload = { email: email?.trim().toLowerCase(), otp };
+    console.log("[Auth] verifyAndRegister payload:", JSON.stringify(payload));
     try {
-      const response = await api.post(AUTH.verifyAndRegister, {
-        email: email?.trim().toLowerCase(),
-        otp,
-      });
-
-      const payload = response.data.data || response.data;
-      const user = normalizeUser(payload);
-
+      const response = await api.post(AUTH.verifyAndRegister, payload);
+      console.log("[Auth] verifyAndRegister success:", response.data);
+      const data = response.data.data || response.data;
+      const user = normalizeUser(data);
       return { user, email: user.email };
     } catch (error) {
+      console.error("[Auth] verifyAndRegister error:", error.response?.status, error.response?.data);
       return thunkAPI.rejectWithValue(
         error.response?.data || { error: "Verification failed" },
       );
@@ -137,12 +143,14 @@ export const verifyAndRegister = createAsyncThunk(
 export const resendRegistrationOtp = createAsyncThunk(
   "auth/resendRegistrationOtp",
   async (email, thunkAPI) => {
+    const payload = { email: email?.trim().toLowerCase() };
+    console.log("[Auth] resendRegistrationOtp payload:", JSON.stringify(payload));
     try {
-      await api.post(AUTH.resendRegistrationOtp, {
-        email: email?.trim().toLowerCase(),
-      });
+      const response = await api.post(AUTH.resendRegistrationOtp, payload);
+      console.log("[Auth] resendRegistrationOtp success:", response.data);
       return { email };
     } catch (error) {
+      console.error("[Auth] resendRegistrationOtp error:", error.response?.status, error.response?.data);
       return thunkAPI.rejectWithValue(
         error.response?.data || { error: "Failed to resend Safety Code" },
       );
@@ -153,24 +161,27 @@ export const resendRegistrationOtp = createAsyncThunk(
 export const completeRegistration = createAsyncThunk(
   "auth/completeRegistration",
   async (data, thunkAPI) => {
+    const payload = {
+      role: data.role || "",
+      display_name: data.display_name || "",
+      phone_number: data.phone_number || "",
+      dob: data.dob || null,
+      gender: data.gender || "",
+      vehicle_type: data.vehicle_type,
+      vehicle_number: data.vehicle_number,
+      vehicle_photo: data.vehicle_photo || "",
+      rc_number: data.rc_number || "",
+      document_ids: data.document_ids || [],
+      bank_details: data.bank_details || {},
+    };
+    console.log("[Auth] completeRegistration payload:", JSON.stringify(payload));
     try {
-      const response = await api.post(AUTH.completeRegistration, {
-        role: data.role || "",
-        display_name: data.display_name || "",
-        phone_number: data.phone_number || "",
-        dob: data.dob || null,
-        gender: data.gender || "",
-        vehicle_type: data.vehicle_type,
-        vehicle_number: data.vehicle_number,
-        vehicle_photo: data.vehicle_photo || "",
-        rc_number: data.rc_number || "",
-        document_ids: data.document_ids || [],
-        bank_details: data.bank_details || {},
-      });
-
-      const payload = response.data.data || response.data;
-      return payload;
+      const response = await api.post(AUTH.completeRegistration, payload);
+      console.log("[Auth] completeRegistration success:", response.data);
+      const result = response.data.data || response.data;
+      return result;
     } catch (error) {
+      console.error("[Auth] completeRegistration error:", error.response?.status, error.response?.data);
       return thunkAPI.rejectWithValue(
         error.response?.data || { error: "Driver registration failed" },
       );

@@ -30,6 +30,7 @@ export default function DriverRegistrationScreen({ navigation }) {
 
   const handleSendOtp = async (formData) => {
     setRegistering(true);
+    console.log("[Reg] Sending OTP for:", formData.email, "role: bikedriver");
     const result = await dispatch(
       sendRegistrationOtp({
         email: formData.email,
@@ -39,6 +40,7 @@ export default function DriverRegistrationScreen({ navigation }) {
       }),
     );
     setRegistering(false);
+    console.log("[Reg] OTP result:", sendRegistrationOtp.rejected.match(result) ? "REJECTED" : "SUCCESS", result.payload);
 
     if (sendRegistrationOtp.rejected.match(result)) {
       const msg =
@@ -58,9 +60,11 @@ export default function DriverRegistrationScreen({ navigation }) {
   };
 
   const handleOtpVerified = async (otpValue) => {
+    console.log("[Reg] Verifying OTP for:", data.email);
     const result = await dispatch(
       verifyAndRegister({ email: data.email, otp: otpValue }),
     );
+    console.log("[Reg] Verify result:", verifyAndRegister.rejected.match(result) ? "REJECTED" : "SUCCESS", result.payload);
 
     if (verifyAndRegister.rejected.match(result)) {
       const msg =
@@ -71,17 +75,21 @@ export default function DriverRegistrationScreen({ navigation }) {
       return;
     }
 
+    console.log("[Reg] Saving onboarding fields:", { fullName: data.fullName, email: data.email, mobile: data.mobile, dob: data.dob, gender: data.gender });
     dispatch(setField({ field: "fullName", value: data.fullName }));
     dispatch(setField({ field: "email", value: data.email }));
     dispatch(setField({ field: "mobile", value: data.mobile }));
     dispatch(setField({ field: "dob", value: data.dob }));
     dispatch(setField({ field: "gender", value: data.gender }));
 
+    console.log("[Reg] Auto-logging in...");
     const loginResult = await dispatch(
       loginUser({ email: data.email, password: data.password }),
     );
+    console.log("[Reg] Login result:", loginUser.rejected.match(loginResult) ? "REJECTED" : "SUCCESS");
 
     if (loginUser.rejected.match(loginResult)) {
+      console.error("[Reg] Login failed:", loginResult.payload);
       Alert.alert(
         "Login Failed",
         "Account created but login failed. Please go to Login page and sign in.",
@@ -90,6 +98,7 @@ export default function DriverRegistrationScreen({ navigation }) {
       return;
     }
 
+    console.log("[Reg] Registration complete — navigating to driver app");
     // AppNavigator will auto-switch to DriverNavigator since isAuthenticated is now true
   };
 

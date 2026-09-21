@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -86,6 +86,92 @@ export default function DriverProfileCompletionScreen({ navigation }) {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(true);
+
+  // ── Fetch existing data on mount ──
+  useEffect(() => {
+    const loadExistingData = async () => {
+      try {
+        console.log("[Completion] Fetching existing data...");
+        const [profileRes, docsRes, bankRes] = await Promise.all([
+          api.get(AUTH.driverProfile).catch((e) => { console.warn("[Completion] Profile fetch failed:", e?.response?.status, e?.response?.data || e?.message); return null; }),
+          api.get(AUTH.driverDocuments).catch((e) => { console.warn("[Completion] Documents fetch failed:", e?.response?.status, e?.response?.data || e?.message); return null; }),
+          api.get(AUTH.driverBankDetails).catch((e) => { console.warn("[Completion] Bank fetch failed:", e?.response?.status, e?.response?.data || e?.message); return null; }),
+        ]);
+
+        console.log("[Completion] Profile response:", JSON.stringify(profileRes?.data?.data || profileRes?.data, null, 2));
+        console.log("[Completion] Documents response:", JSON.stringify(docsRes?.data, null, 2)?.substring(0, 500));
+        console.log("[Completion] Bank response:", JSON.stringify(bankRes?.data?.data || bankRes?.data, null, 2));
+
+        // Profile
+        const profile = profileRes?.data?.data || profileRes?.data;
+        if (profile) {
+          if (profile.display_name || profile.first_name) setFullName(profile.display_name || profile.first_name);
+          if (profile.phone_number) setMobile(profile.phone_number);
+          if (profile.dob) {
+            const parts = String(profile.dob).split("-");
+            if (parts.length === 3) {
+              const [y, m, d] = parts;
+              setDob(`${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`);
+            }
+          }
+          if (profile.gender) setGender(profile.gender);
+          if (profile.vehicle_type) setVehicleType(profile.vehicle_type);
+          if (profile.vehicle_number) setVehicleNumber(profile.vehicle_number);
+          if (profile.rc_number) setRcNumber(profile.rc_number);
+        }
+
+        // Documents — map by type and creation order to UI keys
+        const rawDocs = docsRes?.data;
+        const docList = Array.isArray(rawDocs) ? rawDocs : Array.isArray(rawDocs?.data) ? rawDocs.data : [];
+        console.log("[Completion] Parsed docList:", docList.length, "docs");
+        if (docList.length > 0) {
+          const typeToKeys = {
+            LICENSE: ["dlFront", "dlBack"],
+            RC: ["rcFront", "rcBack"],
+            INSURANCE: ["insuranceFront", "insuranceBack"],
+            IDENTITY: ["aadhaarFront", "aadhaarBack", "selfie"],
+          };
+          const counters = { LICENSE: 0, RC: 0, INSURANCE: 0, IDENTITY: 0 };
+          const newDocs = {};
+
+          for (const doc of docList) {
+            const t = doc.document_type;
+            const keys = typeToKeys[t];
+            if (!keys) continue;
+            const idx = counters[t];
+            if (idx < keys.length) {
+              const field = keys[idx];
+              const uri = doc.file_data ? `data:image/jpeg;base64,${doc.file_data.substring(0, 50)}...` : null;
+              newDocs[field] = { uri: doc.file_data ? `data:image/jpeg;base64,${doc.file_data}` : null, id: doc.id, status: "success" };
+              counters[t]++;
+              console.log(`[Completion] Loaded doc: ${field} → type=${t} id=${doc.id} hasFile=${!!doc.file_data}`);
+            }
+          }
+
+          setDocs((prev) => ({ ...prev, ...newDocs }));
+          console.log("[Completion] Docs state updated:", Object.keys(newDocs));
+        }
+
+        // Bank details
+        const bank = bankRes?.data?.data || bankRes?.data;
+        if (bank) {
+          if (bank.holder_name) setHolderName(bank.holder_name);
+          if (bank.account_number) setAccountNumber(bank.account_number);
+          if (bank.ifsc) setIfsc(bank.ifsc);
+          if (bank.upi) setUpi(bank.upi);
+        }
+
+        console.log("[Completion] Data loading complete");
+      } catch (e) {
+        console.error("[Completion] Unexpected error loading data:", e);
+      } finally {
+        setLoadingExisting(false);
+      }
+    };
+
+    loadExistingData();
+  }, []);
 
   // ── Vehicle Photo Upload ──
   const pickVehiclePhoto = async () => {
@@ -124,6 +210,7 @@ export default function DriverProfileCompletionScreen({ navigation }) {
     if (result.canceled || !result.assets?.[0]?.uri) return;
 
     const uri = result.assets[0].uri;
+    console.log(`[Completion] Uploading doc: field=${field} type=${documentType} uri=${uri}`);
     setDocs((p) => ({ ...p, [field]: { ...p[field], uri, status: "uploading" } }));
 
     try {
@@ -139,9 +226,11 @@ export default function DriverProfileCompletionScreen({ navigation }) {
       });
       const docData = response.data?.data || response.data;
       const docId = docData?.id;
+      console.log(`[Completion] Upload success: field=${field} docId=${docId}`);
       setDocs((p) => ({ ...p, [field]: { uri, id: docId, status: "success" } }));
       setErrors((p) => { const n = { ...p }; delete n[field]; return n; });
     } catch (e) {
+      console.error(`[Completion] Upload failed: field=${field}`, e?.response?.status, e?.response?.data || e?.message);
       setDocs((p) => ({ ...p, [field]: { uri, id: null, status: "error" } }));
       Alert.alert("Upload Failed", "Could not upload document. Tap to retry.");
     }
@@ -221,21 +310,23 @@ export default function DriverProfileCompletionScreen({ navigation }) {
       const dobFormatted = parseDobToISO(dob);
       const role = vehicleType === "auto" ? "autodriver" : "bikedriver";
 
-      const result = await dispatch(
-        completeRegistration({
-          display_name: fullName,
-          phone_number: mobile,
-          dob: dobFormatted,
-          gender: gender,
-          vehicle_type: vehicleType,
-          vehicle_number: vehicleNumber,
-          vehicle_photo: "",
-          rc_number: rcNumber,
-          document_ids: documentIds,
-          bank_details: bankDetails,
-          role,
-        }),
-      );
+      const payload = {
+        display_name: fullName,
+        phone_number: mobile,
+        dob: dobFormatted,
+        gender: gender,
+        vehicle_type: vehicleType,
+        vehicle_number: vehicleNumber,
+        vehicle_photo: "",
+        rc_number: rcNumber,
+        document_ids: documentIds,
+        bank_details: bankDetails,
+        role,
+      };
+      console.log("[Completion] Submit payload:", JSON.stringify(payload, null, 2));
+
+      const result = await dispatch(completeRegistration(payload));
+      console.log("[Completion] Submit result:", JSON.stringify({ rejected: completeRegistration.rejected.match(result), payload: result.payload }, null, 2));
 
       setSubmitting(false);
 
@@ -245,10 +336,12 @@ export default function DriverProfileCompletionScreen({ navigation }) {
           result.payload?.error ||
           result.payload?.message ||
           "Submission failed";
+        console.error("[Completion] Submit error:", errorMsg, result.payload);
         Alert.alert("Registration Failed", errorMsg);
         return;
       }
 
+      console.log("[Completion] Submit success");
       dispatch(clearFields());
       setSubmitted(true);
     } catch {
@@ -262,6 +355,20 @@ export default function DriverProfileCompletionScreen({ navigation }) {
   if (submitted) {
     return (
       <ApplicationSubmittedScreen onCta={() => navigation.navigate("DriverTabs")} />
+    );
+  }
+
+  if (loadingExisting) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <TouchableOpacity style={styles.back} onPress={onBack} activeOpacity={0.7}>
+          <ArrowLeft size={22} color={COLORS.text} />
+        </TouchableOpacity>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={{ marginTop: 12, color: COLORS.textMuted, fontSize: 14 }}>Loading your details...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -415,9 +522,9 @@ export default function DriverProfileCompletionScreen({ navigation }) {
                 <View style={styles.uploadRow}>
                   <ImageUploadCard
                     label="Front"
-                    uri={docs[`${section.key}Front`]?.uri}
-                    onPress={() => pickAndUploadDoc(`${section.key}Front`, section.type)}
-                    status={docs[`${section.key}Front`]?.status}
+                    uri={docs[section.back ? `${section.key}Front` : section.key]?.uri}
+                    onPress={() => pickAndUploadDoc(section.back ? `${section.key}Front` : section.key, section.type)}
+                    status={docs[section.back ? `${section.key}Front` : section.key]?.status}
                   />
                   {section.back && (
                     <ImageUploadCard
@@ -429,7 +536,7 @@ export default function DriverProfileCompletionScreen({ navigation }) {
                   )}
                 </View>
                 {(errors[`${section.key}Front`] || errors[`${section.key}Back`] || errors[section.key]) && (
-                  <Text style={styles.err}>Both sides required</Text>
+                  <Text style={styles.err}>{section.back ? "Both sides required" : "Photo required"}</Text>
                 )}
               </View>
             ))}
