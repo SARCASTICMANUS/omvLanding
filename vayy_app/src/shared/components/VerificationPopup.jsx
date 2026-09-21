@@ -35,7 +35,7 @@ const STATUS_CONFIG = {
     title: "Documents Rejected",
     message: "Some of your documents were rejected. Please re-upload to continue.",
     dismissLabel: "Re-upload Documents",
-    action: "editProfile",
+    action: "completeRegistration",
     dismissable: false,
   },
   not_submitted: {
@@ -91,9 +91,6 @@ export default function VerificationPopup({ visible, onDismiss, navigation }) {
   const handleAction = () => {
     if (config.action === "dismiss") {
       onDismiss?.();
-    } else if (config.action === "editProfile" && navigation) {
-      onDismiss?.();
-      navigation.navigate("EditProfile");
     } else if (config.action === "completeRegistration" && navigation) {
       onDismiss?.();
       navigation.navigate("DriverProfileCompletion");

@@ -10,13 +10,12 @@ import {
   Platform,
   Alert,
   Image,
-  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
-import { updateProfile, fetchVerificationStatus, uploadDocument } from "../../store/slices/profileSlice";
+import { updateProfile, fetchVerificationStatus } from "../../store/slices/profileSlice";
 
 import COLORS from "../constants/colors";
 import RADIUS from "../constants/radius";
@@ -72,8 +71,6 @@ export default function EditProfileScreen({ navigation }) {
       : {}),
   });
 
-  const [uploadingDoc, setUploadingDoc] = useState(null);
-
   useEffect(() => {
     if (isDriver) {
       dispatch(fetchVerificationStatus());
@@ -106,27 +103,6 @@ export default function EditProfileScreen({ navigation }) {
     });
     if (!result.canceled && result.assets?.[0]?.uri) {
       updateField("profile_photo", result.assets[0].uri);
-    }
-  };
-
-  const handleUploadDocument = async (docType) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission needed", "Please allow access to your photos.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setUploadingDoc(docType);
-      const fileUri = result.assets[0].uri;
-      const fileName = fileUri.split("/").pop();
-      await dispatch(uploadDocument({ documentType: docType, fileUri, fileName }));
-      dispatch(fetchVerificationStatus());
-      setUploadingDoc(null);
     }
   };
 
@@ -298,37 +274,38 @@ export default function EditProfileScreen({ navigation }) {
                 const docStatus = getDocStatus(doc.key);
                 const statusKey = docStatus?.status || null;
                 const statusColor = statusKey ? STATUS_COLORS[statusKey] : null;
-                const isUploading = uploadingDoc === doc.key;
-                const isUploaded = !!statusKey;
                 return (
-                  <TouchableOpacity
+                  <View
                     key={doc.key}
                     style={styles.docRow}
-                    onPress={() => handleUploadDocument(doc.key)}
-                    activeOpacity={0.7}
-                    disabled={isUploading}
                   >
                     <View style={styles.docLeft}>
                       <Ionicons name={doc.icon} size={20} color={COLORS.textLight} />
                       <Text style={styles.docLabel}>{doc.label}</Text>
                     </View>
                     <View style={styles.docRight}>
-                      {isUploading ? (
-                        <ActivityIndicator size="small" color={COLORS.primary} />
-                      ) : isUploaded ? (
+                      {statusKey ? (
                         <View style={styles.docUploaded}>
-                          <Ionicons name="checkmark-circle" size={20} color="#16a34a" />
                           <View style={[styles.docBadge, { backgroundColor: statusColor.bg, borderColor: statusColor.border }]}>
                             <Text style={[styles.docBadgeText, { color: statusColor.text }]}>{statusKey}</Text>
                           </View>
                         </View>
                       ) : (
-                        <Ionicons name="cloud-upload-outline" size={18} color={COLORS.primary} />
+                        <Ionicons name="cloud-upload-outline" size={18} color={COLORS.textLight} />
                       )}
                     </View>
-                  </TouchableOpacity>
+                  </View>
                 );
               })}
+              <TouchableOpacity
+                style={styles.reuploadBtn}
+                onPress={() => navigation.navigate("DriverProfileCompletion")}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="document-text-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.reuploadBtnText}>Manage Documents</Text>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
+              </TouchableOpacity>
             </View>
           )}
 
@@ -503,6 +480,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     textTransform: "uppercase",
+  },
+  reuploadBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: COLORS.primary,
+    backgroundColor: "#f0fdf4",
+  },
+  reuploadBtnText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.primary,
   },
   photoPicker: {
     width: 120,

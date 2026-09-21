@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ArrowLeft, Bike, Car, CheckCircle, User, CreditCard, Building2, Smartphone, Phone, Calendar, Users } from "lucide-react-native";
+import { ArrowLeft, Bike, Car, CheckCircle, User, CreditCard, Building2, Smartphone, Phone, Calendar, XCircle, Clock } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useDispatch, useSelector } from "react-redux";
 import COLORS from "../../../shared/constants/colors";
@@ -20,7 +20,6 @@ import ImageUploadCard from "../../components/ImageUploadCard";
 import BottomStickyButton from "../../components/BottomStickyButton";
 import ApplicationSubmittedScreen from "../ApplicationSubmittedScreen";
 import { completeRegistration } from "../../authSlice";
-import { uploadDocument } from "../../../store/slices/profileSlice";
 import { clearFields } from "../../../store/slices/onboardingSlice";
 import { VALIDATORS, VALIDATION_MESSAGES } from "../../validators";
 import api from "../../../shared/lib/api";
@@ -63,17 +62,19 @@ export default function DriverProfileCompletionScreen({ navigation }) {
   const [vehiclePhotoUri, setVehiclePhotoUri] = useState(null);
   const [vehiclePhotoUploading, setVehiclePhotoUploading] = useState(false);
 
-  // Documents: { dlFront: { uri, id, status }, dlBack: { uri, id, status }, ... }
+  // Documents: { dlFront: { uri, id, status, docStatus }, ... }
+  // status = UI upload state (idle/uploading/success/error)
+  // docStatus = backend verification status (PENDING/VERIFIED/REJECTED)
   const [docs, setDocs] = useState({
-    dlFront: { uri: null, id: null, status: "idle" },
-    dlBack: { uri: null, id: null, status: "idle" },
-    rcFront: { uri: null, id: null, status: "idle" },
-    rcBack: { uri: null, id: null, status: "idle" },
-    insuranceFront: { uri: null, id: null, status: "idle" },
-    insuranceBack: { uri: null, id: null, status: "idle" },
-    aadhaarFront: { uri: null, id: null, status: "idle" },
-    aadhaarBack: { uri: null, id: null, status: "idle" },
-    selfie: { uri: null, id: null, status: "idle" },
+    dlFront: { uri: null, id: null, status: "idle", docStatus: null },
+    dlBack: { uri: null, id: null, status: "idle", docStatus: null },
+    rcFront: { uri: null, id: null, status: "idle", docStatus: null },
+    rcBack: { uri: null, id: null, status: "idle", docStatus: null },
+    insuranceFront: { uri: null, id: null, status: "idle", docStatus: null },
+    insuranceBack: { uri: null, id: null, status: "idle", docStatus: null },
+    aadhaarFront: { uri: null, id: null, status: "idle", docStatus: null },
+    aadhaarBack: { uri: null, id: null, status: "idle", docStatus: null },
+    selfie: { uri: null, id: null, status: "idle", docStatus: null },
   });
 
   // Bank
@@ -142,10 +143,14 @@ export default function DriverProfileCompletionScreen({ navigation }) {
             const idx = counters[t];
             if (idx < keys.length) {
               const field = keys[idx];
-              const uri = doc.file_data ? `data:image/jpeg;base64,${doc.file_data.substring(0, 50)}...` : null;
-              newDocs[field] = { uri: doc.file_data ? `data:image/jpeg;base64,${doc.file_data}` : null, id: doc.id, status: "success" };
+              newDocs[field] = {
+                uri: doc.file_data ? `data:image/jpeg;base64,${doc.file_data}` : null,
+                id: doc.id,
+                status: "success",
+                docStatus: doc.status || null,
+              };
               counters[t]++;
-              console.log(`[Completion] Loaded doc: ${field} → type=${t} id=${doc.id} hasFile=${!!doc.file_data}`);
+              console.log(`[Completion] Loaded doc: ${field} → type=${t} id=${doc.id} hasFile=${!!doc.file_data} status=${doc.status}`);
             }
           }
 
@@ -196,6 +201,29 @@ export default function DriverProfileCompletionScreen({ navigation }) {
 
   // ── Document Upload ──
   const pickAndUploadDoc = async (field, documentType) => {
+    const existingDoc = docs[field];
+    if (existingDoc?.id) {
+      const statusLabel = existingDoc.docStatus || "uploaded";
+      const action = await new Promise((resolve) => {
+        Alert.alert(
+          "Replace Document",
+          `This slot already has a ${statusLabel.toLowerCase()} document. Replace it?`,
+          [
+            { text: "Cancel", style: "cancel", onPress: () => resolve("cancel") },
+            { text: "Replace", onPress: () => resolve("replace") },
+          ]
+        );
+      });
+      if (action !== "replace") return;
+
+      try {
+        await api.delete(AUTH.driverDocumentDelete(existingDoc.id));
+        console.log(`[Completion] Deleted old doc: ${field} id=${existingDoc.id}`);
+      } catch (e) {
+        console.warn(`[Completion] Failed to delete old doc: ${e?.message}`);
+      }
+    }
+
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Alert.alert("Permission Required", "Please grant gallery access.");
@@ -211,7 +239,7 @@ export default function DriverProfileCompletionScreen({ navigation }) {
 
     const uri = result.assets[0].uri;
     console.log(`[Completion] Uploading doc: field=${field} type=${documentType} uri=${uri}`);
-    setDocs((p) => ({ ...p, [field]: { ...p[field], uri, status: "uploading" } }));
+    setDocs((p) => ({ ...p, [field]: { uri, id: null, status: "uploading", docStatus: null } }));
 
     try {
       const formData = new FormData();
@@ -227,11 +255,11 @@ export default function DriverProfileCompletionScreen({ navigation }) {
       const docData = response.data?.data || response.data;
       const docId = docData?.id;
       console.log(`[Completion] Upload success: field=${field} docId=${docId}`);
-      setDocs((p) => ({ ...p, [field]: { uri, id: docId, status: "success" } }));
+      setDocs((p) => ({ ...p, [field]: { uri, id: docId, status: "success", docStatus: "PENDING" } }));
       setErrors((p) => { const n = { ...p }; delete n[field]; return n; });
     } catch (e) {
       console.error(`[Completion] Upload failed: field=${field}`, e?.response?.status, e?.response?.data || e?.message);
-      setDocs((p) => ({ ...p, [field]: { uri, id: null, status: "error" } }));
+      setDocs((p) => ({ ...p, [field]: { uri, id: null, status: "error", docStatus: null } }));
       Alert.alert("Upload Failed", "Could not upload document. Tap to retry.");
     }
   };
@@ -516,30 +544,64 @@ export default function DriverProfileCompletionScreen({ navigation }) {
               <Text style={styles.docCount}>{docCount}/{totalDocs} uploaded</Text>
             </View>
 
-            {DOC_SECTIONS.map((section) => (
-              <View key={section.key} style={styles.docSection}>
-                <Text style={styles.docLabel}>{section.label}</Text>
-                <View style={styles.uploadRow}>
-                  <ImageUploadCard
-                    label="Front"
-                    uri={docs[section.back ? `${section.key}Front` : section.key]?.uri}
-                    onPress={() => pickAndUploadDoc(section.back ? `${section.key}Front` : section.key, section.type)}
-                    status={docs[section.back ? `${section.key}Front` : section.key]?.status}
-                  />
-                  {section.back && (
+            {DOC_SECTIONS.map((section) => {
+              const frontField = section.back ? `${section.key}Front` : section.key;
+              const backField = `${section.key}Back`;
+              const frontDoc = docs[frontField];
+              const backDoc = section.back ? docs[backField] : null;
+              const frontStatus = frontDoc?.docStatus;
+              const backStatus = backDoc?.docStatus;
+              const hasRejection = frontStatus === "REJECTED" || backStatus === "REJECTED";
+              const hasPending = frontStatus === "PENDING" || backStatus === "PENDING";
+
+              return (
+                <View key={section.key} style={styles.docSection}>
+                  <View style={styles.docLabelRow}>
+                    <Text style={styles.docLabel}>{section.label}</Text>
+                    {hasRejection && (
+                      <View style={[styles.statusBadge, { backgroundColor: "#FEF2F2", borderColor: "#FECACA" }]}>
+                        <XCircle size={12} color="#dc2626" />
+                        <Text style={[styles.statusBadgeText, { color: "#dc2626" }]}>Rejected</Text>
+                      </View>
+                    )}
+                    {!hasRejection && hasPending && (
+                      <View style={[styles.statusBadge, { backgroundColor: "#fffbeb", borderColor: "#fde68a" }]}>
+                        <Clock size={12} color="#d97706" />
+                        <Text style={[styles.statusBadgeText, { color: "#d97706" }]}>Pending</Text>
+                      </View>
+                    )}
+                    {!hasRejection && !hasPending && frontDoc?.status === "success" && (!section.back || backDoc?.status === "success") && (
+                      <View style={[styles.statusBadge, { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}>
+                        <CheckCircle size={12} color="#16a34a" />
+                        <Text style={[styles.statusBadgeText, { color: "#16a34a" }]}>Verified</Text>
+                      </View>
+                    )}
+                  </View>
+                  {hasRejection && (
+                    <Text style={styles.rejectionHint}>Tap the document to re-upload a new version</Text>
+                  )}
+                  <View style={styles.uploadRow}>
                     <ImageUploadCard
-                      label="Back"
-                      uri={docs[`${section.key}Back`]?.uri}
-                      onPress={() => pickAndUploadDoc(`${section.key}Back`, section.type)}
-                      status={docs[`${section.key}Back`]?.status}
+                      label="Front"
+                      uri={docs[frontField]?.uri}
+                      onPress={() => pickAndUploadDoc(frontField, section.type)}
+                      status={docs[frontField]?.status}
                     />
+                    {section.back && (
+                      <ImageUploadCard
+                        label="Back"
+                        uri={docs[backField]?.uri}
+                        onPress={() => pickAndUploadDoc(backField, section.type)}
+                        status={docs[backField]?.status}
+                      />
+                    )}
+                  </View>
+                  {(errors[frontField] || errors[backField] || errors[section.key]) && (
+                    <Text style={styles.err}>{section.back ? "Both sides required" : "Photo required"}</Text>
                   )}
                 </View>
-                {(errors[`${section.key}Front`] || errors[`${section.key}Back`] || errors[section.key]) && (
-                  <Text style={styles.err}>{section.back ? "Both sides required" : "Photo required"}</Text>
-                )}
-              </View>
-            ))}
+              );
+            })}
           </View>
 
           {/* ── BANK SECTION ── */}
@@ -638,7 +700,11 @@ const styles = StyleSheet.create({
   vehicleCardActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primary },
   vehicleLabel: { fontSize: 14, fontWeight: "600", color: COLORS.textMuted },
   docSection: { marginBottom: 16 },
+  docLabelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
   docLabel: { fontSize: 13, fontWeight: "600", color: "#555", marginBottom: 8 },
+  statusBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
+  statusBadgeText: { fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
+  rejectionHint: { fontSize: 12, color: "#dc2626", marginBottom: 8, fontStyle: "italic" },
   uploadRow: { flexDirection: "row", gap: 12 },
   genderRow: { flexDirection: "row", gap: 10, marginBottom: 8 },
   genderPill: { flex: 1, height: 44, borderRadius: 12, borderWidth: 1.5, borderColor: "#e5e7eb", alignItems: "center", justifyContent: "center", backgroundColor: "#fafafa" },

@@ -66,6 +66,7 @@ urlpatterns = [
 
     # KYC
     path("driver/documents/", DriverDocumentAPIView.as_view()),
+    path("driver/documents/<uuid:doc_id>/", DriverDocumentAPIView.as_view()),
     path("driver/bank-details/", DriverBankDetailAPIView.as_view()),
     path("verification-status/", VerificationStatusAPIView.as_view()),
 

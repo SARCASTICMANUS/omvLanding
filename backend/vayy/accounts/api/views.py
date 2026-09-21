@@ -730,12 +730,31 @@ class AddFundsAPIView(APIView):
 class DriverDocumentAPIView(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
 
-    def get(self, request):
+    def get(self, request, **kwargs):
         docs = DriverDocument.objects.filter(driver=request.user)
         resp = Response(DriverDocumentListSerializer(docs, many=True).data)
         return resp
 
-    def post(self, request):
+    def delete(self, request, doc_id=None):
+        if not doc_id:
+            return Response(
+                {"success": False, "message": "doc_id path parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            doc = DriverDocument.objects.get(id=doc_id, driver=request.user)
+            doc.delete()
+            return Response(
+                {"success": True, "message": "Document deleted"},
+                status=status.HTTP_200_OK,
+            )
+        except DriverDocument.DoesNotExist:
+            return Response(
+                {"success": False, "message": "Document not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    def post(self, request, **kwargs):
         import base64
         import uuid as uuid_mod
 
