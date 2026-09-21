@@ -18,7 +18,7 @@ echo "PostgreSQL is ready"
 # Migrations are committed to the repo and must be tracked - run migrate only.
 # Ensure PostGIS extension exists (PostGIS image does not enable it by default).
 if command -v psql >/dev/null 2>&1; then
-  PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS postgis;" || true
+  PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm;" || true
 fi
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput
