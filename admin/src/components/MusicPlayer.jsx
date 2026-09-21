@@ -207,29 +207,27 @@ export function MusicPlayer({ ctaButton }) {
           className="relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center md:h-11 md:w-11"
         >
           <svg
-            className="absolute inset-0 -rotate-90"
-            width="45"
-            height="45"
-            viewBox="0 0 40 40"
+            className="absolute inset-0 -rotate-90 h-full w-full"
+            viewBox="0 0 44 44"
           >
             <circle
-              cx="21"
-              cy="18"
-              r="18"
+              cx="22"
+              cy="22"
+              r="19"
               fill="none"
               stroke="rgba(255,255,255,0.15)"
               strokeWidth="3"
             />
             <circle
-              cx="21"
-              cy="19"
-              r="17"
+              cx="22"
+              cy="22"
+              r="19"
               fill="none"
               stroke="#ffffff"
               strokeWidth="3"
               strokeLinecap="round"
-              strokeDasharray={106.81}
-              strokeDashoffset={106.81 - (progress / 100) * 106.81}
+              strokeDasharray={119.38}
+              strokeDashoffset={119.38 - (progress / 100) * 119.38}
               className="transition-[stroke-dashoffset] duration-200 ease-linear"
             />
           </svg>
