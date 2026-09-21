@@ -53,6 +53,7 @@ from accounts.api.serializers import (
     TransactionSerializer,
     AddFundsSerializer,
     DriverDocumentSerializer,
+    DriverDocumentListSerializer,
     RecentSearchSerializer,
     RecentSearchCreateSerializer,
     DriverBankDetailSerializer,
@@ -731,7 +732,7 @@ class DriverDocumentAPIView(APIView):
 
     def get(self, request):
         docs = DriverDocument.objects.filter(driver=request.user)
-        resp = Response(DriverDocumentSerializer(docs, many=True).data)
+        resp = Response(DriverDocumentListSerializer(docs, many=True).data)
         return resp
 
     def post(self, request):
@@ -841,7 +842,7 @@ class VerificationStatusAPIView(APIView):
             })
 
         docs = DriverDocument.objects.filter(driver=user)
-        doc_list = DriverDocumentSerializer(docs, many=True).data
+        doc_list = DriverDocumentListSerializer(docs, many=True).data
 
         profile = PublicDriverProfile.objects.filter(user=user).first()
         profile_verified = profile.is_verified if profile else False

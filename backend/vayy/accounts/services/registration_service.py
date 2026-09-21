@@ -1,6 +1,7 @@
 import json
 import logging
 from datetime import date, datetime
+from uuid import UUID
 
 from django.core.cache import cache
 from common.constants import REGISTRATION_PAYLOAD_PREFIX, REGISTRATION_PAYLOAD_TTL
@@ -12,6 +13,8 @@ class _DateEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, (date, datetime)):
             return o.isoformat()
+        if isinstance(o, UUID):
+            return str(o)
         return super().default(o)
 
 
