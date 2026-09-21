@@ -109,86 +109,33 @@ class CompleteDriverRegistrationAPIView(APIView):
     """
     POST /api/accounts/complete-registration/
     Authenticated user submits vehicle + documents + bank details.
-    Creates profile + vehicle + documents + bank + wallet atomically.
+    Heavy work is dispatched to Celery; returns 202 immediately.
     """
+
     permission_classes = [IsAuthenticated, IsDriver]
 
     def post(self, request):
-        from operations.models import Vehicle
-        from common.constants import (
-            VEHICLE_STATUS_PENDING,
-            VEHICLE_BIKE,
-        )
-
         serializer = CompleteDriverRegistrationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        user = request.user
 
-        # Update user role if provided
-        role = data.get("role", "")
-        if role and role in (ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER):
-            user.role = role
-            user.save(update_fields=["role"])
+        from uuid import uuid4
+        from accounts.services.registration_service import RegistrationService
+        from accounts.tasks import process_driver_registration
 
-        # 1. Create/update profile
-        profile, _ = PublicDriverProfile.objects.get_or_create(user=user)
-        profile.display_name = data.get("display_name", "") or user.first_name
-        profile.phone_number = data.get("phone_number", "")
-        profile.vehicle_number = data["vehicle_number"]
-        profile.vehicle_type = data["vehicle_type"]
-        profile.dob = data.get("dob")
-        profile.gender = data.get("gender", "")
-        profile.rc_number = data.get("rc_number", "")
-        profile.save()
+        job_id = str(uuid4())
+        RegistrationService.save_payload(
+            job_id, request.user.id, serializer.validated_data
+        )
 
-        # 2. Create/update vehicle
-        vehicle_photo = data.get("vehicle_photo", "")
-        vehicle, _ = Vehicle.objects.update_or_create(
-            driver=user,
-            defaults={
-                "vehicle_number": data["vehicle_number"],
-                "vehicle_type": data["vehicle_type"],
-                "vehicle_photo": vehicle_photo,
-                "status": VEHICLE_STATUS_PENDING,
-                "is_active": False,
+        process_driver_registration.delay(job_id, request.user.id)
+
+        return Response(
+            {
+                "success": True,
+                "message": "Registration submitted",
+                "data": {"job_id": job_id},
             },
-        )
-
-        # 3. Save documents as base64 strings (idempotent: clear existing first)
-        DriverDocument.objects.filter(driver=user).delete()
-        for doc_input in data.get("documents", []):
-            file_base64 = doc_input.get("file_base64", "")
-            file_name = doc_input.get("file_name", "upload.jpg")
-            doc_type = doc_input["document_type"]
-
-            if file_base64:
-                DriverDocument.objects.create(
-                    driver=user,
-                    document_type=doc_type,
-                    file_data=file_base64,
-                    file_name=file_name,
-                )
-
-        # 4. Save bank details
-        bank = data.get("bank_details", {})
-        if bank and any(bank.get(f) for f in ["holder_name", "account_number", "ifsc", "upi"]):
-            detail, _ = DriverBankDetail.objects.get_or_create(driver=user)
-            for f in ["holder_name", "account_number", "ifsc", "upi"]:
-                if f in bank:
-                    setattr(detail, f, bank[f])
-            detail.save()
-
-        # 5. Create wallet
-        Wallet.objects.get_or_create(
-            user=user,
-            defaults={"balance": 0, "currency": "INR"},
-        )
-
-        return success_response(
-            data=UserSerializer(user).data,
-            message="Driver registration completed successfully.",
-            status_code=status.HTTP_201_CREATED,
+            status=status.HTTP_202_ACCEPTED,
         )
 
 # LOGIN

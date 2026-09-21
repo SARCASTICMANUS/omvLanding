@@ -249,6 +249,11 @@ RK_GEO_EVENT = "geo.event"
 RIDE_REQUEST_KEY = "matching.ride_request"
 RIDE_LIFECYCLE_KEY = "matching.ride_lifecycle"
 
+# --- Registration Job ---
+
+REGISTRATION_PAYLOAD_PREFIX = "vayy:registration:payload"
+REGISTRATION_PAYLOAD_TTL = 300  # 5 minutes
+
 # =============================================================================
 # Backward Compatibility Aliases
 # =============================================================================
