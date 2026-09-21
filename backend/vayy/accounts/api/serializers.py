@@ -475,14 +475,6 @@ class DriverBankDetailUpdateSerializer(serializers.Serializer):
 
 # ── Complete driver registration (after OTP verify) ────────────
 
-class DriverDocumentInputSerializer(serializers.Serializer):
-    document_type = serializers.ChoiceField(
-        choices=["LICENSE", "RC", "INSURANCE", "IDENTITY"]
-    )
-    file_base64 = serializers.CharField(required=False, allow_blank=True, default="")
-    file_name = serializers.CharField(required=False, allow_blank=True, default="upload.jpg")
-
-
 class CompleteDriverRegistrationSerializer(serializers.Serializer):
     # User fields
     role = serializers.CharField(required=False, allow_blank=True, default="")
@@ -499,8 +491,12 @@ class CompleteDriverRegistrationSerializer(serializers.Serializer):
     vehicle_photo = serializers.CharField(required=False, allow_blank=True, default="")
     rc_number = serializers.CharField(required=False, allow_blank=True, default="")
 
-    # Documents (list)
-    documents = DriverDocumentInputSerializer(many=True, required=False, default=[])
+    # Document IDs (uploaded individually via POST /driver/documents/)
+    document_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        default=[],
+    )
 
     # Bank details
     bank_details = DriverBankDetailUpdateSerializer(required=False, default={})

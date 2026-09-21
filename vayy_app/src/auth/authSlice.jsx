@@ -93,6 +93,63 @@ export const registerUser = createAsyncThunk(
   },
 );
 
+export const sendRegistrationOtp = createAsyncThunk(
+  "auth/sendRegistrationOtp",
+  async (data, thunkAPI) => {
+    try {
+      const response = await api.post(AUTH.sendRegistrationOtp, {
+        email: data.email?.trim().toLowerCase(),
+        password: data.password,
+        role: data.role,
+        first_name: data.first_name || "",
+      });
+
+      return { email: data.email?.trim().toLowerCase() };
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data || { error: "Failed to send Safety Code" },
+      );
+    }
+  },
+);
+
+export const verifyAndRegister = createAsyncThunk(
+  "auth/verifyAndRegister",
+  async ({ email, otp }, thunkAPI) => {
+    try {
+      const response = await api.post(AUTH.verifyAndRegister, {
+        email: email?.trim().toLowerCase(),
+        otp,
+      });
+
+      const payload = response.data.data || response.data;
+      const user = normalizeUser(payload);
+
+      return { user, email: user.email };
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data || { error: "Verification failed" },
+      );
+    }
+  },
+);
+
+export const resendRegistrationOtp = createAsyncThunk(
+  "auth/resendRegistrationOtp",
+  async (email, thunkAPI) => {
+    try {
+      await api.post(AUTH.resendRegistrationOtp, {
+        email: email?.trim().toLowerCase(),
+      });
+      return { email };
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data || { error: "Failed to resend Safety Code" },
+      );
+    }
+  },
+);
+
 export const completeRegistration = createAsyncThunk(
   "auth/completeRegistration",
   async (data, thunkAPI) => {
@@ -107,7 +164,7 @@ export const completeRegistration = createAsyncThunk(
         vehicle_number: data.vehicle_number,
         vehicle_photo: data.vehicle_photo || "",
         rc_number: data.rc_number || "",
-        documents: data.documents || [],
+        document_ids: data.document_ids || [],
         bank_details: data.bank_details || {},
       });
 
@@ -252,6 +309,43 @@ const authSlice = createSlice({
         state.otpEmail = action.payload.email;
       })
       .addCase(registerUser.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(sendRegistrationOtp.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(sendRegistrationOtp.fulfilled, (state, action) => {
+        state.loading = false;
+        state.isOtpSent = true;
+        state.otpEmail = action.payload.email;
+      })
+      .addCase(sendRegistrationOtp.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(verifyAndRegister.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(verifyAndRegister.fulfilled, (state) => {
+        state.loading = false;
+        state.isOtpSent = false;
+        state.otpEmail = null;
+      })
+      .addCase(verifyAndRegister.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(resendRegistrationOtp.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(resendRegistrationOtp.fulfilled, (state) => {
+        state.loading = false;
+      })
+      .addCase(resendRegistrationOtp.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

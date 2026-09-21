@@ -7,8 +7,7 @@ import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import OTPInput from "../../components/OTPInput";
 import BottomStickyButton from "../../components/BottomStickyButton";
-import { verifyOtp, resendOtp } from "../../authSlice";
-import { setField } from "../../../store/slices/onboardingSlice";
+import { resendRegistrationOtp } from "../../authSlice";
 
 export default function DriverStep6OTP({ onComplete, onBack, email }) {
   const dispatch = useDispatch();
@@ -29,7 +28,7 @@ export default function DriverStep6OTP({ onComplete, onBack, email }) {
   }, [timer]);
 
   const handleResend = () => {
-    dispatch(resendOtp(email));
+    dispatch(resendRegistrationOtp(email));
     setTimer(30);
     setResendDisabled(true);
     setOtp("");
@@ -38,17 +37,11 @@ export default function DriverStep6OTP({ onComplete, onBack, email }) {
 
   const handleVerify = () => {
     if (otp.length !== 6) return;
-    dispatch(verifyOtp({ email, otp })).then((result) => {
-      if (verifyOtp.fulfilled.match(result)) {
-        dispatch(setField({ field: "verifiedEmail", value: email }));
-        onComplete?.();
-      } else {
-        setOtpError(true);
-      }
-    });
+    setOtpError(false);
+    onComplete?.(otp);
   };
 
-  const apiError = error?.otp?.[0] || error?.error;
+  const apiError = error?.otp?.[0] || error?.error || error?.message;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -60,7 +53,7 @@ export default function DriverStep6OTP({ onComplete, onBack, email }) {
         <Text style={styles.sub}>Enter the code sent to {email}</Text>
         <TouchableOpacity onPress={onBack}><Text style={styles.editLink}>Edit email?</Text></TouchableOpacity>
       </View>
-        <ProgressBar current={2} total={7} />
+        <ProgressBar current={2} total={2} />
       <View style={styles.body}>
         <OTPInput length={6} onComplete={(v) => { setOtp(v); setOtpError(false); }} error={otpError} />
         {otpError ? (

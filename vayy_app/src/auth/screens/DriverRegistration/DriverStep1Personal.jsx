@@ -62,7 +62,7 @@ export default function DriverStep1Personal({ onNext, onBack, loading }) {
           <Text style={styles.title}>Personal Details</Text>
           <Text style={styles.sub}>Tell us about yourself</Text>
         </View>
-        <ProgressBar current={1} total={7} />
+        <ProgressBar current={1} total={2} />
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.label}>Full Name</Text>
           <View style={inputStyle("fullName")}>

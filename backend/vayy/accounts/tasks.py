@@ -64,22 +64,19 @@ def process_driver_registration(self, job_id, user_id):
             },
         )
 
-        # 4. Documents — bulk_create
-        DriverDocument.objects.filter(driver=user).delete()
-        docs_to_create = []
-        for doc_input in payload.get("documents", []):
-            file_base64 = doc_input.get("file_base64", "")
-            if file_base64:
-                docs_to_create.append(
-                    DriverDocument(
-                        driver=user,
-                        document_type=doc_input["document_type"],
-                        file_data=file_base64,
-                        file_name=doc_input.get("file_name", "upload.jpg"),
-                    )
+        # 4. Documents — link existing documents uploaded via /driver/documents/
+        document_ids = payload.get("document_ids", [])
+        if document_ids:
+            existing_docs = DriverDocument.objects.filter(
+                id__in=document_ids, driver=user
+            )
+            doc_ids_found = set(str(d.id) for d in existing_docs)
+            missing_ids = [str(did) for did in document_ids if str(did) not in doc_ids_found]
+            if missing_ids:
+                logger.warning(
+                    "[Registration] Some document IDs not found for user %s: %s",
+                    user_id, missing_ids,
                 )
-        if docs_to_create:
-            DriverDocument.objects.bulk_create(docs_to_create)
 
         # 5. Bank details
         bank = payload.get("bank_details", {})

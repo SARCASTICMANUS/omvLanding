@@ -62,6 +62,7 @@ from accounts.api.serializers import (
 
 from accounts.services.auth_service import AuthService
 from accounts.services.wallet_service import WalletService
+from accounts.services.otp_service import OTPService
 from accounts.permissions import (
     IsAdmin,
     IsDriver,
@@ -72,6 +73,9 @@ from accounts.permissions import (
 from common.responses import success_response, error_response
 
 logger = logging.getLogger(__name__)
+
+# Redis TTL for registration OTP payload (10 minutes)
+_REG_OTP_TTL = 600
 
 # REGISTER
 class RegisterAPIView(APIView):
@@ -102,6 +106,175 @@ class RegisterAPIView(APIView):
             status_code=status.HTTP_201_CREATED
         )
         return resp
+
+
+# SEND REGISTRATION OTP (driver only — stores data in Redis, sends OTP, does NOT create user)
+class SendRegistrationOTPAPIView(APIView):
+    """
+    POST /api/accounts/send-registration-otp/
+    Accepts email, password, role, first_name.
+    Stores registration data in Redis with OTP, sends OTP email.
+    Does NOT create the User — that happens after OTP verification.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        email = request.data.get("email", "").strip().lower()
+        password = request.data.get("password", "")
+        role = request.data.get("role", "")
+        first_name = request.data.get("first_name", "")
+
+        if not email:
+            return Response(
+                {"success": False, "message": "Email is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not password or len(password) < 8:
+            return Response(
+                {"success": False, "message": "Password must be at least 8 characters"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if role not in ("bikedriver", "autodriver"):
+            return Response(
+                {"success": False, "message": "Role must be bikedriver or autodriver"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {"success": False, "message": "An account with this email already exists"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        try:
+            validate_password(password)
+        except DjangoValidationError as e:
+            return Response(
+                {"success": False, "message": "; ".join(e.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        otp = OTPService.generate_otp()
+
+        reg_data = {
+            "email": email,
+            "password": password,
+            "role": role,
+            "first_name": first_name,
+            "otp": otp,
+        }
+        cache.set(f"reg_otp:driver:{email}", reg_data, _REG_OTP_TTL)
+
+        from communication.tasks import send_registration_otp_task
+        send_registration_otp_task.delay(email, otp)
+
+        return success_response(
+            message="Safety Code sent to your email",
+            status_code=status.HTTP_200_OK,
+        )
+
+
+# VERIFY OTP AND REGISTER (driver only — verifies OTP from Redis, then creates user)
+class VerifyAndRegisterAPIView(APIView):
+    """
+    POST /api/accounts/verify-and-register/
+    Accepts email + OTP. Verifies against Redis-stored data.
+    If valid, creates the User and returns user data.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email", "").strip().lower()
+        otp = request.data.get("otp", "")
+
+        if not email or not otp:
+            return Response(
+                {"success": False, "message": "Email and OTP are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reg_data = cache.get(f"reg_otp:driver:{email}")
+
+        if not reg_data:
+            return Response(
+                {"success": False, "message": "OTP expired or not found. Please request a new one."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if reg_data.get("otp") != otp:
+            return Response(
+                {"success": False, "message": "Invalid Safety Code"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user = User.objects.create_user(
+                email=reg_data["email"],
+                password=reg_data["password"],
+                role=reg_data["role"],
+                first_name=reg_data.get("first_name", ""),
+            )
+            user.otp_verified = True
+            user.is_verified = True
+            user.save(update_fields=["otp_verified", "is_verified"])
+        except Exception as e:
+            logger.error("Failed to create user during registration: %s", e)
+            return Response(
+                {"success": False, "message": "Failed to create account"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        cache.delete(f"reg_otp:driver:{email}")
+
+        return success_response(
+            data=UserSerializer(user).data,
+            message="Account created successfully",
+            status_code=status.HTTP_201_CREATED,
+        )
+
+
+# RESEND REGISTRATION OTP (driver only — regenerates OTP stored in Redis)
+class ResendRegistrationOTPAPIView(APIView):
+    """
+    POST /api/accounts/resend-registration-otp/
+    Accepts email. Reads existing registration data from Redis,
+    generates a new OTP, sends it via email.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email", "").strip().lower()
+
+        if not email:
+            return Response(
+                {"success": False, "message": "Email is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reg_data = cache.get(f"reg_otp:driver:{email}")
+
+        if not reg_data:
+            return Response(
+                {"success": False, "message": "OTP expired or not found. Please request a new one."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        otp = OTPService.generate_otp()
+        reg_data["otp"] = otp
+        cache.set(f"reg_otp:driver:{email}", reg_data, _REG_OTP_TTL)
+
+        from communication.tasks import send_registration_otp_task
+        send_registration_otp_task.delay(email, otp)
+
+        return success_response(
+            message="Safety Code resent to your email",
+            status_code=status.HTTP_200_OK,
+        )
 
 
 # COMPLETE DRIVER REGISTRATION (after OTP verify + login)
@@ -564,7 +737,6 @@ class DriverDocumentAPIView(APIView):
     def post(self, request):
         import base64
         import uuid as uuid_mod
-        from django.core.files.base import ContentFile
 
         document_type = request.data.get("document_type", "")
         file_obj = request.data.get("file")
@@ -582,19 +754,17 @@ class DriverDocumentAPIView(APIView):
             if "," in file_base64:
                 file_base64 = file_base64.split(",", 1)[1]
             try:
-                decoded = base64.b64decode(file_base64)
+                base64.b64decode(file_base64)
             except Exception:
                 return Response(
                     {"success": False, "message": "Invalid base64 data"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            ext = file_name.rsplit(".", 1)[-1] if "." in file_name else "jpg"
-            unique_name = f"{uuid_mod.uuid4().hex}.{ext}"
-            content = ContentFile(decoded, name=unique_name)
             doc = DriverDocument.objects.create(
                 driver=request.user,
                 document_type=document_type,
-                file=content,
+                file_data=file_base64,
+                file_name=file_name,
             )
             return Response(
                 DriverDocumentSerializer(doc).data,
@@ -602,10 +772,26 @@ class DriverDocumentAPIView(APIView):
             )
 
         if file_obj:
-            serializer = DriverDocumentSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            serializer.save(driver=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            # Read uploaded file, convert to base64, store in file_data
+            try:
+                file_bytes = file_obj.read()
+                encoded = base64.b64encode(file_bytes).decode("utf-8")
+                actual_name = getattr(file_obj, "name", file_name) or file_name
+            except Exception:
+                return Response(
+                    {"success": False, "message": "Failed to read uploaded file"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            doc = DriverDocument.objects.create(
+                driver=request.user,
+                document_type=document_type,
+                file_data=encoded,
+                file_name=actual_name,
+            )
+            return Response(
+                DriverDocumentSerializer(doc).data,
+                status=status.HTTP_201_CREATED,
+            )
 
         return Response(
             {"success": False, "message": "file or file_base64 is required"},

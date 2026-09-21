@@ -53,3 +53,13 @@ def send_password_reset_otp_task(user_id, otp):
         logger.error(f"User {user_id} not found for password reset OTP")
     except Exception as e:
         logger.exception(f"Failed to send password reset OTP to user {user_id}: {e}")
+
+
+@shared_task(queue="notifications")
+def send_registration_otp_task(email, otp):
+    try:
+        subject = "Your VAYY Safety Code"
+        message = f"Your Safety Code for VAYY account verification is: {otp}. It expires in 10 minutes."
+        EmailService.send(subject, message, email)
+    except Exception as e:
+        logger.exception(f"Failed to send registration OTP to {email}: {e}")
