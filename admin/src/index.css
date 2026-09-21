@@ -36,15 +36,15 @@
 }
 
 @layer components {
-  /* ── Card: full 4px shadow, sticker look for cards/modals/actions ── */
+  /* ── Card: light Memphis offset ── */
   .memphis-card {
-    @apply bg-memphis-paper border-2 border-memphis-ink rounded-xl;
-    box-shadow: 4px 4px 0 0 var(--memphis-ink);
+    @apply bg-memphis-paper border-2 border-slate-300 rounded-xl;
+    box-shadow: 1px 1px 0 0 #cbd5e1;
     transition: transform 150ms ease, box-shadow 150ms ease;
   }
   .memphis-card:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 6px 6px 0 0 var(--memphis-ink);
+    transform: translate(-1px, -1px);
+    box-shadow: 1px 1px 0 0 #cbd5e1;
   }
 
   /* ── Card with pattern top border: dot-dash-dot in Memphis pink ── */
@@ -69,16 +69,16 @@
 
   /* ── Button ── */
   .memphis-btn {
-    @apply px-5 py-3 rounded-lg font-semibold border-2 border-memphis-ink cursor-pointer transition-all duration-200;
-    box-shadow: 4px 4px 0 0 var(--memphis-ink);
+    @apply px-5 py-3 rounded-lg font-semibold border-2 border-slate-400 cursor-pointer transition-all duration-200;
+    box-shadow: 1px 1px 0 0 #cbd5e1;
   }
   .memphis-btn:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 6px 6px 0 0 var(--memphis-ink);
+    transform: translate(-1px, -1px);
+    box-shadow: 2px 2px 0 0 #cbd5e1;
   }
   .memphis-btn:active {
-    transform: translate(-1px, -1px);
-    box-shadow: 2px 2px 0 0 var(--memphis-ink);
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 0 #cbd5e1;
   }
 
   .memphis-btn-primary {
@@ -102,7 +102,7 @@
   }
 
   .memphis-input {
-    @apply w-full bg-memphis-paper border-2 border-memphis-ink rounded-lg px-4 py-3 text-sm font-semibold text-memphis-ink placeholder-memphis-purple/50;
+    @apply w-full bg-memphis-paper border-2 border-slate-300 rounded-lg px-4 py-3 text-sm font-semibold text-memphis-ink placeholder-memphis-purple/50;
   }
   .memphis-input:focus {
     @apply outline-none ring-2 ring-memphis-pink ring-offset-2;
@@ -112,38 +112,38 @@
   .memphis-title {
     @apply text-3xl font-black text-memphis-ink;
     font-family: "Archivo Black", sans-serif;
-    text-shadow: 3px 3px 0 var(--memphis-pink);
+    text-shadow: 1px 1px 0 var(--memphis-pink);
   }
   .memphis-title-sm {
     @apply text-2xl font-black text-memphis-ink;
     font-family: "Archivo Black", sans-serif;
-    text-shadow: 2px 2px 0 var(--memphis-pink);
+    text-shadow: 1px 1px 0 var(--memphis-pink);
   }
 
   /* ── Badge: rounded-md (technical feel, not rounded-full) ── */
   .memphis-badge {
-    @apply text-xs font-bold px-2.5 py-1 rounded-md border-2 border-memphis-ink;
+    @apply text-xs font-bold px-2.5 py-1 rounded-md border-2 border-slate-300;
   }
 
   .memphis-icon-tile {
-    @apply w-11 h-11 rounded-lg border-2 border-memphis-ink flex items-center justify-center;
+    @apply w-11 h-11 rounded-lg border-2 border-slate-300 flex items-center justify-center;
   }
 
   .memphis-empty {
-    @apply border-2 border-dashed border-memphis-ink rounded-xl p-12 text-center;
+    @apply border-2 border-dashed border-slate-300 rounded-xl p-12 text-center;
     background-image: radial-gradient(circle, var(--memphis-purple) 1px, transparent 1px);
     background-size: 20px 20px;
     background-position: 0 0;
   }
 
-  /* ── Table rows: subtle 2px shadow, light borders, muted hover ── */
+  /* ── Table rows: subtle offset on hover ── */
   .memphis-table-row {
     @apply border-b border-memphis-ink/10 transition-all duration-200;
     box-shadow: none;
   }
   .memphis-table-row:hover {
     @apply bg-memphis-pink/5;
-    box-shadow: 2px 2px 0 0 var(--memphis-ink);
+    box-shadow: 1px 1px 0 0 #cbd5e1;
   }
 
   /* ── Monospace with left accent border for quick scanning ── */
@@ -177,14 +177,14 @@
 /* MapLibre popup overrides */
 .maplibregl-popup-content {
   border-radius: 12px !important;
-  box-shadow: 4px 4px 0 0 var(--memphis-ink) !important;
-  border: 2px solid var(--memphis-ink) !important;
+  box-shadow: 1px 1px 0 0 #cbd5e1 !important;
+  border: 2px solid #cbd5e1 !important;
   padding: 12px 16px !important;
   font-family: "Inter", sans-serif !important;
 }
 
 .maplibregl-marker svg {
-  filter: drop-shadow(2px 2px 0 var(--memphis-ink));
+  filter: drop-shadow(1px 1px 0 #cbd5e1);
 }
 
 /* Memphis squiggle pattern for sidebar */

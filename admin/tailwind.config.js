@@ -22,16 +22,16 @@ export default {
         mono: ["JetBrains Mono", "monospace"],
       },
       boxShadow: {
-        // Card/Modal/Action — full offset (4px), the "sticker" look
-        memphis: "4px 4px 0 0 #16121F",
-        "memphis-hover": "6px 6px 0 0 #16121F",
-        // Table/Data rows — subtle offset (2px), reduces visual weight in scrolling lists
-        "memphis-table": "2px 2px 0 0 #16121F",
-        "memphis-table-hover": "3px 3px 0 0 #16121F",
-        // Small controls
-        "memphis-sm": "2px 2px 0 0 #16121F",
-        // Hero/Modal emphasis
-        "memphis-lg": "8px 8px 0 0 #16121F",
+        // Light Memphis — soft slate offset (premium sticker feel)
+        "memphis-sm": "2px 2px 0 0 #cbd5e1",
+        "memphis-md": "3px 3px 0 0 #cbd5e1",
+        "memphis-xs": "1px 1px 0 0 #cbd5e1",
+        // Keep old tokens for any remaining references
+        memphis: "2px 2px 0 0 #cbd5e1",
+        "memphis-hover": "3px 3px 0 0 #cbd5e1",
+        "memphis-table": "1px 1px 0 0 #cbd5e1",
+        "memphis-table-hover": "2px 2px 0 0 #cbd5e1",
+        "memphis-lg": "4px 4px 0 0 #cbd5e1",
       },
       keyframes: {
         "memphis-spin": {
