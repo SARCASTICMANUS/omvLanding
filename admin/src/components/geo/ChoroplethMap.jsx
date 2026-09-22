@@ -22,9 +22,9 @@ function lerpColor(a, b, t) {
 
 function getColor(value, max) {
   const t = Math.min(value / max, 1);
-  if (t < 0.25) return lerpColor("#FAF6EE", "#86CCCA", t / 0.25);
-  if (t < 0.5) return lerpColor("#86CCCA", "#FF71CE", (t - 0.25) / 0.25);
-  if (t < 0.75) return lerpColor("#FF71CE", "#FF5D5D", (t - 0.5) / 0.25);
+  if (t < 0.25) return lerpColor("#F1F6F1", "#2FA97C", t / 0.25);
+  if (t < 0.5) return lerpColor("#2FA97C", "#009849", (t - 0.25) / 0.25);
+  if (t < 0.75) return lerpColor("#009849", "#FF5D5D", (t - 0.5) / 0.25);
   return "#FF5D5D";
 }
 
@@ -62,7 +62,7 @@ export default function ChoroplethMap({ map, countryData = [] }) {
         });
         map.addLayer({
           id: "countries-border", type: "line", source: "countries",
-          paint: { "line-color": "#16121F", "line-opacity": 0.15, "line-width": 0.5 },
+          paint: { "line-color": "#14241C", "line-opacity": 0.15, "line-width": 0.5 },
         });
 
         const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });

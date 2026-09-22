@@ -39,7 +39,7 @@ function buildRouteColorMap(routes) {
   };
 }
 
-function RoutePolyline({ coordinates, color = "#FF71CE", width = 400, height = 80 }) {
+function RoutePolyline({ coordinates, color = "#009849", width = 400, height = 80 }) {
   if (!coordinates || coordinates.length < 2) {
     return (
       <div className="w-full h-20 bg-memphis-ink/5 rounded-xl flex items-center justify-center">
@@ -72,8 +72,8 @@ function RoutePolyline({ coordinates, color = "#FF71CE", width = 400, height = 8
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-20">
       <path d={d} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.25" />
       <path d={d} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={start.x} cy={start.y} r="4" fill={color} stroke="#FAF6EE" strokeWidth="2" />
-      <circle cx={end.x} cy={end.y} r="4" fill="#FF5D5D" stroke="#FAF6EE" strokeWidth="2" />
+      <circle cx={start.x} cy={start.y} r="4" fill={color} stroke="#F1F6F1" strokeWidth="2" />
+      <circle cx={end.x} cy={end.y} r="4" fill="#FF5D5D" stroke="#F1F6F1" strokeWidth="2" />
     </svg>
   );
 }
@@ -136,7 +136,7 @@ function RouteDetail({ route, onBack }) {
     const el = document.createElement("div");
     // Memphis functional pins: mint fill with pink 2px ring
     el.className = "flex items-center justify-center w-7 h-7 rounded-full border-2 border-memphis-pink shadow-memphis-sm text-[11px] font-bold text-memphis-ink cursor-pointer";
-    el.style.backgroundColor = i === 0 ? "#7BE0AD" : i === total - 1 ? "#FF5D5D" : "#6A7BB4";
+    el.style.backgroundColor = i === 0 ? "#7BE0AD" : i === total - 1 ? "#FF5D5D" : "#14532D";
     el.textContent = s.order || i + 1;
 
     const mk = new maplibregl.Marker({ element: el })
@@ -189,12 +189,12 @@ function RouteDetail({ route, onBack }) {
         map.addLayer({
           id: "route-line-bg", type: "line", source: "route-line",
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": "#86CCCA", "line-width": 8, "line-opacity": 0.2 },
+          paint: { "line-color": "#2FA97C", "line-width": 8, "line-opacity": 0.2 },
         });
         map.addLayer({
           id: "route-line-fg", type: "line", source: "route-line",
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": "#FF71CE", "line-width": 4 },
+          paint: { "line-color": "#009849", "line-width": 4 },
         });
 
         const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
@@ -414,7 +414,7 @@ function RouteDetail({ route, onBack }) {
                     <div key={s.id || i} className="relative flex items-center gap-2 py-1.5 px-1 rounded-lg hover:bg-memphis-ink/5 transition group/stop">
                       <div
                         className="relative z-10 w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0 cursor-pointer"
-                        style={{ backgroundColor: isStart ? "#7BE0AD" : isEnd ? "#FF5D5D" : "#6A7BB4" }}
+                        style={{ backgroundColor: isStart ? "#7BE0AD" : isEnd ? "#FF5D5D" : "#14532D" }}
                         onClick={() => {
                           if (editing && s.lon && s.lat && mapRef.current) {
                             mapRef.current.flyTo({ center: [s.lon, s.lat], zoom: 16, duration: 800 });

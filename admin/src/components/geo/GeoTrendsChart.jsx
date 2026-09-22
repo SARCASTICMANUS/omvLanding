@@ -81,7 +81,7 @@ export default function GeoTrendsChart({ dailyByCountry = [], height = 200 }) {
           const y = padding.top + chartH - (val / maxVal) * chartH;
           return (
             <g key={i}>
-              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#16121F10" strokeWidth="1" />
+              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#14241C10" strokeWidth="1" />
               <text x={padding.left - 5} y={y + 3} textAnchor="end" className="text-[8px] fill-memphis-purple/60 font-medium">
                 {val}
               </text>

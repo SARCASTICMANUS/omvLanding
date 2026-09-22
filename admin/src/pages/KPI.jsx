@@ -425,9 +425,9 @@ function AppMetrics({ data, loading }) {
         <div className="memphis-card p-6">
           <h3 className="text-sm font-bold text-memphis-ink mb-4 flex items-center gap-2"><Users size={16} className="text-memphis-teal" /> User Breakdown</h3>
           <ProgressBar segments={[
-            { label: "Passengers", value: ub.passengers || 0, color: "#86CCCA" },
+            { label: "Passengers", value: ub.passengers || 0, color: "#2FA97C" },
             { label: "Bike Drivers", value: ub.bike_drivers || 0, color: "#7BE0AD" },
-            { label: "Auto Drivers", value: ub.auto_drivers || 0, color: "#FFCE5C" },
+            { label: "Auto Drivers", value: ub.auto_drivers || 0, color: "#FFB020" },
           ]} />
           <div className="flex items-center gap-4 mt-3">
             {[

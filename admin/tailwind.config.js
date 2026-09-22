@@ -5,15 +5,15 @@ export default {
     extend: {
       colors: {
         memphis: {
-          pink: "#FF71CE",
-          yellow: "#FFCE5C",
-          teal: "#86CCCA",
-          purple: "#6A7BB4",
-          ink: "#16121F",
-          paper: "#FAF6EE",
+          pink: "#009849",
+          yellow: "#FFB020",
+          teal: "#2FA97C",
+          purple: "#14532D",
+          ink: "#14241C",
+          paper: "#F1F6F1",
           mint: "#7BE0AD",
           coral: "#FF5D5D",
-          lime: "#C7F464",
+          lime: "#A3E635",
         },
       },
       fontFamily: {
@@ -22,16 +22,16 @@ export default {
         mono: ["JetBrains Mono", "monospace"],
       },
       boxShadow: {
-        // Light Memphis — soft slate offset (premium sticker feel)
-        "memphis-sm": "2px 2px 0 0 #cbd5e1",
-        "memphis-md": "3px 3px 0 0 #cbd5e1",
-        "memphis-xs": "1px 1px 0 0 #cbd5e1",
+        // Light Memphis — soft sage offset (green tinted)
+        "memphis-sm": "2px 2px 0 0 #C6DACF",
+        "memphis-md": "3px 3px 0 0 #C6DACF",
+        "memphis-xs": "1px 1px 0 0 #C6DACF",
         // Keep old tokens for any remaining references
-        memphis: "2px 2px 0 0 #cbd5e1",
-        "memphis-hover": "3px 3px 0 0 #cbd5e1",
-        "memphis-table": "1px 1px 0 0 #cbd5e1",
-        "memphis-table-hover": "2px 2px 0 0 #cbd5e1",
-        "memphis-lg": "4px 4px 0 0 #cbd5e1",
+        memphis: "2px 2px 0 0 #C6DACF",
+        "memphis-hover": "3px 3px 0 0 #C6DACF",
+        "memphis-table": "1px 1px 0 0 #C6DACF",
+        "memphis-table-hover": "2px 2px 0 0 #C6DACF",
+        "memphis-lg": "4px 4px 0 0 #C6DACF",
       },
       keyframes: {
         "memphis-spin": {

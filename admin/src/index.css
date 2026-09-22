@@ -5,15 +5,15 @@
 @tailwind utilities;
 
 :root {
-  --memphis-pink: #FF71CE;
-  --memphis-yellow: #FFCE5C;
-  --memphis-teal: #86CCCA;
-  --memphis-purple: #6A7BB4;
-  --memphis-ink: #16121F;
-  --memphis-paper: #FAF6EE;
+  --memphis-pink: #009849;
+  --memphis-yellow: #FFB020;
+  --memphis-teal: #2FA97C;
+  --memphis-purple: #14532D;
+  --memphis-ink: #14241C;
+  --memphis-paper: #F1F6F1;
   --memphis-mint: #7BE0AD;
   --memphis-coral: #FF5D5D;
-  --memphis-lime: #C7F464;
+  --memphis-lime: #A3E635;
 }
 
 @layer base {
@@ -39,12 +39,12 @@
   /* ── Card: light Memphis offset ── */
   .memphis-card {
     @apply bg-memphis-paper border-2 border-slate-300 rounded-xl;
-    box-shadow: 1px 1px 0 0 #cbd5e1;
+    box-shadow: 1px 1px 0 0 #C6DACF;
     transition: transform 150ms ease, box-shadow 150ms ease;
   }
   .memphis-card:hover {
     transform: translate(-1px, -1px);
-    box-shadow: 1px 1px 0 0 #cbd5e1;
+    box-shadow: 1px 1px 0 0 #C6DACF;
   }
 
   /* ── Card with pattern top border: dot-dash-dot in Memphis pink ── */
@@ -70,22 +70,22 @@
   /* ── Button ── */
   .memphis-btn {
     @apply px-5 py-3 rounded-lg font-semibold border-2 border-slate-400 cursor-pointer transition-all duration-200;
-    box-shadow: 1px 1px 0 0 #cbd5e1;
+    box-shadow: 1px 1px 0 0 #C6DACF;
   }
   .memphis-btn:hover {
     transform: translate(-1px, -1px);
-    box-shadow: 2px 2px 0 0 #cbd5e1;
+    box-shadow: 2px 2px 0 0 #C6DACF;
   }
   .memphis-btn:active {
     transform: translate(1px, 1px);
-    box-shadow: 1px 1px 0 0 #cbd5e1;
+    box-shadow: 1px 1px 0 0 #C6DACF;
   }
 
   .memphis-btn-primary {
-    @apply memphis-btn bg-memphis-pink text-memphis-ink font-bold;
+    @apply memphis-btn bg-memphis-pink text-white font-bold;
   }
   .memphis-btn-primary:hover {
-    @apply bg-[#E85BB4];
+    @apply bg-[#007A3A];
   }
 
   .memphis-btn-secondary {
@@ -143,7 +143,7 @@
   }
   .memphis-table-row:hover {
     @apply bg-memphis-pink/5;
-    box-shadow: 1px 1px 0 0 #cbd5e1;
+    box-shadow: 1px 1px 0 0 #C6DACF;
   }
 
   /* ── Monospace with left accent border for quick scanning ── */
@@ -161,7 +161,7 @@
     @apply my-6;
     border: none;
     height: 12px;
-    background: url("data:image/svg+xml,%3Csvg width='200' height='12' viewBox='0 0 200 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='0,10 10,2 20,10 30,2 40,10 50,2 60,10 70,2 80,10 90,2 100,10 110,2 120,10 130,2 140,10 150,2 160,10 170,2 180,10 190,2 200,10' stroke='%236A7BB4' stroke-width='1.5' stroke-opacity='0.2' fill='none'/%3E%3C/svg%3E") repeat-x center;
+    background: url("data:image/svg+xml,%3Csvg width='200' height='12' viewBox='0 0 200 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='0,10 10,2 20,10 30,2 40,10 50,2 60,10 70,2 80,10 90,2 100,10 110,2 120,10 130,2 140,10 150,2 160,10 170,2 180,10 190,2 200,10' stroke='%23009849' stroke-width='1.5' stroke-opacity='0.2' fill='none'/%3E%3C/svg%3E") repeat-x center;
   }
 
   /* ── Ticket queue grid for support dark theme ── */
@@ -177,19 +177,19 @@
 /* MapLibre popup overrides */
 .maplibregl-popup-content {
   border-radius: 12px !important;
-  box-shadow: 1px 1px 0 0 #cbd5e1 !important;
-  border: 2px solid #cbd5e1 !important;
+  box-shadow: 1px 1px 0 0 #C6DACF !important;
+  border: 2px solid #C6DACF !important;
   padding: 12px 16px !important;
   font-family: "Inter", sans-serif !important;
 }
 
 .maplibregl-marker svg {
-  filter: drop-shadow(1px 1px 0 #cbd5e1);
+  filter: drop-shadow(1px 1px 0 #C6DACF);
 }
 
 /* Memphis squiggle pattern for sidebar */
 .memphis-squiggle-bg {
-  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 30 Q20 10 30 30 T50 30' stroke='%23FF71CE' stroke-width='1.5' fill='none' opacity='0.15'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 30 Q20 10 30 30 T50 30' stroke='%23009849' stroke-width='1.5' fill='none' opacity='0.15'/%3E%3C/svg%3E");
   background-size: 60px 60px;
 }
 

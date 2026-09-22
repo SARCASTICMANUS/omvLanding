@@ -29,7 +29,7 @@ export default function CityScatter({ map, cities = [] }) {
       const el = document.createElement("div");
       el.style.cssText = `
         width: ${size}px; height: ${size}px;
-        background: #FF71CE; border: 2px solid #16121F;
+        background: #009849; border: 2px solid #14241C;
         border-radius: 50%; opacity: ${opacity};
         cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
       `;
@@ -37,7 +37,7 @@ export default function CityScatter({ map, cities = [] }) {
       const popup = new maplibregl.Popup({ offset: 15 }).setHTML(
         `<div style="font-family:Inter,sans-serif;padding:2px 4px">
           <div style="font-weight:700;font-size:12px">${city.city}</div>
-          ${city.country ? `<div style="color:#6A7BB4;font-size:10px">${city.country}</div>` : ""}
+          ${city.country ? `<div style="color:#14532D;font-size:10px">${city.country}</div>` : ""}
           <div style="font-weight:700;font-size:11px">${(city.count || 0).toLocaleString()} views (${city.percentage}%)</div>
         </div>`
       );
