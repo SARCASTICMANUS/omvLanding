@@ -517,7 +517,7 @@ class PassengerProfileAPIView(APIView):
 
     def _get_target_user(self, request):
         user_id = request.query_params.get("user_id")
-        if user_id and request.user.role == ROLE_ADMIN:
+        if user_id and (request.user.role == ROLE_ADMIN or request.user.is_staff):
             from accounts.models import User
             try:
                 return User.objects.get(id=user_id)
@@ -545,7 +545,7 @@ class PassengerProfileAPIView(APIView):
         # Support admin updating another user's profile via ?user_id
         user = request.user
         user_id = request.query_params.get("user_id")
-        if user_id and request.user.role == ROLE_ADMIN:
+        if user_id and (request.user.role == ROLE_ADMIN or request.user.is_staff):
             from accounts.models import User
             try:
                 user = User.objects.get(id=user_id)
@@ -631,7 +631,7 @@ class DriverProfileAPIView(APIView):
 
     def _get_target_user(self, request):
         user_id = request.query_params.get("user_id")
-        if user_id and request.user.role == ROLE_ADMIN:
+        if user_id and (request.user.role == ROLE_ADMIN or request.user.is_staff):
             from accounts.models import User
             try:
                 return User.objects.get(id=user_id)
@@ -659,7 +659,7 @@ class DriverProfileAPIView(APIView):
         # Support admin updating another user's profile via ?user_id
         user = request.user
         user_id = request.query_params.get("user_id")
-        if user_id and request.user.role == ROLE_ADMIN:
+        if user_id and (request.user.role == ROLE_ADMIN or request.user.is_staff):
             from accounts.models import User
             try:
                 user = User.objects.get(id=user_id)
@@ -708,7 +708,18 @@ class WalletAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        wallet = WalletService.get_or_create_wallet(request.user)
+        user = request.user
+        user_id = request.query_params.get("user_id")
+        if user_id and (request.user.role == ROLE_ADMIN or request.user.is_staff):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response(
+                    {"success": False, "message": "User not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        wallet = WalletService.get_or_create_wallet(user)
         transactions = Transaction.objects.filter(wallet=wallet).order_by("-created_at")
         
         resp = success_response(
@@ -743,19 +754,35 @@ class AddFundsAPIView(APIView):
 
 # DRIVER DOCUMENTS (KYC)
 class DriverDocumentAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsDriver]
+    permission_classes = [IsAuthenticated, IsDriverOrAdmin]
+
+    def _target_driver(self, request):
+        user_id = request.query_params.get("user_id")
+        if user_id and (request.user.role == ROLE_ADMIN or request.user.is_staff):
+            try:
+                return User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return None
+        return request.user
 
     def get(self, request, doc_id=None, **kwargs):
+        driver = self._target_driver(request)
+        if driver is None:
+            return Response(
+                {"success": False, "message": "User not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
         if doc_id:
             try:
-                doc = DriverDocument.objects.get(id=doc_id, driver=request.user)
+                doc = DriverDocument.objects.get(id=doc_id, driver=driver)
             except DriverDocument.DoesNotExist:
                 return Response(
                     {"success": False, "message": "Document not found"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
             return Response(DriverDocumentSerializer(doc).data)
-        docs = DriverDocument.objects.filter(driver=request.user)
+        docs = DriverDocument.objects.filter(driver=driver)
         resp = Response(DriverDocumentListSerializer(docs, many=True).data)
         return resp
 
@@ -765,8 +792,14 @@ class DriverDocumentAPIView(APIView):
                 {"success": False, "message": "doc_id path parameter is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        driver = self._target_driver(request)
+        if driver is None:
+            return Response(
+                {"success": False, "message": "User not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         try:
-            doc = DriverDocument.objects.get(id=doc_id, driver=request.user)
+            doc = DriverDocument.objects.get(id=doc_id, driver=driver)
             doc.delete()
             return Response(
                 {"success": True, "message": "Document deleted"},

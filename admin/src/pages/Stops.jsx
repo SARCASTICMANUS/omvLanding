@@ -99,7 +99,7 @@ export default function Stops() {
       {loading ? (
         <Loader />
       ) : (
-        <div className="memphis-card overflow-hidden">
+        <div className="memphis-card overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="bg-memphis-ink/5 border-b-2 border-memphis-ink">

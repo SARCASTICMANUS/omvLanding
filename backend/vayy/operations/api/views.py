@@ -1,4 +1,6 @@
+import base64
 import logging
+from django.http import HttpResponse
 from rest_framework import status
 from rest_framework.exceptions import (
     PermissionDenied,
@@ -1479,12 +1481,18 @@ class AdminPendingDriversAPIView(APIView):
                     "license_number": getattr(profile, "license_number", None),
                     "vehicle_number": getattr(profile, "vehicle_number", None),
                     "vehicle_type": getattr(profile, "vehicle_type", None),
+                    "bio": getattr(profile, "bio", "") or "",
+                    "rc_number": getattr(profile, "rc_number", "") or "",
+                    "dob": profile.dob.isoformat() if getattr(profile, "dob", None) else None,
+                    "gender": getattr(profile, "gender", "") or "",
                 } if profile else None,
                 "vehicle": {
                     "id": str(vehicle.id),
                     "vehicle_number": vehicle.vehicle_number,
                     "vehicle_type": vehicle.vehicle_type,
                     "status": vehicle.status,
+                    "is_active": vehicle.is_active,
+                    "vehicle_photo": vehicle.vehicle_photo or "",
                 } if vehicle else None,
                 "documents": DriverDocumentSerializer(docs, many=True).data,
             })
@@ -1516,12 +1524,18 @@ class AdminPendingDriversAPIView(APIView):
                     "license_number": getattr(profile, "license_number", None),
                     "vehicle_number": getattr(profile, "vehicle_number", None),
                     "vehicle_type": getattr(profile, "vehicle_type", None),
+                    "bio": getattr(profile, "bio", "") or "",
+                    "rc_number": getattr(profile, "rc_number", "") or "",
+                    "dob": profile.dob.isoformat() if getattr(profile, "dob", None) else None,
+                    "gender": getattr(profile, "gender", "") or "",
                 } if profile else None,
                 "vehicle": {
                     "id": str(vehicle.id),
                     "vehicle_number": vehicle.vehicle_number,
                     "vehicle_type": vehicle.vehicle_type,
                     "status": vehicle.status,
+                    "is_active": vehicle.is_active,
+                    "vehicle_photo": vehicle.vehicle_photo or "",
                 } if vehicle else None,
                 "documents": DriverDocumentSerializer(docs, many=True).data,
             })
@@ -1662,3 +1676,43 @@ class AdminDocumentVerifyAPIView(APIView):
                 "data": DriverDocumentSerializer(doc).data,
             }
         )
+
+
+class AdminDocumentFileAPIView(APIView):
+    """
+    GET /api/operations/admin/documents/<uuid:doc_id>/file/
+    Returns the raw document file for admin review (open/print).
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, doc_id):
+        try:
+            doc = DriverDocument.objects.get(id=doc_id)
+        except DriverDocument.DoesNotExist:
+            return Response(
+                {"success": False, "message": "Document not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not doc.file_data:
+            return Response(
+                {"success": False, "message": "Document has no file data"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            payload = base64.b64decode(doc.file_data)
+        except Exception:
+            return Response(
+                {"success": False, "message": "Document file data is corrupt"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        import mimetypes
+        content_type = mimetypes.guess_type(doc.file_name or "")[0] or "application/octet-stream"
+        filename = doc.file_name or "document"
+
+        response = HttpResponse(payload, content_type=content_type)
+        response["Content-Disposition"] = 'inline; filename="' + filename + '"'
+        response["Cache-Control"] = "no-cache"
+        return response

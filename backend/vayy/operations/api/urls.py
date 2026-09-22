@@ -34,6 +34,7 @@ from operations.api.views import (
     AdminPendingDriversAPIView,
     AdminDriverVerifyAPIView,
     AdminDocumentVerifyAPIView,
+    AdminDocumentFileAPIView,
 )
 
 urlpatterns = [
@@ -198,5 +199,10 @@ urlpatterns = [
         "admin/documents/<uuid:doc_id>/verify/",
         AdminDocumentVerifyAPIView.as_view(),
         name="admin-document-verify",
+    ),
+    path(
+        "admin/documents/<uuid:doc_id>/file/",
+        AdminDocumentFileAPIView.as_view(),
+        name="admin-document-file",
     ),
 ]

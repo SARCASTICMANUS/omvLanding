@@ -5,7 +5,25 @@ import Loader from "../components/Loader";
 import EmptyState from "../components/EmptyState";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
-const MEDIA_BASE = API_BASE.replace(/\/api\/?$/, "") || "";
+
+const mimeFor = (name) => {
+  const ext = (name || "").split(".").pop().toLowerCase();
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "pdf") return "application/pdf";
+  return "image/jpeg";
+};
+
+const imgSrc = (v) => {
+  if (!v) return null;
+  if (v.startsWith("data:") || v.startsWith("http")) return v;
+  return `data:image/jpeg;base64,${v}`;
+};
+
+const docSrc = (doc) => {
+  if (!doc?.file_data) return null;
+  return `data:${mimeFor(doc.file_name)};base64,${doc.file_data}`;
+};
 
 function InfoRow({ label, value, icon }) {
   return (
@@ -126,9 +144,16 @@ export default function Users() {
         const res = await api.get(`/accounts/me/driver-profile/?user_id=${userId}`);
         profileData = res.data?.data || res.data || {};
       }
+      if (user.role === "bikedriver" || user.role === "autodriver") {
+        try {
+          const docsRes = await api.get(`/accounts/driver/documents/?user_id=${userId}`);
+          profileData.documents = Array.isArray(docsRes.data) ? docsRes.data : docsRes.data?.data || [];
+        } catch {}
+      }
       try {
-        const walletRes = await api.get("/accounts/wallet/");
-        profileData.wallet = walletRes.data?.data || walletRes.data || {};
+        const walletRes = await api.get(`/accounts/wallet/?user_id=${userId}`);
+        const wdata = walletRes.data?.data || walletRes.data || {};
+        profileData.wallet = wdata.wallet || wdata || {};
       } catch {}
       setUserDetails({ ...user, ...profileData });
     } catch (err) {
@@ -199,7 +224,7 @@ export default function Users() {
       {loading ? (
         <Loader />
       ) : (
-        <div className="memphis-card overflow-hidden">
+        <div className="memphis-card overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="bg-memphis-ink/5 border-b-2 border-memphis-ink">
@@ -374,11 +399,22 @@ export default function Users() {
                       <div className="grid grid-cols-2 gap-4">
                         <InfoRow label="Phone" value={userDetails.phone_number || "—"} icon={<Phone size={16} />} />
                         <InfoRow label="Display Name" value={userDetails.display_name || "—"} />
-                        <InfoRow label="Home Location" value={userDetails.home_location || "—"} icon={<MapPin size={16} />} />
-                        <InfoRow label="Current Location" value={userDetails.current_location || "—"} icon={<MapPin size={16} />} />
+                        <InfoRow label="Home Location" value={userDetails.home_location ? `${userDetails.home_location.lat?.toFixed?.(4)}, ${userDetails.home_location.lng?.toFixed?.(4)}` : "—"} icon={<MapPin size={16} />} />
+                        <InfoRow label="Current Location" value={userDetails.current_location ? `${userDetails.current_location.lat?.toFixed?.(4)}, ${userDetails.current_location.lng?.toFixed?.(4)}` : "—"} icon={<MapPin size={16} />} />
                         <InfoRow label="Wallet Balance" value={userDetails.wallet?.balance !== undefined ? `₹${userDetails.wallet.balance}` : "—"} icon={<Wallet size={16} />} />
-                        <InfoRow label="Total Trips" value={userDetails.total_trips !== undefined ? userDetails.total_trips : "—"} icon={<Truck size={16} />} />
+                        <InfoRow label="Saved Routes" value={userDetails.saved_routes?.length !== undefined ? userDetails.saved_routes.length : "—"} icon={<MapPin size={16} />} />
+                        <InfoRow label="Last Active" value={userDetails.last_active_at ? new Date(userDetails.last_active_at).toLocaleString() : "—"} />
+                        <InfoRow label="Joined" value={userDetails.date_joined ? new Date(userDetails.date_joined).toLocaleDateString() : "—"} />
                       </div>
+                      {userDetails.bio && (
+                        <p className="mt-3 text-sm text-memphis-ink/70 bg-memphis-paper rounded-lg px-4 py-2 border-2 border-memphis-ink/10">{userDetails.bio}</p>
+                      )}
+                      {imgSrc(userDetails.profile_photo) && (
+                        <div className="mt-3">
+                          <p className="memphis-label mb-1">Profile Photo</p>
+                          <img src={imgSrc(userDetails.profile_photo)} alt="Profile" className="max-h-40 rounded-lg border-2 border-memphis-ink/20 object-contain" />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -393,17 +429,22 @@ export default function Users() {
                         <InfoRow label="License Number" value={userDetails.license_number || "—"} icon={<Settings size={16} />} />
                         <InfoRow label="Vehicle Number" value={userDetails.vehicle_number || "—"} icon={<Truck size={16} />} />
                         <InfoRow label="Vehicle Type" value={userDetails.vehicle_type || "—"} />
-                        <InfoRow label="KYC Verified" value={
-                          userDetails.is_verified ? (
-                            <span className="text-memphis-mint font-semibold flex items-center gap-1"><ShieldCheck size={14} /> Verified</span>
-                          ) : (
-                            <span className="text-memphis-yellow font-semibold">Pending</span>
-                          )
-                        } />
+                        <InfoRow label="RC Number" value={userDetails.rc_number || "—"} />
+                        <InfoRow label="DOB" value={userDetails.dob || "—"} />
+                        <InfoRow label="Gender" value={userDetails.gender || "—"} />
                         <InfoRow label="Rating" value={userDetails.rating !== undefined ? `${userDetails.rating} ⭐` : "—"} icon={<Star size={16} />} />
                         <InfoRow label="Total Trips" value={userDetails.total_trips !== undefined ? userDetails.total_trips : "—"} icon={<Truck size={16} />} />
                         <InfoRow label="Wallet Balance" value={userDetails.wallet?.balance !== undefined ? `₹${userDetails.wallet.balance}` : "—"} icon={<Wallet size={16} />} />
                       </div>
+                      {userDetails.bio && (
+                        <p className="mt-3 text-sm text-memphis-ink/70 bg-memphis-paper rounded-lg px-4 py-2 border-2 border-memphis-ink/10">{userDetails.bio}</p>
+                      )}
+                      {imgSrc(userDetails.vehicle_photo) && (
+                        <div className="mt-3">
+                          <p className="memphis-label mb-1">Vehicle Photo</p>
+                          <img src={imgSrc(userDetails.vehicle_photo)} alt="Vehicle" className="max-h-40 rounded-lg border-2 border-memphis-ink/20 object-contain" />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -413,43 +454,49 @@ export default function Users() {
                         <ShieldCheck size={20} /> KYC Documents
                       </h3>
                       <div className="space-y-3">
-                        {userDetails.documents.map((doc) => (
-                          <div key={doc.id} className="bg-memphis-paper rounded-xl border-2 border-memphis-ink/20 overflow-hidden">
-                            <div className="flex items-center justify-between px-4 py-3">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-memphis-ink/5 rounded-lg flex items-center justify-center">
-                                  <FileText size={16} className="text-memphis-purple" />
-                                </div>
-                                <div>
-                                  <span className="font-semibold text-memphis-ink">{doc.document_type}</span>
-                                  <p className="text-xs text-memphis-purple">{doc.file ? "Uploaded" : "Not uploaded"}</p>
-                                </div>
-                              </div>
-                              <span className={`memphis-badge ${
-                                doc.status === "verified" ? "bg-memphis-mint/20 text-memphis-ink border-memphis-mint" :
-                                doc.status === "rejected" ? "bg-memphis-coral/20 text-memphis-ink border-memphis-coral" :
-                                "bg-memphis-yellow/20 text-memphis-ink border-memphis-yellow"
-                              }`}>
-                                {doc.status}
-                              </span>
-                            </div>
-                            {doc.file && (
-                              <div className="px-4 pb-3">
-                                <a href={doc.file.startsWith("http") ? doc.file : `${MEDIA_BASE}${doc.file}`} target="_blank" rel="noopener noreferrer" className="block">
-                                  <img
-                                    src={doc.file.startsWith("http") ? doc.file : `${MEDIA_BASE}${doc.file}`}
-                                    alt={doc.document_type}
-                                    className="max-h-40 rounded-lg border-2 border-memphis-ink/20 object-contain hover:shadow-memphis-sm transition-all duration-200 cursor-pointer"
-                                    onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
-                                  />
-                                  <div className="hidden items-center gap-2 mt-1 text-xs text-memphis-purple">
-                                    <FileText size={14} /><span>{doc.file.split("/").pop()}</span><ExternalLink size={10} />
+                        {userDetails.documents.map((doc) => {
+                          const st = String(doc.status || "").toLowerCase();
+                          return (
+                            <div key={doc.id} className="bg-memphis-paper rounded-xl border-2 border-memphis-ink/20 overflow-hidden">
+                              <div className="flex items-center justify-between px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-memphis-ink/5 rounded-lg flex items-center justify-center">
+                                    <FileText size={16} className="text-memphis-purple" />
                                   </div>
-                                </a>
+                                  <div>
+                                    <span className="font-semibold text-memphis-ink">{doc.document_type}</span>
+                                    <p className="text-xs text-memphis-purple">{doc.file_name || "Document"}</p>
+                                  </div>
+                                </div>
+                                <span className={`memphis-badge ${
+                                  st === "verified" ? "bg-memphis-mint/20 text-memphis-ink border-memphis-mint" :
+                                  st === "rejected" ? "bg-memphis-coral/20 text-memphis-ink border-memphis-coral" :
+                                  "bg-memphis-yellow/20 text-memphis-ink border-memphis-yellow"
+                                }`}>
+                                  {doc.status}
+                                </span>
                               </div>
-                            )}
-                          </div>
-                        ))}
+                              {doc.file_data && (
+                                <div className="px-4 pb-3">
+                                  <a href={`${API_BASE}/operations/admin/documents/${doc.id}/file/`} target="_blank" rel="noopener noreferrer" className={`block ${mimeFor(doc.file_name) === "application/pdf" ? "" : "w-fit"}`}>
+                                    {mimeFor(doc.file_name) === "application/pdf" ? (
+                                      <div className="flex items-center gap-2 rounded-lg border-2 border-memphis-ink/20 px-4 py-2 text-xs text-memphis-purple hover:bg-memphis-ink/5 transition-all duration-200">
+                                        <FileText size={14} /><span className="font-semibold text-memphis-ink">{doc.file_name || "Document"}</span>
+                                        <span className="flex items-center gap-1 ml-auto">Open file <ExternalLink size={10} /></span>
+                                      </div>
+                                    ) : (
+                                      <img
+                                        src={docSrc(doc)}
+                                        alt={doc.document_type}
+                                        className="max-h-40 rounded-lg border-2 border-memphis-ink/20 object-contain hover:shadow-memphis-sm transition-all duration-200 cursor-pointer"
+                                      />
+                                    )}
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

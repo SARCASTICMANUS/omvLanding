@@ -13,13 +13,33 @@ import {
   Phone,
   CreditCard,
   AlertTriangle,
+  CalendarClock,
+  ExternalLink,
 } from "lucide-react";
 import api from "../api/client";
 import Loader from "../components/Loader";
 import EmptyState from "../components/EmptyState";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
-const MEDIA_BASE = API_BASE.replace(/\/api\/?$/, "") || "";
+
+const mimeFor = (name) => {
+  const ext = (name || "").split(".").pop().toLowerCase();
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "pdf") return "application/pdf";
+  return "image/jpeg";
+};
+
+const imgSrc = (v) => {
+  if (!v) return null;
+  if (v.startsWith("data:") || v.startsWith("http")) return v;
+  return `data:image/jpeg;base64,${v}`;
+};
+
+const docSrc = (doc) => {
+  if (!doc?.file_data) return null;
+  return `data:${mimeFor(doc.file_name)};base64,${doc.file_data}`;
+};
 
 export default function DriverVerification() {
   const [drivers, setDrivers] = useState([]);
@@ -54,9 +74,15 @@ export default function DriverVerification() {
   };
 
   const handleDocAction = async (docId, action) => {
+    let payload = { action };
+    if (action === "reject") {
+      const reason = window.prompt("Rejection reason (shown to the driver):", "");
+      if (reason === null) return;
+      payload = { action, rejection_reason: reason };
+    }
     setProcessing(docId);
     try {
-      await api.patch(`/operations/admin/documents/${docId}/verify/`, { action });
+      await api.patch(`/operations/admin/documents/${docId}/verify/`, payload);
       setDrivers((prev) =>
         prev.map((d) => ({
           ...d,
@@ -150,7 +176,15 @@ export default function DriverVerification() {
                     <InfoCard icon={<Phone size={16} />} label="Phone" value={driver.profile?.phone_number || "—"} />
                     <InfoCard icon={<CreditCard size={16} />} label="License" value={driver.profile?.license_number || "—"} />
                     <InfoCard icon={<Car size={16} />} label="Vehicle Type" value={driver.profile?.vehicle_type || "—"} />
+                    <InfoCard icon={<CreditCard size={16} />} label="RC Number" value={driver.profile?.rc_number || "—"} />
+                    <InfoCard icon={<User size={16} />} label="Gender" value={driver.profile?.gender || "—"} />
+                    <InfoCard icon={<User size={16} />} label="DOB" value={driver.profile?.dob || "—"} />
+                    <InfoCard icon={<CalendarClock size={16} />} label="Joined" value={driver.date_joined ? new Date(driver.date_joined).toLocaleDateString() : "—"} />
                   </div>
+
+                  {driver.profile?.bio && (
+                    <p className="text-sm text-memphis-ink/70 bg-memphis-ink/5 rounded-xl px-4 py-2 border-2 border-memphis-ink/10">{driver.profile.bio}</p>
+                  )}
 
                   {driver.vehicle && (
                     <div className="bg-memphis-ink/5 rounded-xl p-4 border-2 border-memphis-ink/10">
@@ -158,8 +192,21 @@ export default function DriverVerification() {
                       <div className="grid grid-cols-3 gap-4 text-sm">
                         <div><span className="text-memphis-purple">Number:</span> <span className="font-semibold">{driver.vehicle.vehicle_number}</span></div>
                         <div><span className="text-memphis-purple">Type:</span> <span className="font-semibold capitalize">{driver.vehicle.vehicle_type}</span></div>
-                        <div><span className="text-memphis-purple">Status:</span> <span className="font-semibold capitalize">{driver.vehicle.status.replace("_", " ")}</span></div>
+                        <div>
+                          <span className="text-memphis-purple">Status:</span>{" "}
+                          <span className="font-semibold capitalize">{String(driver.vehicle.status).replace("_", " ")}</span>
+                          {driver.vehicle.is_active === false && (
+                            <span className="memphis-badge bg-memphis-coral/20 text-memphis-ink border-memphis-coral text-[10px] ml-2">Inactive</span>
+                          )}
+                        </div>
                       </div>
+                      {imgSrc(driver.vehicle.vehicle_photo) && (
+                        <img
+                          src={imgSrc(driver.vehicle.vehicle_photo)}
+                          alt="Vehicle registration"
+                          className="mt-3 max-h-40 rounded-lg border-2 border-memphis-ink/20 object-contain"
+                        />
+                      )}
                     </div>
                   )}
 
@@ -193,18 +240,21 @@ export default function DriverVerification() {
                                 )}
                               </div>
                             </div>
-                            {doc.file && (
+                            {doc.file_data && (
                               <div className="mt-3">
-                                <a href={doc.file.startsWith("http") ? doc.file : `${MEDIA_BASE}${doc.file}`} target="_blank" rel="noopener noreferrer" className="block">
-                                  <img
-                                    src={doc.file.startsWith("http") ? doc.file : `${MEDIA_BASE}${doc.file}`}
-                                    alt={doc.document_type}
-                                    className="max-h-48 rounded-lg border-2 border-memphis-ink/20 object-contain hover:shadow-memphis-sm transition-all duration-200 cursor-pointer"
-                                    onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
-                                  />
-                                  <div className="hidden items-center gap-2 mt-2 text-xs text-memphis-purple">
-                                    <FileText size={14} /><span>File: {doc.file.split("/").pop()}</span>
-                                  </div>
+                                <a href={`${API_BASE}/operations/admin/documents/${doc.id}/file/`} target="_blank" rel="noopener noreferrer" className="block">
+                                  {mimeFor(doc.file_name) === "application/pdf" ? (
+                                    <div className="flex items-center gap-2 rounded-lg border-2 border-memphis-ink/20 bg-memphis-paper px-4 py-3 text-xs text-memphis-purple hover:bg-memphis-ink/5 transition-all duration-200">
+                                      <FileText size={14} /><span className="font-semibold text-memphis-ink">{doc.file_name || "Document"}</span>
+                                      <span className="flex items-center gap-1 ml-auto">Open file <ExternalLink size={10} /></span>
+                                    </div>
+                                  ) : (
+                                    <img
+                                      src={docSrc(doc)}
+                                      alt={doc.document_type}
+                                      className="max-h-48 rounded-lg border-2 border-memphis-ink/20 object-contain hover:shadow-memphis-sm transition-all duration-200 cursor-pointer"
+                                    />
+                                  )}
                                 </a>
                               </div>
                             )}

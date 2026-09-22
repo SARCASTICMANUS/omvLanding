@@ -91,8 +91,11 @@ class IsDriverOrAdmin(BasePermission):
     def has_permission(self, request, view):
         return (
             request.user.is_authenticated
-            and request.user.role
-            in [ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER, ROLE_ADMIN]
+            and (
+                request.user.role
+                in [ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER, ROLE_ADMIN]
+                or request.user.is_staff
+            )
         )
 
 
@@ -106,5 +109,8 @@ class IsPassengerOrAdmin(BasePermission):
     def has_permission(self, request, view):
         return (
             request.user.is_authenticated
-            and request.user.role in [ROLE_PASSENGER, ROLE_ADMIN]
+            and (
+                request.user.role in [ROLE_PASSENGER, ROLE_ADMIN]
+                or request.user.is_staff
+            )
         )
