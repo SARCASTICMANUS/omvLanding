@@ -132,8 +132,11 @@ const profileSlice = createSlice({
         state.verificationLoading = false;
       })
       .addCase(uploadDocument.fulfilled, (state, action) => {
-        if (state.verification?.documents) {
-          state.verification.documents.push(action.payload);
+        const doc = action.payload;
+        if (doc && state.verification?.documents) {
+          const idx = state.verification.documents.findIndex((d) => d.id === doc.id);
+          if (idx >= 0) state.verification.documents[idx] = doc;
+          else state.verification.documents.push(doc);
         }
       });
   },

@@ -16,6 +16,7 @@ export const AUTH = {
   walletAddFunds: "/api/accounts/wallet/add-funds/",
   pushToken: "/api/accounts/push-token/",
   driverDocuments: "/api/accounts/driver/documents/",
+  driverDocumentDetail: (id) => `/api/accounts/driver/documents/${id}/`,
   driverDocumentDelete: (id) => `/api/accounts/driver/documents/${id}/`,
   driverBankDetails: "/api/accounts/driver/bank-details/",
   verificationStatus: "/api/accounts/verification-status/",

@@ -20,6 +20,7 @@ import ImageUploadCard from "../../components/ImageUploadCard";
 import BottomStickyButton from "../../components/BottomStickyButton";
 import ApplicationSubmittedScreen from "../ApplicationSubmittedScreen";
 import { completeRegistration } from "../../authSlice";
+import { fetchProfile, fetchVerificationStatus } from "../../../store/slices/profileSlice";
 import { clearFields } from "../../../store/slices/onboardingSlice";
 import { VALIDATORS, VALIDATION_MESSAGES } from "../../validators";
 import api from "../../../shared/lib/api";
@@ -60,6 +61,7 @@ export default function DriverProfileCompletionScreen({ navigation }) {
   const [vehicleNumber, setVehicleNumber] = useState(fields.vehicleNumber || "");
   const [rcNumber, setRcNumber] = useState(fields.rcNumber || "");
   const [vehiclePhotoUri, setVehiclePhotoUri] = useState(null);
+  const [vehiclePhotoBase64, setVehiclePhotoBase64] = useState("");
   const [vehiclePhotoUploading, setVehiclePhotoUploading] = useState(false);
 
   // Documents: { dlFront: { uri, id, status, docStatus }, ... }
@@ -90,7 +92,6 @@ export default function DriverProfileCompletionScreen({ navigation }) {
   const [loadingExisting, setLoadingExisting] = useState(true);
 
   // ── Fetch existing data on mount ──
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const loadExistingData = async () => {
       try {
@@ -121,6 +122,12 @@ export default function DriverProfileCompletionScreen({ navigation }) {
           if (profile.vehicle_type) setVehicleType(profile.vehicle_type);
           if (profile.vehicle_number) setVehicleNumber(profile.vehicle_number);
           if (profile.rc_number) setRcNumber(profile.rc_number);
+          if (profile.vehicle_photo) {
+            const photo = profile.vehicle_photo;
+            const src = /^data:/.test(photo) ? photo : `data:image/jpeg;base64,${photo}`;
+            setVehiclePhotoUri(src);
+            setVehiclePhotoBase64(photo);
+          }
         }
 
         // Documents — map by doc_key (preferred) or fall back to type+order
@@ -134,12 +141,13 @@ export default function DriverProfileCompletionScreen({ navigation }) {
             // Prefer doc_key if present
             if (doc.doc_key && doc.doc_key in docs) {
               newDocs[doc.doc_key] = {
-                uri: doc.file_data ? `data:image/jpeg;base64,${doc.file_data}` : null,
+                uri: null,
                 id: doc.id,
                 status: "success",
                 docStatus: doc.status || null,
+                rejectionReason: doc.rejection_reason || "",
               };
-              console.log(`[Completion] Loaded doc by key: ${doc.doc_key} → type=${doc.document_type} id=${doc.id} status=${doc.status}`);
+              console.log(`[Completion] Loaded doc by key: ${doc.doc_key} → type=${doc.document_type} id=${doc.id} status=${doc.status} reason=${doc.rejection_reason || ""}`);
             }
           }
 
@@ -162,15 +170,43 @@ export default function DriverProfileCompletionScreen({ navigation }) {
               const field = keys[idx];
               if (!newDocs[field]) {
                 newDocs[field] = {
-                  uri: doc.file_data ? `data:image/jpeg;base64,${doc.file_data}` : null,
+                  uri: null,
                   id: doc.id,
                   status: "success",
                   docStatus: doc.status || null,
+                  rejectionReason: doc.rejection_reason || "",
                 };
-                console.log(`[Completion] Loaded doc by order: ${field} → type=${t} id=${doc.id} status=${doc.status}`);
+                console.log(`[Completion] Loaded doc by order: ${field} → type=${t} id=${doc.id} status=${doc.status} reason=${doc.rejection_reason || ""}`);
               }
               counters[t]++;
             }
+          }
+
+          // Fetch preview images — single-doc GET returns file_data (kept out of list response)
+          try {
+            const previewResults = await Promise.all(
+              docList.map((d) =>
+                api.get(AUTH.driverDocumentDetail(d.id))
+                  .then((r) => ({ id: d.id, data: r.data?.data || r.data }))
+                  .catch(() => null)
+              )
+            );
+            for (const p of previewResults) {
+              if (!p?.data?.file_data) continue;
+              const mime = /\.png$/i.test(p.data.file_name || "") ? "image/png" : "image/jpeg";
+              const uri = `data:${mime};base64,${p.data.file_data}`;
+              let field = null;
+              if (p.data.doc_key && p.data.doc_key in newDocs) {
+                field = p.data.doc_key;
+              } else {
+                for (const [k, v] of Object.entries(newDocs)) {
+                  if (v.id === p.id) { field = k; break; }
+                }
+              }
+              if (field) newDocs[field] = { ...newDocs[field], uri };
+            }
+          } catch (e) {
+            console.warn("[Completion] Doc preview fetch failed:", e?.message);
           }
 
           setDocs((prev) => ({ ...prev, ...newDocs }));
@@ -214,6 +250,7 @@ export default function DriverProfileCompletionScreen({ navigation }) {
     if (!result.canceled && result.assets?.[0]) {
       const asset = result.assets[0];
       setVehiclePhotoUri(asset.uri);
+      setVehiclePhotoBase64(asset.base64 || "");
       setErrors((p) => { const n = { ...p }; delete n.photo; return n; });
     }
   };
@@ -269,11 +306,21 @@ export default function DriverProfileCompletionScreen({ navigation }) {
       const docId = docData?.id;
       const updatedStatus = docData?.status || "PENDING";
       console.log(`[Completion] Upload success: field=${field} docId=${docId} status=${updatedStatus}`);
-      setDocs((p) => ({ ...p, [field]: { uri, id: docId, status: "success", docStatus: updatedStatus } }));
+      setDocs((p) => ({
+        ...p,
+        [field]: {
+          uri,
+          id: docId,
+          status: "success",
+          docStatus: updatedStatus,
+          rejectionReason: docData?.rejection_reason || "",
+        },
+      }));
       setErrors((p) => { const n = { ...p }; delete n[field]; return n; });
+      dispatch(fetchVerificationStatus());
     } catch (e) {
       console.error(`[Completion] Upload failed: field=${field}`, e?.response?.status, e?.response?.data || e?.message);
-      setDocs((p) => ({ ...p, [field]: { uri, id: null, status: "error", docStatus: null } }));
+      setDocs((p) => ({ ...p, [field]: { ...p[field], uri, status: "error" } }));
       Alert.alert("Upload Failed", "Could not upload document. Tap to retry.");
     }
   };
@@ -359,7 +406,7 @@ export default function DriverProfileCompletionScreen({ navigation }) {
         gender: gender,
         vehicle_type: vehicleType,
         vehicle_number: vehicleNumber,
-        vehicle_photo: "",
+        vehicle_photo: vehiclePhotoBase64 || "",
         rc_number: rcNumber,
         document_ids: documentIds,
         bank_details: bankDetails,
@@ -385,6 +432,11 @@ export default function DriverProfileCompletionScreen({ navigation }) {
 
       console.log("[Completion] Submit success");
       dispatch(clearFields());
+      // Re-fetch profile after Celery task completes (~50ms)
+      setTimeout(() => {
+        dispatch(fetchProfile());
+        dispatch(fetchVerificationStatus());
+      }, 500);
       setSubmitted(true);
     } catch {
       setSubmitting(false);
@@ -592,7 +644,11 @@ export default function DriverProfileCompletionScreen({ navigation }) {
                     )}
                   </View>
                   {hasRejection && (
-                    <Text style={styles.rejectionHint}>Tap the document to re-upload a new version</Text>
+                    <Text style={styles.rejectionHint}>
+                      {frontDoc?.rejectionReason || backDoc?.rejectionReason
+                        ? `Rejected: ${frontDoc?.rejectionReason || backDoc?.rejectionReason || "Please re-upload"}`
+                        : "Tap the document to re-upload a new version"}
+                    </Text>
                   )}
                   <View style={styles.uploadRow}>
                     <ImageUploadCard

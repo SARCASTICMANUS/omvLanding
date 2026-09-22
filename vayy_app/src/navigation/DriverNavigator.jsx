@@ -109,6 +109,7 @@ export default function DriverNavigator() {
       .unwrap()
       .then((res) => {
         const s = res?.status;
+        if (dismissedRef.current && s !== "rejected") return;
         if (s && s !== "verified" && !dismissedRef.current) {
           setShowVerification(true);
         } else {
@@ -180,6 +181,7 @@ export default function DriverNavigator() {
         visible={showVerification}
         onDismiss={handleDismiss}
         navigation={navigation}
+        onNavigate={() => navigation.navigate("DriverNavigator", { screen: "DriverProfileCompletion" })}
       />
     </>
   );

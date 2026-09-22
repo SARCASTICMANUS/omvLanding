@@ -22,7 +22,7 @@ export default function ApplicationSubmittedScreen({ onCta }) {
           </View>
         </View>
         <TouchableOpacity style={styles.cta} onPress={onCta} activeOpacity={0.85}>
-          <Text style={styles.ctaText}>Go to Sign In</Text>
+          <Text style={styles.ctaText}>Continue</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -62,7 +62,7 @@ const STATUS_CONFIG = {
   },
 };
 
-export default function VerificationPopup({ visible, onDismiss, navigation }) {
+export default function VerificationPopup({ visible, onDismiss, navigation, onNavigate }) {
   const { verification } = useSelector((state) => state.profile);
   const prevStatusRef = useRef(null);
 
@@ -91,9 +91,13 @@ export default function VerificationPopup({ visible, onDismiss, navigation }) {
   const handleAction = () => {
     if (config.action === "dismiss") {
       onDismiss?.();
-    } else if (config.action === "completeRegistration" && navigation) {
+    } else if (config.action === "completeRegistration" && (onNavigate || navigation)) {
       onDismiss?.();
-      navigation.navigate("DriverProfileCompletion");
+      if (onNavigate) {
+        onNavigate();
+      } else {
+        navigation.navigate("DriverProfileCompletion");
+      }
     }
   };
 

@@ -63,6 +63,14 @@ export default function ProfileScreen({ navigation }) {
     dispatch(fetchVerificationStatus());
   }, [dispatch]);
 
+  useEffect(() => {
+    const unsub = navigation.addListener("focus", () => {
+      dispatch(fetchProfile());
+      dispatch(fetchVerificationStatus());
+    });
+    return unsub;
+  }, [navigation, dispatch]);
+
   const handleLogout = () => {
     dispatch(logoutUser());
   };

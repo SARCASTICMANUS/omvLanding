@@ -601,6 +601,12 @@ class DriverProfileAPIView(APIView):
             },
         )
 
+        vehicle_photo = ""
+        from operations.models import Vehicle
+        vehicle = Vehicle.objects.filter(driver=user).first()
+        if vehicle:
+            vehicle_photo = vehicle.vehicle_photo or ""
+
         return {
             "user": user,
             "profile": profile,
@@ -617,6 +623,7 @@ class DriverProfileAPIView(APIView):
             "rc_number": profile.rc_number,
             "dob": profile.dob.isoformat() if profile.dob else None,
             "gender": profile.gender,
+            "vehicle_photo": vehicle_photo,
             "is_verified": profile.is_verified,
             "rating": profile.rating,
             "total_trips": profile.total_trips,
@@ -683,6 +690,14 @@ class DriverProfileAPIView(APIView):
                 setattr(profile, f, attrs[f])
         profile.save()
 
+        # Update vehicle photo on the driver's primary vehicle
+        if "vehicle_photo" in attrs:
+            from operations.models import Vehicle
+            vehicle = Vehicle.objects.filter(driver=user).first()
+            if vehicle:
+                vehicle.vehicle_photo = attrs["vehicle_photo"]
+                vehicle.save(update_fields=["vehicle_photo"])
+
         data = self._get_merged_data(user)
         serializer = MergedDriverProfileSerializer(data)
         resp = success_response(data=serializer.data)
@@ -730,7 +745,16 @@ class AddFundsAPIView(APIView):
 class DriverDocumentAPIView(APIView):
     permission_classes = [IsAuthenticated, IsDriver]
 
-    def get(self, request, **kwargs):
+    def get(self, request, doc_id=None, **kwargs):
+        if doc_id:
+            try:
+                doc = DriverDocument.objects.get(id=doc_id, driver=request.user)
+            except DriverDocument.DoesNotExist:
+                return Response(
+                    {"success": False, "message": "Document not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            return Response(DriverDocumentSerializer(doc).data)
         docs = DriverDocument.objects.filter(driver=request.user)
         resp = Response(DriverDocumentListSerializer(docs, many=True).data)
         return resp
@@ -896,13 +920,11 @@ class VerificationStatusAPIView(APIView):
         profile_verified = profile.is_verified if profile else False
 
         statuses = [d["status"] for d in doc_list]
-        if profile_verified:
-            verification_status = "verified"
-        elif not doc_list:
+        if not doc_list:
             verification_status = "not_submitted"
         elif DOC_STATUS_REJECTED in statuses:
             verification_status = "rejected"
-        elif all(s == DOC_STATUS_VERIFIED for s in statuses):
+        elif profile_verified or all(s == DOC_STATUS_VERIFIED for s in statuses):
             verification_status = "verified"
         else:
             verification_status = "pending"

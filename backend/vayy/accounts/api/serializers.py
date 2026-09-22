@@ -341,6 +341,7 @@ class MergedDriverProfileSerializer(serializers.Serializer):
     rc_number = serializers.CharField(required=False, allow_blank=True, default="")
     dob = serializers.DateField(required=False, allow_null=True, default=None)
     gender = serializers.CharField(required=False, allow_blank=True, default="")
+    vehicle_photo = serializers.CharField(required=False, allow_blank=True, default="")
     is_verified = serializers.BooleanField(read_only=True)
     rating = serializers.FloatField(read_only=True)
     total_trips = serializers.IntegerField(read_only=True)
@@ -351,7 +352,7 @@ class MergedDriverProfileSerializer(serializers.Serializer):
             "is_verified_user", "first_name", "last_name", "date_joined",
             "profile_id", "display_name", "phone_number", "bio",
             "license_number", "vehicle_number", "vehicle_type", "rc_number",
-            "is_verified", "rating", "total_trips",
+            "vehicle_photo", "is_verified", "rating", "total_trips",
         )
 
     def to_representation(self, instance):
@@ -380,6 +381,7 @@ class MergedDriverProfileUpdateSerializer(serializers.Serializer):
     rc_number = serializers.CharField(required=False, allow_blank=True)
     dob = serializers.DateField(required=False, allow_null=True)
     gender = serializers.CharField(required=False, allow_blank=True)
+    vehicle_photo = serializers.CharField(required=False, allow_blank=True)
 
 
 # DRIVER REGISTRATION
