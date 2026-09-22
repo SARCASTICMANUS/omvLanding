@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -14,8 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import * as ImagePicker from "expo-image-picker";
-import { Ionicons } from "@expo/vector-icons";
-import { updateProfile, fetchVerificationStatus } from "../../store/slices/profileSlice";
+import { updateProfile } from "../../store/slices/profileSlice";
 
 import COLORS from "../constants/colors";
 import RADIUS from "../constants/radius";
@@ -23,35 +22,10 @@ import SPACING from "../constants/spacing";
 import VayyButton from "../components/common/VayyButton";
 import { DRIVER_ROLES } from "../../constants";
 
-const VEHICLE_TYPES = [
-  { label: "Bike", value: "bike" },
-  { label: "Auto", value: "auto" },
-];
-
-const DOC_TYPES = [
-  { key: "LICENSE", label: "Driving License", icon: "card-outline" },
-  { key: "RC", label: "Vehicle RC", icon: "document-text-outline" },
-  { key: "INSURANCE", label: "Insurance", icon: "shield-checkmark-outline" },
-  { key: "IDENTITY", label: "ID Proof", icon: "finger-print-outline" },
-];
-
-const DRIVER_DOC_TYPES = [
-  { key: "LICENSE", label: "DL Number", icon: "card-outline" },
-  { key: "RC", label: "Vehicle RC", icon: "document-text-outline" },
-  { key: "INSURANCE", label: "Insurance", icon: "shield-checkmark-outline" },
-  { key: "IDENTITY", label: "ID - Company/College I-Card", icon: "finger-print-outline" },
-];
-
-const STATUS_COLORS = {
-  PENDING: { bg: "#fffbeb", text: "#d97706", border: "#fde68a" },
-  VERIFIED: { bg: "#f0fdf4", text: "#16a34a", border: "#bbf7d0" },
-  REJECTED: { bg: "#fef2f2", text: "#dc2626", border: "#fecaca" },
-};
-
 export default function EditProfileScreen({ navigation }) {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
-  const { data: profile, loading, verification } = useSelector((state) => state.profile);
+  const { data: profile, loading } = useSelector((state) => state.profile);
 
   const isDriver = DRIVER_ROLES.includes(user?.role);
 
@@ -62,28 +36,8 @@ export default function EditProfileScreen({ navigation }) {
     phone_number: profile?.phone_number || "",
     bio: profile?.bio || "",
     profile_photo: profile?.profile_photo || "",
-    ...(isDriver
-      ? {
-          license_number: profile?.license_number || "",
-          vehicle_number: profile?.vehicle_number || "",
-          vehicle_type: profile?.vehicle_type || "auto",
-        }
-      : {}),
+    ...(isDriver ? { license_number: profile?.license_number || "" } : {}),
   });
-
-  useEffect(() => {
-    if (isDriver) {
-      dispatch(fetchVerificationStatus());
-    }
-  }, [dispatch, isDriver]);
-
-  // Re-fetch verification status when coming back from image picker or returning to screen
-  useEffect(() => {
-    const unsub = navigation.addListener("focus", () => {
-      dispatch(fetchVerificationStatus());
-    });
-    return unsub;
-  }, [navigation, dispatch]);
 
   const updateField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -104,11 +58,6 @@ export default function EditProfileScreen({ navigation }) {
     if (!result.canceled && result.assets?.[0]?.uri) {
       updateField("profile_photo", result.assets[0].uri);
     }
-  };
-
-  const getDocStatus = (docType) => {
-    const docs = verification?.documents || [];
-    return docs.find((d) => d.document_type === docType);
   };
 
   const handleSave = async () => {
@@ -215,97 +164,16 @@ export default function EditProfileScreen({ navigation }) {
           )}
 
           {isDriver && (
-            <>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>License Number</Text>
-                <TextInput
-                  style={styles.input}
-                  value={form.license_number}
-                  onChangeText={(v) => updateField("license_number", v)}
-                  placeholder="Enter license number"
-                  placeholderTextColor={COLORS.textLight}
-                  autoCapitalize="characters"
-                />
-              </View>
-
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Vehicle Number</Text>
-                <TextInput
-                  style={styles.input}
-                  value={form.vehicle_number}
-                  onChangeText={(v) => updateField("vehicle_number", v)}
-                  placeholder="Enter vehicle number"
-                  placeholderTextColor={COLORS.textLight}
-                  autoCapitalize="characters"
-                />
-              </View>
-
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Vehicle Type</Text>
-                <View style={styles.chipRow}>
-                  {VEHICLE_TYPES.map((vt) => (
-                    <TouchableOpacity
-                      key={vt.value}
-                      style={[
-                        styles.chip,
-                        form.vehicle_type === vt.value && styles.chipActive,
-                      ]}
-                      onPress={() => updateField("vehicle_type", vt.value)}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          form.vehicle_type === vt.value && styles.chipTextActive,
-                        ]}
-                      >
-                        {vt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </>
-          )}
-
-          {isDriver && (
-            <View style={styles.sectionWrap}>
-              <Text style={styles.sectionLabel}>Documents & Verification</Text>
-              {(isDriver ? DRIVER_DOC_TYPES : DOC_TYPES).map((doc) => {
-                const docStatus = getDocStatus(doc.key);
-                const statusKey = docStatus?.status || null;
-                const statusColor = statusKey ? STATUS_COLORS[statusKey] : null;
-                return (
-                  <View
-                    key={doc.key}
-                    style={styles.docRow}
-                  >
-                    <View style={styles.docLeft}>
-                      <Ionicons name={doc.icon} size={20} color={COLORS.textLight} />
-                      <Text style={styles.docLabel}>{doc.label}</Text>
-                    </View>
-                    <View style={styles.docRight}>
-                      {statusKey ? (
-                        <View style={styles.docUploaded}>
-                          <View style={[styles.docBadge, { backgroundColor: statusColor.bg, borderColor: statusColor.border }]}>
-                            <Text style={[styles.docBadgeText, { color: statusColor.text }]}>{statusKey}</Text>
-                          </View>
-                        </View>
-                      ) : (
-                        <Ionicons name="cloud-upload-outline" size={18} color={COLORS.textLight} />
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-              <TouchableOpacity
-                style={styles.reuploadBtn}
-                onPress={() => navigation.navigate("DriverProfileCompletion")}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="document-text-outline" size={18} color={COLORS.primary} />
-                <Text style={styles.reuploadBtnText}>Manage Documents</Text>
-                <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
-              </TouchableOpacity>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>License Number</Text>
+              <TextInput
+                style={styles.input}
+                value={form.license_number}
+                onChangeText={(v) => updateField("license_number", v)}
+                placeholder="Enter license number"
+                placeholderTextColor={COLORS.textLight}
+                autoCapitalize="characters"
+              />
             </View>
           )}
 
@@ -426,79 +294,6 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     marginTop: SPACING.md,
-  },
-  sectionWrap: {
-    marginTop: SPACING.lg,
-    paddingTop: SPACING.lg,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.md,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  docRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  docLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-  },
-  docLabel: {
-    fontSize: 14,
-    color: COLORS.text,
-    fontWeight: "600",
-  },
-  docRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  docUploaded: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  docBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  docBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  reuploadBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginTop: 8,
-    borderRadius: RADIUS.md,
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    borderColor: COLORS.primary,
-    backgroundColor: "#f0fdf4",
-  },
-  reuploadBtnText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.primary,
   },
   photoPicker: {
     width: 120,

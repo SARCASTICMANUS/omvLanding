@@ -101,6 +101,7 @@ export default function DriverNavigator() {
   const [showVerification, setShowVerification] = useState(false);
   const dismissedRef = useRef(false);
   const dispatch = useDispatch();
+  const { verification } = useSelector((state) => state.profile);
   const navigation = useNavigation();
 
   const checkVerification = () => {
@@ -181,7 +182,12 @@ export default function DriverNavigator() {
         visible={showVerification}
         onDismiss={handleDismiss}
         navigation={navigation}
-        onNavigate={() => navigation.navigate("DriverNavigator", { screen: "DriverProfileCompletion" })}
+        onNavigate={() =>
+          navigation.navigate("DriverNavigator", {
+            screen: "DriverProfileCompletion",
+            params: verification?.status === "rejected" ? { mode: "manage" } : {},
+          })
+        }
       />
     </>
   );

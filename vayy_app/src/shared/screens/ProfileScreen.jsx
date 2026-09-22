@@ -128,7 +128,7 @@ export default function ProfileScreen({ navigation }) {
     //   : []),
     // ...(isDriver && verification?.status !== "verified"
       // ? [
-    { icon: "cloud-upload-outline", label: "Upload Documents", screen: "DriverProfileCompletion" },
+    { icon: "cloud-upload-outline", label: "Upload Documents", screen: "DriverProfileCompletion", params: { mode: "manage" } },
       // ]
       // : []),
     { icon: "shield-checkmark-outline", label: "Privacy Policy", value: "View", screen: "PrivacyPolicy" },
@@ -233,7 +233,7 @@ export default function ProfileScreen({ navigation }) {
               <TouchableOpacity
                 key={i}
                 activeOpacity={0.6}
-                onPress={item.screen ? () => navigation.navigate(item.screen) : undefined}
+                onPress={item.screen ? () => navigation.navigate(item.screen, item.params) : undefined}
               >
                 {i > 0 && <View style={styles.divider} />}
                 <View style={styles.settingRow}>

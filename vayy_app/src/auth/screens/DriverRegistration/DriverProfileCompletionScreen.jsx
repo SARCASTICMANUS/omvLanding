@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -24,7 +24,7 @@ import { fetchProfile, fetchVerificationStatus } from "../../../store/slices/pro
 import { clearFields } from "../../../store/slices/onboardingSlice";
 import { VALIDATORS, VALIDATION_MESSAGES } from "../../validators";
 import api from "../../../shared/lib/api";
-import { AUTH } from "../../../constants";
+import { AUTH, OPERATIONS } from "../../../constants";
 
 const DOC_SECTIONS = [
   { key: "dl", label: "Driving Licence", type: "LICENSE", back: true },
@@ -45,10 +45,11 @@ const parseDobToISO = (dob) => {
   return null;
 };
 
-export default function DriverProfileCompletionScreen({ navigation }) {
+export default function DriverProfileCompletionScreen({ navigation, route }) {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const fields = useSelector((state) => state.onboarding.fields);
+  const isManage = route?.params?.mode === "manage";
 
   // Profile (editable)
   const [fullName, setFullName] = useState(fields.fullName || user?.name || user?.full_name || "");
@@ -91,6 +92,11 @@ export default function DriverProfileCompletionScreen({ navigation }) {
   const [submitted, setSubmitted] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(true);
 
+  // Manage-mode change tracking (snapshots from backend on mount)
+  const initialVehicle = useRef({ type: "bike", number: "", rc: "" });
+  const initialBank = useRef({ holder: "", account: "", ifsc: "", upi: "" });
+  const photoTouched = useRef(false);
+
   // ── Fetch existing data on mount ──
   useEffect(() => {
     const loadExistingData = async () => {
@@ -128,6 +134,15 @@ export default function DriverProfileCompletionScreen({ navigation }) {
             setVehiclePhotoUri(src);
             setVehiclePhotoBase64(photo);
           }
+        }
+
+        // Manage-mode change snapshot (initial vehicle values)
+        if (profile) {
+          initialVehicle.current = {
+            type: profile.vehicle_type || "bike",
+            number: (profile.vehicle_number || "").toUpperCase(),
+            rc: (profile.rc_number || "").toUpperCase(),
+          };
         }
 
         // Documents — map by doc_key (preferred) or fall back to type+order
@@ -220,6 +235,12 @@ export default function DriverProfileCompletionScreen({ navigation }) {
           if (bank.account_number) setAccountNumber(bank.account_number);
           if (bank.ifsc) setIfsc(bank.ifsc);
           if (bank.upi) setUpi(bank.upi);
+          initialBank.current = {
+            holder: bank.holder_name || "",
+            account: bank.account_number || "",
+            ifsc: bank.ifsc || "",
+            upi: bank.upi || "",
+          };
         }
 
         console.log("[Completion] Data loading complete");
@@ -251,6 +272,7 @@ export default function DriverProfileCompletionScreen({ navigation }) {
       const asset = result.assets[0];
       setVehiclePhotoUri(asset.uri);
       setVehiclePhotoBase64(asset.base64 || "");
+      photoTouched.current = true;
       setErrors((p) => { const n = { ...p }; delete n.photo; return n; });
     }
   };
@@ -328,8 +350,10 @@ export default function DriverProfileCompletionScreen({ navigation }) {
   // ── Validation ──
   const validate = () => {
     const e = {};
-    if (!VALIDATORS.fullName(fullName)) e.fullName = VALIDATION_MESSAGES.fullName;
-    if (!VALIDATORS.mobile(mobile)) e.mobile = VALIDATION_MESSAGES.mobile;
+    if (!isManage) {
+      if (!VALIDATORS.fullName(fullName)) e.fullName = VALIDATION_MESSAGES.fullName;
+      if (!VALIDATORS.mobile(mobile)) e.mobile = VALIDATION_MESSAGES.mobile;
+    }
     if (!VALIDATORS.vehicleNumber(vehicleNumber)) e.vehicleNumber = VALIDATION_MESSAGES.vehicleNumber;
     if (!rcNumber || rcNumber.length < 6) e.rcNumber = "Enter a valid RC number (min 6 characters)";
 
@@ -367,6 +391,41 @@ export default function DriverProfileCompletionScreen({ navigation }) {
   const totalDocs = 9;
   const docCount = getDocCount();
 
+  // ── Manage-mode save (vehicle / bank / documents only) ──
+  const handleManageSave = async () => {
+    const vehicleChanged =
+      vehicleType !== initialVehicle.current.type ||
+      vehicleNumber.toUpperCase() !== initialVehicle.current.number ||
+      photoTouched.current;
+    const rcChanged = rcNumber.toUpperCase() !== initialVehicle.current.rc;
+    const bankChanged =
+      holderName !== initialBank.current.holder ||
+      accountNumber !== initialBank.current.account ||
+      ifsc !== initialBank.current.ifsc ||
+      upi !== initialBank.current.upi;
+
+    if (vehicleChanged) {
+      await api.post(OPERATIONS.vehicleRegister, {
+        vehicle_number: vehicleNumber,
+        vehicle_type: vehicleType,
+        vehicle_photo: vehiclePhotoBase64 || "",
+      });
+    }
+
+    if (rcChanged) {
+      await api.put(AUTH.driverProfile, { rc_number: rcNumber });
+    }
+
+    if (bankChanged) {
+      await api.post(AUTH.driverBankDetails, {
+        holder_name: holderName,
+        account_number: accountNumber,
+        ifsc,
+        upi,
+      });
+    }
+  };
+
   // ── Submit ──
   const handleSubmit = async () => {
     if (!validate()) {
@@ -376,6 +435,18 @@ export default function DriverProfileCompletionScreen({ navigation }) {
 
     setSubmitting(true);
     try {
+      if (isManage) {
+        await handleManageSave();
+        setSubmitting(false);
+        console.log("[Completion] Manage save success");
+        setTimeout(() => {
+          dispatch(fetchProfile());
+          dispatch(fetchVerificationStatus());
+        }, 500);
+        navigation.goBack();
+        return;
+      }
+
       const documentIds = [];
       for (const section of DOC_SECTIONS) {
         const frontField = `${section.key}Front`;
@@ -426,7 +497,7 @@ export default function DriverProfileCompletionScreen({ navigation }) {
           result.payload?.message ||
           "Submission failed";
         console.error("[Completion] Submit error:", errorMsg, result.payload);
-        Alert.alert("Registration Failed", errorMsg);
+        Alert.alert(isManage ? "Update Failed" : "Registration Failed", errorMsg);
         return;
       }
 
@@ -438,9 +509,10 @@ export default function DriverProfileCompletionScreen({ navigation }) {
         dispatch(fetchVerificationStatus());
       }, 500);
       setSubmitted(true);
-    } catch {
+    } catch (err) {
       setSubmitting(false);
-      Alert.alert("Registration Failed", "Something went wrong. Please try again.");
+      const errMsg = err?.response?.data?.message || err?.message || "Something went wrong. Please try again.";
+      Alert.alert(isManage ? "Update Failed" : "Registration Failed", errMsg);
     }
   };
 
@@ -474,73 +546,77 @@ export default function DriverProfileCompletionScreen({ navigation }) {
         <ArrowLeft size={22} color={COLORS.text} />
       </TouchableOpacity>
       <View style={styles.header}>
-        <Text style={styles.title}>Complete Profile</Text>
-        <Text style={styles.sub}>Fill in your details to start driving</Text>
+        <Text style={styles.title}>{isManage ? "Vehicle & Documents" : "Complete Profile"}</Text>
+        <Text style={styles.sub}>{isManage ? "Update your vehicle details and documents" : "Fill in your details to start driving"}</Text>
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
 
-          {/* ── PROFILE SECTION ── */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Personal Details</Text>
+          {!isManage && (
+            <>
+              {/* ── PROFILE SECTION ── */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Personal Details</Text>
 
-            <Text style={styles.label}>Full Name</Text>
-            <View style={styles.inputWrap}>
-              <User size={16} color="#9ca3af" />
-              <TextInput
-                style={styles.input}
-                placeholder="As per Aadhaar"
-                placeholderTextColor="#aaa"
-                value={fullName}
-                onChangeText={setFullName}
-                autoCapitalize="words"
-              />
-            </View>
+                <Text style={styles.label}>Full Name</Text>
+                <View style={styles.inputWrap}>
+                  <User size={16} color="#9ca3af" />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="As per Aadhaar"
+                    placeholderTextColor="#aaa"
+                    value={fullName}
+                    onChangeText={setFullName}
+                    autoCapitalize="words"
+                  />
+                </View>
 
-            <Text style={styles.label}>Phone Number</Text>
-            <View style={inputStyle("mobile")}>
-              <Phone size={16} color="#9ca3af" />
-              <TextInput
-                style={styles.input}
-                placeholder="10-digit mobile number"
-                placeholderTextColor="#aaa"
-                value={mobile}
-                onChangeText={(v) => setMobile(v.replace(/[^0-9]/g, ""))}
-                keyboardType="number-pad"
-                maxLength={10}
-              />
-            </View>
-            {errors.mobile && <Text style={styles.err}>{errors.mobile}</Text>}
+                <Text style={styles.label}>Phone Number</Text>
+                <View style={inputStyle("mobile")}>
+                  <Phone size={16} color="#9ca3af" />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="10-digit mobile number"
+                    placeholderTextColor="#aaa"
+                    value={mobile}
+                    onChangeText={(v) => setMobile(v.replace(/[^0-9]/g, ""))}
+                    keyboardType="number-pad"
+                    maxLength={10}
+                  />
+                </View>
+                {errors.mobile && <Text style={styles.err}>{errors.mobile}</Text>}
 
-            <Text style={styles.label}>Date of Birth</Text>
-            <View style={styles.inputWrap}>
-              <Calendar size={16} color="#9ca3af" />
-              <TextInput
-                style={styles.input}
-                placeholder="DD/MM/YYYY"
-                placeholderTextColor="#aaa"
-                value={dob}
-                onChangeText={setDob}
-                keyboardType="numbers-and-punctuation"
-                maxLength={10}
-              />
-            </View>
+                <Text style={styles.label}>Date of Birth</Text>
+                <View style={styles.inputWrap}>
+                  <Calendar size={16} color="#9ca3af" />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="DD/MM/YYYY"
+                    placeholderTextColor="#aaa"
+                    value={dob}
+                    onChangeText={setDob}
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={10}
+                  />
+                </View>
 
-            <Text style={styles.label}>Gender</Text>
-            <View style={styles.genderRow}>
-              {["Male", "Female", "Other"].map((g) => (
-                <TouchableOpacity
-                  key={g}
-                  style={[styles.genderPill, gender === g && styles.genderPillActive]}
-                  onPress={() => setGender(g)}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.genderText, gender === g && { color: "#fff" }]}>{g}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+                <Text style={styles.label}>Gender</Text>
+                <View style={styles.genderRow}>
+                  {["Male", "Female", "Other"].map((g) => (
+                    <TouchableOpacity
+                      key={g}
+                      style={[styles.genderPill, gender === g && styles.genderPillActive]}
+                      onPress={() => setGender(g)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.genderText, gender === g && { color: "#fff" }]}>{g}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </>
+          )}
 
           {/* ── VEHICLE SECTION ── */}
           <View style={styles.section}>
@@ -738,7 +814,7 @@ export default function DriverProfileCompletionScreen({ navigation }) {
       </KeyboardAvoidingView>
 
       <BottomStickyButton
-        label={submitting ? "Submitting..." : "Submit Registration"}
+        label={submitting ? (isManage ? "Saving..." : "Submitting...") : isManage ? "Save & Update" : "Submit Registration"}
         onPress={handleSubmit}
         loading={submitting}
         disabled={submitting}
