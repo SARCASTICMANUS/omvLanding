@@ -331,6 +331,12 @@ class DriverDocument(models.Model):
         max_length=20,
         choices=DOC_TYPE_CHOICES,
     )
+    doc_key = models.CharField(
+        max_length=50,
+        default="",
+        blank=True,
+        help_text="Unique slot key (e.g. dlFront, rcBack) for create-or-update",
+    )
     file_data = models.TextField(
         default="",
         blank=True,
@@ -371,6 +377,7 @@ class DriverDocument(models.Model):
         indexes = [
             models.Index(fields=["status"]),
             models.Index(fields=["document_type"]),
+            models.Index(fields=["driver", "doc_key"]),
         ]
 
 class RecentSearch(models.Model):

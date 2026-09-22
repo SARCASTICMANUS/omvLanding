@@ -759,6 +759,7 @@ class DriverDocumentAPIView(APIView):
         import uuid as uuid_mod
 
         document_type = request.data.get("document_type", "")
+        doc_key = request.data.get("doc_key", "")
         file_obj = request.data.get("file")
         file_base64 = request.data.get("file_base64")
         file_name = request.data.get("file_name", "upload.jpg")
@@ -769,8 +770,13 @@ class DriverDocumentAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        existing_doc = None
+        if doc_key:
+            existing_doc = DriverDocument.objects.filter(
+                driver=request.user, doc_key=doc_key
+            ).first()
+
         if file_base64:
-            # Accept base64-encoded image
             if "," in file_base64:
                 file_base64 = file_base64.split(",", 1)[1]
             try:
@@ -780,9 +786,21 @@ class DriverDocumentAPIView(APIView):
                     {"success": False, "message": "Invalid base64 data"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            if existing_doc:
+                existing_doc.file_data = file_base64
+                existing_doc.file_name = file_name
+                existing_doc.document_type = document_type
+                existing_doc.status = DOC_STATUS_PENDING
+                existing_doc.rejection_reason = ""
+                existing_doc.save()
+                return Response(
+                    DriverDocumentSerializer(existing_doc).data,
+                    status=status.HTTP_200_OK,
+                )
             doc = DriverDocument.objects.create(
                 driver=request.user,
                 document_type=document_type,
+                doc_key=doc_key or "",
                 file_data=file_base64,
                 file_name=file_name,
             )
@@ -792,7 +810,6 @@ class DriverDocumentAPIView(APIView):
             )
 
         if file_obj:
-            # Read uploaded file, convert to base64, store in file_data
             try:
                 file_bytes = file_obj.read()
                 encoded = base64.b64encode(file_bytes).decode("utf-8")
@@ -802,9 +819,21 @@ class DriverDocumentAPIView(APIView):
                     {"success": False, "message": "Failed to read uploaded file"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            if existing_doc:
+                existing_doc.file_data = encoded
+                existing_doc.file_name = actual_name
+                existing_doc.document_type = document_type
+                existing_doc.status = DOC_STATUS_PENDING
+                existing_doc.rejection_reason = ""
+                existing_doc.save()
+                return Response(
+                    DriverDocumentSerializer(existing_doc).data,
+                    status=status.HTTP_200_OK,
+                )
             doc = DriverDocument.objects.create(
                 driver=request.user,
                 document_type=document_type,
+                doc_key=doc_key or "",
                 file_data=encoded,
                 file_name=actual_name,
             )

@@ -90,6 +90,7 @@ export default function DriverProfileCompletionScreen({ navigation }) {
   const [loadingExisting, setLoadingExisting] = useState(true);
 
   // ── Fetch existing data on mount ──
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const loadExistingData = async () => {
       try {
@@ -122,11 +123,27 @@ export default function DriverProfileCompletionScreen({ navigation }) {
           if (profile.rc_number) setRcNumber(profile.rc_number);
         }
 
-        // Documents — map by type and creation order to UI keys
+        // Documents — map by doc_key (preferred) or fall back to type+order
         const rawDocs = docsRes?.data;
         const docList = Array.isArray(rawDocs) ? rawDocs : Array.isArray(rawDocs?.data) ? rawDocs.data : [];
         console.log("[Completion] Parsed docList:", docList.length, "docs");
         if (docList.length > 0) {
+          const newDocs = {};
+
+          for (const doc of docList) {
+            // Prefer doc_key if present
+            if (doc.doc_key && doc.doc_key in docs) {
+              newDocs[doc.doc_key] = {
+                uri: doc.file_data ? `data:image/jpeg;base64,${doc.file_data}` : null,
+                id: doc.id,
+                status: "success",
+                docStatus: doc.status || null,
+              };
+              console.log(`[Completion] Loaded doc by key: ${doc.doc_key} → type=${doc.document_type} id=${doc.id} status=${doc.status}`);
+            }
+          }
+
+          // Fallback: map by type + order for docs without doc_key
           const typeToKeys = {
             LICENSE: ["dlFront", "dlBack"],
             RC: ["rcFront", "rcBack"],
@@ -134,23 +151,25 @@ export default function DriverProfileCompletionScreen({ navigation }) {
             IDENTITY: ["aadhaarFront", "aadhaarBack", "selfie"],
           };
           const counters = { LICENSE: 0, RC: 0, INSURANCE: 0, IDENTITY: 0 };
-          const newDocs = {};
 
           for (const doc of docList) {
+            if (doc.doc_key && doc.doc_key in newDocs) continue;
             const t = doc.document_type;
             const keys = typeToKeys[t];
             if (!keys) continue;
             const idx = counters[t];
             if (idx < keys.length) {
               const field = keys[idx];
-              newDocs[field] = {
-                uri: doc.file_data ? `data:image/jpeg;base64,${doc.file_data}` : null,
-                id: doc.id,
-                status: "success",
-                docStatus: doc.status || null,
-              };
+              if (!newDocs[field]) {
+                newDocs[field] = {
+                  uri: doc.file_data ? `data:image/jpeg;base64,${doc.file_data}` : null,
+                  id: doc.id,
+                  status: "success",
+                  docStatus: doc.status || null,
+                };
+                console.log(`[Completion] Loaded doc by order: ${field} → type=${t} id=${doc.id} status=${doc.status}`);
+              }
               counters[t]++;
-              console.log(`[Completion] Loaded doc: ${field} → type=${t} id=${doc.id} hasFile=${!!doc.file_data} status=${doc.status}`);
             }
           }
 
@@ -202,12 +221,12 @@ export default function DriverProfileCompletionScreen({ navigation }) {
   // ── Document Upload ──
   const pickAndUploadDoc = async (field, documentType) => {
     const existingDoc = docs[field];
+    const statusLabel = existingDoc?.docStatus || existingDoc?.status === "success" ? "uploaded" : null;
     if (existingDoc?.id) {
-      const statusLabel = existingDoc.docStatus || "uploaded";
       const action = await new Promise((resolve) => {
         Alert.alert(
           "Replace Document",
-          `This slot already has a ${statusLabel.toLowerCase()} document. Replace it?`,
+          `This slot already has a ${statusLabel || "uploaded"} document. Replace it?`,
           [
             { text: "Cancel", style: "cancel", onPress: () => resolve("cancel") },
             { text: "Replace", onPress: () => resolve("replace") },
@@ -215,13 +234,6 @@ export default function DriverProfileCompletionScreen({ navigation }) {
         );
       });
       if (action !== "replace") return;
-
-      try {
-        await api.delete(AUTH.driverDocumentDelete(existingDoc.id));
-        console.log(`[Completion] Deleted old doc: ${field} id=${existingDoc.id}`);
-      } catch (e) {
-        console.warn(`[Completion] Failed to delete old doc: ${e?.message}`);
-      }
     }
 
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -239,11 +251,12 @@ export default function DriverProfileCompletionScreen({ navigation }) {
 
     const uri = result.assets[0].uri;
     console.log(`[Completion] Uploading doc: field=${field} type=${documentType} uri=${uri}`);
-    setDocs((p) => ({ ...p, [field]: { uri, id: null, status: "uploading", docStatus: null } }));
+    setDocs((p) => ({ ...p, [field]: { uri, id: p[field]?.id, status: "uploading", docStatus: null } }));
 
     try {
       const formData = new FormData();
       formData.append("document_type", documentType);
+      formData.append("doc_key", field);
       formData.append("file", {
         uri,
         name: uri.split("/").pop() || "upload.jpg",
@@ -254,8 +267,9 @@ export default function DriverProfileCompletionScreen({ navigation }) {
       });
       const docData = response.data?.data || response.data;
       const docId = docData?.id;
-      console.log(`[Completion] Upload success: field=${field} docId=${docId}`);
-      setDocs((p) => ({ ...p, [field]: { uri, id: docId, status: "success", docStatus: "PENDING" } }));
+      const updatedStatus = docData?.status || "PENDING";
+      console.log(`[Completion] Upload success: field=${field} docId=${docId} status=${updatedStatus}`);
+      setDocs((p) => ({ ...p, [field]: { uri, id: docId, status: "success", docStatus: updatedStatus } }));
       setErrors((p) => { const n = { ...p }; delete n[field]; return n; });
     } catch (e) {
       console.error(`[Completion] Upload failed: field=${field}`, e?.response?.status, e?.response?.data || e?.message);
