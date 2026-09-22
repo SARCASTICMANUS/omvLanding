@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
+import { BLUE_PALETTE } from "../../colors";
 
 function isMapValid(map) {
   try {
@@ -22,10 +23,10 @@ function lerpColor(a, b, t) {
 
 function getColor(value, max) {
   const t = Math.min(value / max, 1);
-  if (t < 0.25) return lerpColor("#F1F6F1", "#2FA97C", t / 0.25);
-  if (t < 0.5) return lerpColor("#2FA97C", "#009849", (t - 0.25) / 0.25);
-  if (t < 0.75) return lerpColor("#009849", "#FF5D5D", (t - 0.5) / 0.25);
-  return "#FF5D5D";
+  if (t < 0.25) return lerpColor(BLUE_PALETTE[7], BLUE_PALETTE[5], t / 0.25);
+  if (t < 0.5) return lerpColor(BLUE_PALETTE[5], BLUE_PALETTE[3], (t - 0.25) / 0.25);
+  if (t < 0.75) return lerpColor(BLUE_PALETTE[3], BLUE_PALETTE[1], (t - 0.5) / 0.25);
+  return BLUE_PALETTE[0];
 }
 
 export default function ChoroplethMap({ map, countryData = [] }) {

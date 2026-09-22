@@ -42,24 +42,25 @@ export default function SupportPage() {
   }, [searchParams]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="relative flex h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border-2 border-memphis-ink bg-memphis-paper text-memphis-ink shadow-memphis-lg">
-        {/* Ticket queue grid pattern background */}
-        <div className="absolute inset-0 memphis-ticket-grid pointer-events-none opacity-30" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-4 sm:p-6">
+      <div className="relative flex h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-slate-900/70 backdrop-blur-2xl border border-white/10 text-slate-200 shadow-2xl shadow-slate-900/40">
+        {/* Soft ambient glows — dark blurred glass */}
+        <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full" style={{ background: "radial-gradient(closest-side, rgba(46,92,255,0.25), transparent)" }} />
+        <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full" style={{ background: "radial-gradient(closest-side, rgba(125,211,252,0.16), transparent)" }} />
         {/* Header */}
-        <div className="flex shrink-0 items-center gap-4 border-b-2 border-memphis-ink/10 px-5 py-4">
+        <div className="relative flex shrink-0 items-center gap-4 border-b border-white/10 px-5 py-4">
           <button
             onClick={() => navigate(-1)}
-            className="memphis-btn-secondary flex h-9 w-9 items-center justify-center rounded-full"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-slate-300 transition hover:bg-white/20 hover:text-white"
           >
             <X size={16} />
           </button>
-          <h1 className="text-lg font-bold text-memphis-ink">Support</h1>
+          <h1 className="text-lg font-bold text-slate-100">Support</h1>
         </div>
 
         {/* Tabs */}
-        <div className="shrink-0 px-5 pt-4">
-          <div className="flex gap-1 rounded-lg border-2 border-memphis-ink bg-memphis-ink/5 p-1.5">
+        <div className="relative shrink-0 px-5 pt-4">
+          <div className="flex gap-1 rounded-xl bg-white/5 border border-white/10 p-1.5">
             {[
               { id: "privacy", label: "Privacy" },
               { id: "terms", label: "Terms" },
@@ -71,8 +72,8 @@ export default function SupportPage() {
                 onClick={() => { setActiveTab(tab.id); setOpenFaq(null); }}
                 className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
                   activeTab === tab.id
-                    ? "bg-memphis-pink text-memphis-ink shadow-sm"
-                    : "text-memphis-purple/70 hover:text-memphis-ink"
+                    ? "bg-[#009849] text-white shadow-md shadow-emerald-500/30"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
                 }`}
               >
                 {tab.label}
@@ -82,22 +83,22 @@ export default function SupportPage() {
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain p-5 scrollbar-thin scrollbar-track-memphis-ink/5 scrollbar-thumb-memphis-ink/20">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-5 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/15">
           {/* Privacy */}
           {activeTab === "privacy" && (
             <div className="space-y-5">
-              <p className="text-xs font-medium text-memphis-purple/50">Last updated: July 2026</p>
-              <p className="text-sm leading-relaxed text-memphis-purple">
+              <p className="text-xs font-medium text-slate-500">Last updated: July 2026</p>
+              <p className="text-sm leading-relaxed text-slate-400">
                 OMV is committed to protecting your privacy. This policy explains how we collect, use, and safeguard your information.
               </p>
               {PRIVACY_SECTIONS.map((s, i) => (
-                <div key={i} className="rounded-xl border-2 border-memphis-ink/10 bg-memphis-ink/5 p-4">
-                  <h3 className="text-sm font-bold text-memphis-ink">{s.title}</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-memphis-purple">{s.text}</p>
+                <div key={i} className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+                  <h3 className="text-sm font-bold text-slate-100">{s.title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-400">{s.text}</p>
                 </div>
               ))}
-              <p className="text-xs text-memphis-purple/50">
-                Contact: <span className="font-semibold text-memphis-purple">info@onmyvayy.com</span> — OMV, onmyvayy, Lucknow, UP, India
+              <p className="text-xs text-slate-500">
+                Contact: <span className="font-semibold text-slate-300">info@onmyvayy.com</span> — OMV, onmyvayy, Lucknow, UP, India
               </p>
             </div>
           )}
@@ -105,13 +106,13 @@ export default function SupportPage() {
           {/* Terms */}
           {activeTab === "terms" && (
             <div className="space-y-5">
-              <p className="text-xs font-medium text-memphis-purple/50">Last updated: 9 September 2026</p>
-              <p className="text-sm leading-relaxed text-memphis-purple">
+              <p className="text-xs font-medium text-slate-500">Last updated: 9 September 2026</p>
+              <p className="text-sm leading-relaxed text-slate-400">
                 These Terms of Service govern your access to and use of the OMV — On My Vayy platform. By creating an account, accessing, or using OMV, you agree to these Terms.
               </p>
-              <div className="rounded-xl border-2 border-memphis-ink/10 bg-memphis-ink/5 p-4">
-                <h3 className="text-sm font-bold text-memphis-ink">Important</h3>
-                <p className="mt-1 text-sm leading-relaxed text-memphis-purple">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+                <h3 className="text-sm font-bold text-slate-100">Important</h3>
+                <p className="mt-1 text-sm leading-relaxed text-slate-400">
                   OMV is designed as a technology platform for coordinating shared journeys between individuals who are already travelling along substantially similar routes. These Terms describe the intended operating model; they do not determine or guarantee the legal classification of the service. Users are responsible for complying with applicable law.
                 </p>
               </div>
@@ -140,9 +141,9 @@ export default function SupportPage() {
                 { title: "22. Governing Law and Jurisdiction", text: "These Terms shall be governed by the laws of India, subject to applicable law. Subject to mandatory legal requirements, disputes shall be subject to the jurisdiction of the courts having appropriate jurisdiction over OMV's registered office." },
                 { title: "23. Contact", text: "For questions, complaints, safety concerns, or legal notices, contact: OMV — On My Vayy. Email: info@onmyvayy.com" },
               ].map((s, i) => (
-                <div key={i} className="rounded-xl border-2 border-memphis-ink/10 bg-memphis-ink/5 p-4">
-                  <h3 className="text-sm font-bold text-memphis-ink">{s.title}</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-memphis-purple">{s.text}</p>
+                <div key={i} className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+                  <h3 className="text-sm font-bold text-slate-100">{s.title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-400">{s.text}</p>
                 </div>
               ))}
             </div>
@@ -152,20 +153,20 @@ export default function SupportPage() {
           {activeTab === "faq" && (
             <div className="space-y-2">
               {FAQS.map((f, i) => (
-                <div key={i} className="overflow-hidden rounded-xl border-2 border-memphis-ink/20 bg-memphis-paper">
+                <div key={i} className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
                   <button
                     onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                    className="flex w-full items-center justify-between p-4 text-left"
+                    className="flex w-full items-center justify-between p-4 text-left transition hover:bg-white/5"
                   >
-                    <span className="text-sm font-bold text-memphis-ink">{f.q}</span>
+                    <span className="text-sm font-bold text-slate-100">{f.q}</span>
                     <ChevronDown
                       size={16}
-                      className={`flex-shrink-0 text-memphis-purple/50 transition-transform ${openFaq === i ? "rotate-180" : ""}`}
+                      className={`flex-shrink-0 text-slate-500 transition-transform ${openFaq === i ? "rotate-180" : ""}`}
                     />
                   </button>
                   {openFaq === i && (
                     <div className="px-4 pb-4">
-                      <p className="text-sm leading-relaxed text-memphis-purple">{f.a}</p>
+                      <p className="text-sm leading-relaxed text-slate-400">{f.a}</p>
                     </div>
                   )}
                 </div>
@@ -177,25 +178,25 @@ export default function SupportPage() {
           {activeTab === "contact" && (
             <div className="space-y-3">
               {SUPPORT_CONTACTS.map((s, i) => (
-                <div key={i} className="flex items-center gap-3 overflow-hidden rounded-xl border-2 border-memphis-ink/10 bg-memphis-ink/5 p-4">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-memphis-ink/10 text-memphis-ink">{s.icon}</span>
+                <div key={i} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-slate-200">{s.icon}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold uppercase tracking-wider text-memphis-purple/50">{s.label}</p>
-                    <p className="truncate text-sm font-bold text-memphis-ink">{s.value}</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{s.label}</p>
+                    <p className="truncate text-sm font-bold text-slate-100">{s.value}</p>
                   </div>
                   {s.href && (
                     <a
                       href={s.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="memphis-btn-secondary rounded-full px-4 py-1.5 text-xs font-semibold"
+                      className="rounded-full bg-[#009849] px-4 py-1.5 text-xs font-bold text-white shadow-md shadow-emerald-500/25 transition hover:bg-[#007a3a]"
                     >
                       Visit
                     </a>
                   )}
                 </div>
               ))}
-              <p className="text-center text-xs text-memphis-purple/50">We typically respond within 24 hours</p>
+              <p className="text-center text-xs text-slate-500">We typically respond within 24 hours</p>
             </div>
           )}
         </div>

@@ -73,13 +73,13 @@ export default function TripSchedules() {
   };
 
   return (
-    <div className="p-6 md:p-8 h-full overflow-y-auto">
+    <div className="pt-4 pb-6 px-6 md:pt-5 md:pb-8 md:px-8 h-full overflow-y-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="memphis-title">Trip Schedules</h1>
-          <p className="text-memphis-purple mt-2 font-medium">Manage route schedules and timings</p>
+          <h1 className="glass-title">Trip Schedules</h1>
+          <p className="text-slate-500 mt-2 font-medium">Manage route schedules and timings</p>
         </div>
-        <button onClick={openCreate} className="memphis-btn-primary flex items-center gap-2">
+        <button onClick={openCreate} className="glass-btn-primary flex items-center gap-2">
           <Plus size={18} /> Add Schedule
         </button>
       </div>
@@ -88,38 +88,41 @@ export default function TripSchedules() {
         <Loader />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {schedules.map((s) => (
-            <div key={s.id} className="memphis-card p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="memphis-icon-tile bg-memphis-yellow">
-                  <CalendarClock size={20} className="text-memphis-ink" />
+          {schedules.map((s, index) => (
+            <div key={s.id} className="glass-card p-6 relative overflow-hidden animate-glass-fade-in"
+              style={{ animationDelay: `${index * 60}ms` }}>
+              {/* Gradient blob */}
+              <div className="gradient-blob blob-soft w-20 h-20 -top-6 -right-6 animate-blob-float"
+                style={{ animationDelay: `${index * 400}ms` }} />
+
+              <div className="relative z-10">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="min-w-0">
+                    <h3 className="flex items-center gap-1.5 font-semibold text-lg text-slate-800">
+                      <CalendarClock size={16} className="shrink-0" style={{ color: "#5B8AFF" }} />
+                      <span className="truncate">{s.label}</span>
+                    </h3>
+                    <p className="text-sm text-slate-500 font-medium mt-0.5">
+                      {getRouteName(s.route)}
+                    </p>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <button onClick={() => openEdit(s)} className="p-2 hover:bg-white/50 rounded-xl text-slate-500 hover:text-accent-primary transition-all duration-200">
+                      <Edit3 size={15} />
+                    </button>
+                    <button onClick={() => handleDelete(s.id)} className="p-2 hover:bg-red-50 rounded-xl text-slate-500 hover:text-red-500 transition-all duration-200">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-1">
-                  <button onClick={() => openEdit(s)} className="p-2 hover:bg-memphis-ink/5 rounded-lg text-memphis-purple transition-all duration-200">
-                    <Edit3 size={15} />
-                  </button>
-                  <button onClick={() => handleDelete(s.id)} className="p-2 hover:bg-memphis-coral/10 rounded-lg text-memphis-coral transition-all duration-200">
-                    <Trash2 size={15} />
-                  </button>
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200/60">
+                  <span className="text-sm font-semibold text-slate-800">
+                    {s.scheduled_start_time || "N/A"}
+                  </span>
+                  <span className={`glass-badge ${s.is_active ? "glass-badge-success" : "glass-badge-warning"}`}>
+                    {s.is_active ? "Active" : "Inactive"}
+                  </span>
                 </div>
-              </div>
-              <h3 className="font-bold text-lg text-memphis-ink">{s.label}</h3>
-              <p className="text-sm text-memphis-purple font-medium mt-1">
-                {getRouteName(s.route)}
-              </p>
-              <div className="flex items-center justify-between mt-4 pt-4 border-t-2 border-memphis-ink/10">
-                <span className="text-sm font-bold text-memphis-ink">
-                  {s.scheduled_start_time || "N/A"}
-                </span>
-                <span
-                  className={`memphis-badge ${
-                    s.is_active
-                      ? "bg-memphis-mint/20 text-memphis-mint border-memphis-mint"
-                      : "bg-memphis-purple/10 text-memphis-purple border-memphis-purple/30"
-                  }`}
-                >
-                  {s.is_active ? "Active" : "Inactive"}
-                </span>
               </div>
             </div>
           ))}
@@ -135,22 +138,22 @@ export default function TripSchedules() {
       )}
 
       {modal && (
-        <div className="fixed inset-0 bg-memphis-ink/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-memphis-paper border-2 border-memphis-ink rounded-xl w-full max-w-md shadow-memphis-lg">
-            <div className="flex items-center justify-between p-6 border-b-2 border-memphis-ink">
-              <h2 className="text-xl font-bold text-memphis-ink">{editing ? "Edit Schedule" : "New Schedule"}</h2>
-              <button onClick={() => setModal(false)} className="text-memphis-purple hover:text-memphis-ink transition-all duration-200">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="glass-card-strong w-full max-w-md animate-glass-fade-in" style={{ borderRadius: "24px" }}>
+            <div className="flex items-center justify-between p-6 border-b border-slate-200/60">
+              <h2 className="text-xl font-semibold text-slate-800">{editing ? "Edit Schedule" : "New Schedule"}</h2>
+              <button onClick={() => setModal(false)} className="p-2 hover:bg-white/60 rounded-xl text-slate-500 hover:text-slate-800 transition-all duration-200">
                 <X size={20} />
               </button>
             </div>
             <form onSubmit={handleSave} className="p-6 space-y-4">
-              <div className="space-y-1">
-                <label className="memphis-label">Route</label>
+              <div className="space-y-1.5">
+                <label className="glass-label">Route</label>
                 <select
                   value={form.route}
                   onChange={(e) => setForm({ ...form, route: e.target.value })}
                   required
-                  className="memphis-input"
+                  className="glass-select"
                 >
                   <option value="">Select route...</option>
                   {routes.map((r) => (
@@ -158,36 +161,36 @@ export default function TripSchedules() {
                   ))}
                 </select>
               </div>
-              <div className="space-y-1">
-                <label className="memphis-label">Label</label>
+              <div className="space-y-1.5">
+                <label className="glass-label">Label</label>
                 <input
                   value={form.label}
                   onChange={(e) => setForm({ ...form, label: e.target.value })}
                   required
                   placeholder="e.g. Morning Shift"
-                  className="memphis-input"
+                  className="glass-input"
                 />
               </div>
-              <div className="space-y-1">
-                <label className="memphis-label">Start Time</label>
+              <div className="space-y-1.5">
+                <label className="glass-label">Start Time</label>
                 <input
                   type="time"
                   value={form.scheduled_start_time}
                   onChange={(e) => setForm({ ...form, scheduled_start_time: e.target.value })}
                   required
-                  className="memphis-input"
+                  className="glass-input"
                 />
               </div>
-              <label className="flex items-center gap-3 text-sm font-semibold text-memphis-ink cursor-pointer">
+              <label className="flex items-center gap-3 text-sm font-semibold text-slate-800 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.is_active}
                   onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-                  className="w-5 h-5 rounded border-2 border-memphis-ink text-memphis-pink focus:ring-memphis-pink"
+                  className="w-5 h-5 rounded-lg border-2 border-accent-primary text-accent-primary focus:ring-accent-primary"
                 />
                 Active
               </label>
-              <button type="submit" className="w-full memphis-btn-primary py-4 flex items-center justify-center gap-2">
+              <button type="submit" className="w-full glass-btn-primary py-3.5 flex items-center justify-center gap-2">
                 <Save size={16} /> {editing ? "Update" : "Create"}
               </button>
             </form>

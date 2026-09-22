@@ -9,14 +9,14 @@ export default function ZoneConfiguration({ stops, zones, distances, onZoneChang
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-bold text-memphis-ink uppercase tracking-wider">
+          <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider">
             Zone Configuration
           </h3>
-          <p className="text-xs text-memphis-ink/50 font-medium mt-1">
+          <p className="text-xs text-slate-500 font-medium mt-1">
             Each zone's end stop defines where the next zone begins.
           </p>
         </div>
-        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-memphis-purple/20 text-memphis-ink">
+        <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgba(46,92,255,0.12)", color: "#2E5CFF" }}>
           {zones.length} zones
         </span>
       </div>

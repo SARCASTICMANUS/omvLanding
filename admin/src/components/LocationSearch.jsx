@@ -73,9 +73,9 @@ export default function LocationSearch({ placeholder, onSelect, initialValue = "
     <div ref={ref} className="relative w-full">
       <div className="relative">
         {loading ? (
-          <Loader2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-memphis-pink animate-spin" />
+          <Loader2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#2E5CFF] animate-spin" />
         ) : (
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-memphis-purple" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         )}
         <input
           type="text"
@@ -90,24 +90,24 @@ export default function LocationSearch({ placeholder, onSelect, initialValue = "
           }}
           onFocus={() => { if (results.length) setOpen(true); }}
           placeholder={placeholder}
-          className={`memphis-input pl-9 ${className}`}
+          className={`glass-input pl-9 ${className}`}
         />
       </div>
       {open && results.length > 0 && (
-        <ul className="absolute top-full left-0 right-0 mt-1 bg-memphis-paper border-2 border-memphis-ink rounded-xl shadow-memphis-lg max-h-60 overflow-y-auto z-50">
+        <ul className="glass-card-strong absolute top-full left-0 right-0 mt-1 rounded-xl shadow-lg max-h-60 overflow-y-auto z-50">
           {results.map((item, i) => (
             <li
               key={i}
               onClick={() => handleSelect(item)}
-              className="px-4 py-3 hover:bg-memphis-pink/10 cursor-pointer border-b-2 last:border-0 border-memphis-ink/10 transition-all duration-200"
+              className="px-4 py-3 hover:bg-white/70 cursor-pointer border-b last:border-0 border-slate-200/60 transition-all duration-200"
             >
               <div className="flex items-start gap-3">
-                <MapPin size={16} className="mt-0.5 text-memphis-purple shrink-0" />
+                <MapPin size={16} className="mt-0.5 text-slate-400 shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-memphis-ink truncate">
+                  <p className="text-sm font-medium text-slate-800 truncate">
                     {item.display_name.split(",")[0]}
                   </p>
-                  <p className="text-xs text-memphis-purple truncate">{item.display_name}</p>
+                  <p className="text-xs text-slate-500 truncate">{item.display_name}</p>
                 </div>
               </div>
             </li>

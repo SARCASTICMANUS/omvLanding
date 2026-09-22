@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { CHART_COLORS_6 } from "../../colors";
+import { BLUE_PALETTE } from "../../colors";
 
 export default function GeoTrendsChart({ dailyByCountry = [], height = 200 }) {
   const { countries, days, maxVal } = useMemo(() => {
@@ -33,7 +33,7 @@ export default function GeoTrendsChart({ dailyByCountry = [], height = 200 }) {
   }, [dailyByCountry]);
 
   if (days.length === 0 || countries.length === 0) {
-    return <div className="text-center py-8 text-memphis-purple/50 text-sm">No trend data</div>;
+    return <div className="text-center py-8 text-slate-500/50 text-sm">No trend data</div>;
   }
 
   const padding = { top: 20, right: 20, bottom: 30, left: 40 };
@@ -74,15 +74,15 @@ export default function GeoTrendsChart({ dailyByCountry = [], height = 200 }) {
   const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) => Math.round((maxVal / yTicks) * i));
 
   return (
-    <div className="memphis-card p-4">
+    <div className="glass-card p-4">
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full">
         {/* Y axis gridlines */}
         {yTickValues.map((val, i) => {
           const y = padding.top + chartH - (val / maxVal) * chartH;
           return (
             <g key={i}>
-              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#14241C10" strokeWidth="1" />
-              <text x={padding.left - 5} y={y + 3} textAnchor="end" className="text-[8px] fill-memphis-purple/60 font-medium">
+              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="rgba(46,92,255,0.06)" strokeWidth="1" />
+              <text x={padding.left - 5} y={y + 3} textAnchor="end" className="text-[8px] fill-slate-400/70 font-medium">
                 {val}
               </text>
             </g>
@@ -94,10 +94,10 @@ export default function GeoTrendsChart({ dailyByCountry = [], height = 200 }) {
           <path
             key={country}
             d={buildAreaPath(ci)}
-            fill={CHART_COLORS_6[ci % CHART_COLORS_6.length]}
-            fillOpacity={0.6}
-            stroke={CHART_COLORS_6[ci % CHART_COLORS_6.length]}
-            strokeWidth={1}
+            fill={BLUE_PALETTE[ci % BLUE_PALETTE.length]}
+            fillOpacity={0.45}
+            stroke={BLUE_PALETTE[ci % BLUE_PALETTE.length]}
+            strokeWidth={1.5}
           />
         ))}
 
@@ -106,7 +106,7 @@ export default function GeoTrendsChart({ dailyByCountry = [], height = 200 }) {
           const si = days.indexOf(day);
           const x = padding.left + si * xStep;
           return (
-            <text key={i} x={x} y={height - 5} textAnchor="middle" className="text-[7px] fill-memphis-purple/60 font-medium">
+            <text key={i} x={x} y={height - 5} textAnchor="middle" className="text-[7px] fill-slate-500/60 font-medium">
               {day.slice(5)}
             </text>
           );
@@ -117,8 +117,8 @@ export default function GeoTrendsChart({ dailyByCountry = [], height = 200 }) {
       <div className="flex flex-wrap gap-3 mt-2 justify-center">
         {countries.map((country, i) => (
           <div key={i} className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm border border-memphis-ink/20" style={{ background: CHART_COLORS_6[i % CHART_COLORS_6.length] }} />
-            <span className="text-[10px] font-semibold text-memphis-ink">{country}</span>
+            <div className="w-3 h-3 rounded-sm border border-white/70" style={{ background: BLUE_PALETTE[i % BLUE_PALETTE.length] }} />
+            <span className="text-[10px] font-medium text-slate-800">{country}</span>
           </div>
         ))}
       </div>
