@@ -114,7 +114,13 @@ jobs:
 
       - name: Fix permissions on VM
         run: |
-          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "chown -R ${{ secrets.VM_USER }}:${{ secrets.VM_USER }} /home/${{ secrets.VM_USER }}/vayy/backend/vayy /home/${{ secrets.VM_USER }}/vayy/admin"
+          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} 'bash -s' << 'EOF'
+            set -e
+            cd /home/${{ secrets.VM_USER }}/vayy
+            # Own the synced code, but leave the osrm tree untouched: the OSRM
+            # containers create those files as root and chown would fail below.
+            find backend/vayy admin \( -name osrm -prune \) -o -print0 | xargs -0 chown ${{ secrets.VM_USER }}:${{ secrets.VM_USER }}
+          EOF
 
       - name: Build and restart containers
         run: |
