@@ -1,7 +1,7 @@
 export default function ZoneFareInput({ value, onChange, invalid }) {
   return (
     <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-memphis-ink/40 font-bold pointer-events-none">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium pointer-events-none">
         ₹
       </span>
       <input
@@ -12,8 +12,8 @@ export default function ZoneFareInput({ value, onChange, invalid }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="0"
-        className={`memphis-input w-full pl-8 pr-3 py-3 text-sm font-bold outline-none transition ${
-          invalid ? "border-memphis-coral focus:ring-memphis-coral/20" : ""
+        className={`glass-input w-full pl-8 pr-3 py-3 text-sm font-semibold outline-none transition ${
+          invalid ? "border-red-400 focus:ring-red-400/20" : ""
         }`}
       />
     </div>

@@ -4,70 +4,79 @@ export default {
   theme: {
     extend: {
       colors: {
+        glass: {
+          bg: "rgba(255,255,255,0.65)",
+          "bg-strong": "rgba(255,255,255,0.80)",
+          "bg-subtle": "rgba(255,255,255,0.45)",
+          border: "rgba(255,255,255,0.45)",
+          "border-strong": "rgba(255,255,255,0.60)",
+        },
+        accent: {
+          primary: "#2E5CFF",
+          "primary-light": "#5B8AFF",
+          "primary-dark": "#1A3FCC",
+          lavender: "#C4B5FD",
+          "lavender-light": "#DDD6FE",
+          sky: "#7DD3FC",
+          rose: "#FDA4AF",
+        },
+        surface: {
+          DEFAULT: "#F0F4FF",
+          dark: "#E2E8F0",
+          muted: "#94A3B8",
+        },
         memphis: {
           pink: "#009849",
           yellow: "#FFB020",
           teal: "#2FA97C",
           purple: "#14532D",
           ink: "#14241C",
-          paper: "#F1F6F1",
+          paper: "#F0F4FF",
           mint: "#7BE0AD",
           coral: "#FF5D5D",
           lime: "#A3E635",
         },
       },
       fontFamily: {
-        display: ["Archivo Black", "sans-serif"],
-        body: ["Inter", "system-ui", "-apple-system", "sans-serif"],
+        display: ["Geom", "sans-serif"],
+        body: ["Geom", "Inter", "system-ui", "-apple-system", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
       },
       boxShadow: {
-        // Light Memphis — soft sage offset (green tinted)
-        "memphis-sm": "2px 2px 0 0 #C6DACF",
-        "memphis-md": "3px 3px 0 0 #C6DACF",
-        "memphis-xs": "1px 1px 0 0 #C6DACF",
-        // Keep old tokens for any remaining references
-        memphis: "2px 2px 0 0 #C6DACF",
-        "memphis-hover": "3px 3px 0 0 #C6DACF",
-        "memphis-table": "1px 1px 0 0 #C6DACF",
-        "memphis-table-hover": "2px 2px 0 0 #C6DACF",
-        "memphis-lg": "4px 4px 0 0 #C6DACF",
+        glass: "0 8px 32px rgba(31, 38, 135, 0.08)",
+        "glass-sm": "0 4px 16px rgba(31, 38, 135, 0.06)",
+        "glass-lg": "0 12px 48px rgba(31, 38, 135, 0.12)",
+        "glass-inset": "inset 0 2px 4px rgba(31, 38, 135, 0.04)",
+        "glass-card": "0 4px 24px rgba(31, 38, 135, 0.07), 0 1px 2px rgba(31, 38, 135, 0.04)",
+      },
+      backdropBlur: {
+        glass: "16px",
+        "glass-strong": "24px",
+      },
+      borderRadius: {
+        glass: "20px",
+        "glass-sm": "16px",
+        "glass-lg": "24px",
       },
       keyframes: {
-        "memphis-spin": {
-          "0%": { transform: "rotate(0deg)" },
-          "100%": { transform: "rotate(360deg)" },
-        },
-        "memphis-fade-in": {
-          "0%": { opacity: "0", transform: "translateY(16px)" },
+        "glass-fade-in": {
+          "0%": { opacity: "0", transform: "translateY(12px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-        "memphis-float": {
-          "0%, 100%": { transform: "translateY(0) rotate(0deg)" },
-          "50%": { transform: "translateY(-6px) rotate(3deg)" },
+        "glass-pulse": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.7" },
         },
-        "hook-in": {
-          "0%": { opacity: "0", transform: "translateY(60%)", filter: "blur(10px)" },
-          "60%": { opacity: "1", transform: "translateY(-4%)", filter: "blur(0)" },
-          "100%": { opacity: "1", transform: "translateY(0)", filter: "blur(0)" },
-        },
-        "lang-fade": {
-          "0%": { opacity: "0", transform: "translateY(6px)", filter: "blur(4px)" },
-          "100%": { opacity: "1", transform: "translateY(0)", filter: "blur(0)" },
-        },
-        "shine": {
-          "0%": { transform: "translateX(-150%) skewX(-20deg)" },
-          "60%, 100%": { transform: "translateX(250%) skewX(-20deg)" },
+        "blob-float": {
+          "0%, 100%": { transform: "translate(0, 0) scale(1)" },
+          "33%": { transform: "translate(10px, -15px) scale(1.05)" },
+          "66%": { transform: "translate(-5px, 10px) scale(0.95)" },
         },
       },
       animation: {
-        "memphis-spin": "memphis-spin 1.2s linear infinite",
-        "memphis-fade-in": "memphis-fade-in 420ms ease-out both",
-        "memphis-float": "memphis-float 3s ease-in-out infinite",
-        "hook-in":
-          "hook-in 700ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
-        "lang-fade": "lang-fade 300ms ease-out both",
-        "shine": "shine 2.6s ease-in-out infinite",
+        "glass-fade-in": "glass-fade-in 400ms ease-out both",
+        "glass-pulse": "glass-pulse 2s ease-in-out infinite",
+        "blob-float": "blob-float 8s ease-in-out infinite",
       },
     },
   },

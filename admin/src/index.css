@@ -1,16 +1,27 @@
-@import url("https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geom:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
+  --glass-bg: rgba(255, 255, 255, 0.66);
+  --glass-bg-strong: rgba(255, 255, 255, 0.66);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.3);
+  --glass-border: rgba(255, 255, 255, 0.55);
+  --glass-border-strong: rgba(255, 255, 255, 0.72);
+  --glass-blur: 18px;
+  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);
+  --accent-primary: #2E5CFF;
+  --accent-primary-light: #5B8AFF;
+  --accent-lavender: #C4B5FD;
+  --accent-sky: #7DD3FC;
   --memphis-pink: #009849;
   --memphis-yellow: #FFB020;
   --memphis-teal: #2FA97C;
   --memphis-purple: #14532D;
-  --memphis-ink: #14241C;
-  --memphis-paper: #F1F6F1;
+  --memphis-ink: #16233F;
+  --memphis-paper: #F0F4FF;
   --memphis-mint: #7BE0AD;
   --memphis-coral: #FF5D5D;
   --memphis-lime: #A3E635;
@@ -18,199 +29,354 @@
 
 @layer base {
   body {
-    font-family: "Inter", system-ui, -apple-system, sans-serif;
-    @apply bg-memphis-paper text-memphis-ink antialiased;
+    font-family: "Geom", "Inter", system-ui, -apple-system, sans-serif;
+    background: linear-gradient(135deg, #F0F4FF 0%, #E8EEFF 25%, #F5F0FF 50%, #EFF6FF 75%, #F0F4FF 100%);
+    background-attachment: fixed;
+    @apply text-memphis-ink antialiased;
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
+    min-height: 100vh;
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--memphis-purple) var(--memphis-paper);
+    scrollbar-color: rgba(46, 92, 255, 0.3) transparent;
   }
 
-  /* Data text: font-weight 600 for legibility on Paper background */
+  *::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgba(46, 92, 255, 0.25);
+    border-radius: 3px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(46, 92, 255, 0.4);
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   td, th {
-    @apply font-semibold;
+    @apply font-medium;
   }
 }
 
 @layer components {
-  /* ── Card: light Memphis offset ── */
-  .memphis-card {
-    @apply bg-memphis-paper border-2 border-slate-300 rounded-xl;
-    box-shadow: 1px 1px 0 0 #C6DACF;
-    transition: transform 150ms ease, box-shadow 150ms ease;
+  /* ── Glass Card ── */
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 1px 2px rgba(31, 38, 135, 0.04), 0 4px 12px rgba(31, 38, 135, 0.05), 0 16px 40px rgba(31, 38, 135, 0.08);
+    transition: transform 200ms ease, box-shadow 200ms ease;
   }
-  .memphis-card:hover {
-    transform: translate(-1px, -1px);
-    box-shadow: 1px 1px 0 0 #C6DACF;
-  }
-
-  /* ── Card with pattern top border: dot-dash-dot in Memphis pink ── */
-  .memphis-card-pattern {
-    @apply memphis-card relative overflow-hidden;
-  }
-  .memphis-card-pattern::before {
-    content: "";
-    @apply absolute top-0 left-0 right-0 h-[3px];
-    background: repeating-linear-gradient(
-      90deg,
-      var(--memphis-pink) 0px,
-      var(--memphis-pink) 4px,
-      transparent 4px,
-      transparent 8px,
-      var(--memphis-pink) 8px,
-      var(--memphis-pink) 10px,
-      transparent 10px,
-      transparent 16px
-    );
+  .glass-card:hover {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 2px rgba(31, 38, 135, 0.05), 0 6px 16px rgba(31, 38, 135, 0.06), 0 20px 48px rgba(31, 38, 135, 0.10);
   }
 
-  /* ── Button ── */
-  .memphis-btn {
-    @apply px-5 py-3 rounded-lg font-semibold border-2 border-slate-400 cursor-pointer transition-all duration-200;
-    box-shadow: 1px 1px 0 0 #C6DACF;
-  }
-  .memphis-btn:hover {
-    transform: translate(-1px, -1px);
-    box-shadow: 2px 2px 0 0 #C6DACF;
-  }
-  .memphis-btn:active {
-    transform: translate(1px, 1px);
-    box-shadow: 1px 1px 0 0 #C6DACF;
+  .glass-card-strong {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    border: 1px solid var(--glass-border-strong);
+    border-radius: 20px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 2px rgba(31, 38, 135, 0.04), 0 4px 12px rgba(31, 38, 135, 0.05), 0 16px 40px rgba(31, 38, 135, 0.08);
   }
 
-  .memphis-btn-primary {
-    @apply memphis-btn bg-memphis-pink text-white font-bold;
-  }
-  .memphis-btn-primary:hover {
-    @apply bg-[#007A3A];
-  }
-
-  .memphis-btn-secondary {
-    @apply memphis-btn bg-transparent text-memphis-ink;
+  .glass-card-subtle {
+    background: var(--glass-bg-subtle);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 20px rgba(31, 38, 135, 0.05);
   }
 
-  .memphis-btn-danger {
-    @apply memphis-btn bg-memphis-coral text-white;
+  /* ── Glass Panel ── */
+  .glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
   }
 
-  /* ── Labels: tracking-tight to prevent long label breakage ── */
-  .memphis-label {
-    @apply text-xs font-bold uppercase tracking-tight text-memphis-purple;
+  /* ── Gradient Blob ── */
+  .gradient-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(40px);
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
   }
 
-  .memphis-input {
-    @apply w-full bg-memphis-paper border-2 border-slate-300 rounded-lg px-4 py-3 text-sm font-semibold text-memphis-ink placeholder-memphis-purple/50;
-  }
-  .memphis-input:focus {
-    @apply outline-none ring-2 ring-memphis-pink ring-offset-2;
+  .blob-primary {
+    background: linear-gradient(135deg, #2E5CFF, #7DD3FC);
   }
 
-  /* ── Title: sub-headers 10% smaller (text-2xl vs text-3xl) ── */
-  .memphis-title {
-    @apply text-3xl font-black text-memphis-ink;
-    font-family: "Archivo Black", sans-serif;
-    text-shadow: 1px 1px 0 var(--memphis-pink);
-  }
-  .memphis-title-sm {
-    @apply text-2xl font-black text-memphis-ink;
-    font-family: "Archivo Black", sans-serif;
-    text-shadow: 1px 1px 0 var(--memphis-pink);
+  .blob-primary-light {
+    background: linear-gradient(135deg, #5B8AFF, #AFCDFF);
   }
 
-  /* ── Badge: rounded-md (technical feel, not rounded-full) ── */
-  .memphis-badge {
-    @apply text-xs font-bold px-2.5 py-1 rounded-md border-2 border-slate-300;
+  .blob-sky {
+    background: linear-gradient(135deg, #7DD3FC, #93C5FD);
   }
 
-  .memphis-icon-tile {
-    @apply w-11 h-11 rounded-lg border-2 border-slate-300 flex items-center justify-center;
+  .blob-indigo {
+    background: linear-gradient(135deg, #2E5CFF, #5B8AFF);
   }
 
-  .memphis-empty {
-    @apply border-2 border-dashed border-slate-300 rounded-xl p-12 text-center;
-    background-image: radial-gradient(circle, var(--memphis-purple) 1px, transparent 1px);
-    background-size: 20px 20px;
-    background-position: 0 0;
+  .blob-soft {
+    background: linear-gradient(135deg, #93C5FD, #D6E4FF);
   }
 
-  /* ── Table rows: subtle offset on hover ── */
-  .memphis-table-row {
-    @apply border-b border-memphis-ink/10 transition-all duration-200;
-    box-shadow: none;
-  }
-  .memphis-table-row:hover {
-    @apply bg-memphis-pink/5;
-    box-shadow: 1px 1px 0 0 #C6DACF;
+  .blob-deep {
+    background: linear-gradient(135deg, #1A3FCC, #4D7AFF);
   }
 
-  /* ── Monospace with left accent border for quick scanning ── */
-  .memphis-mono {
-    @apply font-mono text-memphis-ink border-l-2 border-memphis-pink pl-2;
+  /* ── Glass Button ── */
+  .glass-btn {
+    @apply px-5 py-3 rounded-2xl font-semibold cursor-pointer transition-all duration-200;
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 4px 16px rgba(31, 38, 135, 0.06);
+  }
+  .glass-btn:hover {
+    background: var(--glass-bg-strong);
+    box-shadow: 0 6px 24px rgba(31, 38, 135, 0.10);
+    transform: translateY(-1px);
+  }
+  .glass-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(31, 38, 135, 0.06);
   }
 
-  /* ── Layout grid: faint dashed border to hint at structure ── */
-  .memphis-grid-layout {
-    @apply border border-dashed border-memphis-purple/10 rounded-xl;
+  .glass-btn-primary {
+    @apply glass-btn text-white font-bold;
+    background: linear-gradient(135deg, #2E5CFF, #5B8AFF);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 20px rgba(46, 92, 255, 0.3);
+  }
+  .glass-btn-primary:hover {
+    background: linear-gradient(135deg, #1A3FCC, #2E5CFF);
+    box-shadow: 0 6px 28px rgba(46, 92, 255, 0.4);
   }
 
-  /* ── Section divider (zigzag line between data sections) ── */
-  .memphis-divider {
+  .glass-btn-secondary {
+    @apply glass-btn text-memphis-ink;
+  }
+
+  .glass-btn-danger {
+    @apply glass-btn text-white;
+    background: linear-gradient(135deg, #FF5D5D, #F87171);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 20px rgba(255, 93, 93, 0.25);
+  }
+
+  .glass-btn-success {
+    @apply glass-btn text-white;
+    background: linear-gradient(135deg, #2FA97C, #7BE0AD);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 20px rgba(47, 169, 124, 0.25);
+  }
+
+  /* ── Glass Input ── */
+  .glass-input {
+    @apply w-full rounded-2xl px-4 py-3 text-sm font-semibold text-memphis-ink transition-all duration-200;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(46, 92, 255, 0.15);
+    box-shadow: inset 0 1px 3px rgba(31, 38, 135, 0.04);
+  }
+  .glass-input::placeholder {
+    color: #94A3B8;
+  }
+  .glass-input:focus {
+    @apply outline-none;
+    border-color: rgba(46, 92, 255, 0.4);
+    box-shadow: 0 0 0 3px rgba(46, 92, 255, 0.1), inset 0 1px 3px rgba(31, 38, 135, 0.04);
+  }
+
+  /* ── Glass Select ── */
+  .glass-select {
+    @apply glass-input appearance-none cursor-pointer;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%232E5CFF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+  }
+
+  /* ── Title ── */
+  .glass-title {
+    @apply text-3xl font-black text-slate-800;
+    font-family: "Geom", sans-serif;
+    letter-spacing: -0.02em;
+    line-height: 1.12;
+  }
+  .glass-title-sm {
+    @apply text-2xl font-black text-slate-800;
+    font-family: "Geom", sans-serif;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+
+  /* ── Section Title (card/sub-section headings, matches sidebar font) ── */
+  .glass-section-title {
+    @apply font-black text-slate-800;
+    font-family: "Geom", sans-serif;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+
+  /* ── Label ── */
+  .glass-label {
+    @apply text-xs font-medium uppercase tracking-wider;
+    color: #64748B;
+  }
+
+  /* ── Badge ── */
+  .glass-badge {
+    @apply text-xs font-semibold px-3 py-1 rounded-full;
+    background: rgba(46, 92, 255, 0.08);
+    color: var(--accent-primary);
+    border: 1px solid rgba(46, 92, 255, 0.15);
+  }
+
+  .glass-badge-success {
+    @apply glass-badge;
+    background: rgba(47, 169, 124, 0.1);
+    color: #16a34a;
+    border-color: rgba(47, 169, 124, 0.2);
+  }
+
+  .glass-badge-warning {
+    @apply glass-badge;
+    background: rgba(255, 176, 32, 0.1);
+    color: #d97706;
+    border-color: rgba(255, 176, 32, 0.2);
+  }
+
+  .glass-badge-danger {
+    @apply glass-badge;
+    background: rgba(255, 93, 93, 0.1);
+    color: #dc2626;
+    border-color: rgba(255, 93, 93, 0.2);
+  }
+
+  /* ── Icon Tile ── */
+  .glass-icon-tile {
+    @apply w-12 h-12 rounded-2xl flex items-center justify-center;
+    background: rgba(46, 92, 255, 0.1);
+    border: 1px solid rgba(46, 92, 255, 0.15);
+  }
+
+  /* ── Table rows ── */
+  .glass-table-row {
+    @apply border-b border-slate-200/60 transition-all duration-200;
+  }
+  .glass-table-row:hover {
+    background: rgba(46, 92, 255, 0.04);
+  }
+
+  /* ── Divider ── */
+  .glass-divider {
     @apply my-6;
     border: none;
-    height: 12px;
-    background: url("data:image/svg+xml,%3Csvg width='200' height='12' viewBox='0 0 200 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='0,10 10,2 20,10 30,2 40,10 50,2 60,10 70,2 80,10 90,2 100,10 110,2 120,10 130,2 140,10 150,2 160,10 170,2 180,10 190,2 200,10' stroke='%23009849' stroke-width='1.5' stroke-opacity='0.2' fill='none'/%3E%3C/svg%3E") repeat-x center;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(46, 92, 255, 0.15), transparent);
   }
 
-  /* ── Ticket queue grid for support dark theme ── */
-  .memphis-ticket-grid {
-    background-image:
-      linear-gradient(var(--memphis-purple) 1px, transparent 1px),
-      linear-gradient(90deg, var(--memphis-purple) 1px, transparent 1px);
-    background-size: 24px 24px;
-    background-color: rgba(106, 123, 180, 0.04);
+  /* ── Tab Group ── */
+  .glass-tab-group {
+    @apply p-1 rounded-2xl;
+    background: rgba(46, 92, 255, 0.06);
+    border: 1px solid rgba(46, 92, 255, 0.1);
+  }
+
+  .glass-tab {
+    @apply px-4 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all duration-200;
+    color: #94A3B8;
+  }
+  .glass-tab:hover {
+    color: var(--accent-primary);
+    background: rgba(255, 255, 255, 0.6);
+  }
+  .glass-tab-active {
+    @apply glass-tab;
+    background: white;
+    color: var(--accent-primary);
+    box-shadow: 0 2px 8px rgba(46, 92, 255, 0.12);
+  }
+
+  /* ── Mono with accent border ── */
+  .glass-mono {
+    @apply font-mono text-memphis-ink;
+    border-left: 2px solid var(--accent-primary);
+    padding-left: 8px;
+  }
+
+  /* ── Empty state ── */
+  .glass-empty {
+    @apply rounded-3xl p-12 text-center;
+    background: rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(8px);
+    border: 2px dashed rgba(46, 92, 255, 0.15);
+  }
+
+  /* ── Stat Card Number ── */
+  .glass-stat-number {
+    @apply text-3xl font-black;
+    font-family: "Geom", sans-serif;
+    color: var(--memphis-ink);
+    line-height: 1.1;
+  }
+
+  /* ── Progress Bar ── */
+  .glass-progress {
+    @apply rounded-full overflow-hidden;
+    background: rgba(46, 92, 255, 0.06);
+    border: 1px solid rgba(46, 92, 255, 0.08);
+  }
+
+  /* ── Chart bar ── */
+  .glass-chart-bar {
+    @apply rounded-full overflow-hidden;
+    background: rgba(46, 92, 255, 0.06);
+    border: 1px solid rgba(46, 92, 255, 0.08);
   }
 }
 
 /* MapLibre popup overrides */
 .maplibregl-popup-content {
-  border-radius: 12px !important;
-  box-shadow: 1px 1px 0 0 #C6DACF !important;
-  border: 2px solid #C6DACF !important;
+  border-radius: 16px !important;
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
   padding: 12px 16px !important;
-  font-family: "Inter", sans-serif !important;
+  font-family: "Geom", "Inter", sans-serif !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
 }
 
 .maplibregl-marker svg {
-  filter: drop-shadow(1px 1px 0 #C6DACF);
-}
-
-/* Memphis squiggle pattern for sidebar */
-.memphis-squiggle-bg {
-  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 30 Q20 10 30 30 T50 30' stroke='%23009849' stroke-width='1.5' fill='none' opacity='0.15'/%3E%3C/svg%3E");
-  background-size: 60px 60px;
-}
-
-/* Memphis diagonal stripe pattern */
-.memphis-stripe-bg {
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 8px,
-    rgba(22, 18, 31, 0.03) 8px,
-    rgba(22, 18, 31, 0.03) 16px
-  );
-}
-
-/* Memphis terrazzo dots pattern — subtle at 5% for stat cards */
-.memphis-terrazzo-bg {
-  background-image:
-    radial-gradient(circle, var(--memphis-pink) 1px, transparent 1px),
-    radial-gradient(circle, var(--memphis-teal) 1px, transparent 1px),
-    radial-gradient(circle, var(--memphis-yellow) 1px, transparent 1px);
-  background-size: 40px 40px, 55px 55px, 35px 35px;
-  background-position: 0 0, 15px 20px, 8px 30px;
-  opacity: 0.05;
+  filter: drop-shadow(0 2px 8px rgba(31, 38, 135, 0.15));
 }

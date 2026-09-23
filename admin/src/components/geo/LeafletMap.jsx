@@ -39,7 +39,7 @@ const MapLibreMap = forwardRef(function MapLibreMap(
   }, []);
 
   return (
-    <div className={`memphis-card overflow-hidden ${className}`}>
+    <div className={`glass-card overflow-hidden ${className}`}>
       <div ref={containerRef} style={{ height, width: "100%" }} />
       {children}
     </div>

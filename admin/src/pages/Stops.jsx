@@ -3,7 +3,7 @@ import { Plus, Edit3, Trash2, Save, X, MapPin, MoveVertical, StopCircle } from "
 import api from "../api/client";
 import Loader from "../components/Loader";
 import EmptyState from "../components/EmptyState";
-import { Squiggle } from "../components/MemphisShapes";
+import PageToolbar from "../components/PageToolbar";
 
 export default function Stops() {
   const [stops, setStops] = useState([]);
@@ -85,57 +85,53 @@ export default function Stops() {
   };
 
   return (
-    <div className="p-6 md:p-8 h-full overflow-y-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="memphis-title">Stops</h1>
-          <p className="text-memphis-purple mt-2 font-medium">Manage route stops</p>
-        </div>
-        <button onClick={openCreate} className="memphis-btn-primary flex items-center gap-2">
+    <div className="pt-4 pb-6 px-6 md:pt-5 md:pb-8 md:px-8 h-full overflow-y-auto">
+      <PageToolbar>
+        <button onClick={openCreate} className="glass-btn-primary flex items-center gap-2">
           <Plus size={18} /> Add Stop
         </button>
-      </div>
+      </PageToolbar>
 
       {loading ? (
         <Loader />
       ) : (
-        <div className="memphis-card overflow-x-auto">
+        <div className="glass-card overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="bg-memphis-ink/5 border-b-2 border-memphis-ink">
-                <th className="px-6 py-4 text-left memphis-label">#</th>
-                <th className="px-6 py-4 text-left memphis-label">Name</th>
-                <th className="px-6 py-4 text-left memphis-label">Route</th>
-                <th className="px-6 py-4 text-left memphis-label">Coordinates</th>
-                <th className="px-6 py-4 text-right memphis-label">Actions</th>
+              <tr className="border-b border-slate-200/60">
+                <th className="px-6 py-4 text-left glass-label">#</th>
+                <th className="px-6 py-4 text-left glass-label">Name</th>
+                <th className="px-6 py-4 text-left glass-label">Route</th>
+                <th className="px-6 py-4 text-left glass-label">Coordinates</th>
+                <th className="px-6 py-4 text-right glass-label">Actions</th>
               </tr>
             </thead>
             <tbody>
               {stops.map((s) => {
                 const coords = s.location?.coordinates || [];
                 return (
-                  <tr key={s.id} className="memphis-table-row">
+                  <tr key={s.id} className="glass-table-row">
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1 text-sm font-bold text-memphis-purple">
-                        <MoveVertical size={14} className="text-memphis-purple/40" />
+                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-accent-primary">
+                        <MoveVertical size={14} className="opacity-50" />
                         {s.order}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="font-semibold text-memphis-ink">{s.name}</span>
+                      <span className="font-semibold text-slate-800">{s.name}</span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-memphis-purple">{getRouteName(s.route)}</td>
+                    <td className="px-6 py-4 text-sm text-slate-500">{getRouteName(s.route)}</td>
                     <td className="px-6 py-4">
-                      <span className="memphis-mono text-xs text-memphis-purple/60">
+                      <span className="glass-mono text-xs text-slate-500">
                         {coords.length ? `${coords[1].toFixed(5)}, ${coords[0].toFixed(5)}` : "N/A"}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => openEdit(s)} className="p-2 hover:bg-memphis-ink/5 rounded-lg text-memphis-purple transition-all duration-200">
+                        <button onClick={() => openEdit(s)} className="p-2 hover:bg-white/60 rounded-xl text-slate-500 hover:text-accent-primary transition-all duration-200">
                           <Edit3 size={15} />
                         </button>
-                        <button onClick={() => handleDelete(s.id)} className="p-2 hover:bg-memphis-coral/10 rounded-lg text-memphis-coral transition-all duration-200">
+                        <button onClick={() => handleDelete(s.id)} className="p-2 hover:bg-red-50 rounded-xl text-slate-500 hover:text-red-500 transition-all duration-200">
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -157,22 +153,22 @@ export default function Stops() {
       )}
 
       {modal && (
-        <div className="fixed inset-0 bg-memphis-ink/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-memphis-paper border-2 border-memphis-ink rounded-xl w-full max-w-lg shadow-memphis-lg">
-            <div className="flex items-center justify-between p-6 border-b-2 border-memphis-ink">
-              <h2 className="text-xl font-bold text-memphis-ink">{editing ? "Edit Stop" : "New Stop"}</h2>
-              <button onClick={() => setModal(false)} className="text-memphis-purple hover:text-memphis-ink transition-all duration-200">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="glass-card-strong w-full max-w-lg animate-glass-fade-in" style={{ borderRadius: "24px" }}>
+            <div className="flex items-center justify-between p-6 border-b border-slate-200/60">
+              <h2 className="text-xl font-semibold text-slate-800">{editing ? "Edit Stop" : "New Stop"}</h2>
+              <button onClick={() => setModal(false)} className="p-2 hover:bg-white/60 rounded-xl text-slate-500 hover:text-slate-800 transition-all duration-200">
                 <X size={20} />
               </button>
             </div>
             <form onSubmit={handleSave} className="p-6 space-y-4">
-              <div className="space-y-1">
-                <label className="memphis-label">Route</label>
+              <div className="space-y-1.5">
+                <label className="glass-label">Route</label>
                 <select
                   value={form.route}
                   onChange={(e) => setForm({ ...form, route: e.target.value })}
                   required
-                  className="memphis-input"
+                  className="glass-select"
                 >
                   <option value="">Select route...</option>
                   {routes.map((r) => (
@@ -180,50 +176,50 @@ export default function Stops() {
                   ))}
                 </select>
               </div>
-              <div className="space-y-1">
-                <label className="memphis-label">Stop Name</label>
+              <div className="space-y-1.5">
+                <label className="glass-label">Stop Name</label>
                 <input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   required
-                  className="memphis-input"
+                  className="glass-input"
                 />
               </div>
               <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <label className="memphis-label">Order</label>
+                <div className="space-y-1.5">
+                  <label className="glass-label">Order</label>
                   <input
                     type="number"
                     value={form.order}
                     onChange={(e) => setForm({ ...form, order: e.target.value })}
                     required
-                    className="memphis-input"
+                    className="glass-input"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="memphis-label">Latitude</label>
+                <div className="space-y-1.5">
+                  <label className="glass-label">Latitude</label>
                   <input
                     type="number"
                     step="any"
                     value={form.lat}
                     onChange={(e) => setForm({ ...form, lat: e.target.value })}
                     required
-                    className="memphis-input"
+                    className="glass-input"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="memphis-label">Longitude</label>
+                <div className="space-y-1.5">
+                  <label className="glass-label">Longitude</label>
                   <input
                     type="number"
                     step="any"
                     value={form.lon}
                     onChange={(e) => setForm({ ...form, lon: e.target.value })}
                     required
-                    className="memphis-input"
+                    className="glass-input"
                   />
                 </div>
               </div>
-              <button type="submit" className="w-full memphis-btn-primary py-4 flex items-center justify-center gap-2">
+              <button type="submit" className="w-full glass-btn-primary py-3.5 flex items-center justify-center gap-2">
                 <Save size={16} /> {editing ? "Update" : "Create"}
               </button>
             </form>

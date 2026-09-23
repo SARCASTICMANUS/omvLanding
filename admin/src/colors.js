@@ -24,11 +24,11 @@ export const MEMPHIS_INK_5 = "#14241C0D";     // ink/5 — faint borders
 export const MEMPHIS_INK_10 = "#14241C1A";    // ink/10 — table borders
 export const MEMPHIS_PURPLE_20 = "#14532D33"; // purple/20 — chart gridlines
 
-// Status semantics
-export const STATUS_ACTIVE = "#7BE0AD";  // mint — live/active/running
-export const STATUS_PAUSED = "#FFB020";  // amber — paused/pending
+// Status semantics — blue-family only
+export const STATUS_ACTIVE = "#2E5CFF";  // blue — live/active/running
+export const STATUS_PAUSED = "#93C5FD";  // light blue — paused/pending
 export const STATUS_ERROR = "#FF5D5D";   // coral — errors/blocked/cancelled
-export const STATUS_INACTIVE = "#14532D80"; // dark green/50 — inactive/disabled
+export const STATUS_INACTIVE = "#2E5CFF80"; // blue/50 — inactive/disabled
 
 // Memphis tints (for backgrounds) — kept for backward compat
 export const MEMPHIS_PINK_TINT = MEMPHIS_PINK_10;
@@ -38,48 +38,68 @@ export const MEMPHIS_PURPLE_TINT = MEMPHIS_PURPLE_10;
 export const MEMPHIS_MINT_TINT = MEMPHIS_MINT_10;
 export const MEMPHIS_CORAL_TINT = MEMPHIS_CORAL_10;
 
-// Route colors — 14 green-family color sets for route map display
+// Route colors — 14 blue-family color sets for route map display
 export const ROUTE_COLORS = [
-  { line: "#009849", bg: "#0098491A", text: "#007a3a", dot: "#009849" },
-  { line: "#2FA97C", bg: "#2FA97C1A", text: "#1d7a59", dot: "#2FA97C" },
-  { line: "#34C98F", bg: "#34C98F1A", text: "#1d9c68", dot: "#34C98F" },
-  { line: "#7BE0AD", bg: "#7BE0AD1A", text: "#4eb37e", dot: "#7BE0AD" },
-  { line: "#5DD4A0", bg: "#5DD4A01A", text: "#34a873", dot: "#5DD4A0" },
-  { line: "#A3E635", bg: "#A3E6351A", text: "#7fa52b", dot: "#A3E635" },
-  { line: "#65A30D", bg: "#65A30D1A", text: "#3f6212", dot: "#65A30D" },
-  { line: "#BEF264", bg: "#BEF2641A", text: "#79a83a", dot: "#BEF264" },
-  { line: "#D4E157", bg: "#D4E1571A", text: "#a0ad2e", dot: "#D4E157" },
-  { line: "#FFB020", bg: "#FFB0201A", text: "#c8821e", dot: "#FFB020" },
-  { line: "#FFB347", bg: "#FFB3471A", text: "#c8821e", dot: "#FFB347" },
-  { line: "#FF5D5D", bg: "#FF5D5D1A", text: "#cc3a3a", dot: "#FF5D5D" },
-  { line: "#14532D", bg: "#14532D1A", text: "#0f3a20", dot: "#14532D" },
-  { line: "#22C55E", bg: "#22C55E1A", text: "#16a34a", dot: "#22C55E" },
+  { line: "#2E5CFF", bg: "#2E5CFF1A", text: "#1A3FCC", dot: "#2E5CFF" },
+  { line: "#1A3FCC", bg: "#1A3FCC1A", text: "#0F2FBF", dot: "#1A3FCC" },
+  { line: "#4D7AFF", bg: "#4D7AFF1A", text: "#2E5CFF", dot: "#4D7AFF" },
+  { line: "#5B8AFF", bg: "#5B8AFF1A", text: "#2E5CFF", dot: "#5B8AFF" },
+  { line: "#7DA2FF", bg: "#7DA2FF1A", text: "#4D7AFF", dot: "#7DA2FF" },
+  { line: "#93C5FD", bg: "#93C5FD1A", text: "#5B8AFF", dot: "#93C5FD" },
+  { line: "#AFCDFF", bg: "#AFCDFF1A", text: "#5B8AFF", dot: "#AFCDFF" },
+  { line: "#7DD3FC", bg: "#7DD3FC1A", text: "#2E5CFF", dot: "#7DD3FC" },
+  { line: "#3B6EFF", bg: "#3B6EFF1A", text: "#1A3FCC", dot: "#3B6EFF" },
+  { line: "#1E4FD8", bg: "#1E4FD81A", text: "#0F2FBF", dot: "#1E4FD8" },
+  { line: "#0F3DA6", bg: "#0F3DA61A", text: "#092B77", dot: "#0F3DA6" },
+  { line: "#2E6DFF", bg: "#2E6DFF1A", text: "#1A3FCC", dot: "#2E6DFF" },
+  { line: "#6E9BFF", bg: "#6E9BFF1A", text: "#3B6EFF", dot: "#6E9BFF" },
+  { line: "#C3D9FF", bg: "#C3D9FF1A", text: "#4D7AFF", dot: "#C3D9FF" },
 ];
 
-// Chart colors — green-family palette
-export const CHART_COLORS_5 = [
-  "#009849",
-  "#FFB020",
-  "#2FA97C",
-  "#FF5D5D",
-  "#14532D",
-];
-export const CHART_COLORS_6 = [
-  "#009849",
-  "#FFB020",
-  "#2FA97C",
-  "#FF5D5D",
-  "#14532D",
-  "#7BE0AD",
+// ── Chart color system ──────────────────────────────────────────────
+// Primary brand blue
+export const BLUE_PRIMARY = "#2E5CFF";
+
+// BLUE_PALETTE — normal analytical data series. Multiple series graph:
+// use only DIFFERENT SHADES OF BLUE (dark → light as series index grows).
+export const BLUE_PALETTE = [
+  "#1E3A8A", // dark navy blue   — series 1
+  "#274690",
+  "#3156A3",
+  "#3B66B6",
+  "#4678C5",
+  "#5189D0",
+  "#5A9BD0",
+  "#64AAD5", // light blue       — series 8
 ];
 
-// Entity colors — used for stat cards, icons, badges
+// SPECTRUM_PALETTE — categorical segments that need clearly distinct colors.
+// Color-wheel progression: PURPLE → MAGENTA → RED → ORANGE → YELLOW → GREEN.
+// Never mix blue into a categorical visualization.
+export const SPECTRUM_PALETTE = [
+  "#7E22CE", // purple
+  "#A21CAF", // magenta-purple
+  "#C026D3", // magenta/fuchsia
+  "#E11D48", // rose red
+  "#F43F5E", // red
+  "#F97316", // orange
+  "#F59E0B", // amber
+  "#EAB308", // yellow
+  "#84CC16", // lime
+  "#22C55E", // green
+];
+
+// Backwards-compatible chart palettes — normal-series blue slices
+export const CHART_COLORS_5 = BLUE_PALETTE.slice(0, 5);
+export const CHART_COLORS_6 = BLUE_PALETTE.slice(0, 6);
+
+// Entity colors — used for stat cards, icons, badges (blue shades)
 export const ENTITY_COLORS = {
-  cities: "#2FA97C",
-  routes: "#009849",
-  stops: "#14532D",
-  schedules: "#FFB020",
-  passengers: "#7BE0AD",
-  drivers: "#FF5D5D",
-  vehicles: "#A3E635",
+  cities: "#5B8AFF",
+  routes: "#2E5CFF",
+  stops: "#1A3FCC",
+  schedules: "#7DA2FF",
+  passengers: "#7DD3FC",
+  drivers: "#93C5FD",
+  vehicles: "#4D7AFF",
 };
