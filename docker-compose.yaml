@@ -61,7 +61,7 @@ services:
     build: ./backend/vayy
     container_name: vayy-celery
     command: >
-      sh -c "celery -A vayy worker -l info -Q celery,tracking,dispatch,matching,notifications &
+      sh -c "celery -A vayy worker --pool=solo -l info -Q celery,tracking,dispatch,matching,notifications &
              python manage.py consume_boarding &
              python manage.py consume_location"
     volumes:

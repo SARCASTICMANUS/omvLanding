@@ -24,6 +24,7 @@ backend/venv/
 backend/vayy/env/
 backend/.env
 backend/vayy/.env
+backend/vayy/.env.production
 backend/**/.env
 backend/db.sqlite3
 backend/vayy/media/
@@ -88,3 +89,4 @@ admin/node_modules/
 admin/node_modules/*
 admin/.env
 admin/.env.local
+admin/.env.production

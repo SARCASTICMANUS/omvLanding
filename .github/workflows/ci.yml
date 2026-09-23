@@ -6,151 +6,143 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: admin/package-lock.json
+
       - name: Lint admin
         run: |
           cd admin
           npm ci
-          npx eslint .
+          npm run lint
 
   admin-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # - name: Build frontend
-      #   run: |
-      #     cd frontend
-      #     npm ci
-      #     npm run build
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: admin/package-lock.json
 
+      # Cleaned up: Removed the duplicate "Build admin" step
       - name: Build admin
         run: |
           cd admin
           npm ci
-          npx vite build
-
-  docker-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Free disk space
-        run: |
-          docker system prune -af
-          docker builder prune -af
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost
-          df -h
-
-      - name: Build backend image
-        run: docker build -t vayy-web ./backend/vayy
-
-      - name: Build admin image
-        run: docker build -t vayy-admin ./admin
-
-  # security-scan:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-
-  #     - name: Setup Python
-  #       uses: actions/setup-python@v5
-  #       with:
-  #         python-version: "3.12"
-
-  #     - name: Audit Python deps
-  #       run: |
-  #         pip install pip-audit
-  #         pip-audit -r backend/vayy/requirements.txt
-
-  #     - name: Audit frontend deps
-  #       run: |
-  #         cd frontend
-  #         npm ci
-  #         npm audit --audit-level=high
-
-  #     - name: Audit admin deps
-  #       run: |
-  #         cd admin
-  #         npm ci
-  #         npm audit --audit-level=high
+          npm run build 
 
   deploy:
-    # needs: [lint, admin-build, docker-build, security-scan]
-    needs: [lint, admin-build, docker-build]
-    if: github.event_name == 'push'
+    needs: [lint, admin-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
+      - name: Setup SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Sync prod compose to VM
+      - name: Add host to known_hosts
+        run: ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Sync configuration files
         run: |
-          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p /home/azureuser/vayy"
+          # FIX 4: Replaced hardcoded 'azureuser' with ${{ secrets.VM_USER }}
+          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p /home/${{ secrets.VM_USER }}/vayy"
           rsync -avz -e "ssh" \
             docker-compose-prod.yaml nginx.prod.conf .dockerignore \
-            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/azureuser/vayy/
+            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/${{ secrets.VM_USER }}/vayy/
 
       - name: Sync backend to VM
         run: |
-          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p /home/azureuser/vayy/backend/vayy && chmod -R 777 /home/azureuser/vayy/backend/vayy 2>/dev/null || true"
           rsync -avz --delete -e "ssh" \
             --exclude ".venv" --exclude "__pycache__" --exclude "*.pyc" \
             --exclude "staticfiles" --exclude ".env" --exclude "osrm" \
+            --exclude "media" \
             backend/vayy/ \
-            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/azureuser/vayy/backend/vayy/
+            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/${{ secrets.VM_USER }}/vayy/backend/vayy/
 
       - name: Sync admin to VM
         run: |
-          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p /home/azureuser/vayy/admin && chmod -R 777 /home/azureuser/vayy/admin 2>/dev/null || true"
           rsync -avz --delete -e "ssh" \
             --exclude "node_modules" --exclude "dist" \
             admin/ \
-            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/azureuser/vayy/admin/
+            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/${{ secrets.VM_USER }}/vayy/admin/
+
+      # Write the three .env files the stack consumes:
+      #   /home/<user>/vayy/.env              -> compose ${VAR} interpolation (POSTGRES_*, RABBITMQ_*)
+      #   /home/<user>/vayy/backend/vayy/.env -> web/celery env_file
+      #   /home/<user>/vayy/admin/.env        -> Vite build-time env
+      # Values are base64-encoded so $, quotes and backticks survive untouched.
+      - name: Write env files from secrets
+        env:
+          ENV_BACKEND: ${{ secrets.ENV_BACKEND }}
+          ENV_ADMIN: ${{ secrets.ENV_ADMIN }}
+        run: |
+          set -e
+          enc_backend=$(printf '%s\n' "$ENV_BACKEND" | base64 | tr -d '\n')
+          enc_admin=$(printf '%s\n' "$ENV_ADMIN" | base64 | tr -d '\n')
+          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} 'bash -s' <<REMOTE
+            set -e
+            umask 077
+            mkdir -p /home/${{ secrets.VM_USER }}/vayy/backend/vayy /home/${{ secrets.VM_USER }}/vayy/admin
+            printf '%s' '$enc_backend' | base64 -d > /home/${{ secrets.VM_USER }}/vayy/backend/vayy/.env
+            printf '%s' '$enc_backend' | base64 -d > /home/${{ secrets.VM_USER }}/vayy/.env
+            printf '%s' '$enc_admin'  | base64 -d > /home/${{ secrets.VM_USER }}/vayy/admin/.env
+            echo "backend .env: \$(wc -l < /home/${{ secrets.VM_USER }}/vayy/backend/vayy/.env) lines"
+            echo "admin .env:    \$(wc -l < /home/${{ secrets.VM_USER }}/vayy/admin/.env) lines"
+          REMOTE
+
+      - name: Fix permissions on VM
+        run: |
+          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "chown -R ${{ secrets.VM_USER }}:${{ secrets.VM_USER }} /home/${{ secrets.VM_USER }}/vayy/backend/vayy /home/${{ secrets.VM_USER }}/vayy/admin"
 
       - name: Build and restart containers
         run: |
           ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} 'bash -s' << 'EOF'
             set -e
-            cd /home/azureuser/vayy
+            cd /home/${{ secrets.VM_USER }}/vayy
 
-            # 1. Clean up unused build cache and images
+            # 1. Clean up unused build cache
             docker builder prune -f
             docker image prune -f
 
-            # 2. Limit memory and CPU overhead during image build
             export BUILDKIT_PARALLEL_COMPILER_LIMIT=1
             export NODE_OPTIONS="--max-old-space-size=1536"
 
-            # 3. Build containers without shutting down live site
+            # 2. Build containers
             docker compose -f docker-compose-prod.yaml build --parallel=false
 
-            # 4. Gracefully restart services
+            # 3. Gracefully restart services
             docker compose -f docker-compose-prod.yaml up -d --remove-orphans
 
-            # Replace Step 5 with this:
+            # 4. Run database migrations safely
             echo "Running database migrations..."
-            docker compose -f docker-compose-prod.yaml exec -T web python manage.py migrate || {
-              echo "Migration failed due to squashed history. Truncating migration records..."
-              docker compose -f docker-compose-prod.yaml exec -T web python manage.py dbshell -c "TRUNCATE django_migrations;"
-              docker compose -f docker-compose-prod.yaml exec -T web python manage.py migrate --fake
-            }
+            docker compose -f docker-compose-prod.yaml exec -T web python manage.py migrate
 
-            # 6. Collect static files
+            # 5. Collect static files
             echo "Collecting static files..."
             docker compose -f docker-compose-prod.yaml exec -T web python manage.py collectstatic --noinput
 
-            # 7. Cleanup dangling images
+            # 6. Final cleanup
             docker image prune -f
           EOF

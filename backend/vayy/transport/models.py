@@ -1,5 +1,6 @@
 import uuid
 
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from django.contrib.gis.db import models as gis_models
 
@@ -153,6 +154,13 @@ class Stop(models.Model):
     class Meta:
         ordering = ["order"]
         unique_together = [("route", "order")]
+        indexes = [
+            GinIndex(
+                fields=["name"],
+                opclasses=["gin_trgm_ops"],
+                name="transport_stop_name_trgm",
+            ),
+        ]
 
     def __str__(self):
         return self.name

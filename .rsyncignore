@@ -1,0 +1,44 @@
+# Rsync exclude-file for the deploy transfer (repo root -> VM release dir).
+# Keeps the deploy payload small and never ships secrets.
+
+# VCS
+.git
+.gitignore
+.github
+
+# Unrelated apps (not part of the server stack)
+vayy_app/
+frontend/
+
+# Secrets (written from GitHub secrets during deploy)
+.env
+.env.*
+!.env.example
+
+# Python
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache
+
+# Node
+node_modules/
+dist/
+
+# Backend generated / runtime data (persist on VM outside release dirs)
+backend/vayy/osrm/
+backend/vayy/staticfiles/
+backend/vayy/media/
+backend/vayy/db.sqlite3
+*.pbf
+*.osrm*
+*.dump
+backups/
+
+# Local tooling / docs
+.DS_Store
+*.md
+vayy.zip

@@ -785,45 +785,10 @@ class GeocodeSearchAPIView(APIView):
 
         country_codes = request.query_params.get("countrycodes", "in")
 
-        db_results = self._search_db_stops(query, limit)
         from transport.services.geocoding_service import GeocodingService
-        api_results = GeocodingService.search(query, limit=limit, country_codes=country_codes)
+        results = GeocodingService.search_cached(query, limit=limit, country_codes=country_codes)
 
-        return Response(db_results + api_results, status=status.HTTP_200_OK)
-
-    @staticmethod
-    def _search_db_stops(query, limit):
-        from django.contrib.postgres.search import (
-            SearchVector, SearchQuery, SearchRank,
-            TrigramSimilarity,
-        )
-        from django.db.models import F, Value, FloatField
-
-        fts_vector = SearchVector("name", weight="A")
-        fts_query = SearchQuery(query)
-        tri = TrigramSimilarity("name", query)
-
-        stops = (
-            Stop.objects.annotate(
-                fts_rank=SearchRank(fts_vector, fts_query),
-                tri_score=tri,
-                score=F("fts_rank") + F("tri_score"),
-            )
-            .filter(tri_score__gt=0.15)
-            .order_by("-score")
-            .select_related("route")[:limit]
-        )
-
-        return [
-            {
-                "place_id": f"stop-{stop.id}",
-                "lat": stop.location.y,
-                "lon": stop.location.x,
-                "name": stop.name,
-                "display_name": stop.name,
-            }
-            for stop in stops
-        ]
+        return Response(results, status=status.HTTP_200_OK)
 
 
 class GeocodeReverseAPIView(APIView):
