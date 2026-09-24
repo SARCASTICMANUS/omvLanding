@@ -1,13 +1,18 @@
 import { cloneElement, useState } from "react";
-import { BLUE_PRIMARY } from "../../colors";
+import { getBluePrimary } from "../../colors";
 
 // Soft ambient color wash behind graphs — extremely subtle blue haze
-function ChartWash({ color = "#3B82F6" }) {
+function ChartWash({ color = "var(--accent-blue)" }) {
+  const isVar = typeof color === "string" && color.startsWith("var(");
   return (
     <div className="pointer-events-none absolute -inset-3 z-0" aria-hidden>
       <div
         className="absolute left-1/2 top-1/2 h-[80%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-full"
-        style={{ background: `radial-gradient(closest-side, ${color}10, transparent)` }}
+        style={{
+          background: isVar
+            ? "radial-gradient(closest-side, rgb(var(--accent-blue-rgb) / 0.10), transparent)"
+            : `radial-gradient(closest-side, ${color}10, transparent)`,
+        }}
       />
     </div>
   );
@@ -32,13 +37,18 @@ function smoothPath(points) {
 }
 
 export function StatCard({ icon, label, value, color, sub }) {
-  const accent = color || BLUE_PRIMARY;
+  const accent = color || getBluePrimary();
+  const isVar = typeof accent === "string" && accent.startsWith("var(");
   return (
     <div className="glass-card p-5 relative overflow-hidden flex flex-col animate-glass-fade-in">
       {/* Very subtle ambient blue/lavender wash */}
       <div
         className="pointer-events-none absolute -top-12 -right-12 h-32 w-32 rounded-full"
-        style={{ background: `radial-gradient(closest-side, ${accent}1A, transparent)` }}
+        style={{
+          background: isVar
+            ? "radial-gradient(closest-side, rgb(var(--accent-blue-rgb) / 0.10), transparent)"
+            : `radial-gradient(closest-side, ${accent}1A, transparent)`,
+        }}
       />
       {/* Label — subtle, above the metric */}
       <p className="relative z-10 text-[11px] font-medium uppercase tracking-wider text-slate-500 truncate mb-4">
@@ -46,7 +56,7 @@ export function StatCard({ icon, label, value, color, sub }) {
       </p>
       {/* Metric + small secondary visual on the right */}
       <div className="relative z-10 flex items-center justify-between gap-4">
-        <span className="text-[30px] font-bold leading-none whitespace-nowrap" style={{ color: "#16233F" }}>
+        <span className="text-[30px] font-bold leading-none whitespace-nowrap brand-heading">
           {value?.toLocaleString() ?? "\u2014"}
         </span>
         <span className="shrink-0 opacity-90" style={{ color: accent }}>
@@ -62,12 +72,13 @@ export function StatCard({ icon, label, value, color, sub }) {
 }
 
 // ─── Ranked categories → soft rounded blue bars ─────────────────────
-export function BarChart({ data, labelKey, valueKey, color = BLUE_PRIMARY, maxItems = 7 }) {
+export function BarChart({ data, labelKey, valueKey, color = getBluePrimary(), maxItems = 7 }) {
   if (!data || data.length === 0) {
     return <div className="text-center py-8 text-slate-500 text-sm">No data</div>;
   }
   const items = data.slice(0, maxItems);
   const maxVal = Math.max(...items.map((d) => d[valueKey] || 0), 1);
+  const isVar = typeof color === "string" && color.startsWith("var(");
 
   return (
     <div className="relative space-y-3">
@@ -77,15 +88,23 @@ export function BarChart({ data, labelKey, valueKey, color = BLUE_PRIMARY, maxIt
           <span className="w-28 truncate text-right text-xs font-medium text-slate-600">{d[labelKey]}</span>
           <div
             className="flex-1 h-6 overflow-hidden rounded-full"
-            style={{ background: "rgba(46,92,255,0.05)", border: "1px solid rgba(46,92,255,0.08)" }}
+            style={{ background: "rgb(var(--accent-blue-rgb) / 0.05)", border: "1px solid rgb(var(--accent-blue-rgb) / 0.08)" }}
           >
             <div
               className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${((d[valueKey] || 0) / maxVal) * 100}%`,
-                background: `linear-gradient(90deg, ${color}99, ${color})`,
-                boxShadow: `0 2px 8px ${color}2E`,
-              }}
+              style={
+                isVar
+                  ? {
+                      width: `${((d[valueKey] || 0) / maxVal) * 100}%`,
+                      background: "linear-gradient(90deg, rgb(var(--accent-blue-rgb) / 0.55), var(--accent-blue))",
+                      boxShadow: "0 2px 8px rgb(var(--accent-blue-rgb) / 0.18)",
+                    }
+                  : {
+                      width: `${((d[valueKey] || 0) / maxVal) * 100}%`,
+                      background: `linear-gradient(90deg, ${color}99, ${color})`,
+                      boxShadow: `0 2px 8px ${color}2E`,
+                    }
+              }
             />
           </div>
           <span className="w-12 text-right text-xs font-semibold text-slate-700">{(d[valueKey] || 0).toLocaleString()}</span>
@@ -96,7 +115,7 @@ export function BarChart({ data, labelKey, valueKey, color = BLUE_PRIMARY, maxIt
 }
 
 // ─── Time series → elegant lightweight area line chart ──────────────
-export function LineChart({ data, labelKey, valueKey, color = "#3B82F6", height = 190, maxItems }) {
+export function LineChart({ data, labelKey, valueKey, color = "var(--accent-blue)", height = 190, maxItems }) {
   const [hover, setHover] = useState(null);
 
   if (!data || data.length === 0) {
@@ -119,8 +138,8 @@ export function LineChart({ data, labelKey, valueKey, color = "#3B82F6", height 
 
   const linePath = smoothPath(coords);
   const areaPath = `${linePath} L ${coords[coords.length - 1].x} ${padding.top + chartH} L ${coords[0].x} ${padding.top + chartH} Z`;
-  const lineColor = color || "#3B82F6";
-  const gid = `mg-${valueKey}-${lineColor.replace(/[^a-zA-Z0-9]/g, "")}`;
+  const lineColor = color || "var(--accent-blue)";
+  const gid = `mg-${valueKey}`;
 
   const yTicks = 3;
   const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) => Math.round((maxVal / yTicks) * i));
@@ -142,9 +161,9 @@ export function LineChart({ data, labelKey, valueKey, color = "#3B82F6", height 
       <svg viewBox={`0 0 ${width} ${height}`} className="relative z-10 block w-full">
         <defs>
           <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={lineColor} stopOpacity="0.24" />
-            <stop offset="55%" stopColor={lineColor} stopOpacity="0.06" />
-            <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
+            <stop offset="0%" style={{ stopColor: lineColor }} stopOpacity="0.24" />
+            <stop offset="55%" style={{ stopColor: lineColor }} stopOpacity="0.06" />
+            <stop offset="100%" style={{ stopColor: lineColor }} stopOpacity="0" />
           </linearGradient>
         </defs>
 
@@ -153,7 +172,7 @@ export function LineChart({ data, labelKey, valueKey, color = "#3B82F6", height 
           const y = padding.top + chartH - (val / maxVal) * chartH;
           return (
             <g key={i}>
-              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="rgba(46,92,255,0.07)" strokeWidth="1" />
+              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} style={{ stroke: "rgb(var(--accent-blue-rgb) / 0.07)" }} strokeWidth="1" />
               <text x={padding.left - 6} y={y + 3} textAnchor="end" className="fill-slate-400 text-[11px] font-medium">
                 {val.toLocaleString()}
               </text>
@@ -165,13 +184,13 @@ export function LineChart({ data, labelKey, valueKey, color = "#3B82F6", height 
         <path d={areaPath} fill={`url(#${gid})`} />
 
         {/* Thin elegant line */}
-        <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={linePath} fill="none" style={{ stroke: lineColor }} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
 
         {/* Hover guides */}
         {hoverPoint && (
           <g>
-            <line x1={hoverPoint.x} y1={padding.top} x2={hoverPoint.x} y2={padding.top + chartH} stroke="rgba(46,92,255,0.18)" strokeWidth="1" strokeDasharray="3 3" />
-            <circle cx={hoverPoint.x} cy={hoverPoint.y} r="4.5" fill="#FFFFFF" stroke={lineColor} strokeWidth="2" />
+              <line x1={hoverPoint.x} y1={padding.top} x2={hoverPoint.x} y2={padding.top + chartH} style={{ stroke: "rgb(var(--accent-blue-rgb) / 0.18)" }} strokeWidth="1" strokeDasharray="3 3" />
+            <circle cx={hoverPoint.x} cy={hoverPoint.y} r="4.5" fill="#FFFFFF" style={{ stroke: lineColor }} strokeWidth="2" />
           </g>
         )}
 
@@ -218,7 +237,7 @@ export function DonutChart({ data, labelKey, valueKey, colors, centerLabel, cent
 
   return (
     <div className="relative flex items-center gap-6">
-      <ChartWash color={colors[0] || BLUE_PRIMARY} />
+      <ChartWash color={colors[0] || getBluePrimary()} />
       <div className="relative z-10">
         <svg viewBox="0 0 36 36" className="h-28 w-28 -rotate-90">
           {data.map((d, i) => {
@@ -249,13 +268,23 @@ export function DonutChart({ data, labelKey, valueKey, colors, centerLabel, cent
         )}
       </div>
       <div className="relative z-10 space-y-2">
-        {data.map((d, i) => (
-          <div key={i} className="flex items-center gap-2.5">
-            <div className="h-3 w-3 rounded-full" style={{ background: colors[i % colors.length], boxShadow: `0 0 6px ${colors[i % colors.length]}40` }} />
-            <span className="text-xs font-semibold text-slate-700">{d[labelKey]}</span>
-            <span className="ml-auto text-xs font-bold text-slate-700">{(d[valueKey] || 0).toLocaleString()}</span>
-          </div>
-        ))}
+        {data.map((d, i) => {
+          const segColor = colors[i % colors.length];
+          const isVarColor = typeof segColor === "string" && segColor.startsWith("var(");
+          return (
+            <div key={i} className="flex items-center gap-2.5">
+              <div
+                className="h-3 w-3 rounded-full"
+                style={{
+                  background: segColor,
+                  boxShadow: isVarColor ? "0 0 6px rgb(var(--accent-blue-rgb) / 0.3)" : `0 0 6px ${segColor}40`,
+                }}
+              />
+              <span className="text-xs font-semibold text-slate-700">{d[labelKey]}</span>
+              <span className="ml-auto text-xs font-bold text-slate-700">{(d[valueKey] || 0).toLocaleString()}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

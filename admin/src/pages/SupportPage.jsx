@@ -45,7 +45,7 @@ export default function SupportPage() {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-4 sm:p-6">
       <div className="relative flex h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-slate-900/70 backdrop-blur-2xl border border-white/10 text-slate-200 shadow-2xl shadow-slate-900/40">
         {/* Soft ambient glows — dark blurred glass */}
-        <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full" style={{ background: "radial-gradient(closest-side, rgba(46,92,255,0.25), transparent)" }} />
+        <div className="pointer-events-none absolute -top-24 -left-24 h-64 w-64 rounded-full" style={{ background: "radial-gradient(closest-side, rgb(var(--accent-blue-rgb) / 0.25), transparent)" }} />
         <div className="pointer-events-none absolute -bottom-24 -right-24 h-64 w-64 rounded-full" style={{ background: "radial-gradient(closest-side, rgba(125,211,252,0.16), transparent)" }} />
         {/* Header */}
         <div className="relative flex shrink-0 items-center gap-4 border-b border-white/10 px-5 py-4">

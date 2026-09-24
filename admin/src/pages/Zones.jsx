@@ -142,7 +142,7 @@ export default function Zones() {
       />
 
       {saving && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 pl-4 pr-5 py-3 rounded-xl text-white shadow-lg" style={{ background: "linear-gradient(135deg, #2E5CFF, #5B8AFF)" }}>
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 pl-4 pr-5 py-3 rounded-xl text-white shadow-lg" style={{ background: "linear-gradient(135deg, var(--accent-blue), var(--accent-blue-light))" }}>
           <CheckCircle2 size={18} />
           <span className="font-medium text-sm">Zone configuration saved</span>
         </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
-import { BLUE_PALETTE } from "../../colors";
+import { getBluePalette } from "../../colors";
+import useAccentTick from "../../hooks/useAccentTick";
 
 function isMapValid(map) {
   try {
@@ -23,14 +24,15 @@ function lerpColor(a, b, t) {
 
 function getColor(value, max) {
   const t = Math.min(value / max, 1);
-  if (t < 0.25) return lerpColor(BLUE_PALETTE[7], BLUE_PALETTE[5], t / 0.25);
-  if (t < 0.5) return lerpColor(BLUE_PALETTE[5], BLUE_PALETTE[3], (t - 0.25) / 0.25);
-  if (t < 0.75) return lerpColor(BLUE_PALETTE[3], BLUE_PALETTE[1], (t - 0.5) / 0.25);
-  return BLUE_PALETTE[0];
+  if (t < 0.25) return lerpColor(getBluePalette()[7], getBluePalette()[5], t / 0.25);
+  if (t < 0.5) return lerpColor(getBluePalette()[5], getBluePalette()[3], (t - 0.25) / 0.25);
+  if (t < 0.75) return lerpColor(getBluePalette()[3], getBluePalette()[1], (t - 0.5) / 0.25);
+  return getBluePalette()[0];
 }
 
 export default function ChoroplethMap({ map, countryData = [] }) {
   const addedRef = useRef(false);
+  const accentTick = useAccentTick();
 
   useEffect(() => {
     if (!isMapValid(map) || !countryData.length) return;
@@ -106,7 +108,7 @@ export default function ChoroplethMap({ map, countryData = [] }) {
       } catch {}
       addedRef.current = false;
     };
-  }, [map, countryData]);
+  }, [map, countryData, accentTick]);
 
   return null;
 }

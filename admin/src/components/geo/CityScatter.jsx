@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
+import { getAccentColor } from "../../utils/glow";
+import useAccentTick from "../../hooks/useAccentTick";
 
 function isMapValid(map) {
   try {
@@ -11,6 +13,7 @@ function isMapValid(map) {
 
 export default function CityScatter({ map, cities = [] }) {
   const markersRef = useRef([]);
+  const accentTick = useAccentTick();
 
   useEffect(() => {
     markersRef.current.forEach((m) => { try { m.remove(); } catch {} });
@@ -19,6 +22,7 @@ export default function CityScatter({ map, cities = [] }) {
     if (!isMapValid(map) || !cities.length) return;
 
     const maxCount = Math.max(...cities.map((c) => c.count || 0), 1);
+    const accent = getAccentColor();
 
     cities.forEach((city) => {
       if (!city.avg_lat || !city.avg_lng) return;
@@ -29,7 +33,7 @@ export default function CityScatter({ map, cities = [] }) {
       const el = document.createElement("div");
       el.style.cssText = `
         width: ${size}px; height: ${size}px;
-        background: #4275D9; border: 2px solid #1E3A8A;
+        background: ${accent.hex}; border: 2px solid ${accent.dark};
         border-radius: 50%; opacity: ${opacity};
         cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
       `;
@@ -37,7 +41,7 @@ export default function CityScatter({ map, cities = [] }) {
       const popup = new maplibregl.Popup({ offset: 15 }).setHTML(
         `<div style="font-family:Inter,sans-serif;padding:2px 4px">
           <div style="font-weight:700;font-size:12px">${city.city}</div>
-          ${city.country ? `<div style="color:#3156A3;font-size:10px">${city.country}</div>` : ""}
+          ${city.country ? `<div style="color:${accent.dark};font-size:10px">${city.country}</div>` : ""}
           <div style="font-weight:700;font-size:11px">${(city.count || 0).toLocaleString()} views (${city.percentage}%)</div>
         </div>`
       );
@@ -55,7 +59,7 @@ export default function CityScatter({ map, cities = [] }) {
       markersRef.current.forEach((m) => { try { m.remove(); } catch {} });
       markersRef.current = [];
     };
-  }, [map, cities]);
+  }, [map, cities, accentTick]);
 
   return null;
 }

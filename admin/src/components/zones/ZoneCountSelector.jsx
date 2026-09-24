@@ -32,7 +32,7 @@ export default function ZoneCountSelector({ value, onChange, maxStops }) {
             disabled={value >= max}
             aria-label="Increase zones"
             className="w-11 h-11 flex items-center justify-center rounded-xl text-white font-semibold hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
-            style={{ background: "linear-gradient(135deg, #2E5CFF, #5B8AFF)" }}
+            style={{ background: "linear-gradient(135deg, var(--accent-blue), var(--accent-blue-light))" }}
           >
             <Plus size={18} />
           </button>

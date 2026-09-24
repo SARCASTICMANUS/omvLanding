@@ -1,5 +1,74 @@
 // Memphis Design System — Single Source of Truth
 // =================================================
+import { getAccentColor } from "./utils/glow";
+
+// Accent-aware helpers — read the chosen App color at call time
+export function getBluePrimary() {
+  return getAccentColor().hex;
+}
+
+function mixHex(a, b, t) {
+  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
+  const out = pa.map((v, i) => Math.round(v + (pb[i] - v) * t));
+  return `#${out.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
+export function getBluePalette() {
+  const { hex, light, dark } = getAccentColor();
+  return [
+    dark,
+    mixHex(dark, hex, 0.35),
+    mixHex(dark, hex, 0.7),
+    hex,
+    mixHex(hex, light, 0.35),
+    mixHex(hex, light, 0.65),
+    light,
+    mixHex(light, "#FFFFFF", 0.35),
+  ];
+}
+
+export function getChartColors(n = 5) {
+  return getBluePalette().slice(0, n);
+}
+
+export function getRouteColors() {
+  const { hex, light, dark } = getAccentColor();
+  const base = [
+    { line: dark, bg: dark + "1A", text: dark, dot: dark },
+    { line: hex, bg: hex + "1A", text: dark, dot: hex },
+    { line: light, bg: light + "1A", text: hex, dot: light },
+    { line: mixHex(hex, light, 0.5), bg: mixHex(hex, light, 0.5) + "1A", text: hex, dot: mixHex(hex, light, 0.5) },
+    { line: "#7DA2FF", bg: "#7DA2FF1A", text: hex, dot: "#7DA2FF" },
+    { line: "#93C5FD", bg: "#93C5FD1A", text: light, dot: "#93C5FD" },
+    { line: "#AFCDFF", bg: "#AFCDFF1A", text: light, dot: "#AFCDFF" },
+    { line: "#7DD3FC", bg: "#7DD3FC1A", text: hex, dot: "#7DD3FC" },
+    { line: "#3B6EFF", bg: "#3B6EFF1A", text: dark, dot: "#3B6EFF" },
+    { line: "#1E4FD8", bg: "#1E4FD81A", text: dark, dot: "#1E4FD8" },
+    { line: "#0F3DA6", bg: "#0F3DA61A", text: dark, dot: "#0F3DA6" },
+    { line: "#6E9BFF", bg: "#6E9BFF1A", text: hex, dot: "#6E9BFF" },
+    { line: "#C3D9FF", bg: "#C3D9FF1A", text: light, dot: "#C3D9FF" },
+    { line: "#E0ECFF", bg: "#E0ECFF1A", text: light, dot: "#E0ECFF" },
+  ];
+  return base;
+}
+
+export function getEntityColors() {
+  const { hex, light, dark } = getAccentColor();
+  return {
+    cities: light,
+    routes: hex,
+    stops: dark,
+    schedules: mixHex(hex, light, 0.5),
+    passengers: "#7DD3FC",
+    drivers: "#93C5FD",
+    vehicles: "#4D7AFF",
+  };
+}
+
+export function getStatusActive() {
+  return getAccentColor().hex;
+}
 
 // Core palette — CSS variables defined in index.css
 export const MEMPHIS_PINK = "#009849";

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { DataTable } from "../charts";
-import { CHART_COLORS_6 } from "../../colors";
 import { ChevronRight, ChevronDown } from "lucide-react";
 
 export default function GeoDrilldownTable({ countryBreakdown = [], regionBreakdown = [], cityBreakdown = [] }) {

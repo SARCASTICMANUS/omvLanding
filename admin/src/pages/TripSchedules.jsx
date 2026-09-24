@@ -99,7 +99,7 @@ export default function TripSchedules() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="min-w-0">
                     <h3 className="flex items-center gap-1.5 font-semibold text-lg text-slate-800">
-                      <CalendarClock size={16} className="shrink-0" style={{ color: "#5B8AFF" }} />
+                      <CalendarClock size={16} className="shrink-0" style={{ color: "var(--accent-blue-light)" }} />
                       <span className="truncate">{s.label}</span>
                     </h3>
                     <p className="text-sm text-slate-500 font-medium mt-0.5">

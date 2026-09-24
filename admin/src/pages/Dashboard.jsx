@@ -10,24 +10,24 @@ import {
 import api from "../api/client";
 import Loader from "../components/Loader";
 
-// ─── Tiny decorative visuals (blue palette, purely geometric) ────────────
+// ─── Tiny decorative visuals (accent-aware via CSS vars) ────────────
 // City skyline glyph
 const CitiesVisual = () => (
   <svg width="46" height="40" viewBox="0 0 46 40" fill="none" aria-hidden>
-    <rect x="2" y="20" width="8" height="18" rx="2.5" fill="#60A5FA" opacity="0.55" />
-    <rect x="14" y="10" width="9" height="28" rx="2.5" fill="#3B82F6" />
-    <rect x="27" y="16" width="8" height="22" rx="2.5" fill="#93C5FD" opacity="0.75" />
-    <rect x="38" y="6" width="7" height="32" rx="2.5" fill="#2563EB" opacity="0.9" />
+    <rect x="2" y="20" width="8" height="18" rx="2.5" style={{ fill: "var(--accent-blue-light)", opacity: 0.55 }} />
+    <rect x="14" y="10" width="9" height="28" rx="2.5" style={{ fill: "var(--accent-blue)" }} />
+    <rect x="27" y="16" width="8" height="22" rx="2.5" style={{ fill: "var(--accent-blue-light)", opacity: 0.75 }} />
+    <rect x="38" y="6" width="7" height="32" rx="2.5" style={{ fill: "var(--accent-blue-dark)", opacity: 0.9 }} />
   </svg>
 );
 
 // Route line glyph
 const RoutesVisual = () => (
   <svg width="50" height="40" viewBox="0 0 50 40" fill="none" aria-hidden>
-    <path d="M4 33 C 13 31, 15 22, 24 20 S 38 11, 45 6" stroke="#93C5FD" strokeWidth="6" strokeLinecap="round" opacity="0.22" />
-    <path d="M4 33 C 13 31, 15 22, 24 20 S 38 11, 45 6" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" />
-    <circle cx="4" cy="33" r="2.5" fill="#2563EB" />
-    <circle cx="45" cy="6" r="2.5" fill="#2563EB" />
+    <path d="M4 33 C 13 31, 15 22, 24 20 S 38 11, 45 6" style={{ stroke: "var(--accent-blue-light)" }} strokeWidth="6" strokeLinecap="round" opacity="0.22" />
+    <path d="M4 33 C 13 31, 15 22, 24 20 S 38 11, 45 6" style={{ stroke: "var(--accent-blue)" }} strokeWidth="2.5" strokeLinecap="round" />
+    <circle cx="4" cy="33" r="2.5" style={{ fill: "var(--accent-blue-dark)" }} />
+    <circle cx="45" cy="6" r="2.5" style={{ fill: "var(--accent-blue-dark)" }} />
   </svg>
 );
 
@@ -35,36 +35,36 @@ const RoutesVisual = () => (
 const StopsVisual = () => (
   <svg width="44" height="44" viewBox="0 0 44 44" fill="none" aria-hidden>
     <circle cx="22" cy="22" r="16" stroke="#E2E8F0" strokeWidth="5" />
-    <circle cx="22" cy="22" r="16" stroke="#3B82F6" strokeWidth="5" strokeLinecap="round" strokeDasharray="58 100" transform="rotate(-90 22 22)" />
-    <circle cx="22" cy="22" r="3.5" fill="#93C5FD" opacity="0.9" />
+    <circle cx="22" cy="22" r="16" style={{ stroke: "var(--accent-blue)" }} strokeWidth="5" strokeLinecap="round" strokeDasharray="58 100" transform="rotate(-90 22 22)" />
+    <circle cx="22" cy="22" r="3.5" style={{ fill: "var(--accent-blue-light)" }} opacity="0.9" />
   </svg>
 );
 
 // Tiny clock glyph
 const SchedulesVisual = () => (
   <svg width="44" height="44" viewBox="0 0 44 44" fill="none" aria-hidden>
-    <circle cx="22" cy="22" r="18" stroke="#93C5FD" strokeWidth="2.5" opacity="0.8" />
-    <path d="M22 13 v9 l7 5" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="22" cy="22" r="18" style={{ stroke: "var(--accent-blue-light)" }} strokeWidth="2.5" opacity="0.8" />
+    <path d="M22 13 v9 l7 5" style={{ stroke: "var(--accent-blue)" }} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
 // Grouped people bars glyph
 const PassengersVisual = () => (
   <svg width="46" height="40" viewBox="0 0 46 40" fill="none" aria-hidden>
-    <rect x="3" y="18" width="10" height="19" rx="5" fill="#60A5FA" opacity="0.5" />
-    <rect x="18" y="9" width="10" height="28" rx="5" fill="#3B82F6" />
-    <rect x="33" y="15" width="10" height="22" rx="5" fill="#93C5FD" opacity="0.75" />
+    <rect x="3" y="18" width="10" height="19" rx="5" style={{ fill: "var(--accent-blue-light)", opacity: 0.5 }} />
+    <rect x="18" y="9" width="10" height="28" rx="5" style={{ fill: "var(--accent-blue)" }} />
+    <rect x="33" y="15" width="10" height="22" rx="5" style={{ fill: "var(--accent-blue-light)", opacity: 0.75 }} />
   </svg>
 );
 
 // Activity bars glyph
 const DriversVisual = () => (
   <svg width="50" height="40" viewBox="0 0 50 40" fill="none" aria-hidden>
-    <rect x="2" y="27" width="7" height="10" rx="3.5" fill="#93C5FD" opacity="0.65" />
-    <rect x="12" y="20" width="7" height="17" rx="3.5" fill="#60A5FA" opacity="0.75" />
-    <rect x="22" y="11" width="7" height="26" rx="3.5" fill="#3B82F6" />
-    <rect x="32" y="18" width="7" height="19" rx="3.5" fill="#60A5FA" opacity="0.75" />
-    <rect x="42" y="25" width="7" height="12" rx="3.5" fill="#93C5FD" opacity="0.65" />
+    <rect x="2" y="27" width="7" height="10" rx="3.5" style={{ fill: "var(--accent-blue-light)", opacity: 0.65 }} />
+    <rect x="12" y="20" width="7" height="17" rx="3.5" style={{ fill: "var(--accent-blue-light)", opacity: 0.75 }} />
+    <rect x="22" y="11" width="7" height="26" rx="3.5" style={{ fill: "var(--accent-blue)" }} />
+    <rect x="32" y="18" width="7" height="19" rx="3.5" style={{ fill: "var(--accent-blue-light)", opacity: 0.75 }} />
+    <rect x="42" y="25" width="7" height="12" rx="3.5" style={{ fill: "var(--accent-blue-light)", opacity: 0.65 }} />
   </svg>
 );
 
@@ -108,7 +108,7 @@ export default function Dashboard() {
             {/* Subtle ambient color wash */}
             <div
               className="pointer-events-none absolute -top-12 -right-12 h-32 w-32 rounded-full"
-              style={{ background: "radial-gradient(closest-side, rgba(59,130,246,0.12), transparent)" }}
+              style={{ background: "radial-gradient(closest-side, rgb(var(--accent-blue-rgb) / 0.12), transparent)" }}
             />
 
             {/* Label row — icon kept subtle, next to the uppercase label */}
@@ -119,7 +119,7 @@ export default function Dashboard() {
 
             {/* Value + small visualization */}
             <div className="relative z-10 flex items-center justify-between gap-4">
-              <span className="text-[30px] font-bold leading-none" style={{ color: "#16233F" }}>
+              <span className="text-[30px] font-bold leading-none brand-heading">
                 {stats?.[card.key]?.toLocaleString() ?? "0"}
               </span>
               <div className="opacity-90 shrink-0">{card.visual}</div>
