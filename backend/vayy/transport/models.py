@@ -1,6 +1,7 @@
 import uuid
 
 from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVector
 from django.db import models
 from django.contrib.gis.db import models as gis_models
 
@@ -159,6 +160,10 @@ class Stop(models.Model):
                 fields=["name"],
                 opclasses=["gin_trgm_ops"],
                 name="transport_stop_name_trgm",
+            ),
+            GinIndex(
+                SearchVector("name", config="english"),
+                name="transport_stop_name_fts",
             ),
         ]
 

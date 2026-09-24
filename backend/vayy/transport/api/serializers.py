@@ -297,3 +297,47 @@ class DriverRouteSerializer(serializers.ModelSerializer):
     def get_eta_minutes(self, obj):
         return self.get_duration_minutes(obj)
 
+
+class RouteSearchInputSerializer(serializers.Serializer):
+    origin_lat = serializers.FloatField(min_value=-90, max_value=90)
+    origin_lng = serializers.FloatField(min_value=-180, max_value=180)
+    dest_lat = serializers.FloatField(min_value=-90, max_value=90)
+    dest_lng = serializers.FloatField(min_value=-180, max_value=180)
+    radius = serializers.IntegerField(required=False, default=5000, min_value=100, max_value=10000)
+
+
+class StopOutputSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    order = serializers.IntegerField()
+    lat = serializers.SerializerMethodField()
+    lon = serializers.SerializerMethodField()
+    location = serializers.SerializerMethodField()
+
+    def get_lat(self, obj):
+        return obj["location"].y if isinstance(obj, dict) else obj.location.y
+
+    def get_lon(self, obj):
+        return obj["location"].x if isinstance(obj, dict) else obj.location.x
+
+    def get_location(self, obj):
+        loc = obj["location"] if isinstance(obj, dict) else obj.location
+        return {"type": "Point", "coordinates": [loc.x, loc.y]}
+
+
+class RouteSearchResponseSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    route_code = serializers.CharField()
+    city_name = serializers.CharField()
+    start_name = serializers.CharField()
+    end_name = serializers.CharField()
+    total_distance_meters = serializers.IntegerField()
+    fare = serializers.IntegerField()
+    eta_seconds = serializers.IntegerField()
+    walk_minutes = serializers.IntegerField()
+    walk_distance_meters = serializers.IntegerField()
+    distance_km = serializers.FloatField()
+    pickup_stop = StopOutputSerializer()
+    dropoff_stop = StopOutputSerializer()
+    stops = StopOutputSerializer(many=True)

@@ -29,19 +29,17 @@ function RouteCard({ item, index, pickup, destination, onSelect, expanded, onTog
 
   const stops = item?.stops || [];
 
-  const firstStop = timeline[0];
-  const lastStop = timeline[timeline.length - 1];
   const startLabel =
-    pickup?.name ||
-    pickup?.display_name?.split(",")?.[0]?.trim() ||
-    firstStop?.name ||
-    item.startLabel ||
+    // pickup?.name ||
+    // pickup?.display_name?.split(",")?.[0]?.trim() ||
+    // firstStop?.name ||
+    item.pickup_stop.name ||
     "--";
   const endLabel =
-    destination?.name ||
-    destination?.display_name?.split(",")?.[0]?.trim() ||
-    lastStop?.name ||
-    item.endLabel ||
+    // destination?.name ||
+    // destination?.display_name?.split(",")?.[0]?.trim() ||
+    // lastStop?.name ||
+    item.dropoff_stop.name ||
     "--";
 
   const fare = item?.fare;
@@ -50,12 +48,17 @@ function RouteCard({ item, index, pickup, destination, onSelect, expanded, onTog
 
   return (
     <View style={[s.card, isBest && s.cardBest]}>
-      {isBest && (
-        <View style={s.bestBadge}>
-          <Text style={s.bestBadgeText}>BEST MATCH</Text>
+      
+        <View style={s.bestRow}>
+          {isBest && (
+          <View style={s.bestBadge}>
+            <Text style={s.bestBadgeText}>BEST MATCH</Text>
+          </View>)}
+          <Text numberOfLines={1} style={s.routeNameText}>
+            {item.name}
+          </Text>
         </View>
-      )}
-
+      
       {/* Route visualization — start & end */}
       <TouchableOpacity activeOpacity={0.93} onPress={() => onSelect(item)}>
         <View style={s.routeRow}>
@@ -565,7 +568,7 @@ const s = StyleSheet.create({
     marginTop: 12,
     paddingVertical: 12,
     ...Platform.select({
-      ios:     { shadowColor: "#009849", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 8 },
+      ios: { shadowColor: "#009849", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 8 },
       android: { elevation: 4 },
     }),
   },
@@ -584,4 +587,6 @@ const s = StyleSheet.create({
     paddingVertical: 40,
   },
   stateText: { color: "#9CA3AF", fontSize: 15, fontWeight: "600" },
+  bestRow: { alignItems: "center", flexDirection: "row", marginBottom: 12 },
+  routeNameText: { color: "#6B7280", flex: 1, fontSize: 12, fontWeight: "600", marginLeft: 10 }
 });

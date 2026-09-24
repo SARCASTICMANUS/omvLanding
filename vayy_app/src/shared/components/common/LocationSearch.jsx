@@ -35,8 +35,8 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
       setLoading(true);
 
       try {
-        const res = await api.get("/api/transport/geocode/search/", {
-          params: { q: query, limit: 5, countrycodes: "in" },
+        const res = await api.get("/api/transport/geocode/db/search/", {
+          params: { q: query, limit: 5 },
         });
         if (!active) return;
         const data = res.data?.data || res.data;

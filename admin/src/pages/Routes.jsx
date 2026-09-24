@@ -642,7 +642,16 @@ export default function Routes() {
   }, [importStep, importPreviewStops, importRoadPath, mapLoaded]);
 
   const handleImportSave = async () => {
-    if (!selectedCity || !importRouteName || importPreviewStops.length < 2) return;
+    if (!selectedCity || !importRouteName || importPreviewStops.length < 2) {
+      setImportError(
+        !selectedCity
+          ? "Select a city before importing"
+          : !importRouteName
+            ? "Enter a route name before importing"
+            : "Need at least 2 valid stops to import"
+      );
+      return;
+    }
     setImportLoading(true);
     setImportError("");
     try {
@@ -1201,7 +1210,8 @@ export default function Routes() {
                       className="glass-btn px-3 py-3 text-sm">
                       <RefreshCw size={14} />
                     </button>
-                    <button onClick={handleImportSave} disabled={importLoading || !selectedCity}
+                    <button onClick={handleImportSave}
+                      disabled={importLoading || !selectedCity || !importRouteName || importPreviewStops.length < 2}
                       className="glass-btn-primary flex-1 py-3 flex items-center justify-center gap-2">
                       <Save size={16} /> {importLoading ? "Routing via OSRM..." : "Import Route"}
                     </button>

@@ -18,6 +18,7 @@ from transport.api.views import (
     PassengersAlongRouteAPIView,
     RoadDistanceAPIView,
     GeocodeSearchAPIView,
+    GeocodeDbSearchAPIView,
     GeocodeReverseAPIView,
     AdminRouteViewSet,
     AdminStopViewSet,
@@ -40,6 +41,11 @@ urlpatterns = [
         "geocode/search/",
         GeocodeSearchAPIView.as_view(),
         name="geocode-search",
+    ),
+    path(
+        "geocode/db/search/",
+        GeocodeDbSearchAPIView.as_view(),
+        name="geocode-db-search",
     ),
     path(
         "geocode/reverse/",

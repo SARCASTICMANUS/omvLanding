@@ -142,6 +142,67 @@ class GeocodingService:
             return []
 
     @classmethod
+    def search_stops_fts_trgm(
+        cls,
+        query: str,
+        limit: int = 5,
+        route_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Standalone DB-only stop search combining Full-Text Search (FTS) and
+        Trigram similarity (pg_trgm) over Stop.name with a combined score.
+        """
+        try:
+            from django.contrib.postgres.search import (
+                SearchVector, SearchQuery, SearchRank, TrigramSimilarity,
+            )
+            from django.db.models import F, Q
+
+            fts_vector = SearchVector("name", weight="A")
+            fts_query = SearchQuery(query)
+            tri = TrigramSimilarity("name", query)
+
+            qs = Stop.objects.annotate(
+                fts_rank=SearchRank(fts_vector, fts_query),
+                tri_score=tri,
+                score=F("fts_rank") + F("tri_score"),
+            ).filter(
+                Q(tri_score__gt=0.15) | Q(fts_rank__gt=0)
+            ).order_by("-score").select_related("route__city")
+
+            if route_id:
+                qs = qs.filter(route_id=route_id)
+
+            results = []
+            for stop in qs[:limit]:
+                route = stop.route
+                city_name = route.city.name if route.city else ""
+                route_label = " - ".join(
+                    n for n in (route.start_name, route.end_name) if n
+                )
+                display = stop.name
+                if route_label:
+                    display = f"{stop.name}, {route_label}"
+                results.append({
+                    "place_id": f"stop-{stop.id}",
+                    "id": str(stop.id),
+                    "name": stop.name,
+                    "display_name": display,
+                    "lat": stop.location.y,
+                    "lon": stop.location.x,
+                    "route_id": str(stop.route_id),
+                    "route_name": route.name,
+                    "route_code": route.route_code,
+                    "city_name": city_name,
+                    "order": stop.order,
+                    "score": round(stop.score, 4),
+                })
+            return results
+        except Exception as exc:
+            logger.error("Geocode DB stop FTS/trigram search failed for query %s: %s", query, exc)
+            return []
+
+    @classmethod
     def search_cached(
         cls,
         query: str,

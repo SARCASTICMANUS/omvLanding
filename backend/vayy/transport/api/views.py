@@ -1,5 +1,6 @@
 import logging
 import json
+from typing import Dict, Any, List
 from math import radians, sin, cos, sqrt, atan2
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -7,6 +8,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import serializers, status
+from collections import defaultdict
+from django.db.models import Q
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point, LineString
 from django.contrib.gis.measure import D
@@ -22,6 +25,8 @@ from transport.api.serializers import (
     TripScheduleSerializer,
     StopTimeSerializer,
     DriverRouteSerializer,
+    RouteSearchInputSerializer,
+    RouteSearchResponseSerializer,
 )
 from transport.models import City, Stop, Route, TripSchedule, StopTime
 from tracking.services.eta_service import ETAService
@@ -31,13 +36,14 @@ from transport.selectors.route_selector import RouteSelector
 from transport.selectors.driver_route_selector import DriverRouteSelector
 from transport.services.route_service import RouteService
 from transport.services.osrm_service import OSRMService
+from transport.services.route_search_service import RouteSearchService
 
 logger = logging.getLogger(__name__)
 
 class CityViewSet(viewsets.ModelViewSet):
     queryset = City.objects.all()
     serializer_class = CitySerializer
-    permission_classes = [AllowAny]
+    permission_classes = [AllowAny, IsAuthenticated]
 
     def get_queryset(self):
         return CitySelector.list_cities()
@@ -394,151 +400,42 @@ class RouteSearchByLocationSerializer(serializers.Serializer):
     dest_lng = serializers.FloatField()
     radius = serializers.IntegerField(required=False, default=5000, min_value=100, max_value=10000)
 
-    def validate_origin_lat(self, value):
-        if value < -90 or value > 90:
+    def validate_origin_lat(self, value: float) -> float:
+        if not (-90 <= value <= 90):
             raise serializers.ValidationError("origin_lat must be between -90 and 90.")
         return value
 
-    def validate_dest_lat(self, value):
-        if value < -90 or value > 90:
+    def validate_dest_lat(self, value: float) -> float:
+        if not (-90 <= value <= 90):
             raise serializers.ValidationError("dest_lat must be between -90 and 90.")
         return value
 
-    def validate_origin_lng(self, value):
-        if value < -180 or value > 180:
+    def validate_origin_lng(self, value: float) -> float:
+        if not (-180 <= value <= 180):
             raise serializers.ValidationError("origin_lng must be between -180 and 180.")
         return value
 
-    def validate_dest_lng(self, value):
-        if value < -180 or value > 180:
+    def validate_dest_lng(self, value: float) -> float:
+        if not (-180 <= value <= 180):
             raise serializers.ValidationError("dest_lng must be between -180 and 180.")
         return value
 
 class RouteSearchByLocationAPIView(APIView):
-    """
-    GET /api/transport/routes/search-by-location/
-
-    Returns routes that have stops near both the origin and destination points,
-    enriched with estimated fare, ETA, rating, and all stops.
-    Query params: origin_lat, origin_lng, dest_lat, dest_lng, radius (optional, default 1000m)
-    """
     permission_classes = [AllowAny]
 
     def get(self, request):
-        serializer = RouteSearchByLocationSerializer(data=request.query_params)
-        serializer.is_valid(raise_exception=True)
+        input_serializer = RouteSearchInputSerializer(data=request.query_params)
+        input_serializer.is_valid(raise_exception=True)
 
-        params = serializer.validated_data
-        origin_point = Point(params["origin_lng"], params["origin_lat"], srid=4326)
-        dest_point = Point(params["dest_lng"], params["dest_lat"], srid=4326)
+        results = RouteSearchService.search_routes(**input_serializer.validated_data)
 
-        routes = RouteSelector.search_routes_by_location(**params)
-
-        results = []
-        for route in routes:
-            stops = list(route.stops.all().order_by("order"))
-            if not stops:
-                continue
-
-            pickup_stop = min(
-                stops, key=lambda s: origin_point.distance(s.location)
-            )
-            pickup_dist_m = GeoService.haversine_m(
-                origin_point.y, origin_point.x, pickup_stop.location.y, pickup_stop.location.x
-            )
-
-            later_stops = [s for s in stops if s.order > pickup_stop.order]
-            if later_stops:
-                dropoff_stop = min(
-                    later_stops, key=lambda s: dest_point.distance(s.location)
-                )
-                dropoff_dist_m = GeoService.haversine_m(
-                    dest_point.y, dest_point.x, dropoff_stop.location.y, dropoff_stop.location.x
-                )
-            else:
-                dropoff_stop = stops[-1]
-                dropoff_dist_m = GeoService.haversine_m(
-                    dest_point.y, dest_point.x, dropoff_stop.location.y, dropoff_stop.location.x
-                )
-
-            from transport.services.osrm_service import OSRMService
-            metrics = OSRMService.get_road_metrics(
-                (pickup_stop.location.x, pickup_stop.location.y),
-                (dropoff_stop.location.x, dropoff_stop.location.y),
-            )
-            stop_duration_s = metrics["duration"] if metrics else None
-            stop_distance_m = metrics["distance"] if metrics else None
-
-            if stop_distance_m is not None and stop_distance_m > 0:
-                stop_distance_km = round(stop_distance_m / 1000, 1)
-            else:
-                stop_distance_m = GeoService.haversine_m(
-                    pickup_stop.location.y, pickup_stop.location.x,
-                    dropoff_stop.location.y, dropoff_stop.location.x,
-                )
-                stop_distance_km = round(stop_distance_m / 1000, 1)
-
-            if stop_duration_s is not None and stop_duration_s > 0:
-                eta_seconds = int(stop_duration_s)
-            else:
-                speed_kmh = 25
-                eta_seconds = (
-                    int((stop_distance_km / speed_kmh) * 3600)
-                    if stop_distance_km > 0
-                    else 600
-                )
-
-            from operations.services.fare_service import FareService
-            fare = int(FareService.calculate_fare(stop_distance_km, VEHICLE_AUTO))
-
-            walk_pickup_min = max(1, round(pickup_dist_m / 80))
-            walk_dropoff_min = max(1, round(dropoff_dist_m / 80))
-
-            def _stop_json(s):
-                return {
-                    "id": str(s.id),
-                    "name": s.name,
-                    "order": s.order,
-                    "lat": s.location.y,
-                    "lon": s.location.x,
-                    "location": {"type": "Point", "coordinates": [s.location.x, s.location.y]},
-                }
-
-            stops_data = [_stop_json(s) for s in stops]
-            pickup_json = _stop_json(pickup_stop)
-            dropoff_json = _stop_json(dropoff_stop)
-
-            results.append({
-                "id": str(route.id),
-                "name": route.name,
-                "route_code": route.route_code,
-                "city_name": route.city.name if route.city else "",
-                "start_name": route.start_name,
-                "end_name": route.end_name,
-                "total_distance_meters": route.total_distance_meters,
-                "fare": fare,
-                "eta_seconds": eta_seconds,
-                "rating": 4.5,
-                "review_count": 128,
-                "walk_minutes": walk_pickup_min,
-                "walk_distance_meters": round(pickup_dist_m),
-                "vehicle_type": VEHICLE_AUTO,
-                "payment_method": "Cash",
-                "distance_km": stop_distance_km,
-                "is_route_only": False,
-                "trip_available": True,
-                "pickup_stop": pickup_json,
-                "dropoff_stop": dropoff_json,
-                "stops": stops_data,
-            })
-
-        logger.info(f"[RouteSearchByLocation] Found {len(results)} routes for origin=({params['origin_lat']},{params['origin_lng']}) dest=({params['dest_lat']},{params['dest_lng']})")
-        resp = Response({
+        output_serializer = RouteSearchResponseSerializer(results, many=True)
+        return Response({
             "success": True,
             "message": f"Found {len(results)} routes",
-            "data": results,
+            "data": output_serializer.data,
         })
-        return resp
+
 
 class RoutePreviewInputSerializer(serializers.Serializer):
     lat = serializers.FloatField()
@@ -789,6 +686,44 @@ class GeocodeSearchAPIView(APIView):
         results = GeocodingService.search_cached(query, limit=limit, country_codes=country_codes)
 
         return Response(results, status=status.HTTP_200_OK)
+
+
+class GeocodeDbSearchAPIView(APIView):
+    """
+    GET /api/transport/geocode/db/search/
+
+    DB-only stop search combining Full-Text Search (FTS) and Trigram
+    similarity (pg_trgm) over the Stops table.
+    Query params: q (required), limit (optional, default 5, max 10), route_id (optional).
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        if not query:
+            return Response(
+                {"success": False, "message": "Query parameter 'q' is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            limit = min(int(request.query_params.get("limit", 5)), 10)
+        except (TypeError, ValueError):
+            limit = 5
+
+        from common.responses import success_response
+        from transport.services.geocoding_service import GeocodingService
+
+        results = GeocodingService.search_stops_fts_trgm(
+            query,
+            limit=limit,
+            route_id=request.query_params.get("route_id"),
+        )
+        return success_response(
+            results,
+            message=f"Found {len(results)} stops",
+            status_code=status.HTTP_200_OK,
+        )
 
 
 class GeocodeReverseAPIView(APIView):

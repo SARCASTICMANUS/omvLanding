@@ -49,9 +49,16 @@ export default function DriverStep1Personal({ onNext, onBack, loading }) {
 
   const inputStyle = (f) => [styles.inputWrap, focused[f] && styles.inputFocused, errors[f] && styles.inputError];
 
+  const isWeb = Platform.OS === "web";
+  const Container = isWeb ? View : KeyboardAvoidingView;
+
+  const containerProps = isWeb
+    ? { style: { flex: 1 } }
+    : { style: { flex: 1 }, behavior: Platform.OS === "ios" ? "padding" : "height" };
+
   return (
     <SafeAreaView style={styles.root}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+      <Container {...containerProps}>
         <View style={styles.topRow}>
           <TouchableOpacity style={styles.back} onPress={onBack} activeOpacity={0.7}>
             <ArrowLeft size={22} color={COLORS.text} />
@@ -138,7 +145,7 @@ export default function DriverStep1Personal({ onNext, onBack, loading }) {
           onPress={() => onNext(form)}
           loading={loading}
         />
-      </KeyboardAvoidingView>
+      </Container>
 
       <DatePickerModal
         visible={showDatePicker}
@@ -151,14 +158,22 @@ export default function DriverStep1Personal({ onNext, onBack, loading }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#fff" },
+  root: { 
+    flex: 1, 
+    backgroundColor: "#fff",
+    overflow: 'hidden', // <-- ADD THIS: Constrains the flex container height on web
+  },
   topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingRight: 24 },
   back: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", marginLeft: 16 },
   draft: { fontSize: 13, fontWeight: "600", color: COLORS.primary },
   header: { paddingHorizontal: 24, marginBottom: 8 },
   title: { fontSize: 24, fontWeight: "800", color: COLORS.text, letterSpacing: -0.5 },
   sub: { fontSize: 14, color: COLORS.textMuted, marginTop: 2, marginBottom: 4 },
-  scroll: { flex: 1, paddingHorizontal: 24 },
+  scroll: { 
+    flex: 1, 
+    paddingHorizontal: 24,
+    ...(Platform.OS === 'web' ? { overflow: 'auto' } : {}), // <-- ADD THIS: Enables native browser scrolling
+  },
   scrollContent: { paddingBottom: 100 },
   label: { fontSize: 13, fontWeight: "600", color: "#333", marginBottom: 6, marginTop: 8 },
   inputWrap: { flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderColor: "#e5e7eb", borderRadius: 14, paddingHorizontal: 14, height: 52, backgroundColor: "#fafafa", gap: 10 },
