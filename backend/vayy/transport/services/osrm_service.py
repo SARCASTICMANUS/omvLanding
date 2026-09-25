@@ -247,6 +247,35 @@ class OSRMService:
         return metrics
 
     @classmethod
+    def get_road_path(
+        cls,
+        origin: Tuple[float, float],
+        destination: Tuple[float, float],
+    ) -> Optional[Dict[str, Any]]:
+        """Return road path geometry + metrics for an origin/destination pair.
+
+        Returns ``{ distance, duration, geometry }`` where ``geometry`` is the
+        full GeoJSON LineString dict from OSRM. Uses a single /route call with
+        ``overview=full``; results are cached for ``CACHE_TTL``.
+        """
+        cache_key = f"osrm_path_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        result = cls.route(origin, destination, overview="full", geometries="geojson")
+        if not result or not result.get("routes"):
+            return None
+        route = result["routes"][0]
+        payload = {
+            "distance": route["distance"],
+            "duration": route["duration"],
+            "geometry": route.get("geometry"),
+        }
+        cache.set(cache_key, payload, cls.CACHE_TTL)
+        return payload
+
+    @classmethod
     def get_road_distance_m(
         cls,
         origin: Tuple[float, float],

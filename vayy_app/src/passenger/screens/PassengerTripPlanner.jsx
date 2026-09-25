@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Easing,
@@ -13,9 +14,11 @@ import {
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import * as Location from "expo-location";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { getRecentSearches, saveRecentSearch, searchRoutesByLocation } from "../services/passengerService";
 import LocationSearch from "../../shared/components/common/LocationSearch";
+import { NOMINATIM_REVERSE } from "../../constants/geocoding";
 
 import COLORS from "../../shared/constants/colors";
 import SHADOW from "../../shared/constants/shadow";
@@ -68,6 +71,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
   const [recentSearches, setRecentSearches] = useState([]);
   const [fetchingRecent, setFetchingRecent] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [locating, setLocating] = useState(false);
   const loading = route?.params?.loading || false;
   const mode = route?.params?.mode || "auto";
   const isBike = mode === "bike";
@@ -207,6 +211,46 @@ export default function PassengerTripPlanner({ navigation, route }) {
     setDestination(pickup);
   };
 
+  const handleUseCurrentLocation = async () => {
+    if (locating) return;
+    setLocating(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      let loc = null;
+      try {
+        loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          timeout: 5000,
+        });
+      } catch {
+        loc = await Location.getLastKnownPositionAsync();
+      }
+      if (!loc?.coords) return;
+      const lat = loc.coords.latitude;
+      const lon = loc.coords.longitude;
+      let next = { lat, lon, name: "Current Location", display_name: "Current Location" };
+      try {
+        const res = await NOMINATIM_REVERSE(lat, lon);
+        if (res && (res.display_name || res.name)) {
+          next = {
+            lat: Number(res.lat) || lat,
+            lon: Number(res.lon) || lon,
+            name: res.name || res.display_name?.split(",")?.[0],
+            display_name: res.display_name || res.name,
+          };
+        }
+      } catch (error) {
+        console.warn("Reverse geocode failed; using current coordinates", error);
+      }
+      setPickup(next);
+    } catch (error) {
+      console.warn("Failed to get current location", error);
+    } finally {
+      setLocating(false);
+    }
+  };
+
   const applyRecent = (item) => {
     if (item.pickup && item.destination) {
       setPickup(item.pickup);
@@ -216,14 +260,30 @@ export default function PassengerTripPlanner({ navigation, route }) {
 
   const searchPanelContent = isBike ? (
     <>
-      <LocationSearch
-        key={`pickup-${pickup?.display_name || pickup?.name || "empty"}`}
-        isPickup
-        label="Pickup Stop"
-        onSelect={setPickup}
-        placeholder="Search pickup location"
-        value={pickup}
-      />
+      <View style={styles.pickupRow}>
+        <View style={styles.pickupField}>
+          <LocationSearch
+            key={`pickup-${pickup?.display_name || pickup?.name || "empty"}`}
+            isPickup
+            label="Pickup Stop"
+            onSelect={setPickup}
+            placeholder="Search pickup location"
+            value={pickup}
+          />
+        </View>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          disabled={locating}
+          onPress={handleUseCurrentLocation}
+          style={[styles.useCurrentButton, locating && styles.useCurrentDisabled]}
+        >
+          {locating ? (
+            <ActivityIndicator size="small" color="#009849" />
+          ) : (
+            <Ionicons name="locate" size={18} color="#009849" />
+          )}
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity activeOpacity={0.8} onPress={handleSwap} style={styles.swapButton}>
         <Ionicons name="swap-vertical" size={20} color="#009849" />
@@ -436,6 +496,28 @@ const styles = StyleSheet.create({
     width: 32,
     ...SHADOW.sm,
     zIndex: 5,
+  },
+  pickupRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  pickupField: {
+    flex: 1,
+  },
+  useCurrentButton: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#009849",
+    borderRadius: 18,
+    borderWidth: 1.5,
+    height: 38,
+    justifyContent: "center",
+    width: 38,
+    ...SHADOW.sm,
+  },
+  useCurrentDisabled: {
+    opacity: 0.6,
   },
   searchButton: {
     alignItems: "center",

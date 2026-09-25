@@ -1013,11 +1013,13 @@ export function AutoPreRideScreen({ navigation, route }) {
                 id="routeLayer"
                 type="line"
                 source="routeSource"
+                layout={{
+                  "line-join": "round",
+                  "line-cap": "round",
+                }}
                 paint={{
                   "line-color": "#009849",
                   "line-width": 5,
-                  "line-join": "round",
-                  "line-cap": "round",
                 }}
               />
             </>

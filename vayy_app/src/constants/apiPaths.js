@@ -54,6 +54,7 @@ export const TRANSPORT = {
   stopsNearby: "/api/transport/stops/nearby/",
   cities: "/api/transport/cities/",
   roadDistance: "/api/transport/road-distance/",
+  walkingPath: "/api/transport/walking-path/",
 };
 
 export const RIDE = {

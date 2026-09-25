@@ -685,6 +685,64 @@ class RoadDistanceAPIView(APIView):
         })
 
 
+class WalkingPathInputSerializer(serializers.Serializer):
+    origin_lat = serializers.FloatField()
+    origin_lng = serializers.FloatField()
+    dest_lat = serializers.FloatField()
+    dest_lng = serializers.FloatField()
+
+
+class WalkingPathAPIView(APIView):
+    """
+    POST /api/transport/walking-path/
+    Returns the road path (GeoJSON LineString) plus distance/duration between
+    two coordinates via OSRM. Used to draw the walking route from the
+    passenger's current location to the nearest stop.
+
+    Request:
+    {
+        "origin_lat": 26.8467,
+        "origin_lng": 80.9462,
+        "dest_lat": 26.8567,
+        "dest_lng": 80.9562
+    }
+
+    Response:
+    {
+        "success": true,
+        "data": {
+            "path": { "type": "LineString", "coordinates": [[lon, lat], ...] },
+            "distance_m": 1234.5,
+            "duration_s": 180
+        }
+    }
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = WalkingPathInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        origin = (serializer.validated_data["origin_lng"], serializer.validated_data["origin_lat"])
+        dest = (serializer.validated_data["dest_lng"], serializer.validated_data["dest_lat"])
+
+        result = OSRMService.get_road_path(origin, dest)
+        if not result or not result.get("geometry"):
+            return Response(
+                {"success": False, "message": "OSRM routing failed", "data": None},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response({
+            "success": True,
+            "data": {
+                "path": result["geometry"],
+                "distance_m": result["distance"],
+                "duration_s": result["duration"],
+            },
+        })
+
+
 class GeocodeSearchAPIView(APIView):
     permission_classes = [AllowAny]
 

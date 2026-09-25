@@ -14,7 +14,7 @@ import * as Location from "expo-location";
 import VayyMap, { GeoJSONSource, Layer, UserLocation, Marker, ViewAnnotation } from "../../shared/components/VayyMap";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { fetchRouteGeometry } from "../../routes/services/routeService";
+import { fetchRouteGeometry, getWalkingPath } from "../../routes/services/routeService";
 import { haversine, formatDistance, walkingTimeText } from "../../shared/utils/walkingDistance";
 
 const ARRIVAL_THRESHOLD = 500;
@@ -42,7 +42,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   const waveAnim2 = useRef(new Animated.Value(0)).current;
   const waveAnim3 = useRef(new Animated.Value(0)).current;
 
-  // --- 1. REALTIME API / PARAMS INTEGRATION DATA ---
+  // 1. REALTIME API / PARAMS INTEGRATION DATA
   const trip = route?.params?.trip || {};
   const pickup = route?.params?.pickup;
   const pickupName = pickup?.name || pickup?.display_name || trip?.pickup_stop?.name || "Pickup";
@@ -59,6 +59,13 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   const pickupLon = typeof pickupStop?.lon === "number" ? pickupStop.lon : null;
   const dropoffLat = typeof dropoffStop?.lat === "number" ? dropoffStop.lat : null;
   const dropoffLon = typeof dropoffStop?.lon === "number" ? dropoffStop.lon : null;
+
+  const nearestRoad = trip?.nearest_road;
+  const nearestRoadCoords = nearestRoad?.location?.coordinates;
+  const nearestRoadLon = Array.isArray(nearestRoadCoords) && Number.isFinite(nearestRoadCoords[0]) ? nearestRoadCoords[0] : null;
+  const nearestRoadLat = Array.isArray(nearestRoadCoords) && Number.isFinite(nearestRoadCoords[1]) ? nearestRoadCoords[1] : null;
+
+  const searchWalkingPathCoords = trip?.walking_path?.coordinates;
 
   const initialCenter = pickupLat != null && pickupLon != null
     ? [pickupLon, pickupLat]
@@ -122,27 +129,73 @@ export function BikeMapPreRideScreen({ navigation, route }) {
     };
   }, []);
 
-  // Walking line path from the rider's actual location to the nearest pickup stop
+  // Walking line path from the rider's actual location to the nearest pickup stop.
+  // Fetches the road-following path from the backend using the live position so it
+  // starts exactly where the passenger is; falls back to the search-time trip path
+  // and finally a straight haversine line when the fetch fails.
   useEffect(() => {
+    let cancelled = false;
     if (userLocation && pickupLat != null && pickupLon != null) {
-      setWalkingPath({
-        type: "FeatureCollection",
-        features: [
-          {
-            type: "Feature",
-            properties: {},
-            geometry: {
-              type: "LineString",
-              coordinates: [
-                [userLocation.longitude, userLocation.latitude],
-                [pickupLon, pickupLat],
+      const fetchPath = async () => {
+        try {
+          const data = await getWalkingPath(
+            userLocation.latitude,
+            userLocation.longitude,
+            pickupLat,
+            pickupLon,
+          );
+          const coords = data?.path?.coordinates;
+          if (cancelled || !Array.isArray(coords) || coords.length < 2) return;
+          setWalkingPath({
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                properties: {},
+                geometry: { type: "LineString", coordinates: coords },
+              },
+            ],
+          });
+        } catch {
+          if (cancelled) return;
+          const backendCoords = searchWalkingPathCoords;
+          if (Array.isArray(backendCoords) && backendCoords.length >= 2) {
+            setWalkingPath({
+              type: "FeatureCollection",
+              features: [
+                {
+                  type: "Feature",
+                  properties: {},
+                  geometry: { type: "LineString", coordinates: backendCoords },
+                },
               ],
-            },
-          },
-        ],
-      });
+            });
+          } else {
+            setWalkingPath({
+              type: "FeatureCollection",
+              features: [
+                {
+                  type: "Feature",
+                  properties: {},
+                  geometry: {
+                    type: "LineString",
+                    coordinates: [
+                      [userLocation.longitude, userLocation.latitude],
+                      [pickupLon, pickupLat],
+                    ],
+                  },
+                },
+              ],
+            });
+          }
+        }
+      };
+      fetchPath();
     }
-  }, [userLocation, pickupLat, pickupLon]);
+    return () => {
+      cancelled = true;
+    };
+  }, [userLocation, pickupLat, pickupLon, searchWalkingPathCoords]);
 
   // Continuous search ring pulse around the buddy location
   useEffect(() => {
@@ -287,12 +340,14 @@ export function BikeMapPreRideScreen({ navigation, route }) {
             id="walkLayer"
             type="line"
             source="walkSource"
+            layout={{
+              "line-join": "round",
+              "line-cap": "round",
+            }}
             paint={{
               "line-color": "#009849",
               "line-width": 2.5,
               "line-dasharray": [2, 1],
-              "line-join": "round",
-              "line-cap": "round",
             }}
           />
           <GeoJSONSource id="routeSource" data={routePath} />
@@ -300,11 +355,13 @@ export function BikeMapPreRideScreen({ navigation, route }) {
             id="routeLayer"
             type="line"
             source="routeSource"
+            layout={{
+              "line-join": "round",
+              "line-cap": "round",
+            }}
             paint={{
               "line-color": "#009849",
               "line-width": 5,
-              "line-join": "round",
-              "line-cap": "round",
             }}
           />
           {routeStops.map((stop) => {
@@ -374,6 +431,23 @@ export function BikeMapPreRideScreen({ navigation, route }) {
                   <View style={styles.stopMarker}>
                     <Ionicons name="flag" size={18} color="#FFFFFF" />
                   </View>
+                </View>
+              </View>
+            </Marker>
+          )}
+          {nearestRoadLon != null && nearestRoadLat != null && (
+            <Marker lngLat={[nearestRoadLon, nearestRoadLat]}>
+              <View style={styles.nearestRoadMarkerGroup}>
+                {nearestRoad?.is_nearest && (
+                  <View style={styles.nearestRoadLabel}>
+                    <Text style={styles.nearestRoadLabelText} numberOfLines={1}>
+                      {nearestRoad?.name || "Paved point"}
+                    </Text>
+                    <View style={styles.nearestRoadLabelArrow} />
+                  </View>
+                )}
+                <View style={styles.nearestRoadOuter}>
+                  <View style={styles.nearestRoadDot} />
                 </View>
               </View>
             </Marker>
@@ -458,7 +532,8 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           <View style={styles.sheetRouteRow}>
             <View style={styles.sheetRouteDot} />
             <Text style={styles.sheetRouteText} numberOfLines={1}>
-              {pickupName} → {dropoffName}
+              {/* {pickupName} → {dropoffName} */}
+              {route?.params?.name}
             </Text>
           </View>
         </View>
@@ -770,6 +845,54 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#374151",
     maxWidth: 70,
+  },
+  nearestRoadMarkerGroup: {
+    alignItems: "center",
+    marginTop: -24,
+  },
+  nearestRoadLabel: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 6,
+  },
+  nearestRoadLabelText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#B45309",
+    textAlign: "center",
+    lineHeight: 16,
+    maxWidth: 160,
+  },
+  nearestRoadLabelArrow: {
+    position: "absolute",
+    bottom: -5,
+    alignSelf: "center",
+    width: 10,
+    height: 10,
+    backgroundColor: "#FFFFFF",
+    transform: [{ rotate: "45deg" }],
+  },
+  nearestRoadOuter: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(245,158,11,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  nearestRoadDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#F59E0B",
+    borderWidth: 3,
+    borderColor: "#FFFFFF",
   },
   pulseOnMap: {
     width: 100,
