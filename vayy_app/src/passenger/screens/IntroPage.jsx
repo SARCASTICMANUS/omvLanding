@@ -110,6 +110,28 @@ export default function PassengerHomeScreen({ navigation }) {
     return () => pulse.stop();
   }, []);
 
+    const handleGetLocation = useCallback(async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      const loc = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = loc.coords;
+      try {
+        const data = await NOMINATIM_REVERSE(latitude, longitude);
+        const placeName =
+          data?.name ||
+          data?.address?.road ||
+          data?.address?.neighbourhood ||
+          data?.display_name?.split(",")?.[0];
+        if (placeName) {
+          setCurrentLoc(placeName);
+          return;
+        }
+      } catch {}
+      setCurrentLoc(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+    } catch {}
+  }, []);
+  
   useEffect(() => {
     handleGetLocation();
   }, [handleGetLocation]);
@@ -172,27 +194,7 @@ export default function PassengerHomeScreen({ navigation }) {
     navigation.navigate("PassengerTripPlanner", { mode: "bike" });
   }, [dispatch, navigation]);
 
-  const handleGetLocation = useCallback(async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
-      const loc = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = loc.coords;
-      try {
-        const data = await NOMINATIM_REVERSE(latitude, longitude);
-        const placeName =
-          data?.name ||
-          data?.address?.road ||
-          data?.address?.neighbourhood ||
-          data?.display_name?.split(",")?.[0];
-        if (placeName) {
-          setCurrentLoc(placeName);
-          return;
-        }
-      } catch {}
-      setCurrentLoc(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
-    } catch {}
-  }, []);
+
 
   const handleSearchBarPress = useCallback(() => {
     dispatch(setVehicleMode("BIKE"));

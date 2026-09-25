@@ -99,7 +99,7 @@ export const cancelBoardingRequest = async (requestId) => {
 /**
  * Search for routes that have stops near both origin and destination.
  */
-export const searchRoutesByLocation = async (originLat, originLng, destLat, destLng, radius = 1000) => {
+export const searchRoutesByLocation = async (originLat, originLng, destLat, destLng, radius = 5000) => {
   try {
     const response = await api.get(TRANSPORT.routesSearchByLocation, {
       params: {
@@ -108,6 +108,7 @@ export const searchRoutesByLocation = async (originLat, originLng, destLat, dest
         dest_lat: destLat,
         dest_lng: destLng,
         radius,
+        role: "passenger",
       },
     });
     const data = response.data?.data || response.data;

@@ -212,7 +212,7 @@ All responses are wrapped in `{ success, message, data }`. Endpoints require JWT
 | GET/POST | `schedules/` | Yes | Trip schedule CRUD |
 | GET/POST | `stop-times/` | Yes | StopTime CRUD |
 | GET | `driver/routes/` | Yes | Routes assigned to driver |
-| GET | `routes/search-by-location/` | Yes | Search routes by lat/lng |
+| GET | `routes/search-by-location/` | Yes | Search routes by lat/lng; `role=passenger` (default, full payload) or `role=driver` (trimmed). Stops include cumulative distance/duration |
 | GET | `routes/preview/` | Yes | Route preview |
 | GET | `routes/<id>/nearby-passengers/` | Yes | Passengers along route |
 | GET | `routes/<id>/geometry/` | Yes | Route geometry (GeoJSON LineString) |

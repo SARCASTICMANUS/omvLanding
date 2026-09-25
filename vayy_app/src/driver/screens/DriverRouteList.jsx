@@ -46,6 +46,14 @@ function RouteCard({ item, index, pickup, destination, onSelect, expanded, onTog
   const fareText = fare != null ? `₹${fare}` : "--";
   const isExpanded = expanded === item.id;
 
+  const pickupOrder = item?.pickup_stop?.order;
+  const dropoffOrder = item?.dropoff_stop?.order;
+  const rideDistanceText = item?.distance_km != null ? `${item.distance_km} km` : "--";
+  const firstMileKm = item?.first_mile_walk_meters != null ? (item.first_mile_walk_meters / 1000).toFixed(1) : null;
+  const lastMileKm = item?.last_mile_walk_meters != null ? (item.last_mile_walk_meters / 1000).toFixed(1) : null;
+  const walkMicrocopy =
+    firstMileKm != null && lastMileKm != null ? `Board ${firstMileKm} km · Alight ${lastMileKm} km` : null;
+
   return (
     <View style={[s.card, isBest && s.cardBest]}>
       
@@ -54,6 +62,11 @@ function RouteCard({ item, index, pickup, destination, onSelect, expanded, onTog
           <View style={s.bestBadge}>
             <Text style={s.bestBadgeText}>BEST MATCH</Text>
           </View>)}
+          {item?.route_code ? (
+            <View style={s.routeCodeBadge}>
+              <Text style={s.routeCodeText}>{item.route_code}</Text>
+            </View>
+          ) : null}
           <Text numberOfLines={1} style={s.routeNameText}>
             {item.name}
           </Text>
@@ -91,18 +104,35 @@ function RouteCard({ item, index, pickup, destination, onSelect, expanded, onTog
       <View style={s.statsBar}>
         <View style={s.statItem}>
           <Ionicons name="time-outline" size={15} color="#6B7280" />
-          <Text style={s.statValue}>{item.durationText}</Text>
+          <View style={s.statTextCol}>
+            <Text style={s.statValue}>{item.durationText}</Text>
+            <Text style={s.statLabel}>ETA</Text>
+          </View>
         </View>
         <View style={s.statDivider} />
         <View style={s.statItem}>
           <Ionicons name="speedometer" size={14} color="#6B7280" />
-          <Text style={s.statValue}>{item.distanceText}</Text>
+          <View style={s.statTextCol}>
+            <Text style={s.statValue}>{rideDistanceText}</Text>
+            <Text style={s.statLabel}>Ride</Text>
+          </View>
         </View>
         <View style={s.statDivider} />
         <View style={s.statItem}>
-          <Text style={s.earningsValue}>{fareText}</Text>
+          <View style={s.statTextCol}>
+            <Text style={s.earningsValue}>{fareText}</Text>
+            <Text style={s.statLabel}>Earnings</Text>
+          </View>
         </View>
       </View>
+
+      {/* Walk microcopy — boarding & alighting distance */}
+      {walkMicrocopy ? (
+        <View style={s.walkRow}>
+          <Ionicons name="walk-outline" size={13} color="#9CA3AF" />
+          <Text style={s.walkText}>{walkMicrocopy}</Text>
+        </View>
+      ) : null}
 
       {/* Stops count + View Stops toggle */}
       <View style={s.stopsRow}>
@@ -121,23 +151,33 @@ function RouteCard({ item, index, pickup, destination, onSelect, expanded, onTog
       {/* Expandable stops panel */}
       {isExpanded && (
         <View style={s.stopsPanel}>
-          {timeline.map((stop, i) => (
-            <View key={stop.id || i} style={s.stopTimelineRow}>
-              <View style={s.stopTimelineCol}>
-                <View style={[s.stopTimelineDot, { backgroundColor: stop.isBoardingPoint ? "#009849" : "#D1D5DB" }]} />
-                {i < timeline.length - 1 && <View style={s.stopTimelineLine} />}
-              </View>
-              <View style={s.stopTimelineContent}>
-                <Text style={s.stopTimelineName} numberOfLines={1}>{stop.name}</Text>
-                <Text style={s.stopTimelineEta}>{stop.arrivalLabel}</Text>
-              </View>
-              {stop.isBoardingPoint && (
-                <View style={s.boardingBadge}>
-                  <Text style={s.boardingBadgeText}>Boarding</Text>
+          {timeline.map((stop, i) => {
+            const isBoarding = pickupOrder != null && Number(stop.order) === Number(pickupOrder);
+            const isAlighting = dropoffOrder != null && Number(stop.order) === Number(dropoffOrder);
+            const dotColor = isBoarding ? "#009849" : isAlighting ? "#f59e0b" : "#D1D5DB";
+            return (
+              <View key={stop.id || i} style={s.stopTimelineRow}>
+                <View style={s.stopTimelineCol}>
+                  <View style={[s.stopTimelineDot, { backgroundColor: dotColor }]} />
+                  {i < timeline.length - 1 && <View style={s.stopTimelineLine} />}
                 </View>
-              )}
-            </View>
-          ))}
+                <View style={s.stopTimelineContent}>
+                  <Text style={s.stopTimelineName} numberOfLines={1}>{stop.name}</Text>
+                  <Text style={s.stopTimelineEta}>Stop {stop.order || i + 1}</Text>
+                </View>
+                {isBoarding && (
+                  <View style={s.boardingBadge}>
+                    <Text style={s.boardingBadgeText}>Boarding</Text>
+                  </View>
+                )}
+                {isAlighting && (
+                  <View style={s.alightBadge}>
+                    <Text style={s.alightBadgeText}>Alight</Text>
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </View>
       )}
 
@@ -355,6 +395,20 @@ const s = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 0.8,
   },
+  routeCodeBadge: {
+    alignSelf: "center",
+    backgroundColor: "#ECFAF1",
+    borderRadius: 6,
+    marginRight: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  routeCodeText: {
+    color: "#009849",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+  },
 
   /* route row — number + pickup/drop */
   routeRow: {
@@ -455,6 +509,17 @@ const s = StyleSheet.create({
     height: 16,
     width: 1,
   },
+  statTextCol: {
+    alignItems: "flex-start",
+  },
+  statLabel: {
+    color: "#9CA3AF",
+    fontSize: 9,
+    fontWeight: "600",
+    letterSpacing: 0.4,
+    marginTop: 1,
+    textTransform: "uppercase",
+  },
   statValue: {
     color: "#374151",
     fontSize: 13,
@@ -464,6 +529,19 @@ const s = StyleSheet.create({
     color: "#009849",
     fontSize: 16,
     fontWeight: "900",
+  },
+
+  /* walk microcopy — board / alight distance */
+  walkRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 4,
+    marginTop: 8,
+  },
+  walkText: {
+    color: "#9CA3AF",
+    fontSize: 11,
+    fontWeight: "600",
   },
 
   /* stops row — count badge + view stops toggle */
@@ -556,6 +634,19 @@ const s = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
   },
+  alightBadge: {
+    alignSelf: "center",
+    backgroundColor: "#FEF3C7",
+    borderRadius: 6,
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  alightBadgeText: {
+    color: "#f59e0b",
+    fontSize: 10,
+    fontWeight: "700",
+  },
 
   /* continue CTA */
   continueBtn: {
@@ -588,5 +679,5 @@ const s = StyleSheet.create({
   },
   stateText: { color: "#9CA3AF", fontSize: 15, fontWeight: "600" },
   bestRow: { alignItems: "center", flexDirection: "row", marginBottom: 12 },
-  routeNameText: { color: "#6B7280", flex: 1, fontSize: 12, fontWeight: "600", marginLeft: 10 }
+  routeNameText: { color: "#6B7280", flex: 1, fontSize: 12, fontWeight: "600", marginLeft: 4 }
 });

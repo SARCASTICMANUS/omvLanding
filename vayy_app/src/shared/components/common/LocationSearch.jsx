@@ -35,7 +35,7 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
       setLoading(true);
 
       try {
-        const res = await api.get("/api/transport/geocode/db/search/", {
+        const res = await api.get("/api/transport/geocode/search/", {
           params: { q: query, limit: 5 },
         });
         if (!active) return;

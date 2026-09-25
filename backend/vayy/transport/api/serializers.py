@@ -304,6 +304,12 @@ class RouteSearchInputSerializer(serializers.Serializer):
     dest_lat = serializers.FloatField(min_value=-90, max_value=90)
     dest_lng = serializers.FloatField(min_value=-180, max_value=180)
     radius = serializers.IntegerField(required=False, default=5000, min_value=100, max_value=10000)
+    role = serializers.ChoiceField(
+        choices=("passenger", "driver"),
+        required=False,
+        default="passenger",
+        help_text="Requesting role. Defaults to the full passenger payload; 'driver' returns a trimmed payload.",
+    )
 
 
 class StopOutputSerializer(serializers.Serializer):
@@ -313,16 +319,59 @@ class StopOutputSerializer(serializers.Serializer):
     lat = serializers.SerializerMethodField()
     lon = serializers.SerializerMethodField()
     location = serializers.SerializerMethodField()
+    cumulative_distance_meters = serializers.SerializerMethodField()
+    cumulative_duration_s = serializers.SerializerMethodField()
+
+    def _extract_coords(self, obj):
+        loc = obj["location"] if isinstance(obj, dict) else getattr(obj, "location", None)
+        if loc is None:
+            return 0.0, 0.0
+        if isinstance(loc, dict):
+            coords = loc.get("coordinates", [0.0, 0.0])
+            return coords[0], coords[1]
+        return loc.x, loc.y
 
     def get_lat(self, obj):
-        return obj["location"].y if isinstance(obj, dict) else obj.location.y
+        _, lat = self._extract_coords(obj)
+        return lat
 
     def get_lon(self, obj):
-        return obj["location"].x if isinstance(obj, dict) else obj.location.x
+        lon, _ = self._extract_coords(obj)
+        return lon
 
     def get_location(self, obj):
-        loc = obj["location"] if isinstance(obj, dict) else obj.location
-        return {"type": "Point", "coordinates": [loc.x, loc.y]}
+        lon, lat = self._extract_coords(obj)
+        return {"type": "Point", "coordinates": [lon, lat]}
+
+    @staticmethod
+    def _cumulative_value(obj, key):
+        value = obj.get(key) if isinstance(obj, dict) else getattr(obj, key, None)
+        return round(value) if value is not None else None
+
+    def get_cumulative_distance_meters(self, obj):
+        return self._cumulative_value(obj, "cumulative_distance_m")
+
+    def get_cumulative_duration_s(self, obj):
+        return self._cumulative_value(obj, "cumulative_duration_s")
+
+
+class NearestRoadSerializer(serializers.Serializer):
+    name = serializers.CharField(required=False, allow_null=True)
+    location = serializers.JSONField(required=False, allow_null=True)
+    distance_meters = serializers.IntegerField(required=False, allow_null=True)
+    is_nearest = serializers.BooleanField(required=False, allow_null=True)
+
+
+class PickupDropoffStopSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    order = serializers.IntegerField()
+    lat = serializers.FloatField()
+    lon = serializers.FloatField()
+    location = serializers.DictField()
+    distance_meters = serializers.IntegerField(required=False, allow_null=True)
+    distance_to_destination_meters = serializers.IntegerField(required=False, allow_null=True)
+    is_nearest = serializers.BooleanField(required=False, default=False)
 
 
 class RouteSearchResponseSerializer(serializers.Serializer):
@@ -338,6 +387,34 @@ class RouteSearchResponseSerializer(serializers.Serializer):
     walk_minutes = serializers.IntegerField()
     walk_distance_meters = serializers.IntegerField()
     distance_km = serializers.FloatField()
-    pickup_stop = StopOutputSerializer()
-    dropoff_stop = StopOutputSerializer()
+    pickup_stop = PickupDropoffStopSerializer()
+    dropoff_stop = PickupDropoffStopSerializer()
+    stops = StopOutputSerializer(many=True)
+    first_mile_walk_meters = serializers.IntegerField()
+    last_mile_walk_meters = serializers.IntegerField()
+    nearest_road = NearestRoadSerializer(allow_null=True, required=False)
+    nearest_road_distance = serializers.IntegerField()
+    nearest_road_stop_distance = serializers.IntegerField()
+
+class DriverRouteSearchResponseSerializer(serializers.Serializer):
+    """
+    Driver-facing payload for /routes/search-by-location/?role=driver.
+    Trims passenger-only walk aggregates and nearest-road metadata while
+    keeping first/last-mile walk (drivers ride to the boarding point) and
+    the full stops array with cumulative metrics.
+    """
+    id = serializers.CharField()
+    name = serializers.CharField()
+    route_code = serializers.CharField()
+    city_name = serializers.CharField()
+    start_name = serializers.CharField()
+    end_name = serializers.CharField()
+    total_distance_meters = serializers.IntegerField()
+    fare = serializers.IntegerField()
+    eta_seconds = serializers.IntegerField()
+    distance_km = serializers.FloatField()
+    first_mile_walk_meters = serializers.IntegerField()
+    last_mile_walk_meters = serializers.IntegerField()
+    pickup_stop = PickupDropoffStopSerializer()
+    dropoff_stop = PickupDropoffStopSerializer()
     stops = StopOutputSerializer(many=True)

@@ -9,24 +9,20 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { walkingDistanceText } from "../../shared/utils/walkingDistance";
 
 /* ─────────────────────────────────────────────
-   ORIGINAL HELPERS — UNTOUCHED
+   HELPERS
 ───────────────────────────────────────────── */
 export function formatEtaMinutes(etaSeconds) {
   return Math.max(1, Math.ceil(Number(etaSeconds || 300) / 60));
 }
-export function formatDistanceText(trip) {
-  if (trip?.distance_text) return trip.distance_text;
-  if (trip?.distance_km) return `${trip.distance_km} km`;
-  return "—";
+
+export function formatWalkText(meters) {
+  if (!meters || meters <= 0) return "0 m";
+  if (meters < 1000) return `${Math.round(meters)} m walk`;
+  return `${(meters / 1000).toFixed(1)} km walk`;
 }
-export function formatDurationText(trip) {
-  if (trip?.duration_text) return trip.duration_text;
-  if (trip?.eta_seconds) return `${formatEtaMinutes(trip.eta_seconds)} min`;
-  return "—";
-}
+
 export function shortPlace(point, fallback) {
   return (
     point?.name ||
@@ -37,29 +33,35 @@ export function shortPlace(point, fallback) {
 }
 
 /* ─────────────────────────────────────────────
-   STOP DOT LINE  (green circle → dashed → orange circle)
+   STOP CONNECTOR COMPONENT
 ───────────────────────────────────────────── */
-function StopDotLine({ pickupLabel, dropLabel, walkText }) {
+function StopDotLine({ pickupLabel, dropLabel, firstMileWalk, lastMileWalk }) {
   return (
     <View style={s.dotWrap}>
-      {/* Pickup row */}
+      {/* Pickup Row */}
       <View style={s.dotRow}>
         <View style={s.dotGreen} />
         <View style={{ flex: 1 }}>
-          <Text style={s.stopName}>{pickupLabel}</Text>
-          <Text style={s.stopSub}>Pickup{walkText ? `  •  ${walkText}` : ""}</Text>
+          <Text style={s.stopName} numberOfLines={1}>{pickupLabel}</Text>
+          <Text style={s.stopSub}>
+            Pickup{firstMileWalk ? `  •  ${formatWalkText(firstMileWalk)}` : ""}
+          </Text>
         </View>
       </View>
-      {/* Dashed line connector */}
+
+      {/* Dashed Connector */}
       <View style={s.connectorWrap}>
         <View style={s.connectorLine} />
       </View>
-      {/* Drop row */}
+
+      {/* Dropoff Row */}
       <View style={s.dotRow}>
         <View style={s.dotOrange} />
         <View style={{ flex: 1 }}>
-          <Text style={s.stopName}>{dropLabel}</Text>
-          <Text style={s.stopSub}>Drop-off</Text>
+          <Text style={s.stopName} numberOfLines={1}>{dropLabel}</Text>
+          <Text style={s.stopSub}>
+            Drop-off{lastMileWalk ? `  •  ${formatWalkText(lastMileWalk)}` : ""}
+          </Text>
         </View>
       </View>
     </View>
@@ -67,115 +69,149 @@ function StopDotLine({ pickupLabel, dropLabel, walkText }) {
 }
 
 /* ─────────────────────────────────────────────
-   SINGLE ROUTE CARD  (driver-style)
+   PASSENGER ROUTE CARD
 ───────────────────────────────────────────── */
 function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggleExpand, expanded }) {
-  // const eta      = formatEtaMinutes(trip?.eta_seconds);
-  const fromLbl  = shortPlace(pickup,      trip?.pickup_name      || "Pickup");
-  const toLbl    = shortPlace(destination, trip?.destination_name || "Destination");
-  const rating   = trip?.rating  || trip?.score        || null;
-  const reviews  = trip?.reviews || trip?.review_count || null;
-  // const fuelType = trip?.fuel_type || trip?.vehicle_type || "CNG";
-  const walkMin  = trip?.walk_minutes || null;
-  const walkDist = trip?.walk_distance_meters || null;
-  const fare     = trip?.fare || trip?.price || null;
-  const payment  = trip?.payment_method || "Fuel Share";
-  const dist     = formatDistanceText(trip);
-  const dur      = formatDurationText(trip);
+  const routeCode   = trip?.route_code || `R-${index + 1}`;
+  const routeName   = trip?.name || "Transit Route";
+  
+  const boardingStop  = trip?.pickup_stop;
+  const alightingStop = trip?.dropoff_stop;
+  
+  const boardLabel  = boardingStop?.name || shortPlace(pickup, "Pickup Point");
+  const alightLabel = alightingStop?.name || shortPlace(destination, "Drop-off Point");
+
+  const firstMileWalk = trip?.first_mile_walk_meters || boardingStop?.distance_meters || 0;
+  const lastMileWalk  = trip?.last_mile_walk_meters || alightingStop?.distance_to_destination_meters || 0;
+  
+  const fare     = trip?.fare ?? "—";
+  const distKm   = trip?.distance_km ? `${trip.distance_km} km` : "—";
+  const etaMin   = formatEtaMinutes(trip?.eta_seconds);
   const stops    = trip?.stops || [];
 
   return (
     <View style={[s.card, isBest && s.cardBest]}>
+      {/* BEST MATCH BADGE */}
       {isBest && (
         <View style={s.bestBadge}>
+          <Ionicons name="sparkles" size={12} color="#fff" style={{ marginRight: 4 }} />
           <Text style={s.bestBadgeText}>BEST MATCH</Text>
         </View>
       )}
 
-      <TouchableOpacity activeOpacity={0.93} onPress={() => onPress?.(trip)}>
+      <TouchableOpacity activeOpacity={0.92} onPress={() => onPress?.(trip)}>
         <View style={s.mainRow}>
+          {/* ROUTE CODE BADGE */}
           <View style={s.routeNumWrap}>
-            <View style={s.routeNumBadge}>
-              <Text style={s.routeNumText}>{index + 1}</Text>
+            <View style={[s.routeNumBadge, isBest && s.routeNumBadgeBest]}>
+              <Text style={s.routeNumText}>{routeCode}</Text>
             </View>
-            <View style={s.routeNumLine} />
           </View>
 
+          {/* MAIN STOP TIMELINE */}
           <View style={{ flex: 1 }}>
-            <Text style={s.routeTitle}>{fromLbl} → {toLbl}</Text>
+            <Text style={s.routeTitle} numberOfLines={1}>{routeName}</Text>
             <StopDotLine
-              dropLabel={toLbl}
-              pickupLabel={fromLbl}
-              walkText={walkDist ? walkingDistanceText(walkDist) : walkMin ? `${walkMin} min walk` : ""}
+              dropLabel={alightLabel}
+              firstMileWalk={firstMileWalk}
+              lastMileWalk={lastMileWalk}
+              pickupLabel={boardLabel}
             />
           </View>
 
+          {/* FARE & PRICE COL */}
           <View style={s.rightCol}>
             <View style={[s.statsBox, isBest && s.statsBoxBest]}>
-              <Ionicons name="leaf" size={16} color={isBest ? "#009849" : "#374151"} />
               <Text style={[s.statsNum, isBest && s.statsNumBest]}>₹{fare}</Text>
-              <Text style={s.statsLabel}>{payment}</Text>
+              <Text style={s.statsLabel}>Est. Fare</Text>
             </View>
           </View>
         </View>
       </TouchableOpacity>
 
+      {/* METRICS & ACTIONS */}
       <View style={s.cardBottom}>
         <View style={s.metricsRow}>
           <View style={s.metric}>
-            <Ionicons name="star" size={13} color="#6B7280" />
-            <Text style={s.metricText}>{rating} ({reviews})</Text>
+            <Ionicons name="walk-outline" size={14} color="#009849" />
+            <Text style={s.metricText}>{formatWalkText(firstMileWalk + lastMileWalk)}</Text>
           </View>
-          <Text style={s.metricSep}>|</Text>
+          <Text style={s.metricSep}>•</Text>
           <View style={s.metric}>
-            <Ionicons name="speedometer" size={13} color="#6B7280" />
-            <Text style={s.metricText}>{dist}</Text>
+            <Ionicons name="navigate-outline" size={14} color="#6B7280" />
+            <Text style={s.metricText}>{distKm}</Text>
           </View>
-          <Text style={s.metricSep}>|</Text>
+          <Text style={s.metricSep}>•</Text>
           <View style={s.metric}>
-            <Ionicons name="time-outline" size={13} color="#4a5261" />
-            <Text style={s.metricText}>{dur}</Text>
+            <Ionicons name="time-outline" size={14} color="#6B7280" />
+            <Text style={s.metricText}>{etaMin} min total</Text>
           </View>
         </View>
 
         <View style={s.actionRow}>
           <TouchableOpacity
             style={s.viewStopsBtn}
-            onPress={() => onToggleExpand(trip?.id || trip?.trip_id || index)}
+            onPress={() => onToggleExpand(trip?.id || index)}
           >
             <Text style={s.viewStopsText}>
-              {expanded ?  " Hide " : "Stops ›"}  
+              {expanded ? "Hide Stops" : `Stops (${stops.length}) ›`}
             </Text>
           </TouchableOpacity>
+
           <TouchableOpacity
-            style={s.selectBtn}
+            style={[s.selectBtn, isBest && s.selectBtnBest]}
             onPress={() => onPress?.(trip)}
           >
-            <Text style={s.selectBtnText}>Continue</Text>
+            <Text style={s.selectBtnText}>Select Route</Text>
+            <Ionicons name="arrow-forward" size={14} color="#fff" style={{ marginLeft: 4 }} />
           </TouchableOpacity>
         </View>
       </View>
 
+      {/* EXPANDABLE STOPS LIST */}
       {expanded && stops.length > 0 && (
         <View style={s.stopsPanel}>
-          {stops.map((stop, si) => (
-            <View key={si} style={s.stopRow}>
-              <View style={s.stopSeq}>
-                <Text style={s.stopSeqText}>{si + 1}</Text>
+          {stops.map((stop, si) => {
+            const isBoarding  = boardingStop?.id ? String(stop.id) === String(boardingStop.id) : si === 0;
+            const isAlighting = alightingStop?.id ? String(stop.id) === String(alightingStop.id) : si === stops.length - 1;
+
+            let badgeBg = "#E5E7EB";
+            let textColor = "#374151";
+            let statusText = "On Route";
+
+            if (isBoarding) {
+              badgeBg = "#009849";
+              textColor = "#009849";
+              statusText = "Board Here";
+            } else if (isAlighting) {
+              badgeBg = "#F59E0B";
+              textColor = "#F59E0B";
+              statusText = "Alight Here";
+            }
+
+            return (
+              <View key={stop.id || si} style={s.stopRow}>
+                <View style={[s.stopSeq, { backgroundColor: badgeBg }]}>
+                  <Text style={[s.stopSeqText, (isBoarding || isAlighting) && { color: "#fff" }]}>
+                    {stop.order || si + 1}
+                  </Text>
+                </View>
+                <View style={s.stopDetail}>
+                  <Text style={s.stopListStopName}>{stop.name}</Text>
+                  <Text style={[s.stopStatus, { color: textColor }]}>{statusText}</Text>
+                </View>
               </View>
-              <View style={s.stopDetail}>
-                <Text style={s.stopName}>{stop.name}</Text>
-                <Text style={s.stopStatus}>{stop.status || "Upcoming"}</Text>
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
     </View>
   );
 }
 
-/* MAIN EXPORT */
+/* ─────────────────────────────────────────────
+   MAIN SCREEN EXPORT
+───────────────────────────────────────────── */
 export default function PassengerRouteList({ navigation, route }) {
   const {
     trips = [],
@@ -185,46 +221,38 @@ export default function PassengerRouteList({ navigation, route }) {
     mode = "auto",
   } = route?.params || {};
 
-
-
   const isBike = mode === "bike";
   const accent = "#009849";
   const pickup = initialPickup;
   const destination = initialDestination;
   const [expandedRouteId, setExpandedRouteId] = useState(null);
 
-  /* Original sort — untouched */
-  const allTrips = useMemo(() => {
+  /* UPDATED BEST MATCH SORTING LOGIC:
+     Prioritize lowest total walk distance first, followed by lower ETA and fare. */
+  const sortedTrips = useMemo(() => {
     if (!Array.isArray(trips)) return [];
     return [...trips].sort((a, b) => {
-      const aRO = a.is_route_only || a.trip_available === false;
-      const bRO = b.is_route_only || b.trip_available === false;
-      if (aRO !== bRO) return aRO ? 1 : -1;
-      if (!aRO) return (a.eta_seconds || 0) - (b.eta_seconds || 0);
-      return 0;
+      const walkA = a.walk_distance_meters ?? (a.first_mile_walk_meters + a.last_mile_walk_meters) ?? 0;
+      const walkB = b.walk_distance_meters ?? (b.first_mile_walk_meters + b.last_mile_walk_meters) ?? 0;
+      
+      if (walkA !== walkB) return walkA - walkB;
+      if (a.eta_seconds !== b.eta_seconds) return (a.eta_seconds || 0) - (b.eta_seconds || 0);
+      return (a.fare || 0) - (b.fare || 0);
     });
   }, [trips]);
 
-  const bestTrip = allTrips[0] || null;
-
-  /* Handlers */
-  const handleContinue = (tripOverride = null) => {
-    const trip = tripOverride || bestTrip;
-
-    if (!trip) return;
-    if (mode === "auto") {
-      navigation.navigate("AutoPreRide", { trip, pickup, destination, mode });
-    } else if (mode === "bike") {
-      navigation.navigate("BikeMapPreRide", { trip, pickup, destination, mode });
-    }
+  const handleContinue = (selectedTrip) => {
+    if (!selectedTrip) return;
+    const targetScreen = mode === "bike" ? "BikeMapPreRide" : "AutoPreRide";
+    navigation.navigate(targetScreen, { trip: selectedTrip, pickup, destination, mode });
   };
-  const routeCount = allTrips.length;
 
-  /* FlatList renderItem */
+  const routeCount = sortedTrips.length;
+
   const renderItem = ({ item, index }) => (
     <RouteCard
       destination={destination}
-      expanded={String(expandedRouteId) === String(item?.id || item?.trip_id || index)}
+      expanded={String(expandedRouteId) === String(item?.id || index)}
       index={index}
       isBest={index === 0}
       onPress={handleContinue}
@@ -236,41 +264,40 @@ export default function PassengerRouteList({ navigation, route }) {
 
   return (
     <SafeAreaView edges={["top"]} style={s.safe}>
-
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.iconBtn}>
-          <Text style={s.backArrow}>←</Text>
+          <Ionicons name="arrow-back" size={20} color="#111827" />
         </TouchableOpacity>
 
         <View style={s.headerMid}>
-          <Text style={s.headerTitle}>Best Match</Text>
-          <Text style={[s.headerSub, { color: accent }]}>{isBike ? "Bike" : "Auto"} routes</Text>
+          <Text style={s.headerTitle}>Available Routes</Text>
+          <Text style={[s.headerSub, { color: accent }]}>{isBike ? "Bike" : "Auto"} Transit</Text>
         </View>
 
         <TouchableOpacity style={s.iconBtn}>
-          <Text style={s.gearIcon}>⚙</Text>
+          <Ionicons name="options-outline" size={18} color="#009849" />
         </TouchableOpacity>
       </View>
 
-      {/* ── ROUTE LIST ── */}
+      {/* ROUTE LIST */}
       <FlatList
         contentContainerStyle={s.listContent}
-        data={loading ? [] : allTrips}
-        keyExtractor={(item, i) => String(item?.id || item?.trip_id || i)}
+        data={loading ? [] : sortedTrips}
+        keyExtractor={(item, i) => String(item?.id || i)}
         ListHeaderComponent={() => (
           <>
             {!loading && routeCount > 0 && (
-              <Text style={s.countText}>{routeCount} routes available</Text>
+              <Text style={s.countText}>{routeCount} routes found for your journey</Text>
             )}
             {loading && (
               <View style={s.stateCard}>
-                <Text style={s.stateText}>{isBike ? "Finding best bikes..." : "Finding best autos..."}</Text>
+                <Text style={s.stateText}>Finding best options...</Text>
               </View>
             )}
             {!loading && routeCount === 0 && (
               <View style={s.stateCard}>
-                <Text style={s.stateText}>No routes found for this journey.</Text>
+                <Text style={s.stateText}>No transit routes found for this location.</Text>
               </View>
             )}
           </>
@@ -278,31 +305,27 @@ export default function PassengerRouteList({ navigation, route }) {
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
       />
-
     </SafeAreaView>
   );
 }
 
 /* ─────────────────────────────────────────────
-   STYLES — object-based StyleSheet
+   STYLES
 ───────────────────────────────────────────── */
 const CARD_SHADOW = Platform.select({
   ios: {
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
   },
   android: { elevation: 2 },
 });
 
 const s = StyleSheet.create({
-
-  /* layout */
-  safe:        { backgroundColor: "#F4F6F4", flex: 1 },
+  safe: { backgroundColor: "#F4F6F4", flex: 1 },
   listContent: { paddingBottom: 24, paddingHorizontal: 16, paddingTop: 4 },
 
-  /* header */
   header: {
     alignItems: "center",
     flexDirection: "row",
@@ -319,26 +342,23 @@ const s = StyleSheet.create({
     width: 40,
     ...CARD_SHADOW,
   },
-  backArrow:  { color: "#111827", fontSize: 20, fontWeight: "700" },
-  gearIcon:   { color: "#009849", fontSize: 18 },
-  headerMid:  { flex: 1, marginLeft: 12 },
-  headerTitle:{ color: "#111827", fontSize: 24, fontWeight: "900" },
-  headerSub:  { color: "#009849", fontSize: 14, fontWeight: "700", marginTop: 1 },
+  headerMid: { flex: 1, marginLeft: 12 },
+  headerTitle: { color: "#111827", fontSize: 22, fontWeight: "800" },
+  headerSub: { fontSize: 13, fontWeight: "700", marginTop: 1 },
 
-  /* count */
   countText: {
-    color: "#6b7280",
+    color: "#6B7280",
     fontSize: 13,
-    fontWeight: "500",
+    fontWeight: "600",
     marginBottom: 10,
     marginTop: 4,
   },
 
-  /* card */
+  /* Card Styles */
   card: {
     backgroundColor: "#fff",
-    borderColor: "#e5e7eb",
-    borderRadius: 18,
+    borderColor: "#E5E7EB",
+    borderRadius: 16,
     borderWidth: 1,
     marginBottom: 12,
     padding: 16,
@@ -349,112 +369,105 @@ const s = StyleSheet.create({
     borderWidth: 1.5,
   },
 
-  /* best badge */
   bestBadge: {
     alignSelf: "flex-start",
     backgroundColor: "#009849",
     borderRadius: 6,
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   bestBadgeText: {
     color: "#fff",
     fontSize: 10,
     fontWeight: "900",
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
 
-  /* main row inside card */
   mainRow: {
-    alignItems: "center",
+    alignItems: "flex-start",
     flexDirection: "row",
-    gap: 10,
+    gap: 12,
   },
   routeNumWrap: {
     alignItems: "center",
-    gap: 4,
-    width: 32,
+    paddingTop: 2,
   },
   routeNumBadge: {
     alignItems: "center",
+    backgroundColor: "#374151",
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    minWidth: 42,
+  },
+  routeNumBadgeBest: {
     backgroundColor: "#009849",
-    borderRadius: 999,
-    height: 28,
-    justifyContent: "center",
-    width: 28,
   },
   routeNumText: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: "900",
-  },
-  routeNumLine: {
-    backgroundColor: "#d1d5db",
-    flex: 1,
-    width: 2,
   },
   routeTitle: {
     color: "#111827",
-    fontSize: 14,
-    fontWeight: "900",
-    marginBottom: 4,
-  },
-  rightCol: {
-    alignItems: "center",
-    gap: 3,
-    minWidth: 68,
+    fontSize: 15,
+    fontWeight: "800",
+    marginBottom: 6,
   },
 
-  /* stats box (replaces ETA box) */
+  rightCol: {
+    alignItems: "flex-end",
+  },
   statsBox: {
     alignItems: "center",
-    backgroundColor: "#f3f4f6",
-    borderRadius: 12,
-    gap: 2,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 8,
-    width: 68,
+    paddingVertical: 6,
+    minWidth: 64,
   },
   statsBoxBest: {
-    backgroundColor: "#f0fdf4",
-    borderColor: "#bbf7d0",
+    backgroundColor: "#F0FDF4",
+    borderColor: "#BBF7D0",
     borderWidth: 1,
   },
-  statsNum: { color: "#374151", fontSize: 18, fontWeight: "900", lineHeight: 20 },
+  statsNum: { color: "#111827", fontSize: 16, fontWeight: "900" },
   statsNumBest: { color: "#009849" },
-  statsLabel: { color: "#9CA3AF", fontSize: 10, fontWeight: "600" },
+  statsLabel: { color: "#9CA3AF", fontSize: 9, fontWeight: "600", marginTop: 1 },
 
-  /* stop dot line */
+  /* Stop Timeline */
   dotWrap: { gap: 0, marginTop: 2 },
-  dotRow:  { alignItems: "center", flexDirection: "row", gap: 10 },
+  dotRow: { alignItems: "center", flexDirection: "row", gap: 8 },
   dotGreen: {
     borderColor: "#009849",
     borderRadius: 999,
     borderWidth: 2.5,
-    height: 14,
-    width: 14,
+    height: 12,
+    width: 12,
   },
   dotOrange: {
-    borderColor: "#f59e0b",
+    borderColor: "#F59E0B",
     borderRadius: 999,
     borderWidth: 2.5,
-    height: 14,
-    width: 14,
+    height: 12,
+    width: 12,
   },
-  stopName: { color: "#111827", fontSize: 13, fontWeight: "800" },
-  stopSub:  { color: "#9ca3af", fontSize: 11, fontWeight: "500", marginTop: 1 },
-  connectorWrap: { alignItems: "center", height: 18, justifyContent: "center", paddingLeft: 6 },
+  stopName: { color: "#111827", fontSize: 13, fontWeight: "700" },
+  stopSub: { color: "#6B7280", fontSize: 11, fontWeight: "500", marginTop: 1 },
+  connectorWrap: { alignItems: "center", height: 16, justifyContent: "center", paddingLeft: 5 },
   connectorLine: {
-    borderColor: "#d1d5db",
+    borderColor: "#D1D5DB",
     borderLeftWidth: 1.5,
     borderStyle: "dashed",
-    height: 18,
+    height: 16,
   },
 
-  /* card bottom */
+  /* Card Bottom */
   cardBottom: {
-    borderColor: "#f0f0f0",
+    borderColor: "#F3F4F6",
     borderTopWidth: 1,
     marginTop: 12,
     paddingTop: 12,
@@ -462,22 +475,22 @@ const s = StyleSheet.create({
   metricsRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 10,
+    gap: 6,
+    marginBottom: 12,
   },
   metric: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 3,
   },
   metricText: {
-    color: "#6B7280",
+    color: "#4B5563",
     fontSize: 12,
     fontWeight: "600",
   },
   metricSep: {
-    color: "#d1d5db",
-    fontSize: 14,
+    color: "#D1D5DB",
+    fontSize: 10,
   },
   actionRow: {
     flexDirection: "row",
@@ -485,104 +498,59 @@ const s = StyleSheet.create({
     gap: 8,
   },
   viewStopsBtn: {
-    borderColor: "#e5e7eb",
+    borderColor: "#E5E7EB",
     borderRadius: 10,
-    borderWidth: 1.5,
-    paddingHorizontal: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  viewStopsText: { color: "#009849", fontSize: 13, fontWeight: "700" },
+  viewStopsText: { color: "#374151", fontSize: 12, fontWeight: "700" },
   selectBtn: {
     flex: 1,
-    backgroundColor: "#009849",
-    borderRadius: 12,
-    paddingVertical: 10,
+    backgroundColor: "#374151",
+    borderRadius: 10,
+    paddingVertical: 9,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+  },
+  selectBtnBest: {
+    backgroundColor: "#009849",
   },
   selectBtnText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
   },
 
-  /* stops panel */
+  /* Stops Panel */
   stopsPanel: {
-    backgroundColor: "#f9fafb",
-    borderColor: "#e5e7eb",
-    borderRadius: 14,
+    backgroundColor: "#F9FAFB",
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
     borderWidth: 1,
     gap: 8,
     marginTop: 12,
-    padding: 12,
+    padding: 10,
   },
-  stopRow: { alignItems: "center", flexDirection: "row", gap: 12 },
+  stopRow: { alignItems: "center", flexDirection: "row", gap: 10 },
   stopSeq: {
     alignItems: "center",
-    backgroundColor: "#009849",
     borderRadius: 999,
-    height: 24,
+    height: 20,
     justifyContent: "center",
-    width: 24,
+    width: 20,
   },
-  stopSeqText: { color: "#fff", fontSize: 11, fontWeight: "900" },
-  stopDetail: { flex: 1 },
-  stopStatus: { color: "#9CA3AF", fontSize: 11 },
+  stopSeqText: { color: "#374151", fontSize: 10, fontWeight: "800" },
+  stopDetail: { flex: 1, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  stopListStopName: { color: "#111827", fontSize: 12, fontWeight: "600" },
+  stopStatus: { fontSize: 11, fontWeight: "700" },
 
-  /* footer / all button */
-  allBtn: {
-    alignItems: "center",
-    alignSelf: "center",
-    borderColor: "#009849",
-    borderRadius: 14,
-    borderWidth: 1.5,
-    marginTop: 4,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-  },
-  allBtnText: { color: "#009849", fontSize: 14, fontWeight: "700" },
-
-  /* state cards */
   stateCard: {
     alignItems: "center",
     backgroundColor: "#fff",
-    borderRadius: 18,
-    marginBottom: 12,
+    borderRadius: 16,
     paddingVertical: 40,
   },
-  stateText: { color: "#9ca3af", fontSize: 15, fontWeight: "600" },
-
-  /* sticky CTA */
-  stickyBar: {
-    backgroundColor: "#fff",
-    borderColor: "#f0f0f0",
-    borderTopWidth: 1,
-    bottom: 0,
-    left: 0,
-    padding: 16,
-    paddingBottom: Platform.OS === "ios" ? 30 : 16,
-    position: "absolute",
-    right: 0,
-  },
-  continueBtn: {
-    alignItems: "center",
-    backgroundColor: "#009849",
-    borderRadius: 18,
-    flexDirection: "row",
-    height: 56,
-    justifyContent: "center",
-    ...Platform.select({
-      ios:     { shadowColor: "#009849", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.28, shadowRadius: 12 },
-      android: { elevation: 6 },
-    }),
-  },
-  continueBtnOff: {
-    backgroundColor: "#d1d5db",
-    ...Platform.select({
-      ios:     { shadowOpacity: 0 },
-      android: { elevation: 0 },
-    }),
-  },
-  continueTxt:   { color: "#fff", fontSize: 17, fontWeight: "900" },
-  continueArrow: { color: "#fff", fontSize: 20, fontWeight: "900" },
-
+  stateText: { color: "#9CA3AF", fontSize: 14, fontWeight: "600" },
 });

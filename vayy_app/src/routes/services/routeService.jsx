@@ -50,26 +50,6 @@ export const previewRoute = async (start, end, stops = []) => {
   }
 };
 
-export const searchRoutesByLocation = async (
-  originLat, originLng, destLat, destLng, radius = 1000
-) => {
-  try {
-    const response = await api.get(TRANSPORT.routesSearchByLocation, {
-      params: {
-        origin_lat: originLat,
-        origin_lng: originLng,
-        dest_lat: destLat,
-        dest_lng: destLng,
-        radius,
-      },
-    });
-    return response.data?.data || response.data;
-  } catch (error) {
-    console.error("Failed to search routes by location:", error);
-    return [];
-  }
-};
-
 export const getRoadDistance = async (originLat, originLng, destLat, destLng) => {
   try {
     const response = await api.post(TRANSPORT.roadDistance, {
@@ -90,6 +70,5 @@ export default {
   fetchRouteGeometry,
   fetchRouteSchedule,
   previewRoute,
-  searchRoutesByLocation,
   getRoadDistance,
 };

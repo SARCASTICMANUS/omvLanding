@@ -27,6 +27,7 @@ from transport.api.serializers import (
     DriverRouteSerializer,
     RouteSearchInputSerializer,
     RouteSearchResponseSerializer,
+    DriverRouteSearchResponseSerializer,
 )
 from transport.models import City, Stop, Route, TripSchedule, StopTime
 from tracking.services.eta_service import ETAService
@@ -421,15 +422,35 @@ class RouteSearchByLocationSerializer(serializers.Serializer):
         return value
 
 class RouteSearchByLocationAPIView(APIView):
+    """
+    GET /api/transport/routes/search-by-location/
+    Finds routes whose stops lie near both the origin and destination.
+
+    Query params: origin_lat, origin_lng, dest_lat, dest_lng, radius, role.
+    `role` (optional, `passenger` by default) selects the response payload:
+      - passenger (default): full payload including walk aggregates,
+        first/last-mile walk, nearest-road metadata, and stops.
+      - driver: trimmed payload dropping passenger-only walk aggregates and
+        nearest-road metadata while retaining first/last-mile walk and stops.
+    Both shapes share the same envelope: { success, message, data }.
+    """
     permission_classes = [AllowAny]
 
     def get(self, request):
         input_serializer = RouteSearchInputSerializer(data=request.query_params)
         input_serializer.is_valid(raise_exception=True)
 
-        results = RouteSearchService.search_routes(**input_serializer.validated_data)
+        validated_data = dict(input_serializer.validated_data)
+        role = validated_data.pop("role", "passenger")
 
-        output_serializer = RouteSearchResponseSerializer(results, many=True)
+        results = RouteSearchService.search_routes(**validated_data)
+
+        serializer_class = (
+            DriverRouteSearchResponseSerializer
+            if role == "driver"
+            else RouteSearchResponseSerializer
+        )
+        output_serializer = serializer_class(results, many=True)
         return Response({
             "success": True,
             "message": f"Found {len(results)} routes",
