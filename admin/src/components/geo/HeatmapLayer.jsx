@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import { getAccentColor } from "../../utils/glow";
+import useAccentTick from "../../hooks/useAccentTick";
 
 function isMapValid(map) {
   try {
@@ -8,7 +10,24 @@ function isMapValid(map) {
   }
 }
 
+function heatRamp() {
+  const [r, g, b] = getAccentColor().rgb.split(/\s+/).map(Number);
+  return [
+    "interpolate", ["linear"], ["heatmap-density"],
+    0, `rgba(${r}, ${g}, ${b}, 0)`,
+    0.2, `rgba(${r}, ${g}, ${b}, 0.35)`,
+    0.4, `rgba(${r}, ${g}, ${b}, 0.55)`,
+    0.55, `rgba(${r}, ${g}, ${b}, 0.7)`,
+    0.7, `rgba(${r}, ${g}, ${b}, 0.84)`,
+    0.85, `rgba(${r}, ${g}, ${b}, 0.92)`,
+    1, `rgba(${r}, ${g}, ${b}, 0.98)`,
+  ];
+}
+
 export default function HeatmapLayer({ map, points = [] }) {
+  const accentTick = useAccentTick();
+  const addedRef = useRef(false);
+
   useEffect(() => {
     if (!isMapValid(map) || !points.length) return;
 
@@ -37,18 +56,10 @@ export default function HeatmapLayer({ map, points = [] }) {
             "heatmap-intensity": 1,
             "heatmap-radius": 20,
             "heatmap-opacity": 0.7,
-            "heatmap-color": [
-              "interpolate", ["linear"], ["heatmap-density"],
-              0, "rgba(100, 170, 213, 0)",
-              0.2, "rgba(94, 154, 205, 0.45)",
-              0.4, "rgba(76, 120, 197, 0.62)",
-              0.5, "rgba(62, 102, 182, 0.72)",
-              0.7, "rgba(46, 77, 165, 0.84)",
-              0.8, "rgba(30, 58, 138, 0.9)",
-              1, "rgba(20, 38, 100, 0.96)",
-            ],
+            "heatmap-color": heatRamp(),
           },
         });
+        addedRef.current = true;
       } catch {}
     };
 
@@ -65,8 +76,9 @@ export default function HeatmapLayer({ map, points = [] }) {
           if (map.getSource("geo-heat")) map.removeSource("geo-heat");
         }
       } catch {}
+      addedRef.current = false;
     };
-  }, [map, points]);
+  }, [map, points, accentTick]);
 
   return null;
 }

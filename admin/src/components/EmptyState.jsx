@@ -5,11 +5,11 @@ export default function EmptyState({ icon: Icon, title, description, action, cla
         {Icon && (
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center"
             style={{
-              background: "rgba(46,92,255,0.08)",
-              border: "1px solid rgba(46,92,255,0.15)",
-              boxShadow: "0 4px 16px rgba(46,92,255,0.08)",
+              background: "rgb(var(--accent-blue-rgb) / 0.08)",
+              border: "1px solid rgb(var(--accent-blue-rgb) / 0.15)",
+              boxShadow: "0 4px 16px rgb(var(--accent-blue-rgb) / 0.08)",
             }}>
-            <Icon size={32} style={{ color: "#2E5CFF" }} />
+            <Icon size={32} style={{ color: "var(--accent-blue)" }} />
           </div>
         )}
         <h3 className="text-lg font-semibold text-slate-800 mb-1">{title}</h3>

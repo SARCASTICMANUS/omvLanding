@@ -6,7 +6,7 @@ import api from "../api/client";
 import LocationSearch from "../components/LocationSearch";
 import EmptyState from "../components/EmptyState";
 import Loader from "../components/Loader";
-import { ROUTE_COLORS } from "../colors";
+import { getAccentColor, ACCENT_CHANGE_EVENT } from "../utils/glow";
 import {
   Plus, Save, Trash2, XCircle,
   ArrowUp, ArrowDown, Bike, Compass, Box, Edit3,
@@ -197,7 +197,7 @@ export default function Routes() {
         type: "line",
         source: "route-path",
         layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#2E5CFF", "line-width": 6, "line-opacity": 0.9 },
+        paint: { "line-color": getAccentColor().hex, "line-width": 6, "line-opacity": 0.9 },
       });
       setMapLoaded(true);
     });
@@ -206,6 +206,18 @@ export default function Routes() {
       setPitch(map.current.getPitch());
       setBearing(map.current.getBearing());
     });
+  }, []);
+
+  useEffect(() => {
+    const onAccent = () => {
+      try {
+        if (map.current && map.current.getLayer("route-path-layer")) {
+          map.current.setPaintProperty("route-path-layer", "line-color", getAccentColor().hex);
+        }
+      } catch {}
+    };
+    window.addEventListener(ACCENT_CHANGE_EVENT, onAccent);
+    return () => window.removeEventListener(ACCENT_CHANGE_EVENT, onAccent);
   }, []);
 
   useEffect(() => {
@@ -317,7 +329,7 @@ export default function Routes() {
         if (coords.length < 2) return;
         const el = document.createElement("div");
         el.className = "flex items-center justify-center text-white w-7 h-7 rounded-full border-2 border-white/80 shadow-md text-[11px] font-semibold";
-        el.style.backgroundColor = "#2E5CFF";
+        el.style.backgroundColor = "var(--accent-blue)";
         el.innerHTML = i + 1;
         const mk = new maplibregl.Marker({ element: el, draggable: true })
           .setLngLat(coords)
@@ -375,7 +387,7 @@ export default function Routes() {
     stops.forEach((s, i) => {
       const el = document.createElement("div");
       el.className = "flex items-center justify-center text-white w-6 h-6 rounded-full border-2 border-white/80 shadow-md text-[10px] font-semibold cursor-grab";
-      el.style.backgroundColor = "#2E5CFF";
+      el.style.backgroundColor = "var(--accent-blue)";
       el.innerHTML = i + 1;
       const mk = new maplibregl.Marker({ element: el, draggable: true })
         .setLngLat([s.lon, s.lat])
@@ -631,7 +643,7 @@ export default function Routes() {
     importPreviewStops.forEach((s, i) => {
       const el = document.createElement("div");
       el.className = "flex items-center justify-center text-white w-7 h-7 rounded-full border-2 border-white/80 shadow-md text-[11px] font-semibold";
-      el.style.backgroundColor = "#2E5CFF";
+      el.style.backgroundColor = "var(--accent-blue)";
       el.innerHTML = i + 1;
       const mk = new maplibregl.Marker({ element: el })
         .setLngLat([s.lon, s.lat])
@@ -703,8 +715,8 @@ export default function Routes() {
       <div className="w-[420px] flex flex-col shrink-0">
         <div className="p-5 space-y-3">
           <h2 className="glass-section-title text-lg flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(46,92,255,0.1)", border: "1px solid rgba(46,92,255,0.18)" }}>
-              <RouteIcon size={18} style={{ color: "#2E5CFF" }} />
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgb(var(--accent-blue-rgb) / 0.1)", border: "1px solid rgb(var(--accent-blue-rgb) / 0.18)" }}>
+              <RouteIcon size={18} style={{ color: "var(--accent-blue)" }} />
             </div>
             Route Manager
           </h2>
@@ -749,13 +761,13 @@ export default function Routes() {
                 <div key={r.id} className={`group glass-card overflow-hidden transition ${
                   selectedRoute?.id === r.id ? "border-l-[6px]" : ""
                 }`}
-                  style={selectedRoute?.id === r.id ? { borderColor: "rgba(46,92,255,0.35)", boxShadow: "0 6px 24px rgba(46,92,255,0.12)" } : {}}>
+                  style={selectedRoute?.id === r.id ? { borderColor: "rgb(var(--accent-blue-rgb) / 0.35)", boxShadow: "0 6px 24px rgb(var(--accent-blue-rgb) / 0.12)" } : {}}>
                   <div className="flex items-stretch">
                     <button onClick={() => { fetchRouteDetail(r); setTab("library"); }}
                       className="flex-1 min-w-0 p-4 text-left flex items-start">
                       <div className="min-w-0 flex-1">
                         <h4 className="font-semibold text-sm text-slate-800 truncate inline-flex items-center gap-1.5" title={r.name}>
-                          <Bike size={14} className="shrink-0" style={{ color: "#2E5CFF" }} />
+                          <Bike size={14} className="shrink-0" style={{ color: "var(--accent-blue)" }} />
                           <span className="truncate">{r.name}</span>
                         </h4>
                         <p className="text-[11px] text-slate-500 font-medium truncate" title={`${r.start_name} → ${r.end_name}`}>{r.start_name} → {r.end_name}</p>
@@ -764,7 +776,7 @@ export default function Routes() {
                             {r.total_distance_meters ? `${(r.total_distance_meters / 1000).toFixed(1)} km` : "N/A"}
                           </span>
                           {r.stops_count > 0 && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(46,92,255,0.08)", color: "#2E5CFF" }}>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgb(var(--accent-blue-rgb) / 0.08)", color: "var(--accent-blue)" }}>
                               {r.stops_count} stops
                             </span>
                           )}
@@ -879,7 +891,7 @@ export default function Routes() {
                       isAddingStop ? "text-red-500" : "text-accent-primary"
                     }`}
                     style={{
-                      background: !start || !end ? "rgba(148,163,184,0.12)" : isAddingStop ? "rgba(255,93,93,0.1)" : "rgba(46,92,255,0.08)",
+                      background: !start || !end ? "rgba(148,163,184,0.12)" : isAddingStop ? "rgba(255,93,93,0.1)" : "rgb(var(--accent-blue-rgb) / 0.08)",
                     }}>
                     {isAddingStop ? <XCircle size={14} /> : <Plus size={14} />}
                     {isAddingStop ? "Cancel" : "Add Stop"}
@@ -889,15 +901,15 @@ export default function Routes() {
                 {isAddingStop && <div className="glass-card-subtle rounded-lg px-4 py-2.5 text-xs text-slate-600 animate-pulse">Click on the map to place a stop.</div>}
 
                 {start && (
-                  <div className="flex items-center gap-3 rounded-xl p-3" style={{ background: "rgba(46,92,255,0.06)", border: "1px solid rgba(46,92,255,0.12)" }}>
+                  <div className="flex items-center gap-3 rounded-xl p-3" style={{ background: "rgb(var(--accent-blue-rgb) / 0.06)", border: "1px solid rgb(var(--accent-blue-rgb) / 0.12)" }}>
                     <div className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-semibold text-xs">1</div>
                     <span className="text-sm font-semibold text-slate-800 truncate">{startName || "Origin"}</span>
                   </div>
                 )}
 
                 {stops.map((s, i) => (
-                  <div key={i} className="flex items-center gap-2 rounded-xl p-2.5 group hover:shadow-md transition" style={{ background: "rgba(255,255,255,0.72)", border: "1px solid rgba(46,92,255,0.12)" }}>
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center font-semibold text-xs shrink-0" style={{ background: "rgba(46,92,255,0.08)", color: "#2E5CFF" }}>{i + 2}</div>
+                  <div key={i} className="flex items-center gap-2 rounded-xl p-2.5 group hover:shadow-md transition" style={{ background: "rgba(255,255,255,0.72)", border: "1px solid rgb(var(--accent-blue-rgb) / 0.12)" }}>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center font-semibold text-xs shrink-0" style={{ background: "rgb(var(--accent-blue-rgb) / 0.08)", color: "var(--accent-blue)" }}>{i + 2}</div>
                     <LocationSearch
                       placeholder="Search stop location..."
                       initialValue={s.name}
@@ -958,8 +970,8 @@ export default function Routes() {
                   Stops (drag to reorder on map, click to edit)
                 </p>
                 {(selectedRoute.stops || []).sort((a, b) => a.order - b.order).map((s, i) => (
-                  <div key={s.id} className="flex items-center gap-3 rounded-xl p-3 group hover:shadow-md transition" style={{ background: "rgba(255,255,255,0.72)", border: "1px solid rgba(46,92,255,0.12)" }}>
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center font-semibold text-xs" style={{ background: "rgba(46,92,255,0.08)", color: "#2E5CFF" }}>{s.order}</div>
+                  <div key={s.id} className="flex items-center gap-3 rounded-xl p-3 group hover:shadow-md transition" style={{ background: "rgba(255,255,255,0.72)", border: "1px solid rgb(var(--accent-blue-rgb) / 0.12)" }}>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center font-semibold text-xs" style={{ background: "rgb(var(--accent-blue-rgb) / 0.08)", color: "var(--accent-blue)" }}>{s.order}</div>
                     <span className="flex-1 text-sm font-semibold text-slate-800 truncate">{s.name}</span>
                     <button onClick={() => editRouteStop(s)} className="p-1.5 hover:bg-slate-100 rounded text-slate-400 opacity-0 group-hover:opacity-100"><Edit3 size={14} /></button>
                     <button onClick={() => deleteRouteStop(s)} className="p-1.5 hover:bg-red-50 rounded text-red-400 opacity-0 group-hover:opacity-100"><Trash2 size={14} /></button>
@@ -985,9 +997,9 @@ export default function Routes() {
                     }`}
                       style={{
                         background: importStep > i || importStep === i
-                          ? "linear-gradient(135deg, #2E5CFF, #5B8AFF)"
+                          ? "linear-gradient(135deg, var(--accent-blue), var(--accent-blue-light))"
                           : "rgba(148,163,184,0.12)",
-                        boxShadow: importStep === i ? "0 0 0 3px rgba(46,92,255,0.15)" : undefined,
+                        boxShadow: importStep === i ? "0 0 0 3px rgb(var(--accent-blue-rgb) / 0.15)" : undefined,
                       }}>
                       {importStep > i ? <Check size={12} /> : i + 1}
                     </div>
@@ -1006,12 +1018,12 @@ export default function Routes() {
                   <div
                     onClick={() => fileInputRef.current?.click()}
                     className="rounded-xl p-8 text-center cursor-pointer transition"
-                    style={{ border: "2px dashed rgba(46,92,255,0.25)", background: "rgba(255,255,255,0.5)" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(46,92,255,0.5)"; e.currentTarget.style.background = "rgba(46,92,255,0.04)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(46,92,255,0.25)"; e.currentTarget.style.background = "rgba(255,255,255,0.5)"; }}
+                    style={{ border: "2px dashed rgb(var(--accent-blue-rgb) / 0.25)", background: "rgba(255,255,255,0.5)" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgb(var(--accent-blue-rgb) / 0.5)"; e.currentTarget.style.background = "rgb(var(--accent-blue-rgb) / 0.04)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgb(var(--accent-blue-rgb) / 0.25)"; e.currentTarget.style.background = "rgba(255,255,255,0.5)"; }}
                   >
-                    <div className="w-16 h-16 mx-auto mb-3 rounded-2xl flex items-center justify-center" style={{ background: "rgba(46,92,255,0.08)", border: "1px solid rgba(46,92,255,0.15)" }}>
-                      <FileSpreadsheet size={28} style={{ color: "#2E5CFF" }} />
+                    <div className="w-16 h-16 mx-auto mb-3 rounded-2xl flex items-center justify-center" style={{ background: "rgb(var(--accent-blue-rgb) / 0.08)", border: "1px solid rgb(var(--accent-blue-rgb) / 0.15)" }}>
+                      <FileSpreadsheet size={28} style={{ color: "var(--accent-blue)" }} />
                     </div>
                     <p className="text-sm font-semibold text-slate-800">Click to upload CSV or Excel file</p>
                     <p className="text-[11px] text-slate-400 mt-1">Parsed locally in your browser</p>
@@ -1098,10 +1110,10 @@ export default function Routes() {
                   </div>
 
                   {importRows.length > 0 && (
-                    <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid rgba(46,92,255,0.12)", background: "rgba(255,255,255,0.6)" }}>
+                    <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid rgb(var(--accent-blue-rgb) / 0.12)", background: "rgba(255,255,255,0.6)" }}>
                       <table className="w-full text-[11px]">
                         <thead>
-                          <tr style={{ background: "rgba(46,92,255,0.05)" }}>
+                          <tr style={{ background: "rgb(var(--accent-blue-rgb) / 0.05)" }}>
                             {importColumns.slice(0, 8).map((c) => <th key={c} className="p-2 text-left font-semibold text-slate-500 whitespace-nowrap">{c}</th>)}
                           </tr>
                         </thead>
@@ -1126,7 +1138,7 @@ export default function Routes() {
 
               {importStep === 2 && (
                 <div className="space-y-4">
-                  <div className="rounded-xl p-3" style={{ background: "rgba(46,92,255,0.06)", border: "1px solid rgba(46,92,255,0.12)" }}>
+                  <div className="rounded-xl p-3" style={{ background: "rgb(var(--accent-blue-rgb) / 0.06)", border: "1px solid rgb(var(--accent-blue-rgb) / 0.12)" }}>
                     <p className="text-[10px] font-semibold text-slate-700 uppercase tracking-wider mb-1">From CSV</p>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
                       {importRouteCode && <span className="text-slate-800"><span className="font-semibold">Code:</span> {importRouteCode}</span>}
@@ -1153,8 +1165,8 @@ export default function Routes() {
                     </p>
                     <div className="max-h-48 overflow-y-auto space-y-1">
                       {importPreviewStops.map((s, i) => (
-                        <div key={i} className="flex items-center gap-2 rounded-lg p-2" style={{ background: "rgba(255,255,255,0.72)", border: "1px solid rgba(46,92,255,0.12)" }}>
-                          <div className="w-5 h-5 rounded flex items-center justify-center font-semibold text-[9px] shrink-0" style={{ background: "rgba(46,92,255,0.08)", color: "#2E5CFF" }}>{i + 1}</div>
+                        <div key={i} className="flex items-center gap-2 rounded-lg p-2" style={{ background: "rgba(255,255,255,0.72)", border: "1px solid rgb(var(--accent-blue-rgb) / 0.12)" }}>
+                          <div className="w-5 h-5 rounded flex items-center justify-center font-semibold text-[9px] shrink-0" style={{ background: "rgb(var(--accent-blue-rgb) / 0.08)", color: "var(--accent-blue)" }}>{i + 1}</div>
                           <span className="text-[11px] font-medium text-slate-800 truncate flex-1">{s.name}</span>
                           <span className="text-[10px] text-slate-400">{s.lat.toFixed(4)}, {s.lon.toFixed(4)}</span>
                         </div>
@@ -1178,7 +1190,7 @@ export default function Routes() {
 
               {importStep === 3 && (
                 <div className="space-y-4">
-                  <div className="rounded-lg p-3" style={{ background: "rgba(46,92,255,0.06)", border: "1px solid rgba(46,92,255,0.18)" }}>
+                  <div className="rounded-lg p-3" style={{ background: "rgb(var(--accent-blue-rgb) / 0.06)", border: "1px solid rgb(var(--accent-blue-rgb) / 0.18)" }}>
                     <p className="text-xs font-semibold text-slate-800">{importRouteName}</p>
                     <p className="text-[11px] text-slate-500">
                       {importPreviewStops.length} stops | {importPreviewStops[0]?.name} → {importPreviewStops[importPreviewStops.length - 1]?.name}
@@ -1186,7 +1198,7 @@ export default function Routes() {
                   </div>
 
                   {importRoadPath.length >= 2 ? (
-                    <div className="rounded-lg p-3" style={{ background: "rgba(46,92,255,0.06)", border: "1px solid rgba(46,92,255,0.12)" }}>
+                    <div className="rounded-lg p-3" style={{ background: "rgb(var(--accent-blue-rgb) / 0.06)", border: "1px solid rgb(var(--accent-blue-rgb) / 0.12)" }}>
                       <p className="text-[11px] font-semibold text-slate-800">Road path generated</p>
                       <p className="text-[11px] text-slate-500">
                         {importRoadPath.length} geometry points via OSRM
@@ -1229,8 +1241,8 @@ export default function Routes() {
           <div className="glass-card-subtle p-2 rounded-xl flex flex-col gap-1" style={{ boxShadow: "0 8px 24px rgba(31,38,135,0.1)" }}>
             <button onClick={() => map.current?.zoomIn()} className="w-9 h-9 hover:bg-white/70 rounded-lg flex items-center justify-center text-slate-700"><Plus size={18} /></button>
             <button onClick={() => map.current?.zoomOut()} className="w-9 h-9 hover:bg-white/70 rounded-lg flex items-center justify-center text-slate-700"><ArrowDown size={18} /></button>
-            <button onClick={toggle3D} className={`w-9 h-9 rounded-lg flex items-center justify-center ${is3D ? "text-[#2E5CFF]" : "hover:bg-white/70 text-slate-700"}`} style={is3D ? { background: "rgba(46,92,255,0.1)" } : {}}><Box size={18} /></button>
-            <button onClick={resetView} className={`w-9 h-9 rounded-lg flex items-center justify-center ${Math.abs(pitch) > 1 ? "text-[#2E5CFF]" : "hover:bg-white/70 text-slate-700"}`} style={Math.abs(pitch) > 1 ? { background: "rgba(46,92,255,0.1)" } : {}}><Compass size={18} /></button>
+            <button onClick={toggle3D} className={`w-9 h-9 rounded-lg flex items-center justify-center ${is3D ? "text-[#2E5CFF]" : "hover:bg-white/70 text-slate-700"}`} style={is3D ? { background: "rgb(var(--accent-blue-rgb) / 0.1)" } : {}}><Box size={18} /></button>
+            <button onClick={resetView} className={`w-9 h-9 rounded-lg flex items-center justify-center ${Math.abs(pitch) > 1 ? "text-[#2E5CFF]" : "hover:bg-white/70 text-slate-700"}`} style={Math.abs(pitch) > 1 ? { background: "rgb(var(--accent-blue-rgb) / 0.1)" } : {}}><Compass size={18} /></button>
           </div>
         </div>
       </div>

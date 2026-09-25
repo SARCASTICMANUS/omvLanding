@@ -226,7 +226,7 @@ export default function Users() {
                   <td className="px-6 py-4 cursor-pointer" onClick={() => openUserDetails(u.id)}>
                     <div className="flex items-center gap-3">
                       <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-sm font-bold uppercase"
-                        style={{ background: "rgba(46,92,255,0.08)", border: "1px solid rgba(46,92,255,0.15)", color: "#2E5CFF" }}>
+                        style={{ background: "rgb(var(--accent-blue-rgb) / 0.08)", border: "1px solid rgb(var(--accent-blue-rgb) / 0.15)", color: "var(--accent-blue)" }}>
                         {(u.first_name?.[0] || u.email[0])}
                       </div>
                       <span className="font-semibold text-slate-800">
@@ -376,7 +376,7 @@ export default function Users() {
                   </div>
 
                   {userDetails.role === "passenger" && userDetails.phone_number !== undefined && (
-                    <div className="glass-card-subtle rounded-2xl p-5" style={{ background: "rgba(46,92,255,0.05)", borderColor: "rgba(46,92,255,0.12)" }}>
+                    <div className="glass-card-subtle rounded-2xl p-5" style={{ background: "rgb(var(--accent-blue-rgb) / 0.05)", borderColor: "rgb(var(--accent-blue-rgb) / 0.12)" }}>
                       <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
                         <UsersIcon size={20} /> Passenger Profile
                       </h3>
@@ -403,7 +403,7 @@ export default function Users() {
                   )}
 
                   {(userDetails.role === "bikedriver" || userDetails.role === "autodriver") && userDetails.phone_number !== undefined && (
-                    <div className="glass-card-subtle rounded-2xl p-5" style={{ background: "rgba(46,92,255,0.05)", borderColor: "rgba(46,92,255,0.12)" }}>
+                    <div className="glass-card-subtle rounded-2xl p-5" style={{ background: "rgb(var(--accent-blue-rgb) / 0.05)", borderColor: "rgb(var(--accent-blue-rgb) / 0.12)" }}>
                       <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
                         <UserCheck size={20} /> Driver Profile
                       </h3>
@@ -445,8 +445,8 @@ export default function Users() {
                               <div className="flex items-center justify-between px-4 py-3">
                                 <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                                    style={{ background: "rgba(46,92,255,0.08)" }}>
-                                    <FileText size={16} style={{ color: "#2E5CFF" }} />
+                                    style={{ background: "rgb(var(--accent-blue-rgb) / 0.08)" }}>
+                                    <FileText size={16} style={{ color: "var(--accent-blue)" }} />
                                   </div>
                                   <div>
                                     <span className="font-semibold text-slate-800">{doc.document_type}</span>

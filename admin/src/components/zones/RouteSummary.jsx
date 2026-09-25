@@ -29,12 +29,12 @@ export default function RouteSummary({ route, stops, distances, minutes }) {
             {/* Very subtle ambient blue/lavender wash */}
             <div
               className="pointer-events-none absolute -top-8 -right-8 h-16 w-16 rounded-full"
-              style={{ background: "radial-gradient(closest-side, rgba(59,130,246,0.10), transparent)" }}
+              style={{ background: "radial-gradient(closest-side, rgb(var(--accent-blue-rgb) / 0.12), transparent)" }}
             />
             {/* Label + small secondary visual */}
             <div className="relative z-10 flex items-center justify-between gap-2">
               <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">{label}</p>
-              <span className="shrink-0" style={{ color: "#3B82F6" }}>
+              <span className="shrink-0" style={{ color: "var(--accent-blue)" }}>
                 <Icon size={13} strokeWidth={2} />
               </span>
             </div>

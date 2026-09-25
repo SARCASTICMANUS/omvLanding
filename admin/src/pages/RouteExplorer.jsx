@@ -3,7 +3,9 @@ import { Search, Bike, MapPin, ChevronDown, ArrowLeft, Navigation, Edit3, Save, 
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import api from "../api/client";
-import { ROUTE_COLORS } from "../colors";
+import { getRouteColors } from "../colors";
+import { getAccentColor, ACCENT_CHANGE_EVENT } from "../utils/glow";
+import useAccentTick from "../hooks/useAccentTick";
 import EmptyState from "../components/EmptyState";
 import Loader from "../components/Loader";
 
@@ -23,7 +25,7 @@ function buildRouteColorMap(routes) {
   routes.forEach((r) => {
     const key = getRouteColorKey(r.start_name, r.end_name);
     if (key && !pairKeys.has(key)) {
-      pairKeys.set(key, colorIdx % ROUTE_COLORS.length);
+      pairKeys.set(key, colorIdx % getRouteColors().length);
       colorIdx++;
     }
   });
@@ -31,15 +33,15 @@ function buildRouteColorMap(routes) {
   return (r) => {
     const key = getRouteColorKey(r.start_name, r.end_name);
     if (key && pairKeys.has(key)) {
-      return ROUTE_COLORS[pairKeys.get(key)];
+      return getRouteColors()[pairKeys.get(key)];
     }
-    const fallback = colorIdx % ROUTE_COLORS.length;
+    const fallback = colorIdx % getRouteColors().length;
     colorIdx++;
-    return ROUTE_COLORS[fallback];
+    return getRouteColors()[fallback];
   };
 }
 
-function RoutePolyline({ coordinates, color = "#2E5CFF", width = 400, height = 80 }) {
+function RoutePolyline({ coordinates, color = "var(--accent-blue)", width = 400, height = 80 }) {
   if (!coordinates || coordinates.length < 2) {
     return (
       <div className="w-full h-20 bg-slate-100/50 rounded-xl flex items-center justify-center">
@@ -70,10 +72,10 @@ function RoutePolyline({ coordinates, color = "#2E5CFF", width = 400, height = 8
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-20">
-      <path d={d} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.25" />
-      <path d={d} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={start.x} cy={start.y} r="4" fill={color} stroke="#F1F6F1" strokeWidth="2" />
-      <circle cx={end.x} cy={end.y} r="4" fill="#1A3FCC" stroke="#C3D9FF" strokeWidth="2" />
+      <path d={d} fill="none" style={{ stroke: color }} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.25" />
+      <path d={d} fill="none" style={{ stroke: color }} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={start.x} cy={start.y} r="4" style={{ fill: color }} stroke="#F1F6F1" strokeWidth="2" />
+      <circle cx={end.x} cy={end.y} r="4" style={{ fill: "var(--accent-blue-dark)" }} stroke="#C3D9FF" strokeWidth="2" />
     </svg>
   );
 }
@@ -127,6 +129,19 @@ function RouteDetail({ route, onBack }) {
     setTimeout(() => setToast(null), 3000);
   };
 
+  useEffect(() => {
+    const onAccent = () => {
+      try {
+        const m = mapRef.current;
+        if (!m) return;
+        if (m.getLayer("route-line-bg")) m.setPaintProperty("route-line-bg", "line-color", getAccentColor().hex);
+        if (m.getLayer("route-line-fg")) m.setPaintProperty("route-line-fg", "line-color", getAccentColor().dark);
+      } catch {}
+    };
+    window.addEventListener(ACCENT_CHANGE_EVENT, onAccent);
+    return () => window.removeEventListener(ACCENT_CHANGE_EVENT, onAccent);
+  }, []);
+
   const clearMarkers = () => {
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
@@ -136,7 +151,7 @@ function RouteDetail({ route, onBack }) {
     const el = document.createElement("div");
     // Memphis functional pins: mint start, coral end, blue mid with white ring
     el.className = "flex items-center justify-center w-7 h-7 rounded-full border-2 border-white/80 shadow-md text-[11px] font-semibold text-white cursor-pointer";
-    el.style.backgroundColor = i === 0 ? "#7DD3FC" : i === total - 1 ? "#1A3FCC" : "#2E5CFF";
+    el.style.backgroundColor = i === 0 ? "var(--accent-blue-light)" : i === total - 1 ? "var(--accent-blue-dark)" : "var(--accent-blue)";
     el.textContent = s.order || i + 1;
 
     const mk = new maplibregl.Marker({ element: el })
@@ -189,12 +204,12 @@ function RouteDetail({ route, onBack }) {
         map.addLayer({
           id: "route-line-bg", type: "line", source: "route-line",
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": "#2E5CFF", "line-width": 8, "line-opacity": 0.2 },
+          paint: { "line-color": getAccentColor().hex, "line-width": 8, "line-opacity": 0.2 },
         });
         map.addLayer({
           id: "route-line-fg", type: "line", source: "route-line",
           layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": "#1A3FCC", "line-width": 4 },
+          paint: { "line-color": getAccentColor().dark, "line-width": 4 },
         });
 
         const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
@@ -313,7 +328,7 @@ function RouteDetail({ route, onBack }) {
         </div>
       )}
 
-      <div className="w-[400px] bg-white/70 backdrop-blur-xl border-r border-white/60 flex flex-col shrink-0" style={{ boxShadow: "8px 0 32px rgba(46,92,255,0.05)" }}>
+      <div className="w-[400px] bg-white/70 backdrop-blur-xl border-r border-white/60 flex flex-col shrink-0" style={{ boxShadow: "8px 0 32px rgb(var(--accent-blue-rgb) / 0.05)" }}>
         <div className="p-5 space-y-3">
           <div className="flex items-center justify-between">
             <button onClick={onBack} className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-slate-700 transition">
@@ -362,10 +377,10 @@ function RouteDetail({ route, onBack }) {
               </div>
               <div className="flex gap-2 flex-wrap">
                 {detail?.route_code && (
-                  <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ background: "rgba(46,92,255,0.08)", color: "#2E5CFF" }}>{detail.route_code}</span>
+                  <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ background: "rgb(var(--accent-blue-rgb) / 0.08)", color: "var(--accent-blue)" }}>{detail.route_code}</span>
                 )}
                 {detail?.total_distance_meters ? (
-                  <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ background: "rgba(46,92,255,0.08)", color: "#2E5CFF" }}>
+                  <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ background: "rgb(var(--accent-blue-rgb) / 0.08)", color: "var(--accent-blue)" }}>
                     {(detail.total_distance_meters / 1000).toFixed(1)} km
                   </span>
                 ) : null}
@@ -393,7 +408,7 @@ function RouteDetail({ route, onBack }) {
                   : "text-slate-500 hover:text-slate-700"
               }`}
               style={{
-                background: placingStop !== null ? "rgba(46,92,255,0.1)" : "rgba(46,92,255,0.06)",
+                background: placingStop !== null ? "rgb(var(--accent-blue-rgb) / 0.1)" : "rgb(var(--accent-blue-rgb) / 0.06)",
               }}>
               <Plus size={12} /> {placingStop !== null ? "Click map..." : "Add Stop"}
             </button>
@@ -412,7 +427,7 @@ function RouteDetail({ route, onBack }) {
             </div>
           ) : (
             <div className="relative">
-              <div className="absolute left-[27px] top-0 bottom-0 w-0.5" style={{ background: "rgba(46,92,255,0.12)" }} />
+              <div className="absolute left-[27px] top-0 bottom-0 w-0.5" style={{ background: "rgb(var(--accent-blue-rgb) / 0.12)" }} />
               <div className="p-4 space-y-1">
                 {stops.map((s, i) => {
                   const isStart = i === 0;
@@ -421,7 +436,7 @@ function RouteDetail({ route, onBack }) {
                     <div key={s.id || i} className="relative flex items-center gap-2 py-1.5 px-1 rounded-lg hover:bg-white/70 transition group/stop">
                       <div
                         className="relative z-10 w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-semibold text-white shrink-0 cursor-pointer"
-                        style={{ backgroundColor: isStart ? "#7DD3FC" : isEnd ? "#1A3FCC" : "#2E5CFF" }}
+                        style={{ backgroundColor: isStart ? "var(--accent-blue-light)" : isEnd ? "var(--accent-blue-dark)" : "var(--accent-blue)" }}
                         onClick={() => {
                           if (editing && s.lon && s.lat && mapRef.current) {
                             mapRef.current.flyTo({ center: [s.lon, s.lat], zoom: 16, duration: 800 });
@@ -447,7 +462,7 @@ function RouteDetail({ route, onBack }) {
                                 placingStop === i ? "text-[#2E5CFF]" : "text-slate-500 hover:text-slate-700"
                               }`}
                               style={{
-                                background: placingStop === i ? "rgba(46,92,255,0.12)" : "rgba(46,92,255,0.06)",
+                                background: placingStop === i ? "rgb(var(--accent-blue-rgb) / 0.12)" : "rgb(var(--accent-blue-rgb) / 0.06)",
                               }}>
                               {placingStop === i ? "Click map..." : "Pin on map"}
                             </button>
@@ -482,7 +497,7 @@ function RouteDetail({ route, onBack }) {
       <div className="flex-1 relative">
         <div ref={mapContainer} className="h-full w-full" />
         {editing && placingStop !== null && (
-          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-xl shadow-lg text-sm font-semibold text-white z-10" style={{ background: "linear-gradient(135deg, #2E5CFF, #5B8AFF)" }}>
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-xl shadow-lg text-sm font-semibold text-white z-10" style={{ background: "linear-gradient(135deg, var(--accent-blue), var(--accent-blue-light))" }}>
             Click on the map to place stop {placingStop + 1}
           </div>
         )}
@@ -492,6 +507,7 @@ function RouteDetail({ route, onBack }) {
 }
 
 export default function RouteExplorer() {
+  useAccentTick();
   const [cities, setCities] = useState([]);
   const [selectedCity, setSelectedCity] = useState("");
   const [routes, setRoutes] = useState([]);
@@ -499,20 +515,45 @@ export default function RouteExplorer() {
   const [search, setSearch] = useState("");
   const [cityOpen, setCityOpen] = useState(false);
   const [viewRoute, setViewRoute] = useState(null);
+  const cityRef = useRef(null);
 
   useEffect(() => {
-    api.get("/transport/cities/").then((r) => {
-      const d = Array.isArray(r.data) ? r.data : r.data.results || [];
-      setCities(d);
-      if (d.length) setSelectedCity(d[0].id);
-    }).catch(() => {});
+    if (!cityOpen) return;
+    const onDocDown = (e) => {
+      if (cityRef.current && !cityRef.current.contains(e.target)) setCityOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setCityOpen(false);
+    };
+    document.addEventListener("mousedown", onDocDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [cityOpen]);
+
+  useEffect(() => {
+    api.get("/transport/cities/")
+      .then((r) => {
+        const d = Array.isArray(r.data)
+          ? r.data
+          : Array.isArray(r.data?.data)
+            ? r.data.data
+            : r.data?.results || [];
+        setCities(d);
+        if (d.length) setSelectedCity((prev) => prev || d[0].id);
+      })
+      .catch(() => setCities([]));
   }, []);
 
   useEffect(() => {
     if (!selectedCity) return;
     setLoading(true);
     api.get(`/transport/routes/?city_id=${selectedCity}`)
-      .then((r) => setRoutes(Array.isArray(r.data) ? r.data : r.data.results || []))
+      .then((r) => setRoutes(
+        Array.isArray(r.data) ? r.data : Array.isArray(r.data?.data) ? r.data.data : r.data?.results || []
+      ))
       .catch(() => setRoutes([]))
       .finally(() => setLoading(false));
   }, [selectedCity]);
@@ -538,9 +579,12 @@ export default function RouteExplorer() {
   return (
     <div className="pt-5 pb-8 px-6 md:px-8 h-full overflow-y-auto">
       <div className="flex items-center gap-4 mb-6">
-        <div className="relative">
+        <div className="relative" ref={cityRef}>
           <button
-            onClick={() => setCityOpen(!cityOpen)}
+            type="button"
+            onClick={() => setCityOpen((o) => !o)}
+            aria-haspopup="listbox"
+            aria-expanded={cityOpen}
             className="glass-btn flex items-center gap-2 px-4 py-3 text-sm font-medium text-slate-800 min-w-[200px]"
           >
             <MapPin size={16} className="text-[#2E5CFF]" />
@@ -548,15 +592,26 @@ export default function RouteExplorer() {
             <ChevronDown size={16} className={`text-slate-400 transition ${cityOpen ? "rotate-180" : ""}`} />
           </button>
           {cityOpen && (
-            <div className="absolute top-full left-0 mt-1 w-full glass-card-strong rounded-xl shadow-lg z-20 overflow-hidden">
+            <div
+              role="listbox"
+              className="absolute top-full left-0 mt-1 w-full min-w-[200px] glass-card-strong rounded-xl shadow-lg z-50 max-h-72 overflow-y-auto"
+            >
+              {cities.length === 0 && (
+                <div className="px-4 py-3 text-sm text-slate-500">No cities available</div>
+              )}
               {cities.map((c) => (
                 <button
                   key={c.id}
-                  onClick={() => { setSelectedCity(c.id); setCityOpen(false); setSearch(""); }}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCity(c.id);
+                    setCityOpen(false);
+                    setSearch("");
+                  }}
                   className={`w-full text-left px-4 py-3 text-sm font-medium transition ${
-                    c.id === selectedCity ? "text-accent-primary" : "text-slate-800 hover:bg-white/70"
+                    c.id === selectedCity ? "text-accent-primary" : "text-slate-800 hover:bg-white/70 dark:hover:bg-white/10"
                   }`}
-                  style={c.id === selectedCity ? { background: "rgba(46,92,255,0.08)" } : {}}
+                  style={c.id === selectedCity ? { background: "rgb(var(--accent-blue-rgb) / 0.08)" } : {}}
                 >
                   {c.name}
                 </button>
@@ -575,13 +630,28 @@ export default function RouteExplorer() {
           />
         </div>
 
-        <div className="px-4 py-3 rounded-xl text-sm font-semibold text-slate-600" style={{ background: "rgba(243,244,246,0.6)", border: "1px solid rgba(148,163,184,0.2)" }}>
+        <div
+          className="px-4 py-3 rounded-xl text-sm font-semibold text-accent-primary"
+          style={{ background: "rgb(var(--accent-blue-rgb) / 0.08)", border: "1px solid rgb(var(--accent-blue-rgb) / 0.2)" }}
+        >
           {filtered.length} route{filtered.length !== 1 ? "s" : ""}
         </div>
       </div>
 
       {loading ? (
         <Loader />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={Search}
+          title={search ? "No routes found" : "No routes yet"}
+          description={
+            search
+              ? "Try a different search term."
+              : routes.length === 0
+                ? "Select a city to load its routes."
+                : "No routes to display."
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filtered.map((r) => {
@@ -598,7 +668,7 @@ export default function RouteExplorer() {
                 <div className="px-5 pb-4">
                   <div className="mb-3">
                     <h3 className="font-semibold text-base text-slate-800 truncate inline-flex items-center gap-1.5">
-                      <Bike size={14} className="shrink-0" style={{ color: "#3B82F6" }} />
+                      <Bike size={14} className="shrink-0" style={{ color: "var(--accent-blue)" }} />
                       <span className="truncate">{r.name}</span>
                     </h3>
                     <p className="text-xs text-slate-500 font-medium mt-0.5">

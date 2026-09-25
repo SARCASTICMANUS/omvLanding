@@ -16,7 +16,7 @@ export default function ZoneConfiguration({ stops, zones, distances, onZoneChang
             Each zone's end stop defines where the next zone begins.
           </p>
         </div>
-        <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgba(46,92,255,0.12)", color: "#2E5CFF" }}>
+        <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgb(var(--accent-blue-rgb) / 0.12)", color: "var(--accent-blue)" }}>
           {zones.length} zones
         </span>
       </div>

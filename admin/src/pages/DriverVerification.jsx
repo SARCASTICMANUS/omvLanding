@@ -48,12 +48,12 @@ function InfoCard({ icon, label, value }) {
       {/* Very subtle ambient blue/lavender wash */}
       <div
         className="pointer-events-none absolute -top-8 -right-8 h-16 w-16 rounded-full"
-        style={{ background: "radial-gradient(closest-side, rgba(59,130,246,0.10), transparent)" }}
+        style={{ background: "radial-gradient(closest-side, rgb(var(--accent-blue-rgb) / 0.12), transparent)" }}
       />
       {/* Label + small secondary visual */}
       <div className="relative z-10 flex items-center justify-between gap-2">
         <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">{label}</span>
-        <span className="shrink-0" style={{ color: "#3B82F6" }}>
+        <span className="shrink-0" style={{ color: "var(--accent-blue)" }}>
           {cloneElement(icon, { size: 13, strokeWidth: 2 })}
         </span>
       </div>
@@ -168,7 +168,7 @@ export default function DriverVerification() {
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-bold uppercase"
-                    style={{ background: "rgba(46,92,255,0.08)", border: "1px solid rgba(46,92,255,0.15)", color: "#2E5CFF" }}>
+                    style={{ background: "rgb(var(--accent-blue-rgb) / 0.08)", border: "1px solid rgb(var(--accent-blue-rgb) / 0.15)", color: "var(--accent-blue)" }}>
                     {(driver.first_name?.[0] || driver.email[0])}
                   </div>
                   <div>
@@ -240,7 +240,7 @@ export default function DriverVerification() {
                           <div key={doc.id} className="glass-card-subtle rounded-xl px-4 py-3">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
-                                <FileText size={16} style={{ color: "#2E5CFF" }} />
+                                <FileText size={16} style={{ color: "var(--accent-blue)" }} />
                                 <div>
                                   <span className="text-sm font-semibold text-slate-800">{doc.document_type}</span>
                                   {doc.rejection_reason && <p className="text-xs text-red-500 mt-0.5">{doc.rejection_reason}</p>}

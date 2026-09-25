@@ -1,10 +1,10 @@
 import { stopIndexById, formatKm, shortStopName } from "../../utils/zoneLogic";
 
 const ZONE_BAND_COLORS = [
-  "bg-rose-100 border-rose-300/60 text-slate-800",
-  "bg-teal-100 border-teal-300/60 text-slate-800",
-  "bg-amber-100 border-amber-300/60 text-slate-800",
-  "bg-indigo-100 border-indigo-300/60 text-slate-800",
+  "bg-rose-100 border-rose-300/60 text-slate-800 dark:bg-rose-950/50 dark:border-rose-800/50",
+  "bg-teal-100 border-teal-300/60 text-slate-800 dark:bg-teal-950/50 dark:border-teal-800/50",
+  "bg-amber-100 border-amber-300/60 text-slate-800 dark:bg-amber-950/50 dark:border-amber-800/50",
+  "bg-indigo-100 border-indigo-300/60 text-slate-800 dark:bg-indigo-950/50 dark:border-indigo-800/50",
 ];
 
 // Horizontal route timeline. Each zone wraps its assigned stops. Purely
@@ -75,10 +75,13 @@ export default function RouteTimeline({ stops, zones, distances, minutes }) {
                 <div key={stop.id} className="flex-1 flex flex-col items-center gap-1.5 px-1">
                   <div
                     className={`h-3 w-3 rounded-full border-2 border-white/80 shadow ${
-                      isZoneStart ? "bg-rose-500" : "bg-slate-400"
+                      isZoneStart ? "" : "bg-slate-400"
                     }`}
+                    style={isZoneStart ? { background: "var(--accent-blue)" } : {}}
                   />
-                  <span className="text-[10px] font-medium text-slate-400">S{si + 1}</span>
+                  <span className="text-[10px] font-medium" style={{ color: "rgb(var(--accent-blue-rgb) / 0.85)" }}>
+                    S{si + 1}
+                  </span>
                   <span className="text-[11px] font-semibold text-slate-800 text-center leading-tight truncate w-full">
                     {shortStopName(stop)}
                   </span>

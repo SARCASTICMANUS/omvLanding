@@ -1,20 +1,21 @@
 import { Globe, MapPin, Layers, Clock } from "lucide-react";
 
 const ICON_STYLES = [
-  { background: "rgba(46,92,255,0.1)", color: "#2E5CFF" },
-  { background: "rgba(91,138,255,0.12)", color: "#5B8AFF" },
-  { background: "rgba(125,211,252,0.16)", color: "#7DD3FC" },
-  { background: "rgba(30,79,216,0.1)", color: "#1A3FCC" },
+  { background: "rgb(var(--accent-blue-rgb) / 0.1)", color: "var(--accent-blue)" },
+  { background: "rgb(var(--accent-blue-rgb) / 0.12)", color: "var(--accent-blue-light)" },
+  { background: "rgb(var(--accent-blue-rgb) / 0.08)", color: "var(--accent-blue-light)" },
+  { background: "rgb(var(--accent-blue-rgb) / 0.1)", color: "var(--accent-blue-dark)" },
 ];
 
 function MiniStat({ icon, label, value, idx }) {
-  const accent = ICON_STYLES[idx % ICON_STYLES.length].color;
+  const style = ICON_STYLES[idx % ICON_STYLES.length];
+  const accent = style.color;
   return (
     <div className="glass-card p-4 relative overflow-hidden flex flex-col animate-glass-fade-in">
       {/* Very subtle ambient blue/lavender wash */}
       <div
         className="pointer-events-none absolute -top-10 -right-10 h-24 w-24 rounded-full"
-        style={{ background: `radial-gradient(closest-side, ${accent}1A, transparent)` }}
+        style={{ background: "radial-gradient(closest-side, rgb(var(--accent-blue-rgb) / 0.10), transparent)" }}
       />
       {/* Label — subtle, above the metric */}
       <p className="relative z-10 text-[10px] font-medium uppercase tracking-wider text-slate-500 truncate mb-3">
@@ -22,7 +23,7 @@ function MiniStat({ icon, label, value, idx }) {
       </p>
       {/* Metric + small secondary visual on the right */}
       <div className="relative z-10 flex items-center justify-between gap-3">
-        <span className="text-[26px] font-bold leading-none truncate whitespace-nowrap" style={{ color: "#16233F" }}>
+        <span className="text-[26px] font-bold leading-none truncate whitespace-nowrap brand-heading">
           {value?.toLocaleString() ?? "—"}
         </span>
         <span className="shrink-0 opacity-90" style={{ color: accent }}>

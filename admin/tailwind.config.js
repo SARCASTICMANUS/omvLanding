@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: "class",
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
     extend: {
@@ -12,9 +13,9 @@ export default {
           "border-strong": "rgba(255,255,255,0.60)",
         },
         accent: {
-          primary: "#2E5CFF",
-          "primary-light": "#5B8AFF",
-          "primary-dark": "#1A3FCC",
+          primary: "rgb(var(--accent-blue-rgb, 46 92 255) / <alpha-value>)",
+          "primary-light": "var(--accent-blue-light, #5B8AFF)",
+          "primary-dark": "var(--accent-blue-dark, #1A3FCC)",
           lavender: "#C4B5FD",
           "lavender-light": "#DDD6FE",
           sky: "#7DD3FC",

@@ -33,7 +33,7 @@ export default function ZoneCard({ stops, zones, zoneIndex, zone, distances, onZ
         <div className="flex items-center gap-3">
           <div>
             <p className="flex items-center gap-1 text-[10px] font-medium text-slate-400 uppercase tracking-wider">
-              <Layers size={12} strokeWidth={2} style={{ color: "#3B82F6" }} />
+              <Layers size={12} strokeWidth={2} style={{ color: "var(--accent-blue)" }} />
               Zone {letter}
             </p>
             <input
@@ -78,10 +78,9 @@ export default function ZoneCard({ stops, zones, zoneIndex, zone, distances, onZ
                     <div className="flex flex-col items-center shrink-0 pt-0.5">
                       <div
                         className={`w-2.5 h-2.5 rounded-full border-2 ${
-                          isBoundary
-                            ? "bg-[#3B82F6] border-[#3B82F6]/30"
-                            : "bg-white/80 border-slate-300"
+                          isBoundary ? "" : "bg-white/80 border-slate-300"
                         }`}
+                        style={isBoundary ? { background: "var(--accent-blue)", borderColor: "rgb(var(--accent-blue-rgb) / 0.3)" } : {}}
                       />
                       {!isLast && <div className="w-px h-4 bg-slate-300" />}
                     </div>
@@ -90,7 +89,7 @@ export default function ZoneCard({ stops, zones, zoneIndex, zone, distances, onZ
                         <span className={`text-[11px] font-semibold truncate ${isBoundary ? "text-slate-800" : "text-slate-500"}`}>
                           {shortStopName(stop)}
                         </span>
-                        <span className="text-[10px] text-slate-400 shrink-0">
+                        <span className="text-[10px] shrink-0" style={{ color: "rgb(var(--accent-blue-rgb) / 0.85)" }}>
                           S{stopIdx + 1}
                         </span>
                       </div>

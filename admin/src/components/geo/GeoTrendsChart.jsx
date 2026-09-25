@@ -1,7 +1,9 @@
 import { useMemo } from "react";
-import { BLUE_PALETTE } from "../../colors";
+import { getBluePalette } from "../../colors";
+import useAccentTick from "../../hooks/useAccentTick";
 
 export default function GeoTrendsChart({ dailyByCountry = [], height = 200 }) {
+  useAccentTick();
   const { countries, days, maxVal } = useMemo(() => {
     const countryMap = {};
     const daySet = new Set();
@@ -81,7 +83,7 @@ export default function GeoTrendsChart({ dailyByCountry = [], height = 200 }) {
           const y = padding.top + chartH - (val / maxVal) * chartH;
           return (
             <g key={i}>
-              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="rgba(46,92,255,0.06)" strokeWidth="1" />
+              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} style={{ stroke: "rgb(var(--accent-blue-rgb) / 0.06)" }} strokeWidth="1" />
               <text x={padding.left - 5} y={y + 3} textAnchor="end" className="text-[8px] fill-slate-400/70 font-medium">
                 {val}
               </text>
@@ -94,9 +96,9 @@ export default function GeoTrendsChart({ dailyByCountry = [], height = 200 }) {
           <path
             key={country}
             d={buildAreaPath(ci)}
-            fill={BLUE_PALETTE[ci % BLUE_PALETTE.length]}
+            fill={getBluePalette()[ci % getBluePalette().length]}
             fillOpacity={0.45}
-            stroke={BLUE_PALETTE[ci % BLUE_PALETTE.length]}
+            stroke={getBluePalette()[ci % getBluePalette().length]}
             strokeWidth={1.5}
           />
         ))}
@@ -117,7 +119,7 @@ export default function GeoTrendsChart({ dailyByCountry = [], height = 200 }) {
       <div className="flex flex-wrap gap-3 mt-2 justify-center">
         {countries.map((country, i) => (
           <div key={i} className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm border border-white/70" style={{ background: BLUE_PALETTE[i % BLUE_PALETTE.length] }} />
+            <div className="w-3 h-3 rounded-sm border border-white/70" style={{ background: getBluePalette()[i % getBluePalette().length] }} />
             <span className="text-[10px] font-medium text-slate-800">{country}</span>
           </div>
         ))}

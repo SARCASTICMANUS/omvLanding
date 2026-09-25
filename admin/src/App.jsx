@@ -53,7 +53,7 @@ function AdminLayout({ onLogout }) {
   const activeTabInfo = tabs.find((t) => t.id === activeTab);
 
   return (
-    <div className="relative h-screen overflow-hidden p-3 md:p-4 lg:p-5" style={{ background: "linear-gradient(135deg, #EAF0FF 0%, #E8EEFF 25%, #F1ECFF 48%, #EFF6FF 72%, #EAF0FF 100%)" }}>
+    <div className="admin-shell-outer relative h-screen overflow-hidden p-3 md:p-4 lg:p-5">
       {/* Ambient gradient blobs — the back-most backdrop, behind the glass shell */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="gradient-blob blob-primary w-[420px] h-[420px] -top-24 -left-20 animate-blob-float" />
@@ -64,35 +64,25 @@ function AdminLayout({ onLogout }) {
         <div className="gradient-blob blob-deep w-[240px] h-[240px] top-[10%] left-[55%] animate-blob-float" style={{ animationDelay: "2.2s" }} />
       </div>
 
-      <div
-        className="h-full flex flex-col overflow-hidden relative z-10"
-        style={{
-          background: "linear-gradient(180deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.1) 100%)",
-          backdropFilter: "blur(18px)",
-          WebkitBackdropFilter: "blur(18px)",
-          border: "1px solid rgba(255,255,255,0.45)",
-          borderRadius: "36px",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.6), 0 2px 6px rgba(46,92,255,0.03), 0 16px 40px rgba(31,38,135,0.08), 0 40px 100px rgba(31,38,135,0.12)",
-        }}
-      >
+      <div className="admin-shell-inner h-full flex flex-col overflow-hidden relative z-10">
 
         {/* Compact header row — brand (matches sidebar width) + active page title at the same level */}
         <div className="relative z-10 shrink-0 flex items-start px-6 md:px-8 pt-6 md:pt-7 pb-3">
           <div className="w-64 shrink-0">
             <h1
-              className="text-2xl md:text-[30px] leading-none tracking-tight"
-              style={{ fontFamily: "Geom, sans-serif", color: "#16233F" }}
+              className="brand-heading text-2xl md:text-[30px] leading-none tracking-tight"
+              style={{ fontFamily: "Geom, sans-serif" }}
             >
               <span className="font-black">OMV</span>{" "}
-              <span className="font-medium text-slate-700">Admin</span>
+              <span className="font-medium text-slate-700 dark:text-slate-300">Admin</span>
             </h1>
-            <p className="text-xs font-medium text-slate-400 mt-2">Control Panel</p>
+            <p className="text-xs font-medium text-slate-400 dark:text-slate-500 mt-2">Control Panel</p>
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="glass-title-sm text-2xl">{activeTabInfo?.label}</h1>
             <div className="flex items-center justify-between gap-3 mt-1">
               {(activeTabInfo?.description || (pageSubtitle?.tab === activeTab ? pageSubtitle.text : null)) && (
-                <p className="text-slate-500 font-medium text-sm truncate min-w-0">
+                <p className="text-slate-500 dark:text-slate-400 font-medium text-sm truncate min-w-0">
                   {activeTabInfo?.description || pageSubtitle.text}
                 </p>
               )}
