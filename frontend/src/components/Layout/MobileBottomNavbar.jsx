@@ -1,124 +1,120 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
-import { Home, Route, Map, Bell, User } from "lucide-react";
+import { Home, History, Bell, User, LayoutDashboard } from "lucide-react";
+import { DRIVER_ROLES } from "../../constants/roles";
+import { normalizeRole } from "../../utils/roles";
+
+// Exact replica of the mobile React Navigation tab bar
+// (vayy_app/src/navigation/PassengerNavigator.jsx + DriverNavigator.jsx):
+// white bar, borderTop 1px #F0F0F0, top radius 12, height 62 + safe-area,
+// label 10/700, active tint #009849, absolute bottom.
 
 export default function MobileBottomNavbar() {
   const location = useLocation();
   const { isAuthenticated, user } = useSelector((state) => state.auth || {});
-  
-  // Passenger slice notifications count
+
   const passengerNotifications = useSelector(
     (state) => state.passenger?.notifications || []
   );
 
-  // If not logged in, do not render bottom nav
   if (!isAuthenticated) return null;
 
-  const role = user?.role || "passenger";
+  const role = normalizeRole(user?.role);
+  const isDriver = DRIVER_ROLES.includes(role);
 
-  // Determine Live Tracking and Profile paths based on user role
-  const livePath = role === "driver" ? "/driver/live" : "/passenger/live";
-  const profilePath =
-    role === "driver" ? "/driver/profile/update" : "/passenger/profile/update";
-
-  const navItems = [
-    {
-      name: "Home",
-      path: "/",
-      icon: Home,
-      isActive: (pathname) => pathname === "/" || pathname === "/dashboard",
-    },
-    {
-      name: "Routes",
-      path: "/routes",
-      icon: Route,
-      isActive: (pathname) => pathname === "/routes",
-    },
-    {
-      name: "Live Map",
-      path: livePath,
-      icon: Map,
-      isActive: (pathname) =>
-        pathname === "/driver/live" || pathname === "/passenger/live",
-      isLive: true,
-    },
-    {
-      name: "Alerts",
-      path: "/notifications",
-      icon: Bell,
-      isActive: (pathname) => pathname === "/notifications",
-      badgeCount: role === "driver" ? 0 : passengerNotifications.length,
-    },
-    {
-      name: "Profile",
-      path: profilePath,
-      icon: User,
-      isActive: (pathname) =>
-        pathname === "/driver/profile/update" ||
-        pathname === "/passenger/profile/update",
-    },
-  ];
+  // Tab sets mirror the mobile navigators exactly.
+  const navItems = isDriver
+    ? [
+        {
+          name: "Home",
+          path: "/driver/live",
+          icon: LayoutDashboard,
+          active: (p) => p === "/driver/live" || p === "/",
+        },
+        {
+          name: "My Trips",
+          path: "/trips",
+          icon: History,
+          active: (p) => p === "/trips",
+        },
+        {
+          name: "Profile",
+          path: "/profile",
+          icon: User,
+          active: (p) => p === "/profile",
+        },
+      ]
+    : [
+        {
+          name: "Home",
+          path: "/",
+          icon: Home,
+          active: (p) => p === "/" || p === "/passenger/live",
+        },
+        {
+          name: "My Trips",
+          path: "/trips",
+          icon: History,
+          active: (p) => p === "/trips",
+        },
+        {
+          name: "Alerts",
+          path: "/notifications",
+          icon: Bell,
+          active: (p) => p === "/notifications",
+          badgeCount: passengerNotifications.filter((n) => !n?.read).length,
+        },
+        {
+          name: "Profile",
+          path: "/profile",
+          icon: User,
+          active: (p) => p === "/profile",
+        },
+      ];
 
   return (
-    <div
-      className="xl:hidden fixed left-4 right-4 z-[490] flex h-[68px] items-center justify-around rounded-[18px] border border-white/20 bg-white/75 px-2 shadow-[0_8px_32px_0_rgba(15,23,42,0.12)] backdrop-blur-md transition-all duration-300"
+    <nav
+      className="fixed inset-x-0 bottom-0 z-[490] border-t border-[#F0F0F0] bg-white lg:hidden"
       style={{
-        bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
+        borderTopLeftRadius: 12,
+        borderTopRightRadius: 12,
+        paddingTop: 4,
+        paddingBottom: "calc(14px + env(safe-area-inset-bottom, 0px))",
       }}
+      aria-label="Primary"
     >
-      {navItems.map((item) => {
-        const active = item.isActive(location.pathname);
-        const Icon = item.icon;
-        
-        // Colors from Vayy Design System
-        // Active item uses #009849. Live tracking uses #00E676.
-        const activeColor = item.isLive ? "#00E676" : "#009849";
-        const color = active ? activeColor : "#94a3b8";
+      <div className="flex h-[62px] items-stretch justify-around">
+        {navItems.map((item) => {
+          const isActive = item.active(location.pathname);
+          const Icon = item.icon;
+          const color = isActive ? "#009849" : "#9CA3AF";
 
-        return (
-          <Link
-            key={item.name}
-            to={item.path}
-            className="relative flex flex-col items-center justify-center gap-0.5 py-1 w-14 rounded-xl transition-all duration-200 active:scale-90"
-            aria-label={item.name}
-          >
-            <div className="relative flex items-center justify-center">
-              <Icon
-                size={21}
-                color={color}
-                strokeWidth={active ? 2.5 : 2}
-                className={`transition-colors duration-200 ${
-                  active && item.isLive ? "animate-pulse" : ""
-                }`}
-              />
-              
-              {/* Notification Badge */}
-              {item.badgeCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white shadow-sm">
-                  {item.badgeCount}
-                </span>
-              )}
-
-              {/* Live Tracking Indicator Dot */}
-              {item.isLive && (
-                <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00E676] opacity-75"></span>
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-[#00E676]"></span>
-                </span>
-              )}
-            </div>
-
-            {/* Text label below icon */}
-            <span
-              className="text-[10px] font-semibold leading-none tracking-tight transition-colors duration-200 truncate w-full text-center"
-              style={{ color }}
+          return (
+            <Link
+              key={item.name}
+              to={item.path}
+              className="relative flex flex-1 flex-col items-center justify-center gap-1 pt-1 transition-transform active:scale-95"
+              aria-current={isActive ? "page" : undefined}
             >
-              {item.name}
-            </span>
-          </Link>
-        );
-      })}
-    </div>
+              <span className="relative">
+                <Icon size={24} color={color} strokeWidth={isActive ? 2.4 : 2} />
+                {item.badgeCount > 0 && (
+                  <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#EF4444] px-1 text-[9px] font-bold leading-none text-white">
+                    {item.badgeCount > 99 ? "99+" : item.badgeCount}
+                  </span>
+                )}
+              </span>
+              <span
+                className="w-full truncate px-1 text-center text-[10px] font-bold leading-none"
+                style={{ color }}
+              >
+                {item.name}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }

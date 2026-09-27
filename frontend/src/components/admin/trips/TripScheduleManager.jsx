@@ -171,7 +171,7 @@ const TripScheduleManager = ({ cityId }) => {
           >
             <option value="">Choose a route...</option>
             {routes.map(route => (
-              <option key={route.id} value={route.id}>{route.name} ({route.bus_number})</option>
+              <option key={route.id} value={route.id}>{route.name}</option>
             ))}
           </select>
         </div>
@@ -265,7 +265,7 @@ const TripScheduleManager = ({ cityId }) => {
                     <span className="text-indigo-600">{selectedSchedule.scheduled_start_time.substring(0, 5)}</span>
                   </h1>
                   <p className="text-slate-500 font-bold mt-1">
-                    Route: {selectedRoute?.name} • {selectedRoute?.bus_number}
+                    Route: {selectedRoute?.name}
                   </p>
                 </div>
                 <div className="flex gap-3">

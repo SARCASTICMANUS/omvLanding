@@ -23,6 +23,7 @@ export const hasValidCoords = (point) => {
 export const normalizeDriverRoutes = (data) => {
   if (Array.isArray(data)) return data;
   if (!data || typeof data !== "object") return [];
+  if (data.data && data.data !== data) return normalizeDriverRoutes(data.data);
   if (Array.isArray(data.routes)) return data.routes;
   if (Array.isArray(data.results)) return data.results;
   if (Array.isArray(data.assigned_routes)) return data.assigned_routes;
@@ -220,7 +221,6 @@ export const getRouteTitle = (route) =>
 export const getRouteCode = (route) =>
   route?.code ||
   route?.route_code ||
-  route?.bus_number ||
   route?.short_name ||
   route?.route_number ||
   `RT-${route?.id || "--"}`;

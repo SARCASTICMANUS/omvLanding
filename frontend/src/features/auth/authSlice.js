@@ -2,6 +2,14 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../lib/api";
 import { API_PATHS } from "../../constants/apiPaths";
 
+// constants/apiPaths.js is shared/off-limits, so the registration OTP routes that
+// only mobile declares live here (backend: accounts/api/urls.py).
+const REGISTRATION_PATHS = {
+  sendRegistrationOtp: "/api/accounts/send-registration-otp/",
+  verifyAndRegister: "/api/accounts/verify-and-register/",
+  resendRegistrationOtp: "/api/accounts/resend-registration-otp/",
+};
+
 const getPersistedUser = () => {
   try {
     const userStr = localStorage.getItem("user");
@@ -11,42 +19,182 @@ const getPersistedUser = () => {
   }
 };
 
+// Backend wraps every payload in { success, message, data } (common/responses.py).
+const unwrapPayload = (payload) =>
+  payload && typeof payload === "object" && "data" in payload
+    ? payload.data
+    : payload;
+
+// Mobile parity: vayy_app/src/auth/authSlice.jsx normalizeUser()
+const normalizeUser = (payload = {}) => {
+  const source =
+    payload.user && typeof payload.user === "object" ? payload.user : payload;
+  const firstName = source.first_name || "";
+  const lastName = source.last_name || "";
+  const name =
+    source.name ||
+    source.full_name ||
+    [firstName, lastName].filter(Boolean).join(" ");
+
+  return {
+    id: source.id,
+    role: source.role || payload.role,
+    name,
+    first_name: firstName,
+    last_name: lastName,
+    email: source.email || payload.email,
+    city: source.city ?? payload.city ?? null,
+  };
+};
+
+const normalizeError = (error) => {
+  // Axios network failure (server down / wrong base URL / CORS blocked the
+  // response) has no `response` — surface it distinctly from auth failures.
+  if (error?.request && !error?.response) {
+    return {
+      error: "Cannot reach the server. Please make sure the OMV API is running and try again.",
+    };
+  }
+  return (
+    error.response?.data || { error: "Something went wrong. Please try again." }
+  );
+};
+
+const persistSession = (tokens, user) => {
+  if (tokens?.access) localStorage.setItem("access_token", tokens.access);
+  if (tokens?.refresh) localStorage.setItem("refresh_token", tokens.refresh);
+  if (user) localStorage.setItem("user", JSON.stringify(user));
+};
+
 export const loginUser = createAsyncThunk(
   "auth/login",
   async (creds, thunkAPI) => {
     try {
-      const response = await api.post(API_PATHS.auth.login, creds);
-      const data = response.data;
-      const tokens = data.tokens || data;
+      const email = String(creds?.email || "").trim().toLowerCase();
+      const response = await api.post(API_PATHS.auth.login, {
+        email,
+        password: creds.password,
+      });
 
-      const userData = {
-        role: data.role,
-        name: data.name,
-        email: data.email,
-        city: data.city,
-      };
+      const payload = unwrapPayload(response.data) || {};
+      const tokens = payload.tokens || {};
+      const user = normalizeUser(payload);
 
-      localStorage.setItem("access_token", tokens.access);
-      localStorage.setItem("refresh_token", tokens.refresh);
-      localStorage.setItem("user", JSON.stringify(userData));
+      persistSession(tokens, user);
 
-      return { ...data, tokens, user: userData };
+      return { ...payload, tokens, user };
     } catch (error) {
-      return thunkAPI.rejectWithValue(
-        error.response?.data || { error: "Login failed" },
-      );
+      return thunkAPI.rejectWithValue(normalizeError(error));
     }
   },
 );
 
+// Passenger registration — POST /api/accounts/register/ (creates user + emails Safety Code)
 export const registerUser = createAsyncThunk(
   "auth/register",
   async (data, thunkAPI) => {
     try {
-      const response = await api.post(API_PATHS.auth.register, data);
-      return response.data;
+      const response = await api.post(API_PATHS.auth.register, {
+        email: String(data.email || "").trim().toLowerCase(),
+        password: data.password,
+        role: data.role,
+        first_name: data.first_name || "",
+        last_name: data.last_name || "",
+      });
+
+      const payload = unwrapPayload(response.data) || {};
+      const user = normalizeUser(payload);
+
+      return { user, email: user.email || data.email };
     } catch (error) {
-      return thunkAPI.rejectWithValue(error.response?.data || { error: "Registration failed" });
+      return thunkAPI.rejectWithValue(normalizeError(error));
+    }
+  },
+);
+
+// Driver registration — stashes the payload in Redis, no user is created yet
+export const sendRegistrationOtp = createAsyncThunk(
+  "auth/sendRegistrationOtp",
+  async (data, thunkAPI) => {
+    try {
+      await api.post(REGISTRATION_PATHS.sendRegistrationOtp, {
+        email: String(data.email || "").trim().toLowerCase(),
+        password: data.password,
+        role: data.role,
+        first_name: data.first_name || "",
+      });
+
+      return { email: String(data.email || "").trim().toLowerCase() };
+    } catch (error) {
+      return thunkAPI.rejectWithValue(normalizeError(error));
+    }
+  },
+);
+
+export const verifyAndRegister = createAsyncThunk(
+  "auth/verifyAndRegister",
+  async ({ email, otp }, thunkAPI) => {
+    try {
+      const response = await api.post(REGISTRATION_PATHS.verifyAndRegister, {
+        email: String(email || "").trim().toLowerCase(),
+        otp,
+      });
+
+      const payload = unwrapPayload(response.data) || {};
+      const user = normalizeUser(payload);
+
+      return { user, email: user.email || email };
+    } catch (error) {
+      return thunkAPI.rejectWithValue(normalizeError(error));
+    }
+  },
+);
+
+export const resendRegistrationOtp = createAsyncThunk(
+  "auth/resendRegistrationOtp",
+  async (email, thunkAPI) => {
+    try {
+      await api.post(REGISTRATION_PATHS.resendRegistrationOtp, {
+        email: String(email || "").trim().toLowerCase(),
+      });
+
+      return { email: String(email || "").trim().toLowerCase() };
+    } catch (error) {
+      return thunkAPI.rejectWithValue(normalizeError(error));
+    }
+  },
+);
+
+export const verifyOtp = createAsyncThunk(
+  "auth/verifyOtp",
+  async ({ email, otp }, thunkAPI) => {
+    try {
+      const response = await api.post(API_PATHS.auth.verifyOtp, {
+        email: String(email || "").trim().toLowerCase(),
+        otp,
+      });
+
+      const payload = unwrapPayload(response.data) || {};
+      const user = normalizeUser(payload);
+
+      return { user, email };
+    } catch (error) {
+      return thunkAPI.rejectWithValue(normalizeError(error));
+    }
+  },
+);
+
+export const resendOtp = createAsyncThunk(
+  "auth/resendOtp",
+  async (email, thunkAPI) => {
+    try {
+      await api.post(API_PATHS.auth.resendOtp, {
+        email: String(email || "").trim().toLowerCase(),
+      });
+
+      return { email: String(email || "").trim().toLowerCase() };
+    } catch (error) {
+      return thunkAPI.rejectWithValue(normalizeError(error));
     }
   },
 );
@@ -57,9 +205,12 @@ const authSlice = createSlice({
     user: getPersistedUser(),
     token: localStorage.getItem("access_token"),
     refreshToken: localStorage.getItem("refresh_token"),
-    isAuthenticated: !!localStorage.getItem("access_token") && !!getPersistedUser(),
+    isAuthenticated:
+      !!localStorage.getItem("access_token") && !!getPersistedUser(),
     loading: false,
     error: null,
+    isOtpSent: false,
+    otpEmail: null,
   },
   reducers: {
     logout: (state) => {
@@ -70,6 +221,8 @@ const authSlice = createSlice({
       state.token = null;
       state.refreshToken = null;
       state.isAuthenticated = false;
+      state.isOtpSent = false;
+      state.otpEmail = null;
     },
     restoreAuth: (state, action) => {
       state.user = action.payload.user;
@@ -82,7 +235,11 @@ const authSlice = createSlice({
       if (action.payload.refreshToken) {
         state.refreshToken = action.payload.refreshToken;
       }
-    }
+    },
+    clearOtpSent: (state) => {
+      state.isOtpSent = false;
+      state.otpEmail = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -92,37 +249,44 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
+        state.error = null;
         state.isAuthenticated = true;
-        state.token = action.payload.tokens.access;
-        state.refreshToken = action.payload.tokens.refresh;
+        state.isOtpSent = false;
+        state.otpEmail = null;
+        state.token = action.payload.tokens?.access || null;
+        state.refreshToken = action.payload.tokens?.refresh || null;
         state.user = action.payload.user;
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
-      .addCase(registerUser.pending, (state) => {
-        state.loading = true;
-      })
+      // Registration / OTP thunks deliberately do NOT touch the shared
+      // `loading` / `error` pair — those belong to the login screen so a
+      // failed sign-up never leaks a stale error into the login form.
       .addCase(registerUser.fulfilled, (state, action) => {
-        state.loading = false;
-        const tokens = action.payload.tokens || action.payload;
-        if (tokens.access && action.payload.user) {
-          state.isAuthenticated = true;
-          state.token = tokens.access;
-          state.refreshToken = tokens.refresh;
-          state.user = action.payload.user;
-          localStorage.setItem("access_token", tokens.access);
-          localStorage.setItem("refresh_token", tokens.refresh);
-          localStorage.setItem("user", JSON.stringify(action.payload.user));
-        }
+        state.isOtpSent = true;
+        state.otpEmail = action.payload.email;
       })
-      .addCase(registerUser.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
+      .addCase(sendRegistrationOtp.fulfilled, (state, action) => {
+        state.isOtpSent = true;
+        state.otpEmail = action.payload.email;
       })
+      .addCase(resendRegistrationOtp.fulfilled, (state, action) => {
+        state.isOtpSent = true;
+        state.otpEmail = action.payload.email;
+      })
+      .addCase(verifyAndRegister.fulfilled, (state) => {
+        state.isOtpSent = false;
+        state.otpEmail = null;
+      })
+      .addCase(verifyOtp.fulfilled, (state) => {
+        state.isOtpSent = false;
+        state.otpEmail = null;
+      });
   },
 });
 
-export const { logout, restoreAuth, refreshTokenSuccess } = authSlice.actions;
+export const { logout, restoreAuth, refreshTokenSuccess, clearOtpSent } =
+  authSlice.actions;
 export default authSlice.reducer;

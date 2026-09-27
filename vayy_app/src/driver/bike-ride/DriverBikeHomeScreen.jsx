@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
+  Dimensions,
   Image,
   Keyboard,
   PanResponder,
@@ -59,9 +60,17 @@ export default function DriverBikeHomeScreen({ navigation }) {
     locateUser();
   }, [locateUser]);
 
-  const SHEET_EXPANDED = Math.round(windowHeight - 120);
   const sheetHeight = useRef(new Animated.Value(SHEET_COMPACT)).current;
   const sheetStartRef = useRef(SHEET_COMPACT);
+  const kbLiftRef = useRef(0);
+  const preKbHeightRef = useRef(SHEET_COMPACT);
+  const kbClampRef = useRef(SHEET_COMPACT);
+
+  const getSheetMax = () =>
+    Math.max(
+      SHEET_COMPACT,
+      Math.round(Dimensions.get("window").height) - 80 - kbLiftRef.current,
+    );
 
   const sheetPan = useRef(
     PanResponder.create({
@@ -72,14 +81,15 @@ export default function DriverBikeHomeScreen({ navigation }) {
       },
       onPanResponderMove: (_, g) => {
         const next = Math.min(
-          SHEET_EXPANDED,
+          getSheetMax(),
           Math.max(SHEET_COMPACT, sheetStartRef.current - g.dy),
         );
         sheetHeight.setValue(next);
       },
       onPanResponderRelease: (_, g) => {
+        const max = getSheetMax();
         const next = sheetStartRef.current - g.dy;
-        const target = next >= (SHEET_COMPACT + SHEET_EXPANDED) / 2 ? SHEET_EXPANDED : SHEET_COMPACT;
+        const target = next >= (SHEET_COMPACT + max) / 2 ? max : SHEET_COMPACT;
         Animated.spring(sheetHeight, {
           toValue: target,
           friction: 9,
@@ -141,13 +151,23 @@ export default function DriverBikeHomeScreen({ navigation }) {
 
     const showSub = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", (e) => {
       const kbHeight = e.endCoordinates.height;
-      Animated.timing(keyboardHeight, { toValue: kbHeight, duration: 250, useNativeDriver: false }).start();
-      const availableHeight = windowHeight - kbHeight - 140;
-      Animated.spring(sheetHeight, { toValue: Math.max(SHEET_COMPACT, availableHeight), friction: 9, tension: 80, useNativeDriver: false }).start();
+      const lift = Platform.OS === "ios" ? kbHeight : 0;
+      kbLiftRef.current = lift;
+      Animated.timing(keyboardHeight, { toValue: lift, duration: 250, useNativeDriver: false }).start();
+
+      const current = sheetHeight.__getValue();
+      preKbHeightRef.current = current;
+      const spaceAbove = Math.max(SHEET_COMPACT, windowHeight - kbHeight - 16);
+      const target = Math.max(SHEET_COMPACT, Math.min(current, spaceAbove));
+      kbClampRef.current = target;
+      Animated.spring(sheetHeight, { toValue: target, friction: 9, tension: 80, useNativeDriver: false }).start();
     });
     const hideSub = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => {
+      kbLiftRef.current = 0;
       Animated.timing(keyboardHeight, { toValue: 0, duration: 250, useNativeDriver: false }).start();
-      Animated.spring(sheetHeight, { toValue: SHEET_COMPACT, friction: 9, useNativeDriver: false }).start();
+      const current = sheetHeight.__getValue();
+      const target = Math.abs(current - kbClampRef.current) < 2 ? preKbHeightRef.current : current;
+      Animated.spring(sheetHeight, { toValue: target, friction: 9, useNativeDriver: false }).start();
     });
     return () => { showSub.remove(); hideSub.remove(); };
   }, [cardAnim, keyboardHeight, loadRecentSearches]);
@@ -300,13 +320,12 @@ export default function DriverBikeHomeScreen({ navigation }) {
             <ScrollView
               bounces={false}
               keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={false}
               style={styles.sheetScroll}
               contentContainerStyle={styles.cardScroll}
             >
               <LocationSearch
-                key={`p-${pickup?.display_name || pickup?.name || "e"}`}
+                isPickup
                 label="Start Point"
                 onSelect={setPickup}
                 placeholder="Search starting location"
@@ -322,7 +341,6 @@ export default function DriverBikeHomeScreen({ navigation }) {
               </View>
 
               <LocationSearch
-                key={`d-${destination?.display_name || destination?.name || "e"}`}
                 dropdownLift={110}
                 label="Destination"
                 onSelect={setDestination}

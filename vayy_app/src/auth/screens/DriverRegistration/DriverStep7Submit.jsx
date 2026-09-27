@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ArrowLeft, CheckCircle, FileText, CreditCard, Car } from "lucide-react-native";
+import { ArrowLeft, CheckCircle, FileText, CreditCard, Bike } from "lucide-react-native";
 import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import BottomStickyButton from "../../components/BottomStickyButton";
@@ -51,7 +51,7 @@ export default function DriverStep7Submit({ data, onSubmit, onBack, loading }) {
           <Row label="Gender" value={data.gender} />
         </Section>
 
-        <Section icon={Car} title="Vehicle Details">
+        <Section icon={Bike} title="Vehicle Details">
           <Row label="Type" value={data.vehicleType === "bike" ? "Bike" : "Auto"} />
           <Row label="Number" value={data.vehicleNumber} />
           <Row label="RC Number" value={data.rcNumber} />

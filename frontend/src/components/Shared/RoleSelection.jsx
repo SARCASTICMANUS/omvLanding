@@ -1,5 +1,5 @@
 import React from "react";
-import { Car, User } from "lucide-react";
+import { Bike, User } from "lucide-react";
 
 const RoleSelection = ({ onSelect }) => {
   return (
@@ -11,7 +11,7 @@ const RoleSelection = ({ onSelect }) => {
           className="group relative bg-white p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-transparent hover:border-blue-500 flex flex-col items-center gap-4"
         >
           <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Car size={40} className="text-blue-600" />
+            <Bike size={40} className="text-blue-600" />
           </div>
           <h2 className="text-2xl font-bold text-gray-800">I am a Driver</h2>
           <p className="text-gray-500 text-center">

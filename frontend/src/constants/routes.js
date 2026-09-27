@@ -2,20 +2,23 @@ export const APP_ROUTES = {
   root: "/",
   login: "/login",
   register: "/register",
+  forgotPassword: "/forgot-password",
   admin: "/admin",
   driverLive: "/driver/live",
   passengerLive: "/passenger/live",
   driverProfileUpdate: "/driver/profile/update",
+  
   passengerProfileUpdate: "/passenger/profile/update",
   profile: "/profile",
+  trips: "/trips",
+  notifications: "/notifications",
   about: "/about",
   contact: "/contact",
+  help: "/help",
+  privacy: "/privacy",
+  terms: "/terms",
   routes: "/routes",
-  allBuses: "/passenger/all-buses",
   tracking: "/passenger/tracking/:tripId",
-  splash2: "/splash2",
-  splash3: "/splash3",
-  splash4: "/splash4",
 };
 
 export const ROLE_ROUTES = {
@@ -23,5 +26,5 @@ export const ROLE_ROUTES = {
   bikedriver: APP_ROUTES.driverLive,
   autodriver: APP_ROUTES.driverLive,
   admin: APP_ROUTES.admin,
-  passenger: APP_ROUTES.passengerLive,
+  passenger: APP_ROUTES.root,
 };

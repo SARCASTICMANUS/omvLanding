@@ -17,7 +17,7 @@ import {
   BarChart3,
   Users,
   LogOut,
-  Bus,
+  CarFront,
   UserCheck,
   UserSquare,
 } from "lucide-react";
@@ -49,7 +49,7 @@ const AdminPanel = () => {
     // Admin modules
     { id: "passengers", label: "Passengers", icon: <UserSquare size={18} />, hidden: !canSeeAllAdminItems },
     { id: "routes", label: "Routes", icon: <RouteIcon size={18} /> },
-    { id: "vehicles", label: "Vehicles", icon: <Bus size={18} />, hidden: !canSeeAllAdminItems },
+    { id: "vehicles", label: "Vehicles", icon: <CarFront size={18} />, hidden: !canSeeAllAdminItems },
     { id: "drivers", label: "Drivers", icon: <UserCheck size={18} />, hidden: !canSeeAllAdminItems },
     { id: "cities", label: "Cities", icon: <MapPin size={18} />, hidden: !canSeeAllAdminItems },
     { id: "users", label: "Users", icon: <Users size={18} />, hidden: !canSeeAllAdminItems },
@@ -66,7 +66,7 @@ const AdminPanel = () => {
           <div className="bg-indigo-600 p-2 rounded-xl">
             <LayoutDashboard size={24} />
           </div>
-          <h1 className="text-2xl font-black tracking-tighter">Vayy Admin</h1>
+          <h1 className="text-2xl font-black tracking-tighter">OMV Admin</h1>
         </div>
 
         <nav className="flex-1 space-y-2">

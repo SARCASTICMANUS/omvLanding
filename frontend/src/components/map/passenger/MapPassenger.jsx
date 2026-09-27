@@ -7,7 +7,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import api, { getWsUrl } from "../../../lib/api";
 import { API_PATHS } from "../../../constants/apiPaths";
 import { Navigation, Clock, Bus, RefreshCw, MapPin, Hand, Search, ArrowRight } from "lucide-react";
-import Header from "../../layout/Header";
+import Header from "../../Layout/Header";
 import LocationSearch from "../LocationSearch";
 import ProximityAlertModal from "../../passenger/ProximityAlertModal";
 import { getDistanceMeters } from "../../../maps/utils/geo";

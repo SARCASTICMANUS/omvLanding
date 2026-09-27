@@ -14,8 +14,7 @@ import {
   ArrowUp,
   ArrowDown,
   ChevronDown,
-  School,
-  Bus,
+  Route as RouteIcon,
   Upload,
   FileJson,
   FileSpreadsheet,
@@ -102,7 +101,6 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
           order: i 
         })),
       });
-      console.log("Preview API Response:", res.data);
       setPreviews(res.data || []);
       setSelectedIndex(0);
     } catch (e) {
@@ -639,8 +637,8 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
         <div className="p-6 bg-slate-900 text-white flex flex-col gap-4 shadow-lg">
           <div className="flex justify-between items-center">
             <h2 className="font-bold text-xl flex items-center gap-3 tracking-tight">
-              <School className="text-indigo-400" size={24} /> City
-              Transit
+              <RouteIcon className="text-indigo-400" size={24} /> City
+              Mobility
             </h2>
             <button
               onClick={onBack}
@@ -729,7 +727,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-3">
                               <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
-                                <Bus size={18} />
+                                <RouteIcon size={18} />
                               </div>
                               <div className="min-w-0">
                                 <h4 className="text-sm font-black text-slate-900 truncate">
@@ -954,7 +952,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
                 <div className="flex justify-between items-center">
                   <div className="flex flex-col">
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-                      Transit Stops ({totalRouteStopCount})
+                      Route Stops ({totalRouteStopCount})
                     </label>
                     {(!newPoints.start || !newPoints.end) && (
                       <span className="text-[9px] font-bold text-amber-500 uppercase tracking-tight mt-0.5">
@@ -1086,7 +1084,7 @@ const AdminRouteManager = ({ onBack, preSelectedCity }) => {
                 className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 transition shadow-xl hover:shadow-indigo-500/30 flex justify-center items-center gap-3 disabled:bg-slate-200 disabled:shadow-none disabled:text-slate-400"
               >
                 <Save size={18} />{" "}
-                {loading ? "Scaling Transit Path..." : "Save Route Package"}
+                {loading ? "Saving Route..." : "Save Route"}
               </button>
             </div>
             )}

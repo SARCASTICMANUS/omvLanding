@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { useSelector, useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import { CircleStop, LoaderCircle } from "lucide-react";
 import api from "../../lib/api";
 import { getStopLngLat } from "../../components/map/utils/routeGeometry";
 import { API_PATHS } from "../../constants/apiPaths";
 import {
   setStep,
   setDriverActiveTrip,
+  setActiveRide,
   setSelectedRoute,
   setSearchQuery,
   resetDriverState,
@@ -22,35 +25,57 @@ import {
   mergeRoutePreview,
   normalizeDriverRoutes,
 } from "./driverFlowUtils";
+import DriverBuddyRadar from "./DriverBuddyRadar";
 import DriverLiveTracking from "./DriverLiveTracking";
+import DriverOtpEntry from "./DriverOtpEntry";
+import DriverPickup from "./DriverPickup";
+import DriverPreRideCheck from "./DriverPreRideCheck";
 import DriverRouteList from "./DriverRouteList";
-import DriverStopsTimeline from "./DriverStopsTimeline";
+import DriverTripComplete from "./DriverTripComplete";
 import DriverTripPlanner from "./DriverTripPlanner";
-import DriverTripReview from "./DriverTripReview";
 
 const STEPS = {
   PLANNER: "planner",
   ROUTES: "routes",
-  REVIEW: "review",
+  PREFLIGHT: "preflight",
+  RADAR: "radar",
+  PICKUP: "pickup",
+  OTP: "otp",
   LIVE: "live",
+  COMPLETE: "complete",
 };
+
+const BROADCAST_ACCEPT = (requestId) =>
+  `/api/operations/dispatch/broadcast/${requestId}/accept/`;
+const BROADCAST_REJECT = (requestId) =>
+  `/api/operations/dispatch/broadcast/${requestId}/reject/`;
+const RIDE_EARNINGS_TODAY = "/api/ride/earnings/?period=today";
+const RIDE_FARE = (tripId) => `/api/ride/trip/${tripId}/fare/`;
 
 export default function DriverFlow() {
   const dispatch = useDispatch();
-  const [previewMode, setPreviewMode] = useState("");
+  const navigate = useNavigate();
   const [allRoutes, setAllRoutes] = useState([]);
   const [matchingRoutes, setMatchingRoutes] = useState([]);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
-  const [startingTrip, setStartingTrip] = useState(false);
+  const [rideResult, setRideResult] = useState(null);
+  const [endingRide, setEndingRide] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
-  const { currentStep, activeTrip, selectedRoute, source, destination, loading } = useSelector(
-    (state) => state.driver,
-  );
+  const {
+    currentStep,
+    activeTrip,
+    activeRide,
+    selectedRoute,
+    source,
+    destination,
+    loading,
+  } = useSelector((state) => state.driver);
 
   // Synchronization effect on mount/refresh
   useEffect(() => {
     const syncTripStatus = async () => {
-      if (currentStep === "live" && activeTrip?.id) {
+      if (currentStep === STEPS.LIVE && activeTrip?.id) {
         try {
           dispatch(setDriverLoading(true));
           const response = await api.get(API_PATHS.driver.tripStatus(activeTrip.id));
@@ -58,7 +83,6 @@ export default function DriverFlow() {
             dispatch(resetDriverState());
           }
         } catch (e) {
-          console.error("Health check failed", e);
           if (e.response?.status === 404) {
             dispatch(resetDriverState());
           }
@@ -70,28 +94,32 @@ export default function DriverFlow() {
     syncTripStatus();
   }, [activeTrip?.id, dispatch]);
 
-  const fetchDriverRoutes = async (from = null, to = null) => {
-    let url = API_PATHS.driver.routes;
-    if (from && to) {
-      const params = new URLSearchParams({
-        source_lat: from.lat,
-        source_lon: from.lon,
-        source_name: from.name || from.display_name || "",
-        dest_lat: to.lat,
-        dest_lon: to.lon,
-        dest_name: to.name || to.display_name || "",
-      });
-      url += `?${params.toString()}`;
+  useEffect(() => {
+    if (
+      (currentStep === STEPS.PICKUP || currentStep === STEPS.OTP) &&
+      !activeRide?.tripId
+    ) {
+      dispatch(setStep(STEPS.RADAR));
     }
+  }, [currentStep, activeRide?.tripId, dispatch]);
 
-    try {
-      const response = await api.get(url);
-      return normalizeDriverRoutes(response.data).map(buildRouteSummary);
-    } catch (error) {
-      console.warn("Driver route search failed, falling back to full list", error);
-      const response = await api.get(API_PATHS.transport.routes);
-      return normalizeDriverRoutes(response.data).map(buildRouteSummary);
-    }
+  const fetchDriverRoutes = async (from = null, to = null) => {
+    const searchingByLocation = Boolean(from && to);
+    const params = searchingByLocation
+      ? {
+          origin_lat: from.lat,
+          origin_lng: from.lon,
+          dest_lat: to.lat,
+          dest_lng: to.lon,
+          radius: 5000,
+          role: "driver",
+        }
+      : undefined;
+    const endpoint = searchingByLocation
+      ? API_PATHS.transport.routeSearchByLocation
+      : API_PATHS.driver.routes;
+    const response = await api.get(endpoint, { params });
+    return normalizeDriverRoutes(response.data).map(buildRouteSummary);
   };
 
   const fetchPreviewForRoute = async (route) => {
@@ -163,82 +191,307 @@ export default function DriverFlow() {
     dispatch(setDriverLoading(true));
     const hydratedRoute = await fetchPreviewForRoute(route);
     dispatch(setSelectedRoute(hydratedRoute));
-    dispatch(setStep(STEPS.REVIEW));
+    dispatch(setStep(STEPS.PREFLIGHT));
     dispatch(setDriverLoading(false));
   };
 
-  const handleStartTrip = async () => {
-    if (!selectedRoute?.id) return;
-
+  const handleAcceptRide = async (ride) => {
     try {
-      setStartingTrip(true);
-      dispatch(setDriverStatus("starting"));
-      const response = await api.post(API_PATHS.driver.startTrip, {
-        route_id: selectedRoute.id,
-      });
-      const actualTripId = response.data?.trip_id || response.data?.id;
+      let tripId = ride.tripId || null;
+      let otp = ride.otp || null;
 
-      const mergedTrip = buildRouteSummary({
-        ...selectedRoute,
-        ...response.data,
-        id: actualTripId,
-        trip_id: actualTripId,
-        vehicle_id: response.data?.vehicle_id || selectedRoute.vehicle_id,
-        stops: Array.isArray(response.data?.stops) && response.data.stops.length
-            ? response.data.stops
-            : selectedRoute.stops,
-      });
+      if (ride.requestId) {
+        const response = await api.post(BROADCAST_ACCEPT(ride.requestId));
+        const data = response.data || {};
+        if (data.status !== "accepted") {
+          return {
+            ok: false,
+            error:
+              data.message ||
+              (data.status === "no_vehicle"
+                ? "No active vehicle found for this driver"
+                : "Ride no longer available"),
+          };
+        }
+        tripId = data.trip_id || tripId;
+        otp = data.otp || otp;
+      } else if (tripId) {
+        try {
+          const response = await api.patch(API_PATHS.dispatchAccept(tripId));
+          const payload = response.data || {};
+          if (payload.success === false) {
+            return { ok: false, error: payload.message || "Could not accept this request" };
+          }
+          tripId = payload.data?.id || tripId;
+          otp = payload.data?.otp || otp;
+        } catch (acceptError) {
+          // Already accepted by us (e.g. after a refresh) is still a success.
+          const detail = await api.get(API_PATHS.dispatchDetail(tripId)).catch(() => null);
+          const status = detail?.data?.status;
+          if (!["accepted", "arrived", "active"].includes(status)) {
+            throw acceptError;
+          }
+          tripId = detail.data?.id || tripId;
+          otp = detail.data?.otp || otp;
+        }
+      } else {
+        return { ok: false, error: "This request has no trip reference" };
+      }
 
-      dispatch(setDriverActiveTrip(mergedTrip));
-      dispatch(setDriverStatus("active"));
+      dispatch(
+        setActiveRide({
+          ...ride,
+          tripId,
+          dispatchId: tripId,
+          otp,
+        }),
+      );
+      dispatch(setDriverStatus("assigned"));
+
+      dispatch(setStep(STEPS.PICKUP));
+      return { ok: true };
     } catch (error) {
-      console.error("Failed to start trip", error);
-      dispatch(setDriverError("Failed to start trip"));
-      dispatch(setDriverStatus("idle"));
-    } finally {
-      setStartingTrip(false);
+      const data = error?.response?.data || {};
+      return {
+        ok: false,
+        error: data.message || data.detail || "Could not accept this request",
+      };
     }
   };
 
-  if (previewMode === "routes") {
-    return (
-      <DriverRouteList
-        source={source}
-        destination={destination}
-        routes={allRoutes}
-        allRoutesCount={allRoutes.length}
-        onBack={() => setPreviewMode("")}
-        onSelectRoute={() => setPreviewMode("review")}
-      />
-    );
-  }
+  const handleSkipRide = (ride) => {
+    if (ride?.requestId) {
+      api.post(BROADCAST_REJECT(ride.requestId)).catch(() => {});
+    }
+  };
 
-  if (previewMode === "review") {
-    return (
-      <DriverTripReview
-        route={selectedRoute}
-        source={source}
-        destination={destination}
-        onBack={() => setPreviewMode("")}
-        onStartTrip={() => setPreviewMode("live")}
-      />
-    );
-  }
+  const handlePickupBack = () => {
+    if (activeRide?.tripId) {
+      api
+        .post(API_PATHS.dispatchCancel(activeRide.tripId), { reason: "driver_abandoned" })
+        .catch(() => {});
+    }
+    dispatch(setActiveRide(null));
+    dispatch(setDriverStatus("idle"));
+    dispatch(setStep(STEPS.RADAR));
+  };
 
-  if (currentStep === "live") {
-    return (
-      <div className="relative h-screen">
-        <DriverLiveTracking
-            activeTrip={activeTrip}
-            onBack={() => dispatch(setStep("review"))}
+  const handleVerified = async (tripId) => {
+    let detail = null;
+    try {
+      const response = await api.get(API_PATHS.dispatchDetail(tripId));
+      detail = response.data || null;
+    } catch {
+      detail = null;
+    }
+
+    const mergedTrip = buildRouteSummary({
+      ...(selectedRoute || {}),
+      ...(detail || {}),
+      id: tripId,
+      trip_id: tripId,
+      vehicle: detail?.vehicle || selectedRoute?.vehicle,
+      vehicle_id: detail?.vehicle?.id || selectedRoute?.vehicle_id,
+      stops:
+        Array.isArray(detail?.stops) && detail.stops.length
+          ? detail.stops
+          : selectedRoute?.stops,
+      otp: null,
+    });
+
+    dispatch(setDriverActiveTrip(mergedTrip));
+    dispatch(setStep(STEPS.LIVE));
+  };
+
+  const handleEndRide = async () => {
+    const tripId = activeTrip?.id || activeRide?.tripId;
+    if (!tripId || endingRide) return;
+
+    setEndingRide(true);
+    try {
+      await api.patch(API_PATHS.dispatchComplete(tripId));
+    } catch {
+      // Completion is retried implicitly by the health check; still show the summary.
+    }
+
+    const [fareResponse, earningsResponse] = await Promise.allSettled([
+      api.get(RIDE_FARE(tripId)),
+      api.get(RIDE_EARNINGS_TODAY),
+    ]);
+
+    const farePayload =
+      fareResponse.status === "fulfilled"
+        ? fareResponse.value.data?.data ?? fareResponse.value.data
+        : null;
+    const earningsPayload =
+      earningsResponse.status === "fulfilled" ? earningsResponse.value.data : null;
+
+    setRideResult({
+      tripId,
+      ride: activeRide,
+      route: selectedRoute,
+      fare: farePayload && farePayload.success !== false ? farePayload : null,
+      earnings:
+        earningsPayload && !earningsPayload.detail && earningsPayload.success !== false
+          ? earningsPayload
+          : null,
+      distanceText: activeTrip?.distanceText || null,
+      durationText: activeTrip?.durationText || null,
+      completedAtLabel: new Date().toLocaleString("en-IN", {
+        weekday: "short",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    });
+
+    dispatch(setDriverActiveTrip(null));
+    dispatch(setActiveRide(null));
+    dispatch(setDriverStatus("idle"));
+    dispatch(setStep(STEPS.COMPLETE));
+    setShowEndConfirm(false);
+    setEndingRide(false);
+  };
+
+  const handleNextRide = () => {
+    setRideResult(null);
+    dispatch(resetDriverState());
+  };
+
+  const handleBackHome = () => {
+    setRideResult(null);
+    dispatch(resetDriverState());
+    navigate("/");
+  };
+
+  if (currentStep === STEPS.COMPLETE) {
+    if (!rideResult) {
+      return (
+        <DriverTripComplete
+          result={{ ride: activeRide, route: selectedRoute }}
+          onNextRide={handleNextRide}
+          onBackHome={handleBackHome}
         />
+      );
+    }
+    return (
+      <DriverTripComplete
+        result={rideResult}
+        onNextRide={handleNextRide}
+        onBackHome={handleBackHome}
+      />
+    );
+  }
+
+  if (currentStep === STEPS.PICKUP) {
+    if (!activeRide?.tripId) return null;
+    return (
+      <DriverPickup
+        ride={activeRide}
+        route={selectedRoute}
+        onBack={handlePickupBack}
+        onArrived={() => dispatch(setStep(STEPS.OTP))}
+      />
+    );
+  }
+
+  if (currentStep === STEPS.OTP) {
+    if (!activeRide?.tripId) return null;
+    return (
+      <DriverOtpEntry
+        ride={activeRide}
+        route={selectedRoute}
+        onBack={() => dispatch(setStep(STEPS.PICKUP))}
+        onVerified={handleVerified}
+      />
+    );
+  }
+
+  const buddyRadar = (
+    <DriverBuddyRadar
+      route={selectedRoute}
+      onAccept={handleAcceptRide}
+      onSkip={handleSkipRide}
+      onBack={() => dispatch(setStep(STEPS.ROUTES))}
+    />
+  );
+
+  if (currentStep === STEPS.RADAR) return buddyRadar;
+
+  if (currentStep === STEPS.PREFLIGHT) {
+    return (
+      <div className="relative min-h-screen">
+        {buddyRadar}
+        <DriverPreRideCheck onComplete={() => dispatch(setStep(STEPS.RADAR))} />
+      </div>
+    );
+  }
+
+  if (currentStep === STEPS.LIVE) {
+    return (
+      <div className="relative min-h-screen lg:h-[calc(100vh-72px)] lg:min-h-0">
+        <DriverLiveTracking
+          activeTrip={activeTrip}
+          onBack={() => dispatch(setStep(STEPS.RADAR))}
+        />
+
+        <button
+          type="button"
+          onClick={() => setShowEndConfirm(true)}
+          disabled={endingRide}
+          className="fixed bottom-4 right-4 z-[6000] flex h-14 items-center justify-center gap-2 rounded-vayy bg-[#ef4444] px-6 text-[15px] font-extrabold text-white shadow-[0_14px_34px_rgba(239,68,68,0.35)] transition hover:bg-[#dc2626] disabled:opacity-70"
+        >
+          <CircleStop size={18} strokeWidth={2.6} />
+          End Ride
+        </button>
+
+        {showEndConfirm && (
+          <div className="fixed inset-0 z-[6500] flex items-end justify-center bg-slate-950/45 px-4 pb-6 backdrop-blur-[2px] sm:items-center">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#fef2f2]">
+                <CircleStop size={22} className="text-[#ef4444]" />
+              </div>
+              <h2 className="mt-4 text-[19px] font-black text-[#111827]">End this ride?</h2>
+              <p className="mt-2 text-[14px] font-medium text-[#6b7280]">
+                The trip will be completed, fare settled and your earnings updated.
+              </p>
+              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={handleEndRide}
+                  disabled={endingRide}
+                  className="flex min-h-[52px] flex-1 items-center justify-center gap-2 rounded-vayy bg-[#ef4444] px-5 text-[15px] font-extrabold text-white transition hover:bg-[#dc2626] disabled:opacity-70"
+                >
+                  {endingRide ? "Ending…" : "End Ride"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEndConfirm(false)}
+                  disabled={endingRide}
+                  className="min-h-[52px] rounded-vayy border border-[#e5e7eb] bg-white px-5 text-[15px] font-extrabold text-[#6b7280]"
+                >
+                  Keep riding
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {endingRide && (
+          <div className="absolute inset-0 z-[7000] flex items-center justify-center bg-slate-950/40 backdrop-blur-[2px]">
+            <div className="flex items-center gap-4 rounded-2xl bg-white px-6 py-4 shadow-2xl">
+              <LoaderCircle size={22} className="animate-spin text-[#009849]" />
+              <span className="text-sm font-bold text-slate-800">Completing ride…</span>
+            </div>
+          </div>
+        )}
+
         {loading && (
-             <div className="absolute inset-0 z-[5000] flex items-center justify-center bg-slate-950/40 backdrop-blur-[2px]">
-                <div className="bg-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
-                    <div className="w-6 h-6 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-slate-800 font-bold text-sm">Refreshing session...</span>
-                </div>
-             </div>
+          <div className="absolute inset-0 z-[5000] flex items-center justify-center bg-slate-950/40 backdrop-blur-[2px]">
+            <div className="bg-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
+              <div className="w-6 h-6 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-slate-800 font-bold text-sm">Refreshing session...</span>
+            </div>
+          </div>
         )}
       </div>
     );
@@ -246,7 +499,7 @@ export default function DriverFlow() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-slate-950">
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
         <div className="text-center">
             <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <span className="text-white font-bold tracking-tight">Syncing Context...</span>
@@ -262,7 +515,6 @@ export default function DriverFlow() {
         initialDestination={destination}
         loading={loadingRoutes}
         onNext={handlePlannerNext}
-        onOpenPreview={setPreviewMode}
       />
     );
   }
@@ -281,18 +533,14 @@ export default function DriverFlow() {
     );
   }
 
-  if (currentStep === STEPS.REVIEW) {
-    return (
-      <DriverTripReview
-        route={selectedRoute}
-        source={source}
-        destination={destination}
-        onBack={() => dispatch(setStep(STEPS.ROUTES))}
-        onStartTrip={handleStartTrip}
-        starting={startingTrip}
-      />
-    );
-  }
-
-  return null;
+  // Recover to a usable home screen if stale persisted state contains a
+  // step that this build no longer supports.
+  return (
+    <DriverTripPlanner
+      initialSource={source}
+      initialDestination={destination}
+      loading={loadingRoutes}
+      onNext={handlePlannerNext}
+    />
+  );
 }

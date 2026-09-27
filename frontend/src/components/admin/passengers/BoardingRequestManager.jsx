@@ -12,7 +12,7 @@ import {
   Search,
   Filter,
   RefreshCw,
-  Bus
+  CarFront
 } from "lucide-react";
 
 const BoardingRequestManager = ({ cityId }) => {
@@ -49,7 +49,7 @@ const BoardingRequestManager = ({ cityId }) => {
   const filteredRequests = requests.filter(r => 
     r.passenger_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.stop_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.trip_bus_number?.toLowerCase().includes(searchTerm.toLowerCase())
+    (r.vehicle_number || r.trip_bus_number || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getStatusStyle = (status) => {
@@ -69,10 +69,10 @@ const BoardingRequestManager = ({ cityId }) => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tighter flex items-center gap-3">
-              <Ticket className="text-indigo-600" size={32} /> Boarding Requests
+              <Ticket className="text-indigo-600" size={32} /> Ride Requests
             </h1>
             <p className="text-slate-500 font-bold mt-1">
-              Manage passenger bookings and digital manifest
+              Manage pickup requests and ride status
             </p>
           </div>
           <button 
@@ -88,7 +88,7 @@ const BoardingRequestManager = ({ cityId }) => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
               type="text"
-              placeholder="Search by passenger, stop or bus number..."
+              placeholder="Search by passenger, stop or vehicle number..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition font-medium"
@@ -106,7 +106,7 @@ const BoardingRequestManager = ({ cityId }) => {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Passenger</th>
-                <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Route / Bus</th>
+                <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Route / Vehicle</th>
                 <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Pickup Stop</th>
                 <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
                 <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Time</th>
@@ -129,8 +129,8 @@ const BoardingRequestManager = ({ cityId }) => {
                   </td>
                   <td className="p-6">
                     <div className="flex items-center gap-2">
-                      <Bus size={14} className="text-indigo-500" />
-                      <span className="font-bold text-slate-700">{r.trip_bus_number}</span>
+                      <CarFront size={14} className="text-indigo-500" />
+                      <span className="font-bold text-slate-700">{r.vehicle_number || r.trip_bus_number || "Ride"}</span>
                     </div>
                   </td>
                   <td className="p-6">

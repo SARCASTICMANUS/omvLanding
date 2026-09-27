@@ -1,54 +1,33 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
 import { loginUser } from "../features/auth/authSlice";
-import { Loader } from "lucide-react";
-import loginBusImage from "../assets/loginBus.png";
+import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, Loader, Lock, Mail } from "lucide-react";
+import { APP_ROUTES } from "../constants/routes";
+import { ADMIN_ROLES, DRIVER_ROLES } from "../constants/roles";
+import { normalizeRole } from "../utils/roles";
+import loginVayyImage from "../assets/loginVayy.png";
 
-/* ─────────────────────────────────────────────
-   Inline SVG Icons (no extra deps)
-───────────────────────────────────────────── */
-const MailIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="4" width="20" height="16" rx="2"/>
-    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-  </svg>
-);
-
-const LockIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-  </svg>
-);
-
-const ArrowRightIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M5 12h14M12 5l7 7-7 7"/>
-  </svg>
-);
-
-const MicrosoftIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 23 23">
-    <path fill="#f3f3f3" d="M0 0h23v23H0z"/>
-    <path fill="#f35325" d="M1 1h10v10H1z"/>
-    <path fill="#81bc06" d="M12 1h10v10H12z"/>
-    <path fill="#05a6f0" d="M1 12h10v10H1z"/>
-    <path fill="#ffba08" d="M12 12h10v10H12z"/>
-  </svg>
-);
-
-const GlobeIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/>
-    <line x1="2" y1="12" x2="22" y2="12"/>
-    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-  </svg>
-);
-
+// Mobile parity: vayy_app/src/auth/screens/LoginPage.jsx error box copy.
+const resolveErrorMessage = (error) => {
+  if (!error) return "";
+  if (typeof error === "string") return error.slice(0, 100);
+  if (Array.isArray(error?.non_field_errors)) return error.non_field_errors[0];
+  if (Array.isArray(error?.email)) return error.email[0];
+  if (Array.isArray(error?.password)) return error.password[0];
+  return (
+    error.detail ||
+    error.error ||
+    error.message ||
+    (error.email && !Array.isArray(error.email) ? error.email : "") ||
+    "Invalid email or password."
+  );
+};
 
 const LoginPage = () => {
-  const [formData, setFormData] = React.useState({ email: "", password: "" });
+  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const { loading, error, isAuthenticated, user } = useSelector(
     (state) => state.auth,
@@ -57,11 +36,15 @@ const LoginPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
+  // Role-based landing (mobile AppNavigator parity: admin / driver / passenger)
   useEffect(() => {
-    if (isAuthenticated && user) {
-      if (user.role === "admin") navigate("/admin");
-      else navigate("/");
-    }
+    if (!isAuthenticated || !user) return;
+
+    const role = normalizeRole(user.role);
+    if (ADMIN_ROLES.includes(role)) navigate(APP_ROUTES.admin, { replace: true });
+    else if (DRIVER_ROLES.includes(role))
+      navigate(APP_ROUTES.driverLive, { replace: true });
+    else navigate(APP_ROUTES.root, { replace: true });
   }, [isAuthenticated, user, navigate]);
 
   const handleSubmit = (e) => {
@@ -69,302 +52,172 @@ const LoginPage = () => {
     dispatch(loginUser(formData));
   };
 
+  const inputShellClass =
+    "mb-3.5 flex h-[52px] items-center gap-2.5 rounded-[14px] border-[1.5px] border-[#e5e5e5] bg-[#fafafa] px-3.5 transition-colors focus-within:border-[#009849] focus-within:bg-[#f0faf2]";
+  const inputClass =
+    "h-full min-w-0 flex-1 bg-transparent text-[15px] text-[#111111] outline-none placeholder:text-[#aaaaaa]";
+
   return (
-    <>
-      <style>{`
-        .vayy-root * { box-sizing: border-box; margin: 0; padding: 0; }
-        .vayy-root { font-family: inherit; }
-
-        .left-panel {
-          background: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url("${loginBusImage}") center center / 115% 100% no-repeat; 
-          position: relative;
-          overflow: hidden;
-        }
-
-        .logo-box {
-          width: 44px;
-          height: 44px;
-          background: #00E676;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 900;
-          font-size: 22px;
-          color: #030f04;
-        }
-
-        .feature-icon {
-          width: 44px;
-          height: 44px;
-          background: rgba(0,230,118,0.15);
-          border: 1px solid rgba(0,230,118,0.25);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0 auto 10px;
-        }
-
-        .form-input {
-          width: 100%;
-          height: 52px;
-          border: 1.5px solid #e5e7eb;
-          border-radius: 10px;
-          background: white;
-          padding: 0 16px 0 44px;
-          font-size: 15px;
-          font-family: inherit;
-          color: #111827;
-          outline: none;
-          transition: border-color 0.2s, box-shadow 0.2s;
-        }
-        .form-input:focus {
-          border-color: #00C96B;
-          box-shadow: 0 0 0 3px rgba(0,201,107,0.12);
-        }
-        .form-input::placeholder { color: #9ca3af; }
-
-        .sign-in-btn {
-          width: 100%;
-          height: 52px;
-          background: #00C96B;
-          border: none;
-          border-radius: 10px;
-          color: white;
-          font-weight: 700;
-          font-size: 16px;
-          font-family: inherit;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          transition: background 0.2s, transform 0.15s;
-        }
-        .sign-in-btn:hover:not(:disabled) { background: #00b560; transform: translateY(-1px); }
-        .sign-in-btn:disabled { opacity: 0.7; cursor: not-allowed; }
-
-        .social-btn {
-          flex: 1;
-          height: 48px;
-          border: 1.5px solid #e5e7eb;
-          border-radius: 10px;
-          background: white;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          font-size: 14px;
-          font-weight: 600;
-          font-family: inherit;
-          color: #374151;
-          transition: border-color 0.2s, background 0.2s;
-        }
-        .social-btn:hover { border-color: #d1d5db; background: #f9fafb; }
-
-        .lang-btn {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          border: 1px solid #e5e7eb;
-          border-radius: 8px;
-          padding: 6px 12px;
-          background: white;
-          font-size: 13px;
-          font-weight: 500;
-          color: #374151;
-          cursor: pointer;
-          font-family: inherit;
-        }
-
-        .checkbox-custom {
-          width: 16px;
-          height: 16px;
-          border: 2px solid #d1d5db;
-          border-radius: 4px;
-          cursor: pointer;
-          accent-color: #00C96B;
-        }
-      `}</style>
-
-      <div className="vayy-root" style={{ minHeight: '100vh', display: 'flex', backgroundColor: '#f9fafb' }}>
-
-        {/* ── LEFT PANEL ── */}
-        <div className="left-panel" style={{ display: 'flex', width: '50%', padding: '40px 50px', flexDirection: 'column', justifyContent: 'flex-start', gap: 50 }}
-          ref={el => { if (el) el.style.display = window.innerWidth >= 1024 ? 'flex' : 'none'; }}>
-
-          {/* Logo */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className="logo-box">V</div>
-            <div>
-              <div style={{ color: 'white', fontWeight: 800, fontSize: 18, letterSpacing: 1 }}>VAYY</div>
-              <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11 }}>Smart. Simple. Seamless.</div>
-            </div>
-          </div>
-
-          {/* Hero text */}
-          <div>
-            <h2 style={{ color: 'white', fontSize: 52, fontWeight: 900, lineHeight: 1.1, letterSpacing: -1 }}>
-              Better Commutes.<br />
-              <span style={{ color: '#00E676' }}>Smarter</span> Cities.
-            </h2>
-            <div style={{ width: 48, height: 4, background: '#00E676', borderRadius: 2, margin: '20px 0' }} />
-            <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 15, lineHeight: 1.7, maxWidth: 380 }}>
-              Real-time tracking for fixed-route transit. Connecting passengers and drivers with reliable technology.
-            </p>
-          </div>
-
-        
-
-          {/* Feature pills */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 34, position: 'absolute', bottom: 40 }}>
-            {[
-              { label: 'Live Tracking', sub: 'Real-time bus updates', icon: (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00E676" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-              )},
-              { label: 'Reliable Service', sub: 'On-time and dependable', icon: (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00E676" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              )},
-              { label: 'Better Connectivity', sub: 'Seamless travel experience', icon: (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00E676" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              )},
-            ].map(f => (
-              <div key={f.label} style={{ textAlign: 'center', padding: '16px 12px', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14 }}>
-                <div className="feature-icon">{f.icon}</div>
-                <div style={{ color: 'white', fontWeight: 700, fontSize: 13 }}>{f.label}</div>
-                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 4 }}>{f.sub}</div>
-              </div>
-            ))}
-          </div>
+    <div className="flex min-h-dvh flex-col bg-[#0d1f0f]">
+      {/* ── Hero image (mobile heroContainer / heroImage / heroOverlay) ── */}
+      <div className="relative h-[48vh] min-h-[260px] overflow-hidden bg-[#053D24]">
+        <img
+          src={loginVayyImage}
+          alt=""
+          className="absolute left-0 top-0 h-[140%] w-full object-cover"
+        />
+        <button
+          type="button"
+          onClick={() => navigate(APP_ROUTES.root)}
+          aria-label="Back to home"
+          className="absolute left-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-[#111827] shadow-md transition active:scale-95"
+        >
+          <ArrowLeft size={21} />
+        </button>
+        <div className="relative flex h-full flex-col items-center justify-end px-6 pb-[22px]">
+          <p className="text-center text-[36px] font-black leading-[1.15] tracking-[-1px] text-white">
+            OMV
+            <br />
+            onmyvayy
+          </p>
+          <p className="mt-[1px] text-center text-[14px] font-normal text-white/70">
+            Your Ride. Your Route.
+          </p>
         </div>
-
-        {/* ── RIGHT PANEL ── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'white', padding: '40px 24px', position: 'relative' }}>
-
-          {/* Language selector */}
-          <div style={{ position: 'absolute', top: 20, right: 24 }}>
-            <button className="lang-btn">
-              <GlobeIcon />
-              English
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
-            </button>
-          </div>
-
-          <div style={{ width: '100%', maxWidth: 440 }}>
-            {/* Heading */}
-            <div style={{ marginBottom: 36 }}>
-              <h2 style={{ fontSize: 36, fontWeight: 900, color: '#111827', letterSpacing: -0.5 }}>Welcome Back</h2>
-              <p style={{ color: '#6b7280', fontSize: 15, marginTop: 8 }}>Sign in to continue to your account</p>
-            </div>
-
-            {/* Error */}
-            {error && (
-              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>
-                <p style={{ color: '#dc2626', fontWeight: 700, fontSize: 14 }}>Login Failed</p>
-                <p style={{ color: '#ef4444', fontSize: 13, marginTop: 4 }}>{error.detail || 'Invalid email or password.'}</p>
-              </div>
-            )}
-
-            {/* Form */}
-            <form onSubmit={handleSubmit}>
-              {/* Email */}
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-                  Email Address
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
-                    <MailIcon />
-                  </span>
-                  <input
-                    type="email"
-                    placeholder="name@company.com"
-                    value={formData.email}
-                    onChange={e => setFormData({ ...formData, email: e.target.value })}
-                    required
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              {/* Password */}
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-                  Password
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
-                    <LockIcon />
-                  </span>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    value={formData.password}
-                    onChange={e => setFormData({ ...formData, password: e.target.value })}
-                    required
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              {/* Remember + Forgot */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#374151', cursor: 'pointer' }}>
-                  <input type="checkbox" className="checkbox-custom" />
-                  Remember me
-                </label>
-                <a href="#" style={{ fontSize: 14, fontWeight: 600, color: '#00a855', textDecoration: 'none' }}>
-                  Forgot password?
-                </a>
-              </div>
-
-              {/* Submit */}
-              <button type="submit" disabled={loading} className="sign-in-btn" style={{ marginBottom: 24 }}>
-                {loading ? (
-                  <Loader className="animate-spin" size={20} />
-                ) : (
-                  <>Sign In <ArrowRightIcon /></>
-                )}
-              </button>
-            </form>
-
-            {/* Divider */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-              <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-              <span style={{ fontSize: 13, color: '#9ca3af', whiteSpace: 'nowrap' }}>or continue with</span>
-              <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-            </div>
-
-            {/* Social */}
-            <div style={{ display: 'flex', gap: 12, marginBottom: 32 }}>
-              <button className="social-btn">
-                <MicrosoftIcon /> Continue with Microsoft
-              </button>
-            </div>
-
-            {/* Register link */}
-            <p style={{ textAlign: 'center', fontSize: 14, color: '#6b7280' }}>
-              Don't have an account?{' '}
-              <Link to="/register" style={{ color: '#00a855', fontWeight: 700, textDecoration: 'none' }}>
-                Create free account
-              </Link>
-            </p>
-          </div>
-        </div>
-
-        {/* Responsive left panel toggle */}
-        <style>{`
-          @media (min-width: 1024px) {
-            .left-panel { display: flex !important; }
-          }
-          @media (max-width: 1023px) {
-            .left-panel { display: none !important; }
-          }
-        `}</style>
       </div>
-    </>
+
+      {/* ── Bottom sheet (mobile bottomSheet / dragHandle) ── */}
+      <div className="flex flex-1 flex-col rounded-t-[28px] bg-white px-6 pb-6 pt-6">
+        <div className="mx-auto mb-5 h-1 w-10 shrink-0 rounded-full bg-[#e0e0e0]" />
+
+        <div className="mx-auto w-full max-w-md">
+          <h1 className="mb-1 text-[26px] font-extrabold tracking-[-0.5px] text-[#111111]">
+            Welcome Back
+          </h1>
+          <p className="mb-3 text-[13px] font-normal text-[#888888]">
+            Sign in to your OMV account
+          </p>
+
+          {error ? (
+            <div
+              role="alert"
+              className="mb-4 rounded-[10px] border border-[#fecaca] bg-[#fef2f2] p-3 text-[13px] text-[#ef4444]"
+            >
+              {resolveErrorMessage(error)}
+            </div>
+          ) : null}
+
+          <form onSubmit={handleSubmit}>
+            {/* Email */}
+            <label
+              htmlFor="login-email"
+              className="mb-1.5 block text-[13px] font-semibold text-[#333333]"
+            >
+              Email Address
+            </label>
+            <div className={inputShellClass}>
+              <Mail size={20} className="shrink-0 text-[#888888]" />
+              <input
+                id="login-email"
+                type="email"
+                autoComplete="email"
+                placeholder="name@company.com"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                required
+                className={inputClass}
+              />
+            </div>
+
+            {/* Password */}
+            <label
+              htmlFor="login-password"
+              className="mb-1.5 block text-[13px] font-semibold text-[#333333]"
+            >
+              Password
+            </label>
+            <div className={inputShellClass}>
+              <Lock size={20} className="shrink-0 text-[#888888]" />
+              <input
+                id="login-password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                placeholder="••••••••"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                required
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="shrink-0 text-[#888888] transition-colors active:opacity-60"
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+
+            {/* Remember me + Forgot password */}
+            <div className="mb-5 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setRememberMe((v) => !v)}
+                aria-pressed={rememberMe}
+                className="flex items-center"
+              >
+                <span
+                  className={`mr-2 flex h-[18px] w-[18px] items-center justify-center rounded-[4px] border-[1.5px] ${
+                    rememberMe
+                      ? "border-[#009849] bg-[#009849]"
+                      : "border-[#cccccc] bg-white"
+                  }`}
+                >
+                  {rememberMe && (
+                    <Check size={11} strokeWidth={3.5} className="text-white" />
+                  )}
+                </span>
+                <span className="text-[13px] font-medium text-[#444444]">
+                  Remember me
+                </span>
+              </button>
+              <Link
+                to={APP_ROUTES.forgotPassword}
+                className="text-[13px] font-semibold text-[#009849] hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
+
+            {/* Sign in */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="mb-5 flex h-[54px] w-full items-center justify-center gap-2 rounded-[18px] bg-[#009849] text-[16px] font-bold tracking-[0.3px] text-white shadow-[0_4px_12px_rgba(0,152,73,0.35)] transition-colors hover:bg-[#007A3B] disabled:opacity-70"
+            >
+              {loading ? (
+                <Loader size={20} className="animate-spin" />
+              ) : (
+                <>
+                  Sign In <ArrowRight size={18} strokeWidth={2.5} />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Create account */}
+          <p className="flex items-center justify-center text-[13px] text-[#888888]">
+            Don&#39;t have an account?
+            <Link
+              to={APP_ROUTES.register}
+              className="ml-1 text-[13px] font-bold text-[#009849] hover:underline"
+            >
+              Create free account
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
   );
 };
 

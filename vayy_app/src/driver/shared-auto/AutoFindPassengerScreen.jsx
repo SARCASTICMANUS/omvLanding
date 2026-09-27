@@ -223,7 +223,7 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
             <Animated.View style={[styles.radarRing, styles.radarRing2, { transform: [{ scale: pulseAnim }] }]} />
             <Animated.View style={[styles.radarRing, styles.radarRing3, { transform: [{ scale: pulseAnim }] }]} />
             <View style={styles.vehicleDot}>
-              <Ionicons name="car-sport" size={22} color="#fff" />
+              <Ionicons name="bicycle" size={22} color="#fff" />
             </View>
             <View style={styles.vehicleShadow} />
           </Animated.View>
@@ -233,7 +233,7 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
         {!showVerify && !online && (
           <View style={styles.offlineCenter}>
             <View style={styles.vehicleDot}>
-              <Ionicons name="car-sport" size={22} color="#fff" />
+              <Ionicons name="bicycle" size={22} color="#fff" />
             </View>
             <Text style={styles.offlineText}>Radar Offline</Text>
           </View>

@@ -343,14 +343,12 @@ export default function MapDriver({
 
   // Sync Route Path and Stops
   useEffect(() => {
-    console.log("Syncing map route:", routePath);
     if (!map.current || !mapLoaded) return;
     
     const source = map.current.getSource("route");
     const layer = map.current.getLayer("route");
     
     if (source) {
-        console.log("Source found, updating data...");
         source.setData({
             type: "FeatureCollection",
             features: [{
@@ -364,7 +362,6 @@ export default function MapDriver({
         });
         
         if (!layer) {
-            console.log("Layer missing, re-adding...");
             map.current.addLayer({
                 id: "route",
                 type: "line",
@@ -375,7 +372,6 @@ export default function MapDriver({
         }
         map.current.triggerRepaint();
     } else {
-        console.log("Source missing, creating it...");
         map.current.addSource("route", {
             type: "geojson",
             data: {
@@ -552,7 +548,6 @@ export default function MapDriver({
   const handleLoadRoute = async () => {
     if (!selectedRouteId) return;
     const selectedRoute = availableRoutes.find(r => r.id === selectedRouteId);
-    console.log("Selected route from available:", selectedRoute);
     if (!selectedRoute) return;
 
     setRoutePath(null);
@@ -595,11 +590,9 @@ export default function MapDriver({
             .filter(Boolean)
       });
       
-      console.log("Preview response data:", res.data);
       const previewOptions = getPreviewOptions(res.data);
       const activePreview = previewOptions[0] || {};
       const path = getPreviewPath(activePreview).length > 0 ? getPreviewPath(activePreview) : savedPath;
-      console.log("Setting routePath:", path);
       setRoutePath(path);
 
       updateRenderedRoute(path);
@@ -610,7 +603,6 @@ export default function MapDriver({
         trip_id: null,
         stops: orderedStops
       };
-      console.log("Setting tripData:", combinedTripData);
       setTripData(combinedTripData);
       
       if (path && path.length > 0) {
@@ -1152,8 +1144,9 @@ export default function MapDriver({
                 <ChevronRight size={20} />
               </button>
               <DriverManifest
-                vehicleId={tripData?.vehicle_id || "VAYY-123"}
-                tripId={tripData?.trip_id}
+                nextStops={nextStops}
+                allStops={tripData?.stops || []}
+                live={isDriving}
               />
             </div>
           </motion.div>

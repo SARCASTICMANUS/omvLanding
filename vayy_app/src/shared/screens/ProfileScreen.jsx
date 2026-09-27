@@ -163,7 +163,7 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.headerName}>{displayName}</Text>
             <Text style={styles.headerEmail}>{displayEmail}</Text>
             <View style={styles.roleBadge}>
-              <MaterialIcons name={isDriver ? "directions-car" : "person"} size={12} color="#FFFFFF" />
+              <MaterialIcons name={isDriver ? "motorcycle" : "person"} size={12} color="#FFFFFF" />
               <Text style={styles.roleText}>{roleLabel}</Text>
             </View>
             {isDriver && verification && (

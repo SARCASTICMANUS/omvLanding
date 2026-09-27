@@ -3,7 +3,7 @@ import { X, Search, UserPlus, Trash2, Loader2, UserCheck } from "lucide-react";
 import api from "../../../lib/api";
 import { API_PATHS } from "../../../constants/apiPaths";
 
-const VehicleAssignmentModal = ({ vehicle, universityId, onClose }) => {
+const VehicleAssignmentModal = ({ vehicle, onClose }) => {
     const [assignments, setAssignments] = useState([]);
     const [allStudents, setAllStudents] = useState([]);
     const [loading, setLoading] = useState(true);

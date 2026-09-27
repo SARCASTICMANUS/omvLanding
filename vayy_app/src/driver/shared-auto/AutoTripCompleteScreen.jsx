@@ -164,7 +164,7 @@ export default function AutoTripCompleteScreen({ navigation, route }) {
             style={styles.primaryBtn}
             onPress={() => navigation.navigate("FindPassenger", {})}
           >
-            <Ionicons name="car-sport" size={20} color="#fff" />
+            <Ionicons name="bicycle" size={20} color="#fff" />
             <Text style={styles.primaryBtnText}>  Next Ride</Text>
           </TouchableOpacity>
 

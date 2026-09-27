@@ -14,7 +14,7 @@ const DriversManager = ({ cityId }) => {
     last_name: "",
     license_number: "",
     vehicle_number: "",
-    vehicle_type: "bus",
+    vehicle_type: "bike",
   });
 
   useEffect(() => {
@@ -44,7 +44,7 @@ const DriversManager = ({ cityId }) => {
         last_name: driver.last_name,
         license_number: profile.license_number || "",
         vehicle_number: profile.vehicle_number || "",
-        vehicle_type: profile.vehicle_type || "bus",
+        vehicle_type: profile.vehicle_type || "bike",
       });
     } else {
       setCurrentDriver(null);
@@ -54,7 +54,7 @@ const DriversManager = ({ cityId }) => {
         last_name: "",
         license_number: "",
         vehicle_number: "",
-        vehicle_type: "bus",
+        vehicle_type: "bike",
       });
     }
     setIsModalOpen(true);
@@ -242,9 +242,8 @@ const DriversManager = ({ cityId }) => {
                     onChange={(e) => setFormData({ ...formData, vehicle_type: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition font-bold text-sm"
                   >
-                    <option value="bus">Bus</option>
-                    <option value="van">Van</option>
-                    <option value="minibus">Minibus</option>
+                    <option value="bike">Bike</option>
+                    <option value="auto">Auto-Rickshaw</option>
                   </select>
                 </div>
               </div>

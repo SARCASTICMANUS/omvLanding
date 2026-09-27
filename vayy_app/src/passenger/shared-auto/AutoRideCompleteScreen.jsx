@@ -181,7 +181,7 @@ export function AutoRideCompleteScreen({ navigation, route }) {
               navigation.navigate('AutoPreRide');
             }}
           >
-            <Ionicons name="car-outline" size={20} color="#FFFFFF" />
+            <Ionicons name="bicycle-outline" size={20} color="#FFFFFF" />
             <Text style={styles.primaryBtnText}>  Book Another Auto</Text>
           </TouchableOpacity>
 

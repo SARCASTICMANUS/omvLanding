@@ -1,36 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
   ArrowLeft,
   ArrowRight,
-  BusFront,
-  Check,
   Clock3,
-  Globe2,
-  MapPin,
-  RefreshCw,
-  Route,
-  Star,
-  Sun,
-  UserRound,
-  Menu,
-  ChevronDown,
   Crosshair,
-  TrendingUp,
-  Bus,
-  Bell,
-  BarChart2,
-  Calendar,
-  MoreHorizontal,
+  Footprints,
+  Navigation,
+  RefreshCw,
+  SlidersHorizontal,
+  Sparkles,
 } from "lucide-react";
-import MobileBackButton from "../../../components/Layout/MobileBackButton";
-import { APP_ROUTES } from "../../../constants/routes";
 
 
 /* ─────────────────────────────────────────────
-   ALL ORIGINAL HELPER FUNCTIONS — UNTOUCHED
+   HELPERS — original web helpers + mobile formatWalkText
 ───────────────────────────────────────────── */
 function formatEtaMinutes(etaSeconds) {
   return Math.max(1, Math.ceil(Number(etaSeconds || 300) / 60));
@@ -44,6 +29,11 @@ function formatDurationText(trip) {
   if (trip?.duration_text) return trip.duration_text;
   if (trip?.eta_seconds) return `${formatEtaMinutes(trip.eta_seconds)} min`;
   return "45 min";
+}
+function formatWalkText(meters) {
+  if (!meters || meters <= 0) return "0 m";
+  if (meters < 1000) return `${Math.round(meters)} m walk`;
+  return `${(meters / 1000).toFixed(1)} km walk`;
 }
 function shortPlace(point, fallback) {
   return (
@@ -147,7 +137,7 @@ function getRouteStops(trip, routeCoordinates) {
 }
 
 /* ─────────────────────────────────────────────
-   MAP COMPONENT — all logic untouched
+   MAP COMPONENT — all maplibre logic untouched
 ───────────────────────────────────────────── */
 function RouteMapPreview({ trip, pickup, destination, onUpdatePickup, onUpdateDestination }) {
   const mapContainer = useRef(null);
@@ -271,305 +261,234 @@ function RouteMapPreview({ trip, pickup, destination, onUpdatePickup, onUpdateDe
   }, [fitMapToPoints, pickup, destination, syncMarkers, trip, updateRouteLine]);
 
   return (
-    <div style={{
-      position: "relative", width: "100%", borderRadius: 18, overflow: "hidden",
-      border: "1px solid #e5e7eb", boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
-      height: "100%", minHeight: 340,
-    }}>
-      <div ref={mapContainer} style={{ width: "100%", height: "100%" }} />
-      {/* locate button */}
+    <div className="relative h-full min-h-[340px] w-full overflow-hidden rounded-[18px] border border-[#E5E7EB] shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
+      <div ref={mapContainer} className="h-full w-full" />
+      {/* re-center button */}
       <button
         type="button"
         onClick={fitMapToPoints}
-        style={{
-          position: "absolute", bottom: 16, right: 16,
-          width: 40, height: 40, borderRadius: "50%",
-          background: "white", border: "1px solid #e5e7eb",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.12)", cursor: "pointer",
-        }}
+        className="absolute bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.12)] transition hover:bg-[#F9FAFB] active:scale-95"
         aria-label="Re-center map"
       >
-        <Crosshair size={18} color="#374151" />
+        <Crosshair size={18} className="text-[#374151]" />
       </button>
     </div>
   );
 }
 
 /* ─────────────────────────────────────────────
-   METRIC CHIP — distance / duration / stops
+   STOP CONNECTOR — replica of mobile StopDotLine
 ───────────────────────────────────────────── */
-function MetricChip({ icon: Icon, value, label }) {
+function StopDotLine({ pickupLabel, dropLabel, firstMileWalk, lastMileWalk }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "center" }}>
-      <div style={{
-        width: 32, height: 32, borderRadius: "50%",
-        background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        {React.createElement(Icon, { size: 15, color: "#374151", strokeWidth: 2 })}
+    <div className="mt-0.5 flex flex-col">
+      {/* Pickup */}
+      <div className="flex items-center gap-2">
+        <span className="h-3 w-3 shrink-0 rounded-full border-[2.5px] border-[#009849]" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-bold text-[#111827]">{pickupLabel}</span>
+          <span className="block text-[11px] font-medium text-[#6B7280]">
+            Pickup{firstMileWalk ? `  •  ${formatWalkText(firstMileWalk)}` : ""}
+          </span>
+        </span>
       </div>
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 800, color: "#111827" }}>{value}</div>
-        <div style={{ fontSize: 10, color: "#9ca3af", fontWeight: 500 }}>{label}</div>
+
+      {/* Dashed connector */}
+      <div className="flex h-4 items-center pl-[5px]">
+        <span className="h-4 border-l-[1.5px] border-dashed border-[#D1D5DB]" />
+      </div>
+
+      {/* Drop-off */}
+      <div className="flex items-center gap-2">
+        <span className="h-3 w-3 shrink-0 rounded-full border-[2.5px] border-[#F59E0B]" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-bold text-[#111827]">{dropLabel}</span>
+          <span className="block text-[11px] font-medium text-[#6B7280]">
+            Drop-off{lastMileWalk ? `  •  ${formatWalkText(lastMileWalk)}` : ""}
+          </span>
+        </span>
       </div>
     </div>
   );
 }
 
 /* ─────────────────────────────────────────────
-   BEST MATCH CARD — right panel
+   ROUTE CARD — replica of mobile PassengerRouteList RouteCard
 ───────────────────────────────────────────── */
-function BestMatchCard({ trip, pickup, destination, onContinue }) {
-  const isRouteOnly = trip?.is_route_only || trip?.trip_available === false;
-  const busNo = trip?.bus_number || trip?.vehicle_number || trip?.vehicle_no || (isRouteOnly ? "Route match" : "UP 32 DC 0003");
-  const eta = formatEtaMinutes(trip?.eta_seconds);
-  const fromLabel = shortPlace(pickup, trip?.pickup_name || "Noida");
-  const toLabel = shortPlace(destination, trip?.destination_name || "Delhi");
-  const startTime = trip?.start_time || trip?.departure_time || (isRouteOnly ? "--" : "7:00 AM");
-  const endTime = trip?.end_time || trip?.arrival_time || (isRouteOnly ? "--" : "8:00 AM");
-  const distance = formatDistanceText(trip);
-  const duration = formatDurationText(trip);
-  const stopsCount = Array.isArray(trip?.stops) ? trip.stops.length : trip?.stops_count || trip?.stop_count || 8;
-  const seatType = trip?.seat_type || trip?.vehicle_type || trip?.bus_type || (isRouteOnly ? "Route available" : "AC Seater");
-  const rating = trip?.rating || trip?.score || "4.6";
+function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggleExpand, expanded }) {
+  const routeCode = trip?.route_code || `R-${index + 1}`;
+  const routeName = trip?.name || "Shared ride";
+
+  const boardingStop = trip?.pickup_stop;
+  const alightingStop = trip?.dropoff_stop;
+
+  const boardLabel = boardingStop?.name || shortPlace(pickup, "Pickup Point");
+  const alightLabel = alightingStop?.name || shortPlace(destination, "Drop-off Point");
+
+  const firstMileWalk = trip?.first_mile_walk_meters || boardingStop?.distance_meters || 0;
+  const lastMileWalk = trip?.last_mile_walk_meters || alightingStop?.distance_to_destination_meters || 0;
+
+  const fare = trip?.fare ?? "—";
+  const stops = trip?.stops || [];
 
   return (
-    <div style={{
-      background: "white", borderRadius: 12,
-      border: "1px solid #f0f0f0",
-      boxShadow: "0 4px 20px rgba(0,0,0,0.07)",
-      padding: "16px",
-      display: "flex", flexDirection: "column", gap: 0,
-    }}>
-      {/* Tag row */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <span style={{
-          background: isRouteOnly ? "#fef3c7" : "#f0fdf4",
-          color: isRouteOnly ? "#92400e" : "#15803d",
-          fontSize: 9, fontWeight: 800, padding: "2px 8px", borderRadius: 20,
-          letterSpacing: 0.5, textTransform: "uppercase",
-        }}>
-          {isRouteOnly ? "Route Found" : "Next Arriving Bus"}
-        </span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: isRouteOnly ? "#b45309" : "#15803d" }}>
-          {isRouteOnly ? "No active bus" : `Arrives in ${eta} min`}
-        </span>
-      </div>
-
-      {/* Bus identity */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 38, height: 38, borderRadius: 10,
-            background: isRouteOnly ? "#fff7ed" : "#f0fdf4",
-            border: isRouteOnly ? "1.5px solid #fed7aa" : "1.5px solid #bbf7d0",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <BusFront size={20} color={isRouteOnly ? "#d97706" : "#009849"} strokeWidth={2} />
-          </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 900, color: "#111827", lineHeight: 1 }}>{busNo}</div>
-            <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2, fontWeight: 500 }}>{seatType}</div>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, fontWeight: 800, color: "#111827" }}>
-          <Star size={13} fill="#111827" strokeWidth={0} />
-          {rating}
-        </div>
-      </div>
-
-      {/* Route line */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0" }}>
-        <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#009849", flexShrink: 0 }} />
-        <div style={{ flex: 1, borderTop: "2px dashed #009849" }} />
-        <ArrowRight size={16} color="#374151" strokeWidth={2.5} />
-        <div style={{ flex: 1, borderTop: "2px dashed #d1d5db" }} />
-        <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />
-      </div>
-
-      {/* From / To */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", marginTop: 6, marginBottom: 12 }}>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 900, color: "#111827" }}>{fromLabel}</div>
-          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{startTime}</div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 16, fontWeight: 900, color: "#111827" }}>{toLabel}</div>
-          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{endTime}</div>
-        </div>
-      </div>
-
-      {/* Passing your stop banner */}
-      <div style={{
-        background: isRouteOnly ? "#fff7ed" : "#f0fdf4",
-        border: isRouteOnly ? "1.5px solid #fed7aa" : "1.5px solid #bbf7d0",
-        borderRadius: 12,
-        padding: "10px 14px", display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: 14,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{
-            width: 26, height: 26, borderRadius: "50%",
-            border: isRouteOnly ? "2px solid #d97706" : "2px solid #009849",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Check size={13} color={isRouteOnly ? "#d97706" : "#009849"} strokeWidth={2.5} />
-          </div>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: isRouteOnly ? "#b45309" : "#009849" }}>
-              {isRouteOnly ? "Route found but no active bus" : "Passing your stop"}
-            </div>
-            <div style={{ fontSize: 11, color: "#374151", marginTop: 1 }}>Board at {fromLabel}</div>
-          </div>
-        </div>
-        <button type="button" onClick={() => window.history.back()} style={{
-          fontSize: 12, fontWeight: 700, color: isRouteOnly ? "#b45309" : "#009849", background: "none", border: "none", cursor: "pointer",
-        }}>Change</button>
-      </div>
-
-      {/* Metrics */}
-      <div style={{
-        display: "flex", alignItems: "center",
-        borderTop: "1px solid #f0f0f0", borderBottom: "1px solid #f0f0f0",
-        padding: "12px 0",
-        gap: 0,
-      }}>
-        <MetricChip icon={TrendingUp} value={distance} label="Distance" />
-        <div style={{ width: 1, height: 28, background: "#f0f0f0" }} />
-        <MetricChip icon={Clock3} value={duration} label="Duration" />
-        <div style={{ width: 1, height: 28, background: "#f0f0f0" }} />
-        <MetricChip icon={BusFront} value={stopsCount} label="Stops" />
-      </div>
-
-      {/* Hidden original button kept for API compatibility */}
-      <button type="button" onClick={() => onContinue(trip)} className="hidden" aria-label="Continue route" />
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────
-   OTHER BUS ROW — all buses list
-───────────────────────────────────────────── */
-function OtherBusRow({ trip, pickup, destination, onChooseRoute }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChooseRoute?.(trip)}
-      style={{
-        display: "flex", width: "100%", alignItems: "center",
-        justifyContent: "space-between",
-        borderRadius: 14, border: "1.5px solid #e5e7eb",
-        background: "white", padding: "14px 16px", textAlign: "left",
-        cursor: "pointer", transition: "border-color 0.2s, background 0.2s",
-      }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = "#009849"; e.currentTarget.style.background = "#f0fdf4"; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = "#e5e7eb"; e.currentTarget.style.background = "white"; }}
+    <div
+      className={`rounded-[16px] bg-white p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] ${
+        isBest ? "border-[1.5px] border-[#009849]" : "border border-[#E5E7EB]"
+      }`}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{
-          width: 38, height: 38, borderRadius: 10, background: "#f0fdf4",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <BusFront size={20} color="#009849" strokeWidth={2} />
+      {/* BEST MATCH BADGE */}
+      {isBest && (
+        <span className="mb-3 inline-flex items-center gap-1 rounded-[6px] bg-[#009849] px-2 py-[3px] text-[10px] font-black tracking-[0.6px] text-white">
+          <Sparkles size={12} strokeWidth={2} />
+          BEST MATCH
+        </span>
+      )}
+
+      <button
+        type="button"
+        onClick={() => onPress?.(trip)}
+        className="flex w-full items-start gap-3 text-left transition active:opacity-90"
+      >
+        {/* ROUTE CODE BADGE */}
+        <span className="flex shrink-0 items-center pt-0.5">
+          <span
+            className={`flex min-w-[42px] items-center justify-center rounded-[8px] px-1.5 py-1 text-[11px] font-black text-white ${
+              isBest ? "bg-[#009849]" : "bg-[#374151]"
+            }`}
+          >
+            {routeCode}
+          </span>
+        </span>
+
+        {/* MAIN STOP TIMELINE */}
+        <span className="min-w-0 flex-1">
+          <span className="mb-1.5 block truncate text-[15px] font-extrabold text-[#111827]">
+            {routeName}
+          </span>
+          <StopDotLine
+            pickupLabel={boardLabel}
+            dropLabel={alightLabel}
+            firstMileWalk={firstMileWalk}
+            lastMileWalk={lastMileWalk}
+          />
+        </span>
+
+        {/* FARE COLUMN */}
+        <span
+          className={`flex min-w-[64px] shrink-0 flex-col items-center rounded-[10px] px-2.5 py-1.5 ${
+            isBest ? "border border-[#BBF7D0] bg-[#F0FDF4]" : "bg-[#F3F4F6]"
+          }`}
+        >
+          <span
+            className={`text-[16px] font-black leading-none ${
+              isBest ? "text-[#009849]" : "text-[#111827]"
+            }`}
+          >
+            ₹{fare}
+          </span>
+          <span className="mt-1 text-[9px] font-semibold leading-none text-[#9CA3AF]">Est. Fare</span>
+        </span>
+      </button>
+
+      {/* METRICS & ACTIONS */}
+      <div className="mt-3 border-t border-[#F3F4F6] pt-3">
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <span className="flex items-center gap-[3px]">
+            <Footprints size={14} className="text-[#009849]" />
+            <span className="text-[12px] font-semibold text-[#4B5563]">
+              {formatWalkText(firstMileWalk + lastMileWalk)}
+            </span>
+          </span>
+          <span className="text-[10px] text-[#D1D5DB]">•</span>
+          <span className="flex items-center gap-[3px]">
+            <Navigation size={14} className="text-[#6B7280]" />
+            <span className="text-[12px] font-semibold text-[#4B5563]">{formatDistanceText(trip)}</span>
+          </span>
+          <span className="text-[10px] text-[#D1D5DB]">•</span>
+          <span className="flex items-center gap-[3px]">
+            <Clock3 size={14} className="text-[#6B7280]" />
+            <span className="text-[12px] font-semibold text-[#4B5563]">
+              {formatDurationText(trip)} total
+            </span>
+          </span>
         </div>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>
-            {trip?.bus_number || trip?.vehicle_number || "Bus"}
-          </div>
-          <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
-            {shortPlace(pickup, trip?.pickup_name || "Pickup")} → {shortPlace(destination, trip?.destination_name || "Drop")}
-          </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onToggleExpand?.(trip?.id || index)}
+            className="shrink-0 rounded-[10px] border border-[#E5E7EB] px-3 py-2 text-[12px] font-bold text-[#374151] transition enabled:hover:border-[#009849] enabled:hover:text-[#009849]"
+          >
+            {expanded ? "Hide Stops" : `Stops (${stops.length}) ›`}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onPress?.(trip)}
+            className={`flex flex-1 items-center justify-center gap-1 rounded-[10px] py-[9px] text-[13px] font-extrabold text-white transition ${
+              isBest
+                ? "bg-[#009849] enabled:hover:bg-[#007A3B]"
+                : "bg-[#374151] enabled:hover:bg-[#1F2937]"
+            }`}
+          >
+            Select Route
+            <ArrowRight size={14} strokeWidth={2.5} />
+          </button>
         </div>
       </div>
-      <span style={{ fontSize: 13, fontWeight: 700, color: "#009849" }}>
-        {formatEtaMinutes(trip?.eta_seconds)} min
-      </span>
-    </button>
-  );
-}
 
-/* ─────────────────────────────────────────────
-   MOBILE BOTTOM NAV
-───────────────────────────────────────────── */
-function MobileBottomNav() {
-  const items = [
-    { icon: BusFront, label: "Console", active: true },
-    { icon: Route, label: "Routes" },
-    { icon: Calendar, label: "Trips" },
-    { icon: Calendar, label: "Schedule" },
-    { icon: MoreHorizontal, label: "More" },
-  ];
-  return (
-    <div style={{
-      display: "flex", background: "white",
-      borderTop: "1px solid #f0f0f0", padding: "8px 0 12px",
-    }}>
-      {items.map(({ icon: Icon, label, active }) => (
-        <button key={label} type="button" style={{
-          flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-          background: "none", border: "none", cursor: "pointer", padding: "4px 0",
-        }}>
-          {React.createElement(Icon, {
-            size: 22,
-            color: active ? "#009849" : "#9ca3af",
-            strokeWidth: active ? 2.5 : 2,
+      {/* EXPANDABLE STOPS LIST */}
+      {expanded && stops.length > 0 && (
+        <div className="mt-3 flex flex-col gap-2 rounded-[12px] border border-[#E5E7EB] bg-[#F9FAFB] p-2.5">
+          {stops.map((stop, si) => {
+            const isBoarding = boardingStop?.id
+              ? String(stop.id) === String(boardingStop.id)
+              : si === 0;
+            const isAlighting = alightingStop?.id
+              ? String(stop.id) === String(alightingStop.id)
+              : si === stops.length - 1;
+
+            const seqBg = isBoarding
+              ? "bg-[#009849]"
+              : isAlighting
+                ? "bg-[#F59E0B]"
+                : "bg-[#E5E7EB]";
+            const seqText = isBoarding || isAlighting ? "text-white" : "text-[#374151]";
+            const statusText = isBoarding ? "Pickup Here" : isAlighting ? "Drop-off Here" : "On Route";
+            const statusTextClass = isBoarding
+              ? "text-[#009849]"
+              : isAlighting
+                ? "text-[#F59E0B]"
+                : "text-[#374151]";
+
+            return (
+              <div key={stop.id || si} className="flex items-center gap-2.5">
+                <span
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold ${seqBg} ${seqText}`}
+                >
+                  {stop.order || si + 1}
+                </span>
+                <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                  <span className="truncate text-[12px] font-semibold text-[#111827]">{stop.name}</span>
+                  <span className={`shrink-0 text-[11px] font-bold ${statusTextClass}`}>{statusText}</span>
+                </span>
+              </div>
+            );
           })}
-          <span style={{ fontSize: 11, fontWeight: active ? 700 : 500, color: active ? "#009849" : "#9ca3af" }}>{label}</span>
-        </button>
-      ))}
+        </div>
+      )}
     </div>
   );
 }
 
 /* ─────────────────────────────────────────────
-   STATUS BAR — bottom strip
+   LOADING / EMPTY STATE CARD
 ───────────────────────────────────────────── */
-function StatusBar({ trip, onRefresh, loading }) {
-  const isRouteOnly = trip?.is_route_only || trip?.trip_available === false;
-  const busNo = trip?.bus_number || trip?.vehicle_number || (isRouteOnly ? "--" : "UP 32 DC 0003");
+function StateCard({ children }) {
   return (
-    <div style={{
-      background: "white", borderTop: "1px solid #f0f0f0",
-      padding: "14px 24px",
-      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24,
-      flexWrap: "wrap",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ width: 10, height: 10, borderRadius: "50%", background: isRouteOnly ? "#9ca3af" : "#009849", display: "inline-block" }} />
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Live Tracking</div>
-          <div style={{ fontSize: 12, color: isRouteOnly ? "#6b7280" : "#009849", fontWeight: 600 }}>
-            {isRouteOnly ? "No active bus" : "Active"}
-          </div>
-        </div>
-      </div>
-      <div style={{ width: 1, height: 32, background: "#f0f0f0" }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <BusFront size={20} color="#374151" />
-        <div>
-          <div style={{ fontSize: 12, color: "#9ca3af", fontWeight: 500 }}>Vehicle</div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "#111827" }}>{busNo}</div>
-        </div>
-      </div>
-      <div style={{ width: 1, height: 32, background: "#f0f0f0" }} />
-      <button 
-        type="button" 
-        onClick={onRefresh} 
-        disabled={loading}
-        style={{ 
-          display: "flex", alignItems: "center", gap: 10, 
-          background: "none", border: "none", cursor: "pointer",
-          padding: 0, outline: "none"
-        }}
-      >
-        <RefreshCw size={18} color="#374151" className={loading ? "prl-animate-spin" : ""} />
-        <div>
-          <div style={{ fontSize: 12, color: "#9ca3af", fontWeight: 500 }}>Last Updated</div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "#111827" }}>
-            {isRouteOnly ? "--" : new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-          </div>
-        </div>
-      </button>
+    <div className="rounded-[16px] bg-white py-10 text-center text-[14px] font-semibold text-[#9CA3AF] shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+      {children}
     </div>
   );
 }
@@ -588,10 +507,8 @@ export default function PassengerRouteList({
   onUpdatePickup,
   onUpdateDestination,
   onReSearchRoutes,
-  onShowAllBuses,
 }) {
-  const navigate = useNavigate();
-  const [showAllBuses, setShowAllBuses] = useState(false);
+  const [expandedRouteId, setExpandedRouteId] = useState(null);
 
   const allTrips = useMemo(() => {
     if (!Array.isArray(trips)) return [];
@@ -599,229 +516,119 @@ export default function PassengerRouteList({
     return [...trips].sort((a, b) => {
       const aRouteOnly = a.is_route_only || a.trip_available === false;
       const bRouteOnly = b.is_route_only || b.trip_available === false;
-      
+
       if (aRouteOnly !== bRouteOnly) {
         return aRouteOnly ? 1 : -1; // Active trips first
       }
-      
+
       // If both are active, sort by ETA (fastest first)
       if (!aRouteOnly) {
         return (a.eta_seconds || 0) - (b.eta_seconds || 0);
       }
-      
+
       return 0;
     });
   }, [trips]);
   const bestTrip = allTrips[0] || null;
-  const isRouteOnly = bestTrip?.is_route_only || bestTrip?.trip_available === false;
-  const eta = isRouteOnly ? "--" : formatEtaMinutes(bestTrip?.eta_seconds);
+  const routeCount = allTrips.length;
+  const modeLabel =
+    Array.isArray(trips) && trips.some((trip) => trip?.vehicle_type === "bike")
+      ? "Bike"
+      : "Auto";
 
   const handleContinue = (trip) => { if (!trip) return; onChooseRoute?.(trip); };
-  const handleViewAllBuses = () => {
-    const params = new URLSearchParams();
-    if (pickup) {
-      params.append("pLat", pickup.lat);
-      params.append("pLon", pickup.lon);
-      params.append("pName", pickup.name || pickup.display_name || "");
-    }
-    if (destination) {
-      params.append("dLat", destination.lat);
-      params.append("dLon", destination.lon);
-      params.append("dName", destination.name || destination.display_name || "");
-    }
-    navigate(`${APP_ROUTES.allBuses}?${params.toString()}`);
-  };
-
-  const css = `
-    .prl-root { font-family: inherit; }
-    .prl-root * { box-sizing: border-box; }
-
-    /* hide maplibre controls */
-    .maplibregl-ctrl-bottom-left,
-    .maplibregl-ctrl-bottom-right,
-    .maplibregl-ctrl-top-right { display: none !important; }
-
-    /* responsive: desktop shows 2-col grid, mobile is single col */
-    .prl-body-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 16px;
-    }
-
-    @keyframes prl-spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    .prl-animate-spin {
-      animation: prl-spin 1s linear infinite;
-    }
-    @media (min-width: 1024px) {
-      .prl-body-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 24px;
-      }
-      .prl-map-col { height: 100%; min-height: 560px; }
-      .mobile-only { display: none !important; }
-      .desktop-only { display: flex !important; }
-    }
-    @media (max-width: 1023px) {
-      .prl-map-col { height: 300px; }
-      .desktop-only { display: none !important; }
-      .mobile-only { display: block !important; }
-    }
-  `;
+  const handleToggleExpand = (id) =>
+    setExpandedRouteId((current) => (String(current) === String(id) ? null : id));
 
   return (
-    <>
-      <style>{css}</style>
-      <MobileBackButton onClick={onBack} />
-      <div
-        className="prl-root"
-        style={{
-          minHeight: "calc(100vh - 64px)", background: "#F8FAF9",
-          display: "flex", flexDirection: "column",
-        }}
-      >
-        {/* redundant local navbar removed */}
+    <div className="min-h-[calc(100vh-64px)] bg-[#F8FAF9] font-sans">
+      {/* HEADER — mobile PassengerRouteList header */}
+      <header className="mx-auto w-full max-w-[1400px] px-4 pb-3 pt-2 sm:px-5">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition active:scale-95"
+          >
+            <ArrowLeft size={20} className="text-[#111827]" strokeWidth={2.2} />
+          </button>
 
-        {/* ══ MAIN CONTENT ══ */}
-        <main style={{ flex: 1, maxWidth: 1400, width: "100%", margin: "0 auto", padding: "24px 20px 24px", display: "flex", flexDirection: "column" }}>
-
-          {/* Page heading row */}
-          <div style={{ position: "relative", marginBottom: 24 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative", zIndex: 1 }}>
-              <button
-                type="button"
-                onClick={onBack}
-                className="desktop-only"
-                style={{
-                  width: 44, height: 44, borderRadius: "50%",
-                  border: "1.5px solid #e5e7eb", background: "white",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                  flexShrink: 0,
-                }}
-                aria-label="Back"
-              >
-                <ArrowLeft size={20} color="#374151" strokeWidth={2.2} />
-              </button>
-
-              <div>
-                <h1 style={{ fontSize: 28, fontWeight: 900, color: "#111827", lineHeight: 1, margin: 0 }}>
-                  Best <span style={{ color: "#009849" }}>Match</span>
-                </h1>
-                <p style={{ fontSize: 14, color: "#6b7280", marginTop: 6, margin: "6px 0 0" }}>
-                  The best bus option for your trip
-                </p>
-              </div>
-            </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[22px] font-extrabold leading-tight text-[#111827]">
+              Available Routes
+            </h1>
+            <p className="mt-px text-[13px] font-bold text-[#009849]">{modeLabel} Transit</p>
           </div>
 
-          {/* ── TWO COLUMN GRID ── */}
-          <div className="prl-body-grid" style={{ flex: 1 }}>
-            {/* LEFT: Map */}
-            <div className="prl-map-col" style={{ height: "100%" }}>
-              <RouteMapPreview
-                trip={bestTrip}
-                pickup={pickup}
-                destination={destination}
-                onUpdatePickup={onUpdatePickup}
-                onUpdateDestination={onUpdateDestination}
-              />
-            </div>
+          <button
+            type="button"
+            aria-label="Route filters"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition active:scale-95"
+          >
+            <SlidersHorizontal size={18} className="text-[#009849]" />
+          </button>
+        </div>
+      </header>
 
-            {/* RIGHT: Card + buttons */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
-              {loading ? (
-                <div style={{
-                  background: "white", borderRadius: 18, padding: 40,
-                  textAlign: "center", fontSize: 16, fontWeight: 700, color: "#374151",
-                  boxShadow: "0 4px 24px rgba(0,0,0,0.07)", border: "1px solid #f0f0f0",
-                }}>
-                  Loading routes...
-                </div>
-              ) : bestTrip ? (
-                <BestMatchCard
-                  trip={bestTrip}
+      {/* ══ MAIN CONTENT ══ */}
+      <main className="mx-auto w-full max-w-[1400px] px-4 pb-8 sm:px-5">
+        {/* LIST STATES */}
+        {!loading && routeCount > 0 && (
+          <p className="mb-2.5 mt-1 text-[13px] font-semibold text-[#6B7280]">
+            {routeCount} routes found for your journey
+          </p>
+        )}
+        {loading && <StateCard>Finding best options...</StateCard>}
+        {!loading && routeCount === 0 && (
+          <StateCard>No matching rides found for this location.</StateCard>
+        )}
+
+        {/* ── RESPONSIVE GRID: map + route list (single DOM tree) ── */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+          {/* LEFT: map preview — hidden below sm (mobile shows the list only) */}
+          <div className="hidden h-[340px] sm:block lg:h-auto lg:min-h-[560px]">
+            <RouteMapPreview
+              trip={bestTrip}
+              pickup={pickup}
+              destination={destination}
+              onUpdatePickup={onUpdatePickup}
+              onUpdateDestination={onUpdateDestination}
+            />
+          </div>
+
+          {/* RIGHT: route cards + actions */}
+          <div className="flex flex-col gap-3">
+            {!loading &&
+              allTrips.map((trip, index) => (
+                <RouteCard
+                  key={String(trip?.id || index)}
+                  trip={trip}
                   pickup={pickup}
                   destination={destination}
-                  onContinue={handleContinue}
+                  index={index}
+                  isBest={index === 0}
+                  expanded={String(expandedRouteId) === String(trip?.id || index)}
+                  onPress={handleContinue}
+                  onToggleExpand={handleToggleExpand}
                 />
-              ) : (
-                <div style={{
-                  background: "white", borderRadius: 18, padding: 40,
-                  textAlign: "center", fontSize: 16, fontWeight: 700, color: "#374151",
-                  boxShadow: "0 4px 24px rgba(0,0,0,0.07)", border: "1px solid #f0f0f0",
-                }}>
-                  No route found
-                </div>
-              )}
+              ))}
 
-              <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
-                {/* Continue CTA */}
-                <button
-                  type="button"
-                  onClick={() => handleContinue(bestTrip)}
-                  disabled={!bestTrip || loading}
-                  style={{
-                    width: "100%", height: 56, borderRadius: 18, border: "none",
-                    background: !bestTrip || loading ? "#d1d5db" : (isRouteOnly ? "#374151" : "#009849"),
-                    color: "white", fontWeight: 800, fontSize: 16, fontFamily: "inherit",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                    cursor: !bestTrip || loading ? "not-allowed" : "pointer",
-                    boxShadow: !bestTrip || loading ? "none" : (isRouteOnly ? "0 4px 20px rgba(0,0,0,0.1)" : "0 4px 20px rgba(0,152,73,0.3)"),
-                    transition: "background 0.18s, transform 0.12s",
-                  }}
-                  onMouseEnter={e => { if (bestTrip && !loading) e.currentTarget.style.background = isRouteOnly ? "#1f2937" : "#007a3d"; }}
-                  onMouseLeave={e => { if (bestTrip && !loading) e.currentTarget.style.background = isRouteOnly ? "#374151" : "#009849"; }}
-                >
-                  {isRouteOnly ? "View Route Details" : "Continue"}
-                  {!isRouteOnly && bestTrip && <ArrowRight size={20} strokeWidth={2.5} />}
-                </button>
-
-                {/* View all buses */}
-                <button
-                  type="button"
-                  onClick={handleViewAllBuses}
-                  style={{
-                    width: "100%", height: 52, borderRadius: 18,
-                    border: "1.5px solid #009849", background: "white",
-                    color: "#009849", fontWeight: 800, fontSize: 15, fontFamily: "inherit",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                    cursor: "pointer", transition: "background 0.15s",
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "#f0fdf4"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "white"; }}
-                >
-                  <BusFront size={20} color="#009849" />
-                  {showAllBuses ? "Hide buses" : "View all buses"}
-                </button>
-
-                {/* Refresh */}
-                <button
-                  type="button"
-                  onClick={onReSearchRoutes}
-                  disabled={!pickup || !destination || loading}
-                  style={{
-                    width: "100%", height: 44, borderRadius: 18,
-                    border: "1px solid #e5e7eb", background: "white",
-                    color: "#6b7280", fontWeight: 600, fontSize: 13, fontFamily: "inherit",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                    cursor: !pickup || !destination || loading ? "not-allowed" : "pointer",
-                    opacity: !pickup || !destination || loading ? 0.5 : 1,
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={e => { if (pickup && destination && !loading) e.currentTarget.style.background = "#f9fafb"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "white"; }}
-                >
-                  <RefreshCw size={15} className={loading ? "prl-animate-spin" : ""} />
-                  Refresh Routes
-                </button>
-              </div>
+            {/* Refresh matching rides */}
+            <div className="mt-1 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={onReSearchRoutes}
+                disabled={!pickup || !destination || loading}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-[18px] border border-[#E5E7EB] bg-white text-[13px] font-semibold text-[#6B7280] transition enabled:hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+                Refresh Routes
+              </button>
             </div>
           </div>
-        </main>
-      </div>
-    </>
+        </div>
+      </main>
+    </div>
   );
 }

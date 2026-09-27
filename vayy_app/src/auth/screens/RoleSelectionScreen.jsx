@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ArrowLeft, User, Navigation, Car } from "lucide-react-native";
+import { ArrowLeft, User, Navigation, Bike } from "lucide-react-native";
 import COLORS from "../../shared/constants/colors";
 import { useDispatch } from "react-redux";
 import { ROLE } from "../../constants";
@@ -24,7 +24,7 @@ const ROLES = [
     key: ROLE.AUTO_DRIVER,
     title: "Auto Marshal",
     subtitle: "I want to drive an auto and earn.",
-    icon: (active) => <Car size={36} color={active ? COLORS.primary : "#9ca3af"} />,
+    icon: (active) => <Bike size={36} color={active ? COLORS.primary : "#9ca3af"} />,
   },
 ];
 

@@ -578,7 +578,7 @@ export default function AdminScreen({ navigation }) {
                         <View style={styles.profileSectionDivider} />
                         <Text style={styles.profileSectionTitle}>Driver Details</Text>
                         <ProfileDetailRow icon="card-outline" label="License" value={userProfile?.license_number} />
-                        <ProfileDetailRow icon="car-outline" label="Vehicle Number" value={userProfile?.vehicle_number} />
+                        <ProfileDetailRow icon="bicycle-outline" label="Vehicle Number" value={userProfile?.vehicle_number} />
                         <ProfileDetailRow icon="speedometer-outline" label="Vehicle Type" value={userProfile?.vehicle_type} />
                         <ProfileDetailRow icon="star-outline" label="Rating" value={userProfile?.rating?.toFixed?.(1) || userProfile?.rating} />
                         <ProfileDetailRow icon="trophy-outline" label="Total Trips" value={userProfile?.total_trips} />

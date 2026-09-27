@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2E5CFF" />
+      <stop offset="0.6" stop-color="#4D7AFF" />
+      <stop offset="1" stop-color="#7DD3FC" />
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.25" />
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.05" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <style>
+      @font-face {
+        font-family: 'Geom';
+        font-style: normal;
+        font-weight: 900;
+        src: url(https://fonts.gstatic.com/s/geom/v1/X7nq4bw6Cf6j8tOXHQ.woff2) format('woff2');
+      }
+    </style>
+  </defs>
+
+  <rect x="3" y="3" width="94" height="94" rx="26" fill="#16233F" opacity="0.18" />
+  <rect x="2" y="2" width="96" height="96" rx="26" fill="url(#bg)" />
+  <rect x="2" y="2" width="96" height="96" rx="26" fill="url(#gloss)" />
+  <rect x="2" y="2" width="96" height="96" rx="26" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="1.5" />
+
+  <circle cx="88" cy="14" r="10" fill="none" stroke="#ffffff" stroke-opacity="0.28" stroke-width="2" />
+
+  <text x="50" y="62" text-anchor="middle" font-family="Geom, system-ui, sans-serif" font-size="38" font-weight="900" fill="#ffffff" letter-spacing="1">OMV</text>
+</svg>

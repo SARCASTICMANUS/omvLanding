@@ -1,22 +1,28 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
 import { APP_ROUTES } from "../constants/routes";
-import { PASSENGER_ROLES, DRIVER_ROLES, USER_ROLES } from "../constants/roles";
+import { PASSENGER_ROLES, DRIVER_ROLES } from "../constants/roles";
 import AppLayout from "../layouts/AppLayout";
 import AdminPanel from "../pages/AdminPanel";
 import DriverLivePage from "../pages/DriverLivePage";
 import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
+import PasswordResetPage from "../pages/PasswordResetPage";
 import PassengerLivePage from "../pages/PassengerLivePage";
 import DriverProfileUpdate from "../pages/DriverProfileUpdate";
+
 import PassengerProfileUpdate from "../pages/PassengerProfileUpdate";
 import ProfilePage from "../pages/ProfilePage";
 import AboutPage from "../pages/AboutPage";
 import NotificationsPage from "../pages/NotificationsPage";
 import ContactUsPage from "../pages/ContactUsPage";
+import HelpSupportPage from "../pages/HelpSupportPage";
+import PrivacyPolicyPage from "../pages/PrivacyPolicyPage";
+import TermsPage from "../pages/TermsPage";
 import RoutesPage from "../pages/RoutesPage";
-import HomeVayy from "../pages/HomeVayy";
-import AllBusesPage from "../pages/AllBusesPage";
+import HomeOrLanding from "../pages/HomeOrLanding";
+import TripsPage from "../pages/TripsPage";
+
 import TrackingPage from "../pages/TrackingPage";
 import { ProtectedAdmin, ProtectedRoute, PublicRoute } from "./guards";
 
@@ -34,6 +40,14 @@ export const appRouteConfig = [
     element: (
       <PublicRoute>
         <RegisterPage />
+      </PublicRoute>
+    ),
+  },
+  {
+    path: APP_ROUTES.forgotPassword,
+    element: (
+      <PublicRoute>
+        <PasswordResetPage />
       </PublicRoute>
     ),
   },
@@ -68,16 +82,6 @@ export const appRouteConfig = [
     ),
   },
   {
-    path: APP_ROUTES.allBuses,
-    element: (
-      <ProtectedRoute allowedRoles={PASSENGER_ROLES}>
-        <AppLayout>
-          <AllBusesPage />
-        </AppLayout>
-      </ProtectedRoute>
-    ),
-  },
-  {
     path: APP_ROUTES.tracking,
     element: (
       <ProtectedRoute allowedRoles={PASSENGER_ROLES}>
@@ -97,6 +101,7 @@ export const appRouteConfig = [
       </ProtectedRoute>
     ),
   },
+  
   {
     path: APP_ROUTES.passengerProfileUpdate,
     element: (
@@ -118,16 +123,38 @@ export const appRouteConfig = [
     ),
   },
   {
+    path: APP_ROUTES.trips,
+    element: (
+      <ProtectedRoute allowedRoles={[...PASSENGER_ROLES, ...DRIVER_ROLES]}>
+        <AppLayout>
+          <TripsPage />
+        </AppLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: APP_ROUTES.notifications,
+    element: (
+      <ProtectedRoute allowedRoles={[...PASSENGER_ROLES, ...DRIVER_ROLES]}>
+        <AppLayout>
+          <NotificationsPage />
+        </AppLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: APP_ROUTES.root,
     element: (
       <AppLayout flush={false}>
-        <HomeVayy />
+        <HomeOrLanding />
       </AppLayout>
     ),
   },
   { path: APP_ROUTES.about, element: <AppLayout><AboutPage /></AppLayout> },
   { path: APP_ROUTES.contact, element: <AppLayout><ContactUsPage /></AppLayout> },
+  { path: APP_ROUTES.help, element: <AppLayout><HelpSupportPage /></AppLayout> },
+  { path: APP_ROUTES.privacy, element: <AppLayout><PrivacyPolicyPage /></AppLayout> },
+  { path: APP_ROUTES.terms, element: <AppLayout><TermsPage /></AppLayout> },
   { path: APP_ROUTES.routes, element: <AppLayout><RoutesPage /></AppLayout> },
-  { path: "/notifications", element: <AppLayout><NotificationsPage /></AppLayout> },
   { path: "*", element: <Navigate to={APP_ROUTES.root} replace /> },
 ];

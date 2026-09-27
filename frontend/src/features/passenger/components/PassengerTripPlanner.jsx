@@ -1,113 +1,99 @@
-import React, { useMemo, useState, useEffect } from "react";
-import {
-  ArrowUpDown,
-  Bus,
-  ChevronDown,
-  Clock,
-  Crosshair,
-  Globe2,
-  MapPin,
-  Menu,
-  Search,
-  ShieldCheck,
-  Sun,
-} from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, ArrowUpDown, ChevronRight, Clock, MapPin, Search, Flag } from "lucide-react";
 import { LocationSearch } from "../../../components/map";
 import api from "../../../lib/api";
 import { API_PATHS } from "../../../constants/apiPaths";
-import splashScreen1 from "../../../assets/SplashScreen1.png";
+import heroBg from "../../../assets/new-bg1.png";
+import bikeImg1 from "../../../assets/vayyWithPassengerbike.webp";
+import bikeImg2 from "../../../assets/vayyWithPassengerbike2.webp";
+import bikeImg3 from "../../../assets/vayyWithPassengerbike3.webp";
+import bikeImg4 from "../../../assets/vayyWithoutPassengerBike.webp";
+import bikeImg5 from "../../../assets/vayyWithoutPassengerBike2.webp";
+import bikeImg6 from "../../../assets/vayyWithoutPassengerBike3.webp";
+import bikeImg7 from "../../../assets/vayyWithoutPassengerBike4.webp";
+import autoImg1 from "../../../assets/vayyWithPassengerAuto.webp";
+import autoImg2 from "../../../assets/vayyWithoutPassengerAuto.webp";
+import autoComingSoonImg from "../../../assets/vayyAutoBoarding.webp";
 
-const brandGreen = "#079f4f";
+const RIDE_IMAGES = [bikeImg1, bikeImg2, bikeImg3, bikeImg4, bikeImg5, bikeImg6, bikeImg7];
+const AUTO_IMAGES = [autoImg1, autoImg2];
+const RIDE_DURATION = 4000;
 
-function VayyLogo() {
+function prefersReducedMotion() {
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#12c46a] to-[#008e43] text-[23px] font-black text-white shadow-[0_10px_22px_rgba(0,153,77,0.25)]">
-        V
-      </div>
-      <span className="text-[22px] font-black tracking-[0.02em] text-[#071419]">
-        VAYY
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+function SearchField({ label, placeholder, value, onSelect, isPickup }) {
+  return (
+    <div className="relative mb-4 flex min-h-[56px] items-center gap-3 rounded-[16px] border border-[#E5E7EB] bg-white px-3 py-2 shadow-v-sm transition-colors focus-within:border-[#009849] focus-within:ring-2 focus-within:ring-[#009849]/15">
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] text-white ${
+          isPickup ? "bg-[#009849]" : "bg-[#f59e0b]"
+        }`}
+        aria-hidden="true"
+      >
+        {isPickup ? <MapPin size={16} /> : <Flag size={14} />}
       </span>
-    </div>
-  );
-}
-
-
-
-function PlannerField({ label, placeholder, onSelect, initialValue, icon }) {
-  return (
-    <div className="relative z-20">
-      <label className="mb-3 flex items-center gap-3 text-[17px] lg:text-[14px] font-extrabold text-[#0b171c]">
-        {React.createElement(icon, {
-          size: 24,
-          className: "text-[#0aa658]",
-          fill: brandGreen,
-          strokeWidth: 2.5,
-        })}
-        {label}
-      </label>
-
-      <div className="relative">
-        <LocationSearch
-          placeholder={placeholder}
-          onSelect={onSelect}
-          initialValue={initialValue}
-          className="h-[52px] w-full rounded-[10px] border border-[#cfd8e5] bg-white pl-[54px] pr-[54px] text-[15px] font-medium text-[#14242c] shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] outline-none transition focus:border-[#8fa6ba] focus:ring-4 focus:ring-[#dcebe4]"
-        />
-        <Crosshair
-          size={21}
-          className="pointer-events-none absolute  right-5 top-1/2 z-20 -translate-y-1/2 text-[#7b8da3]"
-          strokeWidth={2.2}
-        />
+      <div className="min-w-0 flex-1">
+        <span className="block text-[11px] font-semibold uppercase leading-tight tracking-[0.3px] text-[#6B7280]">
+          {label}
+        </span>
+        <div className="[&>div>svg]:hidden">
+          <LocationSearch
+            placeholder={placeholder}
+            onSelect={onSelect}
+            initialValue={value}
+            iconPosition="right"
+            className="w-full border-0 bg-transparent py-0 pl-0 pr-10 text-[14px] font-semibold text-[#111827] outline-none placeholder:font-medium placeholder:text-[#9CA3AF]"
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-function FeatureItem({ icon, title, copy }) {
-  return (
-    <div className="flex min-w-0 items-center gap-5">
-      <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full bg-[#dff4ea] text-[#0aa658]">
-        {React.createElement(icon, { size: 32, strokeWidth: 2.4 })}
-      </div>
-      <div>
-        <h3 className="text-[16px] font-extrabold text-[#102027]">{title}</h3>
-        <p className="mt-2 max-w-[260px] text-[13px] font-medium leading-6 text-[#5f6f83]">
-          {copy}
-        </p>
-      </div>
-    </div>
-  );
-}
+function RecentRow({ item, onClick }) {
+  const fromName = item.pickup?.name || item.pickup?.display_name || "Unknown Start";
+  const toName = item.destination?.name || item.destination?.display_name || "Unknown End";
 
-function RecentSearchItem({ search, onClick }) {
   return (
     <button
-      onClick={() => onClick(search)}
-      className="group flex w-full items-center gap-3 rounded-[12px] border border-[#f0f3f6] bg-white p-3 text-left transition hover:border-[#079f4f] hover:bg-[#f8fbfa] hover:shadow-sm"
+      type="button"
+      onClick={() => onClick(item)}
+      className="group mb-2.5 flex w-full items-center gap-3 rounded-[14px] border border-[#F3F4F6] bg-white px-3.5 py-3.5 text-left transition-colors hover:border-[#009849]/40 hover:bg-[#F8FBFA]"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f1f5f9] text-[#64748b] group-hover:bg-[#dff4ea] group-hover:text-[#079f4f]">
-        <Clock size={16} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-bold text-[#1e293b]">
-          {search.pickup?.name || search.pickup?.display_name?.split(",")[0]}
-        </div>
-        <div className="truncate text-[11px] font-medium text-[#64748b]">
-          To: {search.destination?.name || search.destination?.display_name?.split(",")[0]}
-        </div>
-      </div>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-[#F3F4F6] text-[#6B7280]">
+        <Clock size={18} />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate text-[12px] font-black text-[#111827]">{fromName}</span>
+        <span className="truncate text-[12px] font-medium text-[#6B7280]">To: {toName}</span>
+      </span>
+      <ChevronRight
+        size={16}
+        className="shrink-0 text-[#D1D5DB] transition-colors group-hover:text-[#009849]"
+      />
     </button>
   );
 }
 
 export default function PassengerTripPlanner({
+  onBack,
   onNext,
   loading = false,
+  mode = "bike",
 }) {
   const [pickup, setPickup] = useState(null);
   const [destination, setDestination] = useState(null);
   const [recentSearches, setRecentSearches] = useState([]);
+  const [imgIndex, setImgIndex] = useState(0);
+  const [autoImgIndex, setAutoImgIndex] = useState(0);
+  const [riding, setRiding] = useState(false);
+  const [reducedMotion] = useState(prefersReducedMotion);
 
   useEffect(() => {
     // Fetch recent searches
@@ -118,11 +104,38 @@ export default function PassengerTripPlanner({
       .catch(err => console.error("Failed to fetch recent searches", err));
   }, []);
 
+  useEffect(() => {
+    if (mode !== "auto" || reducedMotion) return undefined;
+    const timer = setInterval(() => {
+      setAutoImgIndex((index) => (index + 1) % AUTO_IMAGES.length);
+    }, 7000);
+    return () => clearInterval(timer);
+  }, [mode, reducedMotion]);
+
+  useEffect(() => {
+    if (reducedMotion) return undefined;
+    if (!riding) {
+      const startTimer = setTimeout(() => setRiding(true), 80);
+      return () => clearTimeout(startTimer);
+    }
+    const rideTimer = setTimeout(() => {
+      setImgIndex((prev) => (prev + 1) % RIDE_IMAGES.length);
+      setRiding(false);
+    }, RIDE_DURATION);
+    return () => clearTimeout(rideTimer);
+  }, [riding, reducedMotion]);
+
   const canProceed = useMemo(() => {
     return Boolean(
       pickup?.lat && pickup?.lon && destination?.lat && destination?.lon
     );
   }, [pickup, destination]);
+
+  const handleSwap = () => {
+    const p = pickup;
+    setPickup(destination);
+    setDestination(p);
+  };
 
   const handleNext = () => {
     if (!canProceed || loading) return;
@@ -134,136 +147,124 @@ export default function PassengerTripPlanner({
     setDestination(search.destination);
   };
 
-  return (
-    <div className="min-h-screen bg-white sm:bg-none font-sans text-[#071419]">
-      <section className="relative flex w-full flex-col overflow-hidden -mt-5">
-        
-        {/* Main Content Container: Unified immersive layout */}
-        <main className="relative z-10 flex flex-1 flex-col w-full max-w-full mx-auto">
-          
-          {/* Hero Section: Hero image fills available space above the card */}
-          <section className="relative w-full  flex-1 min-h-[320px]">
-            {/* Background Image */}
-            <div className='absolute sm:relative  sm:bg-[#ffffff] inset-0 w-full h-full sm:flex sm:justify-end'>
-              <img src={splashScreen1} alt="Vayy Hero" className='w-full h-full object-cover p-0 m-0 sm:w-[40rem] lg:w-[40rem] lg:h-[23rem] lg:mt-[-8.5rem]  sm:object-top lg:object-top ' />
-              <div className="absolute inset-0 bg-black/5" />
-            </div>
+  const vehiclePosition = reducedMotion
+    ? "translate-x-[calc(50vw_-_50%)] transition-none"
+    : riding
+      ? "translate-x-[calc(100vw_+_80px)] transition-transform duration-[4000ms] ease-linear"
+      : "-translate-x-[35vw] transition-none";
 
-            {/* Heading Content: Centered over image */}
-            <div className="absolute inset-0 flex flex-col justify-center px-[20px] sm:px-[40px] lg:px-[60px] lg:mt-[-85px] text-left z-20">
-              <h1 className="text-[42px] sm:text-[48px] lg:text-[48px] font-black leading-[1.05] tracking-tight text-[#08161b]">
-                Choose Your <br />
-                <span className="bg-gradient-to-r from-[#078f48] to-[#17b965] bg-clip-text text-transparent lg:text-[50px]">
-                  Route
-                </span>
-              </h1>
-              <p className="mt-4 max-w-[450px] text-[15px] sm:text-[16px] lg:text-[14px] font-medium leading-[1.6] text-[#33475b]">
-                Enter your pickup and drop locations <br />
-                to find the best bus routes <br />
-                and track in real-time.
-              </p>
-            </div>
-          </section>
-
-          {/* Search Card Section */}
-         <section className="relative z-30 mt-[-20px] lg:mt-[-6.5rem] w-full bg-white rounded-t-[20px] border-t border-[#e6ebef] p-[30px] sm:p-[32px] lg:p-[30px] shadow-[0_-15px_50px_rgba(18,38,48,0.12)]">
-            <PlannerField
-            
-              label="Pickup Point"
-              placeholder="Search pickup location "
-              onSelect={setPickup}
-              
-              icon={MapPin}
-            />
-
-            <div className="relative my-[24px]  flex items-center justify-center">
-              <div className="absolute h-full border-l border-dashed border-[#d5dde7]" />
-              <button
-                type="button"
-                className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#e1e8ee] bg-white text-[#1e303a] shadow-sm"
-                aria-label="Swap pickup and drop"
-              >
-                <ArrowUpDown size={18} strokeWidth={2.2} className="lg:h-8 "/>
-              </button>
-            </div>
-
-            <PlannerField
-            
-              label="Drop Location "
-              placeholder="Enter your destination"
-              onSelect={setDestination}
-              icon={MapPin}
-            />
-
+  if (mode === "auto") {
+    return (
+      <div className="flex min-h-screen w-full flex-col bg-white font-sans text-[#111827]">
+        <section className="relative h-[300px] w-full shrink-0 overflow-hidden">
+          <img src={heroBg} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
+          <img
+            src={AUTO_IMAGES[autoImgIndex]}
+            alt=""
+            aria-hidden="true"
+            className="absolute bottom-[22px] left-0 h-[110px] w-[190px] max-w-[55vw] animate-[omv-auto-ride_7s_linear_infinite] object-contain"
+          />
+          {onBack ? (
             <button
               type="button"
-              onClick={handleNext}
-              disabled={!canProceed || loading}
-              className="mt-[30px] flex h-[64px] sm:h-[56px] w-full items-center justify-center gap-4 rounded-[14px] bg-[#079f4f] text-[18px] sm:text-[16px] font-bold text-white transition-all duration-300 hover:bg-[#068a44] shadow-lg shadow-[#079f4f]/20 disabled:opacity-50 disabled:pointer-events-none"
+              onClick={onBack}
+              aria-label="Back to home"
+              className="absolute left-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#111827] shadow-v-md transition active:scale-95"
             >
-              <Search size={22} strokeWidth={2.5} />
-              {loading ? "Searching..." : "Search Vayy Rides"}
+              <ArrowLeft size={22} strokeWidth={2.5} />
             </button>
-          
+          ) : null}
+        </section>
+        <section className="relative z-10 -mt-5 flex flex-1 flex-col rounded-t-[35px] bg-white px-5 pb-8 pt-5 shadow-[0_-6px_24px_rgba(0,0,0,0.08)]">
+          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center">
+            <div className="flex flex-col items-center gap-3 rounded-[22px] bg-white px-7 py-8 text-center">
+              <img src={autoComingSoonImg} alt="" className="h-[120px] w-[160px] object-contain" />
+              <h1 className="text-[20px] font-black text-[#111827]">Coming Soon</h1>
+              <p className="max-w-sm text-[14px] font-medium leading-5 text-[#6B7280]">
+                Shared Auto matching is coming soon. Please try Bike Ride for now.
+              </p>
+            </div>
+          </div>
+        </section>
+        <style>{`@keyframes omv-auto-ride { from { transform: translateX(-45vw); } to { transform: translateX(calc(100vw + 80px)); } }`}</style>
+      </div>
+    );
+  }
 
-            {/* Recent Searches Section */}
-            {recentSearches.length > 0 && (
-              <div className="mt-8">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-[13px] font-black uppercase tracking-widest text-[#94a3b8]">
-                    Recent Searches
-                  </span>
-                  <div className="h-px flex-1 bg-[#f1f5f9] ml-4" />
-                </div>
-                <div className="space-y-2">
-                  {recentSearches.map((search, idx) => (
-                    <RecentSearchItem
-                      key={idx}
-                      search={search}
-                      onClick={handleRecentClick}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
+  return (
+    <div className="flex min-h-screen w-full flex-col bg-[#F5F7FA] font-sans text-[#111827]">
+      <section className="relative h-[300px] w-full shrink-0 overflow-hidden">
+        <img src={heroBg} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={RIDE_IMAGES[imgIndex]}
+          alt=""
+          aria-hidden="true"
+          className={`pointer-events-none absolute bottom-[15px] left-0 h-[120px] w-[50vw] max-w-[420px] object-contain ${vehiclePosition}`}
+        />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[60px] shadow-[0_-4px_12px_rgba(0,0,0,0.15)]" aria-hidden="true" />
+      </section>
+      <section className="relative z-10 -mt-5 flex flex-1 flex-col rounded-t-[35px] bg-white px-5 pb-8 pt-5 shadow-[0_-6px_24px_rgba(0,0,0,0.08)]">
+        <div className="mx-auto w-full max-w-[560px]">
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back to home"
+              className="mb-3 flex h-10 w-10 items-center justify-center rounded-full text-[#111827] transition hover:bg-[#F3F4F6] active:scale-95"
+            >
+              <ArrowLeft size={22} strokeWidth={2.5} />
+            </button>
+          ) : null}
+          <SearchField
+            isPickup
+            label="Pickup Stop"
+            placeholder="Search pickup location"
+            onSelect={setPickup}
+            value={pickup?.display_name || pickup?.name || ""}
+          />
 
-          {/* Feature List: Flush with search card */}
-          <section className="relative z-20 mt-0 grid w-full gap-8 bg-[#edf8f3] p-[30px] sm:p-[32px] lg:p-[40px] lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-            <FeatureItem
-              icon={ShieldCheck}
-              title={
-                <>
-                  Safe. <br />
-                  Reliable. <br />
-                  On Time.
-                </>
-              }
-              copy="Real-time transit tracking powered by Vayy Geospatial."
-            />
-            <div className="hidden h-[64px] w-px border-l border-dashed border-[#bdcbd5] lg:block" />
-            <FeatureItem
-              icon={Bus}
-              title="Live Tracking"
-              copy="Track buses in real-time and get accurate arrival updates."
-            />
-          </section>
-        </main>
+          <div className="-mt-1.5 mb-3.5 flex justify-center">
+            <button
+              type="button"
+              onClick={handleSwap}
+              aria-label="Swap pickup and destination"
+              className="flex h-8 w-8 items-center justify-center rounded-full border-[1.5px] border-[#E5E7EB] bg-white shadow-v-sm transition active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#009849]"
+            >
+              <ArrowUpDown size={18} className="text-[#009849]" />
+            </button>
+          </div>
 
-        {/* <footer className="relative z-20 mt-0 flex flex-col gap-6 border-t border-[#dbe4ea] bg-white px-[20px] sm:px-[40px] py-[24px] text-[13px] font-medium text-[#637286] sm:flex-row sm:items-center sm:justify-between">
-          <span>&copy; 2025 Vayy. All rights reserved.</span>
-          <nav className="flex flex-wrap gap-7">
-            <a href="#" className="transition hover:text-[#079f4f]">
-              Terms of Service
-            </a>
-            <a href="#" className="transition hover:text-[#079f4f]">
-              Privacy Policy
-            </a>
-            <a href="#" className="transition hover:text-[#079f4f]">
-              Contact Us
-            </a>
-          </nav>
-        </footer> */}
+          <SearchField
+            label="Destination"
+            placeholder="Enter your destination"
+            onSelect={setDestination}
+            value={destination?.display_name || destination?.name || ""}
+          />
+
+          <button
+            type="button"
+            onClick={handleNext}
+            disabled={!canProceed || loading}
+            className="mt-2 flex h-[52px] w-full items-center justify-center gap-2 rounded-[16px] bg-[#009849] shadow-v-md transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50"
+          >
+            <Search size={18} className="text-white" strokeWidth={2.5} />
+            <span className="text-[15px] font-extrabold text-white">
+              {loading ? "Searching..." : "Search OMV Rides"}
+            </span>
+          </button>
+
+          {/* Recent searches */}
+          {recentSearches.length > 0 && (
+            <div className="pb-10 pt-5">
+              <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[0.5px] text-[#9CA3AF]">
+                RECENT SEARCHES
+              </h3>
+              {recentSearches.map((search, idx) => (
+                <RecentRow key={idx} item={search} onClick={handleRecentClick} />
+              ))}
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );

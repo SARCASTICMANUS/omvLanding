@@ -137,7 +137,7 @@ function RouteCard({ item, index, pickup, destination, onSelect, expanded, onTog
       {/* Stops count + View Stops toggle */}
       <View style={s.stopsRow}>
         <View style={s.stopsCountBadge}>
-          <Ionicons name="map-pin-outline" size={13} color="#009849" />
+          <Ionicons name="location-outline" size={13} color="#009849" />
           <Text style={s.stopsCountText}>{stops.length} stops</Text>
         </View>
         {stops.length > 0 && (

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Bus, Plus, Trash2, Edit, X, Save, Loader2 } from "lucide-react";
+import { CarFront, Plus, Trash2, Edit, X, Save, Loader2 } from "lucide-react";
 import api from "../../../lib/api";
 import { API_PATHS } from "../../../constants/apiPaths";
 
@@ -12,7 +12,7 @@ const VehiclesManager = ({ cityId }) => {
   const [currentVehicle, setCurrentVehicle] = useState(null);
   const [formData, setFormData] = useState({
     vehicle_number: "",
-    vehicle_type: "bus",
+    vehicle_type: "bike",
     route: "",
     driver: "",
   });
@@ -56,7 +56,7 @@ const VehiclesManager = ({ cityId }) => {
       setCurrentVehicle(null);
       setFormData({
         vehicle_number: "",
-        vehicle_type: "bus",
+        vehicle_type: "bike",
         route: "",
         driver: "",
       });
@@ -98,7 +98,7 @@ const VehiclesManager = ({ cityId }) => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-black text-slate-800">Vehicle Management</h1>
-            <p className="text-slate-500 mt-2">Manage city public transport vehicles.</p>
+            <p className="text-slate-500 mt-2">Manage vehicles used for shared rides.</p>
           </div>
           <button 
             onClick={() => handleOpenModal()}
@@ -130,7 +130,7 @@ const VehiclesManager = ({ cityId }) => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="bg-indigo-50 p-2 rounded-xl text-indigo-600">
-                          <Bus size={20} />
+                          <CarFront size={20} />
                         </div>
                         <div>
                           <p className="font-bold text-slate-800 uppercase">{v.vehicle_number}</p>
@@ -208,10 +208,8 @@ const VehiclesManager = ({ cityId }) => {
                     onChange={(e) => setFormData({ ...formData, vehicle_type: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition font-bold text-slate-800"
                   >
-                    <option value="bus">Bus</option>
-                    <option value="van">Van</option>
-                    <option value="minibus">Minibus</option>
-                    <option value="car">Car</option>
+                    <option value="bike">Bike</option>
+                    <option value="auto">Auto-Rickshaw</option>
                   </select>
                 </div>
               </div>
@@ -225,7 +223,7 @@ const VehiclesManager = ({ cityId }) => {
                 >
                   <option value="">No Route Selected</option>
                   {routes.map((r) => (
-                    <option key={r.id} value={r.id}>{r.name} {r.bus_number ? `(${r.bus_number})` : ''}</option>
+                    <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>
               </div>

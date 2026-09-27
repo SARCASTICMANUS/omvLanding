@@ -3,7 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { ADMIN_ROLES } from "../constants/roles";
 import { APP_ROUTES } from "../constants/routes";
-import { UnknownRoleScreen } from "../components/shared";
+import { UnknownRoleScreen } from "../components/Shared";
 import { getRedirectPathByRole, normalizeRole } from "../utils/roles";
 
 export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
@@ -41,6 +41,12 @@ export const PublicRoute = ({ children }) => {
   const role = normalizeRole(user?.role);
 
   if (isAuthenticated) {
+    const hasDriverOnboardingDraft =
+      typeof window !== "undefined" &&
+      window.sessionStorage.getItem("OMV_DRIVER_ONBOARDING_DRAFT");
+    if (hasDriverOnboardingDraft && DRIVER_ROLES.includes(role)) {
+      return <Navigate to={`${APP_ROUTES.driverProfileUpdate}?mode=complete`} replace />;
+    }
     return <Navigate to={getRedirectPathByRole(role)} replace />;
   }
 

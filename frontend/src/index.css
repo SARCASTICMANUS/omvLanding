@@ -1,8 +1,14 @@
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geom:wght@700&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.font-geom-700 {
+  font-family: "Geom", "Plus Jakarta Sans", ui-sans-serif, sans-serif;
+  font-weight: 700;
+}
 
 @layer base {
   :root {

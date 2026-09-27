@@ -217,7 +217,6 @@ export default function PassengerTripPlanner({ navigation, route }) {
   const searchPanelContent = isBike ? (
     <>
       <LocationSearch
-        key={`pickup-${pickup?.display_name || pickup?.name || "empty"}`}
         isPickup
         label="Pickup Stop"
         onSelect={setPickup}
@@ -230,7 +229,6 @@ export default function PassengerTripPlanner({ navigation, route }) {
       </TouchableOpacity>
 
       <LocationSearch
-        key={`destination-${destination?.display_name || destination?.name || "empty"}`}
         dropdownLift={90}
         isPickup={false}
         label="Destination"
