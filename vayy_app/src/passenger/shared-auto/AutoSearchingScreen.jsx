@@ -324,7 +324,7 @@ export function AutoSearchingScreen({ navigation, route }) {
 
         <View style={styles.availabilityRow}>
           <View style={styles.availItem}>
-            <Ionicons name="car" size={18} color="#009849" />
+            <Ionicons name="bicycle" size={18} color="#009849" />
             <Text style={styles.availText}>
               <Text style={styles.availBold}>{nearbyCount != null ? nearbyCount : "—"}</Text> autos nearby
             </Text>

@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ArrowLeft, Bike, Car, CheckCircle, User, CreditCard, Building2, Smartphone, Phone, Calendar, XCircle, Clock } from "lucide-react-native";
+import { ArrowLeft, Bike, CheckCircle, User, CreditCard, Building2, Smartphone, Phone, Calendar, XCircle, Clock } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useDispatch, useSelector } from "react-redux";
 import COLORS from "../../../shared/constants/colors";
@@ -626,7 +626,7 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
             <View style={styles.vehicleRow}>
               {[
                 { key: "bike", label: "Bike", icon: Bike },
-                { key: "auto", label: "Auto", icon: Car },
+                { key: "auto", label: "Auto", icon: Bike },
               ].map((v) => {
                 const active = vehicleType === v.key;
                 const Icon = v.icon;

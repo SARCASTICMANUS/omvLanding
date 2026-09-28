@@ -1,13 +1,11 @@
 import React from "react";
-import { CheckCircle2, Clock3, Flag, MapPin, Users } from "lucide-react";
+import { StatusBadge } from "../../components/vayy";
 import { estimateStopTimeline } from "./driverFlowUtils";
 
-const statusStyles = {
-  completed: "border-emerald-500/30 bg-emerald-500 text-slate-950",
-  current: "border-[#00E676]/30 bg-[#00E676] text-slate-950",
-  origin: "border-cyan-500/30 bg-cyan-500 text-slate-950",
-  destination: "border-rose-500/30 bg-rose-500 text-white",
-  upcoming: "border-slate-700 bg-slate-800 text-slate-200",
+const titleCase = (value) => {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
 };
 
 export default function DriverStopsTimeline({
@@ -19,86 +17,121 @@ export default function DriverStopsTimeline({
 
   if (!stops.length) {
     return (
-      <div className={`rounded-[18px] border border-slate-800 bg-slate-900/80 p-6 text-sm text-slate-400 ${className}`}>
+      <div
+        className={`rounded-vayy border border-[#F0F0F0] bg-white p-6 text-sm text-[#6B7280] shadow-v-sm ${className}`}
+      >
         No stop timeline is available for this route yet.
       </div>
     );
   }
 
   return (
-    <div className={`rounded-[18px] border border-slate-800 bg-slate-900/80 ${className}`}>
-      <div className="border-b border-slate-800 px-5 py-4">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+    <div
+      className={`flex flex-col rounded-vayy border border-[#F0F0F0] bg-white shadow-v-sm ${className}`}
+    >
+      <div className="border-b border-[#F0F0F6] px-5 py-4">
+        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#9CA3AF]">
           Route Timeline
         </p>
-        <h3 className="mt-2 text-lg font-black text-white">
+        <h3 className="mt-2 text-lg font-black text-[#111827]">
           Stop sequence and operational timing
         </h3>
       </div>
 
-      <div className="max-h-[520px] overflow-y-auto px-5 py-4">
-        <div className="relative">
-          <div className="absolute left-[15px] top-2 h-[calc(100%-1rem)] w-px bg-slate-800" />
-          <div className="space-y-4">
-            {stops.map((stop, index) => {
-              const resolvedStatus =
-                currentStopIndex > -1
-                  ? index < currentStopIndex
-                    ? "completed"
-                    : index === currentStopIndex
-                    ? "current"
-                    : index === stops.length - 1
-                    ? "destination"
-                    : "upcoming"
-                  : stop.status === "destination"
-                  ? "destination"
-                  : stop.status === "origin"
-                  ? "origin"
-                  : "upcoming";
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+        <div className="space-y-1">
+          {stops.map((stop, index) => {
+            const isFirst = index === 0;
+            const isLast = index === stops.length - 1;
+            const completed =
+              currentStopIndex > -1 && index < currentStopIndex;
+            const isActive =
+              currentStopIndex > -1 && index === currentStopIndex;
 
-              return (
-                <div key={stop.id || `${stop.name}-${index}`} className="relative pl-12">
-                  <div
-                    className={`absolute left-0 top-1 flex h-8 w-8 items-center justify-center rounded-full border text-[11px] font-black ${statusStyles[resolvedStatus]}`}
-                  >
-                    {resolvedStatus === "completed" ? (
-                      <CheckCircle2 size={15} />
-                    ) : resolvedStatus === "destination" ? (
-                      <Flag size={15} />
-                    ) : (
-                      <span>{stop.sequence}</span>
-                    )}
-                  </div>
+            const name =
+              stop.short_name ||
+              stop.name ||
+              stop.stop_name ||
+              `Stop ${stop.sequence}`;
+            const city =
+              stop.city ||
+              stop.area ||
+              (stop.name?.split(",")?.[1]?.trim() || "");
+            const arrival =
+              stop.arrivalLabel || stop.arrival_time || stop.eta || "--";
+            const departure = stop.departure_time || stop.departure || "--";
 
-                  <div className="rounded-[18px] border border-slate-800 bg-slate-950/90 p-4">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                      <div>
-                        <h4 className="text-base font-black text-white">{stop.name || `Stop ${stop.sequence}`}</h4>
-                        <p className="mt-2 text-sm text-slate-400">
-                          {stop.isBoardingPoint ? "Boarding point enabled" : "Operational transit stop"}
-                        </p>
-                      </div>
+            const statusLabel = titleCase(stop.status) || "Upcoming";
+            const isDropOff = isLast && !completed;
 
-                      <div className="flex flex-wrap gap-2">
-                        <div className="rounded-2xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-300">
-                          <span className="flex items-center gap-2">
-                            <Clock3 size={14} />
-                            {stop.arrivalLabel}
-                          </span>
-                        </div>
-                        <div className="rounded-2xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-300">
-                          <span className="flex items-center gap-2">
-                            {stop.isBoardingPoint ? <Users size={14} /> : <MapPin size={14} />}
-                            {stop.isBoardingPoint ? "Boarding" : "Transit"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+            let badgeLabel = statusLabel;
+            let badgeTone = /delay|late/i.test(statusLabel)
+              ? "warning"
+              : "success";
+            if (completed) {
+              badgeLabel = "Completed";
+              badgeTone = "success";
+            } else if (isFirst) {
+              badgeLabel = "Boarding";
+              badgeTone = "success";
+            } else if (isLast) {
+              badgeLabel = "Drop-off";
+              badgeTone = "error";
+            }
+
+            const dotClass = isActive
+              ? `flex h-[18px] w-[18px] shrink-0 rounded-full border-[3px] border-[#00E676] ${
+                  isDropOff ? "bg-[#EF4444]" : "bg-[#009849]"
+                }`
+              : `h-3 w-3 shrink-0 rounded-full ${
+                  isDropOff ? "bg-[#EF4444]" : "bg-[#009849]"
+                }`;
+
+            return (
+              <div
+                key={stop.id || stop.stop_id || `${stop.name}-${index}`}
+                className={`flex min-h-[70px] items-center px-4 ${
+                  isActive ? "rounded-v-md bg-[#009849]/[0.08]" : ""
+                }`}
+              >
+                <span className="w-[52px] shrink-0 text-[12px] font-bold text-[#6B7280]">
+                  {arrival}
+                </span>
+
+                <div className="flex w-[26px] shrink-0 flex-col items-center self-stretch">
+                  {!isFirst && (
+                    <span className="w-0.5 flex-1 bg-[#E5E7EB]" />
+                  )}
+                  <span className={dotClass} />
+                  {!isLast && (
+                    <span className="w-0.5 flex-1 bg-[#E5E7EB]" />
+                  )}
                 </div>
-              );
-            })}
-          </div>
+
+                <div className="min-w-0 flex-1 px-4">
+                  <p
+                    className={`truncate text-[14px] font-extrabold leading-snug ${
+                      isActive ? "text-[#009849]" : "text-[#111827]"
+                    }`}
+                  >
+                    {name}
+                  </p>
+                  {city ? (
+                    <p className="mt-0.5 truncate text-[12px] text-[#6B7280]">
+                      {city}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <StatusBadge tone={badgeTone}>{badgeLabel}</StatusBadge>
+                  <span className="whitespace-nowrap text-[11px] font-semibold text-[#9CA3AF]">
+                    {departure}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

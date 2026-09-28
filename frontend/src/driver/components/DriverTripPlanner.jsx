@@ -1,72 +1,51 @@
-import React, { useMemo, useState, useEffect } from "react";
-import {
-  ArrowUpDown,
-  Bus,
-  Clock,
-  Clock3,
-  Crosshair,
-  MapPin,
-  Route,
-  Search,
-  ShieldCheck,
-  TrafficCone,
-} from "lucide-react";
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSelector } from "react-redux";
+import { ArrowUpDown, Clock, Flag, LocateFixed, Map, MapPin } from "lucide-react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { LocationSearch } from "../../components/map";
 import api from "../../lib/api";
 import { API_PATHS } from "../../constants/apiPaths";
-import splashScreen1 from "../../assets/SplashScreen1.png";
 import { hasValidCoords } from "./driverFlowUtils";
-// import api from "../../lib/api";
+import bikeMarker from "../../assets/vayyTopBike1.webp";
+import autoMarker from "../../assets/vayyTopAuto.webp";
+import namasteIcon from "../../assets/vayyNamaste.webp";
 
-const brandGreen = "#009849";
+const COMPACT_SHEET_HEIGHT = 240;
 
-function PlannerField({
-  label,
-  placeholder,
-  onSelect,
-  initialValue,
-  icon: Icon,
-}) {
+function PlannerField({ label, placeholder, onSelect, initialValue, tone = "pickup" }) {
+  const isPickup = tone === "pickup";
+
   return (
     <div className="relative z-20">
-      <label className="mb-3 flex items-center gap-3 text-[17px] font-extrabold text-[#0b171c] lg:text-[14px]">
-        <Icon
-          size={24}
-          className="text-[#0aa658]"
-          fill={brandGreen}
-          strokeWidth={2.5}
+      <label className="mb-2 flex items-center gap-2 text-[12px] font-bold tracking-[0.3px] text-[#374151]">
+        <span
+          className={`h-2 w-2 rounded-full ${isPickup ? "bg-[#009849]" : "bg-[#f59e0b]"}`}
+          aria-hidden="true"
         />
         {label}
       </label>
 
       <div className="relative">
-        <LocationSearch
-          placeholder={placeholder}
-          onSelect={onSelect}
-          initialValue={initialValue}
-          className="h-[52px] w-full rounded-[10px] border border-[#cfd8e5] bg-white pl-[54px] pr-[54px] text-[15px] font-medium text-[#14242c] shadow-[inset_0_1px_2px_rgba(15,23,42,0.03)] outline-none transition focus:border-[#8fa6ba] focus:ring-4 focus:ring-[#dcebe4]"
-        />
-        <Crosshair
-          size={21}
-          className="pointer-events-none absolute right-5 top-1/2 z-20 -translate-y-1/2 text-[#7b8da3]"
-          strokeWidth={2.2}
-        />
-      </div>
-    </div>
-  );
-}
-
-function FeatureItem({ icon: Icon, title, copy }) {
-  return (
-    <div className="flex min-w-0 items-center gap-5">
-      <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full bg-[#dff4ea] text-[#0aa658]">
-        <Icon size={32} strokeWidth={2.4} />
-      </div>
-      <div>
-        <h3 className="text-[16px] font-extrabold text-[#102027]">{title}</h3>
-        <p className="mt-2 max-w-[260px] text-[13px] font-medium leading-6 text-[#5f6f83]">
-          {copy}
-        </p>
+        <div className="[&>div>div>svg]:hidden">
+          <LocationSearch
+            placeholder={placeholder}
+            onSelect={onSelect}
+            initialValue={initialValue}
+            className="h-[52px] w-full rounded-[14px] border border-white/70 bg-white/85 pl-10 pr-4 text-[15px] font-medium text-[#111827] outline-none backdrop-blur-md transition focus:border-[#009849] focus:ring-4 focus:ring-[#009849]/12"
+          />
+        </div>
+        {isPickup ? (
+          <MapPin
+            size={18}
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#009849]"
+          />
+        ) : (
+          <Flag
+            size={16}
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#f59e0b]"
+          />
+        )}
       </div>
     </div>
   );
@@ -76,25 +55,28 @@ function RecentSearchItem({ search, onClick }) {
   const pickup = search.pickup || search.source;
   const destination = search.destination;
 
-  const pickupLabel = pickup?.name || pickup?.display_name?.split(",")[0] || "Unknown Start";
-  const destLabel = destination?.name || destination?.display_name?.split(",")[0] || "Unknown End";
+  const pickupLabel =
+    pickup?.name || pickup?.display_name?.split(",")[0] || "Unknown Start";
+  const destLabel =
+    destination?.name || destination?.display_name?.split(",")[0] || "Unknown End";
 
   return (
     <button
+      type="button"
       onClick={() => onClick(search)}
-      className="group flex w-full items-center gap-3 rounded-[12px] border border-[#f0f3f6] bg-white p-3 text-left transition hover:border-[#079f4f] hover:bg-[#f8fbfa] hover:shadow-sm"
+      className="flex w-full items-center gap-2.5 rounded-[12px] px-1 py-2 text-left transition hover:bg-[#F8FBFA]"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f1f5f9] text-[#64748b] group-hover:bg-[#dff4ea] group-hover:text-[#079f4f]">
-        <Clock size={16} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-bold text-[#1e293b]">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F3F4F6] text-[#9CA3AF]">
+        <Clock size={14} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12px] font-bold text-[#111827]">
           {pickupLabel}
-        </div>
-        <div className="truncate text-[11px] font-medium text-[#64748b]">
+        </span>
+        <span className="mt-0.5 block truncate text-[11px] font-medium text-[#6B7280]">
           To: {destLabel}
-        </div>
-      </div>
+        </span>
+      </span>
     </button>
   );
 }
@@ -104,20 +86,156 @@ export default function DriverTripPlanner({
   loading = false,
   initialSource = null,
   initialDestination = null,
-  onOpenPreview,
 }) {
   const [source, setSource] = useState(initialSource);
   const [destination, setDestination] = useState(initialDestination);
   const [recentSearches, setRecentSearches] = useState([]);
+  const [sheetHeight, setSheetHeight] = useState(COMPACT_SHEET_HEIGHT);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [sheetDragging, setSheetDragging] = useState(false);
+  const rootRef = useRef(null);
+  const sheetHeightRef = useRef(COMPACT_SHEET_HEIGHT);
+  const sheetDragRef = useRef({
+    active: false,
+    moved: false,
+    startY: 0,
+    startHeight: COMPACT_SHEET_HEIGHT,
+  });
+  const mapContainerRef = useRef(null);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
+
+  const { user } = useSelector((state) => state.auth || {});
+  const driverMapMarker = user?.role === "autodriver" ? autoMarker : bikeMarker;
+  const locateDriver = useCallback(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const point = [coords.longitude, coords.latitude];
+        mapRef.current?.easeTo({ center: point, zoom: 15, duration: 700 });
+        if (!markerRef.current && mapRef.current) {
+          const element = document.createElement("div");
+          element.className = "flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-lg";
+          const image = document.createElement("img");
+          image.src = driverMapMarker;
+          image.alt = "";
+          image.className = "h-10 w-10 object-contain";
+          element.appendChild(image);
+          markerRef.current = new maplibregl.Marker({ element, anchor: "center" })
+            .setLngLat(point)
+            .addTo(mapRef.current);
+        } else {
+          markerRef.current?.setLngLat(point);
+        }
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 6000, maximumAge: 60000 },
+    );
+  }, [driverMapMarker]);
+
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return undefined;
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+      center: [80.9462, 26.8467],
+      zoom: 12,
+      attributionControl: false,
+      dragRotate: false,
+      pitchWithRotate: false,
+    });
+    mapRef.current = map;
+    map.on("load", () => map.resize());
+    const resizeObserver = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => map.resize())
+      : null;
+    if (resizeObserver && mapContainerRef.current) {
+      resizeObserver.observe(mapContainerRef.current);
+    }
+    locateDriver();
+    return () => {
+      resizeObserver?.disconnect();
+      markerRef.current?.remove();
+      markerRef.current = null;
+      map.remove();
+      mapRef.current = null;
+    };
+  }, [locateDriver]);
 
   useEffect(() => {
     // Fetch recent searches - using passenger endpoint as a known working path
     api.get(API_PATHS.auth.recentSearches)
       .then(res => {
-        setRecentSearches(Array.isArray(res.data) ? res.data : []);
+        const payload = res.data?.data ?? res.data;
+        setRecentSearches(Array.isArray(payload) ? payload : []);
       })
       .catch(err => console.error("Failed to fetch recent searches", err));
   }, []);
+
+  const getMaxSheetHeight = () => {
+    const viewportHeight = rootRef.current?.clientHeight || window.innerHeight;
+    return Math.max(
+      COMPACT_SHEET_HEIGHT,
+      Math.min(viewportHeight - 16, Math.round(viewportHeight * 0.9)),
+    );
+  };
+
+  const setSheetHeightAndRef = (height) => {
+    sheetHeightRef.current = height;
+    setSheetHeight(height);
+  };
+
+  const handleSheetPointerDown = (event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    sheetDragRef.current = {
+      active: true,
+      moved: false,
+      startY: event.clientY,
+      startHeight: sheetHeightRef.current,
+    };
+    setSheetDragging(true);
+  };
+
+  const handleSheetPointerMove = (event) => {
+    const drag = sheetDragRef.current;
+    if (!drag.active) return;
+    const deltaY = event.clientY - drag.startY;
+    if (Math.abs(deltaY) > 4) drag.moved = true;
+    if (!drag.moved) return;
+    const nextHeight = Math.max(
+      COMPACT_SHEET_HEIGHT,
+      Math.min(getMaxSheetHeight(), drag.startHeight - deltaY),
+    );
+    setSheetHeightAndRef(nextHeight);
+  };
+
+  const finishSheetDrag = (event) => {
+    const drag = sheetDragRef.current;
+    if (!drag.active) return;
+    drag.active = false;
+    setSheetDragging(false);
+    const target = sheetHeightRef.current >= (COMPACT_SHEET_HEIGHT + getMaxSheetHeight()) / 2
+      ? getMaxSheetHeight()
+      : COMPACT_SHEET_HEIGHT;
+    setSheetExpanded(target > COMPACT_SHEET_HEIGHT);
+    setSheetHeightAndRef(target);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handleSheetClick = () => {
+    if (sheetDragRef.current.moved) {
+      sheetDragRef.current.moved = false;
+      return;
+    }
+    const expand = !sheetExpanded;
+    const target = expand ? getMaxSheetHeight() : COMPACT_SHEET_HEIGHT;
+    setSheetExpanded(expand);
+    setSheetHeightAndRef(target);
+  };
 
   const canProceed = useMemo(
     () => hasValidCoords(source) && hasValidCoords(destination),
@@ -133,6 +251,21 @@ export default function DriverTripPlanner({
 
   const handleNext = () => {
     if (!canProceed || loading) return;
+    const getLatitude = (point) => Number(point?.lat ?? point?.latitude ?? point?.y);
+    const getLongitude = (point) => Number(point?.lon ?? point?.lng ?? point?.longitude ?? point?.x);
+    api.post(API_PATHS.auth.recentSearches, {
+      pickup_name: source?.name || source?.display_name || "",
+      pickup_lat: getLatitude(source),
+      pickup_lon: getLongitude(source),
+      destination_name: destination?.name || destination?.display_name || "",
+      destination_lat: getLatitude(destination),
+      destination_lon: getLongitude(destination),
+    }).then(() => {
+      api.get(API_PATHS.auth.recentSearches).then((response) => {
+        const data = response.data?.data ?? response.data;
+        if (Array.isArray(data)) setRecentSearches(data);
+      }).catch(() => {});
+    }).catch(() => {});
     onNext?.({ from: source, to: destination });
   };
 
@@ -141,89 +274,104 @@ export default function DriverTripPlanner({
     setDestination(search.destination);
   };
 
+  const driverName =
+    user?.full_name || user?.name || user?.first_name || "Driver";
   return (
-    <div className="min-h-[calc(100vh-5rem)] bg-white font-sans text-[#071419] sm:bg-none">
-      <section className="relative flex w-full flex-col overflow-hidden">
-        <main className="relative z-10 mx-auto flex w-full max-w-full flex-1 flex-col">
-          <section className="relative min-h-[320px] w-full flex-1">
-            <div className="absolute inset-0 w-full h-full sm:flex sm:justify-end sm:bg-[#ffffff]">
-              <img
-                src={splashScreen1}
-                alt="Vayy Driver Hero"
-                className="h-full w-full object-cover p-0 m-0 sm:w-[40rem] sm:object-top lg:mt-[-8.5rem] lg:h-[23rem] lg:w-[40rem] lg:object-top"
-              />
-              <div className="absolute inset-0 bg-black/5" />
-            </div>
+    <div ref={rootRef} className="relative min-h-[calc(100dvh-64px)] w-full overflow-hidden bg-[#E9ECEF] font-sans text-[#111827] lg:min-h-[calc(100dvh-72px)]">
+      <div ref={mapContainerRef} className="absolute inset-0 z-0 h-full w-full" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[260px] bg-gradient-to-b from-[#0A163C]/95 to-transparent px-5 pt-12 text-white sm:px-8">
+        <div className="mx-auto w-full max-w-3xl">
+          <div className="flex items-center gap-2">
+            <img src={namasteIcon} alt="" className="h-[38px] w-[30px] object-contain" />
+            <p className="text-[38px] font-black leading-tight">
+              <span className="font-geom-700 text-[#FFD700]">namaste,</span>
+            </p>
+          </div>
+          <p className="font-geom-700 mt-1 text-[28px] leading-tight text-white">{driverName}</p>
+          <p className="mt-2 text-[14px] font-semibold text-white/85">Aaj aap kahan jaana chahte hain?</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={locateDriver}
+        aria-label="Center map on my location"
+        className="absolute right-4 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#111827] shadow-v-md transition active:scale-95"
+        style={{ bottom: `${Math.min(sheetHeight + 24, getMaxSheetHeight())}px` }}
+      >
+        <LocateFixed size={20} />
+      </button>
+      {/* Drag-up route search sheet */}
+        <main className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-[680px] px-0 sm:px-4">
+        <section
+          className={`flex flex-col overflow-hidden rounded-t-[30px] border border-white/70 bg-white/95 shadow-[0_-8px_30px_rgba(0,0,0,0.14)] backdrop-blur-xl sm:rounded-[30px] ${sheetDragging ? "" : "transition-[height] duration-300 ease-out"}`}
+          style={{ height: `${sheetHeight}px` }}
+        >
+          <button
+            type="button"
+            aria-expanded={sheetExpanded}
+            aria-label={sheetExpanded ? "Collapse route search sheet" : "Expand for recent searches"}
+            onPointerDown={handleSheetPointerDown}
+            onPointerMove={handleSheetPointerMove}
+            onPointerUp={finishSheetDrag}
+            onPointerCancel={finishSheetDrag}
+            onClick={handleSheetClick}
+            className="flex h-[56px] w-full shrink-0 touch-none cursor-grab flex-col items-center justify-center active:cursor-grabbing"
+          >
+            <span className="h-1 w-10 rounded-full bg-[#E5E7EB]" />
+            <span className="mt-2 text-[12px] font-medium text-[#9CA3AF]">
+              {sheetExpanded ? "Drag down to close" : "Drag up for recent searches"}
+            </span>
+          </button>
 
-            <div className="absolute inset-0 z-20 flex flex-col justify-center px-[20px] text-left sm:px-[40px] lg:mt-[-85px] lg:px-[60px]">
-              <h1 className="text-[42px] font-black leading-[1.05] tracking-tight text-[#08161b] sm:text-[48px] lg:text-[48px]">
-                Operate Your <br />
-                <span className="bg-gradient-to-r from-[#078f48] to-[#17b965] bg-clip-text text-transparent lg:text-[50px]">
-                  Driver Route
-                </span>
-              </h1>
-              <p className="mt-4 max-w-[450px] text-[15px] font-medium leading-[1.6] text-[#33475b] sm:text-[16px] lg:text-[14px]">
-                Enter source and destination points to search saved operational
-                routes, review route details, and start the trip live.
-              </p>
-            </div>
-          </section>
-
-          <section className="relative z-30 mt-[-20px] w-full rounded-t-[20px] border-t border-[#e6ebef] bg-white p-[30px] shadow-[0_-15px_50px_rgba(18,38,48,0.12)] sm:p-[32px] lg:mt-[-6.5rem] lg:p-[30px]">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 sm:px-6">
             <PlannerField
               label="Start Point"
-              placeholder="Search source / depot / first boarding stop"
+              placeholder="Search starting location"
               onSelect={setSource}
               initialValue={source?.display_name || source?.name || ""}
-              icon={MapPin}
+              tone="pickup"
             />
 
-            <div className="relative my-[24px] flex items-center justify-center">
-              <div className="absolute h-full border-l border-dashed border-[#d5dde7]" />
+            <div className="my-4 flex items-center justify-center gap-3 px-1">
+              <span className="h-px flex-1 border-t border-dashed border-[#E5E7EB]" />
               <button
                 type="button"
                 onClick={handleSwap}
-                className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#e1e8ee] bg-white text-[#1e303a] shadow-sm"
                 aria-label="Swap start and destination"
+                className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-[#009849] text-white shadow-v-md transition active:scale-95"
               >
-                <ArrowUpDown size={18} strokeWidth={2.2} />
+                <ArrowUpDown size={16} strokeWidth={2.4} />
               </button>
+              <span className="h-px flex-1 border-t border-dashed border-[#E5E7EB]" />
             </div>
 
             <PlannerField
               label="Destination"
-              placeholder="Search destination / terminal / last stop"
+              placeholder="Enter your destination"
               onSelect={setDestination}
-              initialValue={
-                destination?.display_name || destination?.name || ""
-              }
-              icon={MapPin}
+              initialValue={destination?.display_name || destination?.name || ""}
+              tone="drop"
             />
 
             <button
               type="button"
               onClick={handleNext}
               disabled={!canProceed || loading}
-              className="mt-[30px] flex h-[64px] w-full items-center justify-center gap-4 rounded-[14px] bg-[#079f4f] text-[18px] font-bold text-white transition hover:bg-[#068a44] disabled:opacity-50 sm:h-[56px] sm:text-[16px]"
-              style={{ boxShadow: "0 18px 38px rgba(0,152,73,0.18)" }}
+              className="mt-5 flex h-14 w-full items-center justify-center gap-2.5 rounded-[18px] bg-[#009849] text-[15px] font-extrabold text-white shadow-[0_4px_16px_rgba(0,152,73,0.35)] transition hover:bg-[#007A3B] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-45"
             >
-              <Search size={22} strokeWidth={2.5} />
-              {loading ? "Searching Routes..." : "Search Saved Routes"}
+              <Map size={18} strokeWidth={2.4} />
+              {loading ? "Searching..." : "Find Best Route"}
             </button>
 
-            {/* Recent Searches Section */}
-            {recentSearches.length > 0 && (
-              <div className="mt-8">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-[13px] font-black uppercase tracking-widest text-[#94a3b8]">
-                    Recent Trips
-                  </span>
-                  <div className="h-px flex-1 bg-[#f1f5f9] ml-4" />
+            {sheetExpanded && recentSearches.length > 0 && (
+              <div className="mt-5 border-t border-[#F3F4F6] pt-4">
+                <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.6px] text-[#9CA3AF]">
+                  <Clock size={13} /> Recent searches
                 </div>
-                <div className="space-y-2">
-                  {recentSearches.map((search, idx) => (
+                <div className="flex flex-col divide-y divide-[#F3F4F6]">
+                  {recentSearches.map((search, index) => (
                     <RecentSearchItem
-                      key={idx}
+                      key={search.id || index}
                       search={search}
                       onClick={handleRecentClick}
                     />
@@ -231,47 +379,9 @@ export default function DriverTripPlanner({
                 </div>
               </div>
             )}
-
-            {/* <div className="mt-8 rounded-[18px] border border-[#ebf2ed] bg-[#f6fbf8] p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Route size={16} className="text-[#079f4f]" />
-                <span className="text-[13px] font-black uppercase tracking-widest text-[#5f6f83]">
-                  Driver Flow
-                </span>
-              </div>
-              <ul className="space-y-2 text-[13px] font-medium text-[#425466]">
-                <li>Search all matching saved operational routes.</li>
-                <li>
-                  Review route cards, timings, stop count, and live status.
-                </li>
-                <li>Confirm the route and start live bus operations.</li>
-              </ul>
-            </div> */}
-
-            {/* code */}
-          </section>
-
-          <section className="relative z-20 mt-0 grid w-full gap-8 bg-[#edf8f3] p-[30px] sm:p-[32px] lg:grid-cols-[1fr_auto_1fr_auto_1fr] lg:items-center lg:p-[40px]">
-            <FeatureItem
-              icon={TrafficCone}
-              title="Operational Search"
-              copy="Find all saved routes matching the searched endpoints without best-match prioritization."
-            />
-            <div className="hidden h-[64px] w-px border-l border-dashed border-[#bdcbd5] lg:block" />
-            <FeatureItem
-              icon={ShieldCheck}
-              title="Live Driver Control"
-              copy="Start trips, publish GPS, and move into the live operational tracking view."
-            />
-            <div className="hidden h-[64px] w-px border-l border-dashed border-[#bdcbd5] lg:block" />
-            <FeatureItem
-              icon={Bus}
-              title="Route Review"
-              copy="Inspect stops, timings, ETA, distance, and route status before going live."
-            />
-          </section>
-        </main>
-      </section>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }

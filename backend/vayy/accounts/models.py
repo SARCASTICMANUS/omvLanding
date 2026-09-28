@@ -98,8 +98,7 @@ class PublicPassengerProfile(models.Model):
         blank=True,
     )
 
-    profile_photo = models.CharField(
-        max_length=500,
+    profile_photo = models.TextField(
         default="",
         blank=True,
     )

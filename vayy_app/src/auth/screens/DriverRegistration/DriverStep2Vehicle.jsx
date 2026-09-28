@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ArrowLeft, Bike, Car } from "lucide-react-native";
+import { ArrowLeft, Bike } from "lucide-react-native";
 import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import BottomStickyButton from "../../components/BottomStickyButton";
@@ -25,7 +25,7 @@ const VEHICLES = [
     subtitle: "Shared auto rides",
     icon: (active) => (
       <View style={[styles.vIcon, active && styles.vIconActive]}>
-        <Car size={32} color={active ? "#fff" : COLORS.textMuted} />
+        <Bike size={32} color={active ? "#fff" : COLORS.textMuted} />
       </View>
     ),
   },

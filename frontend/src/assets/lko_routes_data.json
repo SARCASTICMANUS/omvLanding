@@ -1,0 +1,3117 @@
+{
+  "city": {
+    "name": "Lucknow",
+    "state": "Uttar Pradesh",
+    "country": "India"
+  },
+  "routes": {
+    "LKO-01": {
+      "route_id": "LKO-01",
+      "route_name": "High Court (Kamta) → Dubagga Bus Station",
+      "start": "HIGH COURT (KAMTA)",
+      "end": "DUBAGGA BUS STATION",
+      "via": "Ismail Ganj / Polytechnic / Hazratganj–Chowk corridor",
+      "stop_count": 18,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "HIGH COURT (KAMTA)",
+          "role": "START",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8835,
+          "lng": 81.0185
+        },
+        {
+          "seq": 2,
+          "name": "ISMAIL GANJ",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8798,
+          "lng": 81.0062
+        },
+        {
+          "seq": 3,
+          "name": "POLYTECHNIC",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8714,
+          "lng": 80.9963
+        },
+        {
+          "seq": 4,
+          "name": "LOHIA PARK CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8615,
+          "lng": 80.9782
+        },
+        {
+          "seq": 5,
+          "name": "FUN MALL / PRIYATAN BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8572,
+          "lng": 80.9721
+        },
+        {
+          "seq": 6,
+          "name": "1090 CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8524,
+          "lng": 80.9635
+        },
+        {
+          "seq": 7,
+          "name": "CM HOUSE",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8501,
+          "lng": 80.9572
+        },
+        {
+          "seq": 8,
+          "name": "DALIGANJ PUL",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8642,
+          "lng": 80.9388
+        },
+        {
+          "seq": 9,
+          "name": "GHANTA GHAR (CHOWK)",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8681,
+          "lng": 80.9039
+        },
+        {
+          "seq": 10,
+          "name": "KONESHWAR CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8732,
+          "lng": 80.8931
+        },
+        {
+          "seq": 11,
+          "name": "TAHSEENGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8718,
+          "lng": 80.8872
+        },
+        {
+          "seq": 12,
+          "name": "THAKURGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8752,
+          "lng": 80.8815
+        },
+        {
+          "seq": 13,
+          "name": "BALAGANJ CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8791,
+          "lng": 80.8759
+        },
+        {
+          "seq": 14,
+          "name": "ERA HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8836,
+          "lng": 80.8712
+        },
+        {
+          "seq": 15,
+          "name": "DUBAGGA PETROL PUMP",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8821,
+          "lng": 80.8605
+        },
+        {
+          "seq": 16,
+          "name": "DUBAGGA MANDI",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8804,
+          "lng": 80.8521
+        },
+        {
+          "seq": 17,
+          "name": "SITAPUR BY-PASS",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8841,
+          "lng": 80.8448
+        },
+        {
+          "seq": 18,
+          "name": "DUBAGGA BUS STATION",
+          "role": "END",
+          "direction": "High Court (Kamta) → Dubagga Bus Station",
+          "lat": 26.8812,
+          "lng": 80.8402
+        }
+      ]
+    },
+    "LKO-02": {
+      "route_id": "LKO-02",
+      "route_name": "Dubagga Bus Station → High Court (Kamta)",
+      "start": "DUBAGGA BUS STATION",
+      "end": "HIGH COURT (KAMTA)",
+      "via": "Reverse of LKO-01",
+      "stop_count": 18,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "DUBAGGA BUS STATION",
+          "role": "START",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.882145,
+          "lng": 80.840612
+        },
+        {
+          "seq": 2,
+          "name": "SITAPUR BY-PASS",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.884512,
+          "lng": 80.84439
+        },
+        {
+          "seq": 3,
+          "name": "DUBAGGA MANDI",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.878564,
+          "lng": 80.85231
+        },
+        {
+          "seq": 4,
+          "name": "DUBAGGA PETROL PUMP",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.88012,
+          "lng": 80.85965
+        },
+        {
+          "seq": 5,
+          "name": "ERA HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.884015,
+          "lng": 80.87189
+        },
+        {
+          "seq": 6,
+          "name": "BALAGANJ CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.877489,
+          "lng": 80.87321
+        },
+        {
+          "seq": 7,
+          "name": "THAKURGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.875612,
+          "lng": 80.881945
+        },
+        {
+          "seq": 8,
+          "name": "TAHSEENGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.872102,
+          "lng": 80.887644
+        },
+        {
+          "seq": 9,
+          "name": "KONESHWAR CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.87463,
+          "lng": 80.89312
+        },
+        {
+          "seq": 10,
+          "name": "GHANTA GHAR (CHOWK)",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.870815,
+          "lng": 80.90089
+        },
+        {
+          "seq": 11,
+          "name": "DALIGANJ PUL",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.86654,
+          "lng": 80.936215
+        },
+        {
+          "seq": 12,
+          "name": "CM HOUSE",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.83789,
+          "lng": 80.95741
+        },
+        {
+          "seq": 13,
+          "name": "1090 CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.85125,
+          "lng": 80.96645
+        },
+        {
+          "seq": 14,
+          "name": "FUN MALL / PRIYATAN BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.85791,
+          "lng": 80.97692
+        },
+        {
+          "seq": 15,
+          "name": "LOHIA PARK CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.858912,
+          "lng": 80.98324
+        },
+        {
+          "seq": 16,
+          "name": "POLYTECHNIC",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.87425,
+          "lng": 80.99712
+        },
+        {
+          "seq": 17,
+          "name": "ISMAIL GANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.88045,
+          "lng": 81.00694
+        },
+        {
+          "seq": 18,
+          "name": "HIGH COURT (KAMTA)",
+          "role": "END",
+          "direction": "Dubagga Bus Station → High Court (Kamta)",
+          "lat": 26.88691,
+          "lng": 81.01895
+        }
+      ]
+    },
+    "LKO-03": {
+      "route_id": "LKO-03",
+      "route_name": "Ghanta Ghar (Chowk) → Naimisaranya",
+      "start": "GHANTA GHAR (CHOWK)",
+      "end": "NAIMISARANYA",
+      "via": "Dubagga / Kakori / Malihabad / Sandila",
+      "stop_count": 41,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "GHANTA GHAR (CHOWK)",
+          "role": "START",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 2,
+          "name": "KONESHWAR CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 3,
+          "name": "TAHSEENGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 4,
+          "name": "THAKURGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 5,
+          "name": "BALAGANJ CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 6,
+          "name": "ERA HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 7,
+          "name": "DUBAGGA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 8,
+          "name": "DUBAGGA MANDI",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 9,
+          "name": "SITAPUR BY-PASS",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 10,
+          "name": "DUBAGGA BUS STATION",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 11,
+          "name": "ANDHE KI CHAUKI",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 12,
+          "name": "KAKORI",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 13,
+          "name": "GOLA KUA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 14,
+          "name": "MOTI NEEM",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 15,
+          "name": "AAMRAPALI WATER PARK",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 16,
+          "name": "MAHMOOD NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 17,
+          "name": "MALIHABAD",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 18,
+          "name": "KATAULI",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 19,
+          "name": "BATUIYYA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 20,
+          "name": "BANJARAN KHEDA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 21,
+          "name": "RAHIMABAD",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 22,
+          "name": "TARONA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 23,
+          "name": "JALAMAU",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 24,
+          "name": "ADORA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 25,
+          "name": "BULBUL KHERA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 26,
+          "name": "CHANDORA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 27,
+          "name": "TILUIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 28,
+          "name": "RNARAYAN PUR TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 29,
+          "name": "BADI TILUIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 30,
+          "name": "TILUIYA KALA PETROL PUMP",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 31,
+          "name": "CSC SANDILA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 32,
+          "name": "BEGAMGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 33,
+          "name": "SANDILA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 34,
+          "name": "IMALIYABAGH",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 35,
+          "name": "MALHERA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 36,
+          "name": "ATIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 37,
+          "name": "KOTHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 38,
+          "name": "ATIYA MAJHIGAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 39,
+          "name": "BENIGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 40,
+          "name": "PRATAP NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        },
+        {
+          "seq": 41,
+          "name": "NAIMISARANYA",
+          "role": "END",
+          "direction": "Ghanta Ghar (Chowk) → Naimisaranya"
+        }
+      ]
+    },
+    "LKO-04": {
+      "route_id": "LKO-04",
+      "route_name": "Naimisaranya → Ghanta Ghar (Chowk)",
+      "start": "NAIMISARANYA",
+      "end": "GHANTA GHAR (CHOWK)",
+      "via": "Reverse of LKO-03",
+      "stop_count": 41,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "NAIMISARANYA",
+          "role": "START",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 2,
+          "name": "PRATAP NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 3,
+          "name": "BENIGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 4,
+          "name": "ATIYA MAJHIGAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 5,
+          "name": "KOTHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 6,
+          "name": "ATIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 7,
+          "name": "MALHERA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 8,
+          "name": "IMALIYABAGH",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 9,
+          "name": "SANDILA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 10,
+          "name": "BEGAMGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 11,
+          "name": "CSC SANDILA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 12,
+          "name": "TILUIYA KALA PETROL PUMP",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 13,
+          "name": "BADI TILUIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 14,
+          "name": "RNARAYAN PUR TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 15,
+          "name": "TILUIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 16,
+          "name": "CHANDORA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 17,
+          "name": "BULBUL KHERA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 18,
+          "name": "ADORA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 19,
+          "name": "JALAMAU",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 20,
+          "name": "TARONA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 21,
+          "name": "RAHIMABAD",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 22,
+          "name": "BANJARAN KHEDA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 23,
+          "name": "BATUIYYA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 24,
+          "name": "KATAULI",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 25,
+          "name": "MALIHABAD",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 26,
+          "name": "MAHMOOD NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 27,
+          "name": "AAMRAPALI WATER PARK",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 28,
+          "name": "MOTI NEEM",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 29,
+          "name": "GOLA KUA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 30,
+          "name": "KAKORI",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 31,
+          "name": "ANDHE KI CHAUKI",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 32,
+          "name": "DUBAGGA BUS STATION",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 33,
+          "name": "SITAPUR BY-PASS",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 34,
+          "name": "DUBAGGA MANDI",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 35,
+          "name": "DUBAGGA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 36,
+          "name": "ERA HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 37,
+          "name": "BALAGANJ CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 38,
+          "name": "THAKURGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 39,
+          "name": "TAHSEENGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 40,
+          "name": "KONESHWAR CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        },
+        {
+          "seq": 41,
+          "name": "GHANTA GHAR (CHOWK)",
+          "role": "END",
+          "direction": "Naimisaranya → Ghanta Ghar (Chowk)"
+        }
+      ]
+    },
+    "LKO-05": {
+      "route_id": "LKO-05",
+      "route_name": "Balaganj Chauraha → Viraj Khand",
+      "start": "BALAGANJ CHAURAHA",
+      "end": "VIRAJ KHAND",
+      "via": "Dubagga / Polytechnic / High Court / Kathauta / Amity",
+      "stop_count": 30,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "BALAGANJ CHAURAHA",
+          "role": "START",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.877021,
+          "lng": 80.873012
+        },
+        {
+          "seq": 2,
+          "name": "ERA HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.883614,
+          "lng": 80.871205
+        },
+        {
+          "seq": 3,
+          "name": "DUBAGGA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.879512,
+          "lng": 80.859011
+        },
+        {
+          "seq": 4,
+          "name": "DUBAGGA MANDI",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.878045,
+          "lng": 80.852034
+        },
+        {
+          "seq": 5,
+          "name": "UNITY TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.889412,
+          "lng": 80.854215
+        },
+        {
+          "seq": 6,
+          "name": "SHAHEED SMARAK",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.898102,
+          "lng": 80.862341
+        },
+        {
+          "seq": 7,
+          "name": "MC SAXENA",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.91421,
+          "lng": 80.875122
+        },
+        {
+          "seq": 8,
+          "name": "CARRIER MEDICAL",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.929851,
+          "lng": 80.886412
+        },
+        {
+          "seq": 9,
+          "name": "SAHARA CITY",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.945201,
+          "lng": 80.89895
+        },
+        {
+          "seq": 10,
+          "name": "URDU FARSHI UNIVERSITY",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.95314,
+          "lng": 80.902145
+        },
+        {
+          "seq": 11,
+          "name": "I I M TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.960241,
+          "lng": 80.904512
+        },
+        {
+          "seq": 12,
+          "name": "MUTAKKIPUR",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.951025,
+          "lng": 80.92341
+        },
+        {
+          "seq": 13,
+          "name": "AMAN HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.94412,
+          "lng": 80.93815
+        },
+        {
+          "seq": 14,
+          "name": "BHITAULI CROSSING",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.941952,
+          "lng": 80.94125
+        },
+        {
+          "seq": 15,
+          "name": "MANDIYAO",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.92485,
+          "lng": 80.94981
+        },
+        {
+          "seq": 16,
+          "name": "ENGG. COLLEGE",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.91241,
+          "lng": 80.947215
+        },
+        {
+          "seq": 17,
+          "name": "TEDI PULIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.90463,
+          "lng": 80.95251
+        },
+        {
+          "seq": 18,
+          "name": "JAGRANI",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.896245,
+          "lng": 80.961021
+        },
+        {
+          "seq": 19,
+          "name": "KHURAM NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.89125,
+          "lng": 80.96645
+        },
+        {
+          "seq": 20,
+          "name": "SEC-25",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.887412,
+          "lng": 80.98125
+        },
+        {
+          "seq": 21,
+          "name": "MUNSI PULIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.88451,
+          "lng": 80.990215
+        },
+        {
+          "seq": 22,
+          "name": "POLYTECHNIC",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.87384,
+          "lng": 80.99642
+        },
+        {
+          "seq": 23,
+          "name": "SEC-8",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.87954,
+          "lng": 81.00624
+        },
+        {
+          "seq": 24,
+          "name": "HIGH COURT (ISMAIL GANJ)",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.886412,
+          "lng": 81.01831
+        },
+        {
+          "seq": 25,
+          "name": "KAMTA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.88791,
+          "lng": 81.02541
+        },
+        {
+          "seq": 26,
+          "name": "VIJAYPUR",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.87612,
+          "lng": 81.02985
+        },
+        {
+          "seq": 27,
+          "name": "KATHAUTA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.86815,
+          "lng": 81.03364
+        },
+        {
+          "seq": 28,
+          "name": "AMITY UNIVERSITY",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.85241,
+          "lng": 81.04215
+        },
+        {
+          "seq": 29,
+          "name": "HANEMANN CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.85042,
+          "lng": 81.02641
+        },
+        {
+          "seq": 30,
+          "name": "VIRAJ KHAND",
+          "role": "END",
+          "direction": "Balaganj Chauraha → Viraj Khand",
+          "lat": 26.848512,
+          "lng": 81.02045
+        }
+      ]
+    },
+    "LKO-06": {
+      "route_id": "LKO-06",
+      "route_name": "Viraj Khand → Balaganj Chauraha",
+      "start": "VIRAJ KHAND",
+      "end": "BALAGANJ CHAURAHA",
+      "via": "Reverse of LKO-05",
+      "stop_count": 30,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "VIRAJ KHAND",
+          "role": "START",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 2,
+          "name": "HANEMANN CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 3,
+          "name": "AMITY UNIVERSITY",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 4,
+          "name": "KATHAUTA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 5,
+          "name": "VIJAYPUR",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 6,
+          "name": "HIGH COURT (ISMAIL GANJ)",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 7,
+          "name": "SEC-8",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 8,
+          "name": "POLYTECHNIC",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 9,
+          "name": "MUNSI PULIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 10,
+          "name": "SEC-25",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 11,
+          "name": "KHURAM NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 12,
+          "name": "JAGRANI",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 13,
+          "name": "TEDI PULIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 14,
+          "name": "ENGG. COLLEGE",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 15,
+          "name": "MANDIYAO",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 16,
+          "name": "BHITAULI CROSSING",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 17,
+          "name": "AMAN HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 18,
+          "name": "MUTAKKIPUR",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 19,
+          "name": "I I M TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 20,
+          "name": "URDU FARSHI UNIVERSITY",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 21,
+          "name": "SAHARA CITY",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 22,
+          "name": "CARRIER MEDICAL",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 23,
+          "name": "MC SAXENA",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 24,
+          "name": "SHAHEED SMARAK",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 25,
+          "name": "UNITY TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 26,
+          "name": "SITAPUR BY-PASS",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 27,
+          "name": "DUBAGGA MANDI",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 28,
+          "name": "DUBAGGA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 29,
+          "name": "ERA HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        },
+        {
+          "seq": 30,
+          "name": "BALAGANJ CHAURAHA",
+          "role": "END",
+          "direction": "Viraj Khand → Balaganj Chauraha"
+        }
+      ]
+    },
+    "LKO-07": {
+      "route_id": "LKO-07",
+      "route_name": "Industrial Area → High Court (Kamta)",
+      "start": "INDUSTRIAL AREA",
+      "end": "HIGH COURT (KAMTA)",
+      "via": "Airport / Vrindavan Yojna / Ekana / Gomti Nagar",
+      "stop_count": 29,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "INDUSTRIAL AREA",
+          "role": "START",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 2,
+          "name": "SCOOTER INDIA",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 3,
+          "name": "GAURI BAZAR",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 4,
+          "name": "HYDEL COLONY",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 5,
+          "name": "SAINIK SCHOOL",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 6,
+          "name": "SANTHI NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 7,
+          "name": "NADARGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 8,
+          "name": "AIRPORT CROSSING",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 9,
+          "name": "BAGIA NO.-03",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 10,
+          "name": "BAGIA NO.-02",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 11,
+          "name": "T.P NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 12,
+          "name": "NEW GARORA COLONY",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 13,
+          "name": "AURANGABAD",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 14,
+          "name": "RAMABAI MAIDAN",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 15,
+          "name": "SHUBHAM SOUTH CITY",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 16,
+          "name": "UTTARATHIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 17,
+          "name": "VRINDAVAN YOJNA",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 18,
+          "name": "AWADH SHILP GRAM",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 19,
+          "name": "DELHI PUBLIC SCHOOL",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 20,
+          "name": "AWADH SHILP GRAM 2",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 21,
+          "name": "CMS SCHOOL",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 22,
+          "name": "AHIMAMAU",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 23,
+          "name": "SUDHA OFFICE",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 24,
+          "name": "EKANA STADIUM",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 25,
+          "name": "DELHI PUBLIC SCHOOL 2",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 26,
+          "name": "HOME GUARD OFFICE",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 27,
+          "name": "HUSARIYA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 28,
+          "name": "GOMTI NAGAR BUS STATION",
+          "role": "INTERMEDIATE",
+          "direction": "Industrial Area → High Court (Kamta)"
+        },
+        {
+          "seq": 29,
+          "name": "HIGH COURT (KAMTA)",
+          "role": "END",
+          "direction": "Industrial Area → High Court (Kamta)"
+        }
+      ]
+    },
+    "LKO-08": {
+      "route_id": "LKO-08",
+      "route_name": "High Court (Kamta) → Industrial Area",
+      "start": "HIGH COURT (KAMTA)",
+      "end": "INDUSTRIAL AREA",
+      "via": "Reverse of LKO-07",
+      "stop_count": 29,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "HIGH COURT (KAMTA)",
+          "role": "START",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 2,
+          "name": "GOMTI NAGAR BUS STATION",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 3,
+          "name": "HUSARIYA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 4,
+          "name": "HOME GUARD OFFICE",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 5,
+          "name": "DELHI PUBLIC SCHOOL 2",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 6,
+          "name": "EKANA STADIUM",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 7,
+          "name": "SUDHA OFFICE",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 8,
+          "name": "AHIMAMAU",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 9,
+          "name": "CMS SCHOOL",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 10,
+          "name": "AWADH SHILP GRAM 2",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 11,
+          "name": "DELHI PUBLIC SCHOOL",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 12,
+          "name": "AWADH SHILP GRAM",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 13,
+          "name": "VRINDAVAN YOJNA",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 14,
+          "name": "UTTARATHIYA",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 15,
+          "name": "SHUBHAM SOUTH CITY",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 16,
+          "name": "RAMABAI MAIDAN",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 17,
+          "name": "AURANGABAD",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 18,
+          "name": "NEW GARORA COLONY",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 19,
+          "name": "T.P NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 20,
+          "name": "BAGIA NO.-02",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 21,
+          "name": "BAGIA NO.-03",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 22,
+          "name": "AIRPORT CROSSING",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 23,
+          "name": "NADARGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 24,
+          "name": "SANTHI NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 25,
+          "name": "SAINIK SCHOOL",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 26,
+          "name": "HYDEL COLONY",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 27,
+          "name": "GAURI BAZAR",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 28,
+          "name": "SCOOTER INDIA",
+          "role": "INTERMEDIATE",
+          "direction": "High Court (Kamta) → Industrial Area"
+        },
+        {
+          "seq": 29,
+          "name": "INDUSTRIAL AREA",
+          "role": "END",
+          "direction": "High Court (Kamta) → Industrial Area"
+        }
+      ]
+    },
+    "LKO-09": {
+      "route_id": "LKO-09",
+      "route_name": "Rajajipuram Bus Terminus → B.B.D.",
+      "start": "RAJAJIPURAM BUS TERMINUS",
+      "end": "B.B.D.",
+      "via": "Charbagh / GPO / Nishatganj / Polytechnic / Chinhat",
+      "stop_count": 36,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "RAJAJIPURAM BUS TERMINUS",
+          "role": "START",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 2,
+          "name": "POLICE CHAUKI RAJAJIPURAM",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 3,
+          "name": "MEENA BEKARI CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 4,
+          "name": "EVEREADY TIRAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 5,
+          "name": "BHUSA MANDI TIRAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 6,
+          "name": "MAWAIYYA",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 7,
+          "name": "CHARBAGH",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 8,
+          "name": "K.K.C.",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 9,
+          "name": "VIKASDEEP",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 10,
+          "name": "HUSSAINGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 11,
+          "name": "BURLINGTON",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 12,
+          "name": "BAPU BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 13,
+          "name": "GPO",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 14,
+          "name": "AAYKAR BHAWAN / SHAKTI BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 15,
+          "name": "JAWAHAR BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 16,
+          "name": "SIKANDAR BAGH",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 17,
+          "name": "GOKHLE MARG",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 18,
+          "name": "PAPER MILL COLONY",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 19,
+          "name": "NISHATGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 20,
+          "name": "GOAL MARKET",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 21,
+          "name": "BADSHAH NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 22,
+          "name": "SHAKTI NAGAR DHAL",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 23,
+          "name": "LAKHRAJ",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 24,
+          "name": "NEELGIRI",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 25,
+          "name": "BHOOTNATH",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 26,
+          "name": "H.A.L",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 27,
+          "name": "ARAVALI",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 28,
+          "name": "POLYTECHNIC",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 29,
+          "name": "SECTOR-08",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 30,
+          "name": "ISMAIL GANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 31,
+          "name": "SURENDRA NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 32,
+          "name": "AWADH BUS STATION",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 33,
+          "name": "CHINHAT TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 34,
+          "name": "MATIYARI TIRAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 35,
+          "name": "DAYAL RESIDENCY",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        },
+        {
+          "seq": 36,
+          "name": "B.B.D.",
+          "role": "END",
+          "direction": "Rajajipuram Bus Terminus → B.B.D."
+        }
+      ]
+    },
+    "LKO-10": {
+      "route_id": "LKO-10",
+      "route_name": "B.B.D. → Rajajipuram Bus Terminus",
+      "start": "B.B.D.",
+      "end": "RAJAJIPURAM BUS TERMINUS",
+      "via": "Reverse of LKO-09",
+      "stop_count": 36,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "B.B.D.",
+          "role": "START",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 2,
+          "name": "DAYAL RESIDENCY",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 3,
+          "name": "MATIYARI TIRAHA",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 4,
+          "name": "CHINHAT TURN",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 5,
+          "name": "AWADH BUS STATION",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 6,
+          "name": "SURENDRA NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 7,
+          "name": "ISMAIL GANJ",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 8,
+          "name": "SECTOR-08",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 9,
+          "name": "POLYTECHNIC",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 10,
+          "name": "ARAVALI",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 11,
+          "name": "H.A.L",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 12,
+          "name": "BHOOTNATH",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 13,
+          "name": "NEELGIRI",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 14,
+          "name": "LAKHRAJ",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 15,
+          "name": "SHAKTI NAGAR DHAL",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 16,
+          "name": "BADSHAH NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 17,
+          "name": "GOAL MARKET",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 18,
+          "name": "NISHATGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 19,
+          "name": "PAPER MILL COLONY",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 20,
+          "name": "GOKHLE MARG",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 21,
+          "name": "SIKANDAR BAGH",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 22,
+          "name": "JAWAHAR BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 23,
+          "name": "AAYKAR BHAWAN / SHAKTI BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 24,
+          "name": "GPO",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 25,
+          "name": "BAPU BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 26,
+          "name": "BURLINGTON",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 27,
+          "name": "HUSSAINGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 28,
+          "name": "VIKASDEEP",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 29,
+          "name": "K.K.C.",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 30,
+          "name": "CHARBAGH",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 31,
+          "name": "MAWAIYYA",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 32,
+          "name": "BHUSA MANDI TIRAHA",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 33,
+          "name": "EVEREADY TIRAHA",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 34,
+          "name": "MEENA BEKARI CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 35,
+          "name": "POLICE CHAUKI RAJAJIPURAM",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        },
+        {
+          "seq": 36,
+          "name": "RAJAJIPURAM BUS TERMINUS",
+          "role": "END",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus"
+        }
+      ]
+    },
+    "LKO-11": {
+      "route_id": "LKO-11",
+      "route_name": "Rajajipuram Bus Terminus → B.B.D. via Kathauta",
+      "start": "RAJAJIPURAM BUS TERMINUS",
+      "end": "B.B.D.",
+      "via": "Charbagh / Sikandar Bagh / 1090 / Kathauta / Chinhat",
+      "stop_count": 26,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "RAJAJIPURAM BUS TERMINUS",
+          "role": "START",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 2,
+          "name": "POLICE CHAUKI RAJAJIPURAM",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 3,
+          "name": "MEENA BEKARI CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 4,
+          "name": "EVEREADY TIRAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 5,
+          "name": "BHUSA MANDI TIRAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 6,
+          "name": "MAWAIYYA",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 7,
+          "name": "CHARBAGH",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 8,
+          "name": "K.K.C.",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 9,
+          "name": "VIKASDEEP",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 10,
+          "name": "HUSSAINGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 11,
+          "name": "BURLINGTON",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 12,
+          "name": "BAPU BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 13,
+          "name": "GPO",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 14,
+          "name": "AAYKAR BHAWAN / SHAKTI BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 15,
+          "name": "JAWAHAR BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 16,
+          "name": "SIKANDAR BAGH",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 17,
+          "name": "1090 CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 18,
+          "name": "LOHIA PARK TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 19,
+          "name": "CMS SCHOOL",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 20,
+          "name": "HUSARIYA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 21,
+          "name": "AMITY UNIVERSITY",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 22,
+          "name": "KATHAUTA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 23,
+          "name": "CHINHAT TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 24,
+          "name": "MATIYARI TIRAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 25,
+          "name": "DAYAL RESIDENCY",
+          "role": "INTERMEDIATE",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        },
+        {
+          "seq": 26,
+          "name": "B.B.D.",
+          "role": "END",
+          "direction": "Rajajipuram Bus Terminus → B.B.D. via Kathauta"
+        }
+      ]
+    },
+    "LKO-12": {
+      "route_id": "LKO-12",
+      "route_name": "B.B.D. → Rajajipuram Bus Terminus via Kathauta",
+      "start": "B.B.D.",
+      "end": "RAJAJIPURAM BUS TERMINUS",
+      "via": "Reverse of LKO-11",
+      "stop_count": 26,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "B.B.D.",
+          "role": "START",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 2,
+          "name": "DAYAL RESIDENCY",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 3,
+          "name": "MATIYARI TIRAHA",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 4,
+          "name": "CHINHAT TURN",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 5,
+          "name": "KATHAUTA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 6,
+          "name": "AMITY UNIVERSITY",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 7,
+          "name": "HUSARIYA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 8,
+          "name": "CMS SCHOOL",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 9,
+          "name": "LOHIA PARK TURN",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 10,
+          "name": "1090 CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 11,
+          "name": "SIKANDAR BAGH",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 12,
+          "name": "JAWAHAR BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 13,
+          "name": "AAYKAR BHAWAN / SHAKTI BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 14,
+          "name": "GPO",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 15,
+          "name": "BAPU BHAWAN",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 16,
+          "name": "BURLINGTON",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 17,
+          "name": "HUSSAINGANJ",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 18,
+          "name": "VIKASDEEP",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 19,
+          "name": "K.K.C.",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 20,
+          "name": "CHARBAGH",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 21,
+          "name": "MAWAIYA",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 22,
+          "name": "BHUSA MANDI TIRAHA",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 23,
+          "name": "EVEREADY TIRAHA",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 24,
+          "name": "MEENA BEKARI CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 25,
+          "name": "POLICE CHAUKI RAJAJIPURAM",
+          "role": "INTERMEDIATE",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        },
+        {
+          "seq": 26,
+          "name": "RAJAJIPURAM BUS TERMINUS",
+          "role": "END",
+          "direction": "B.B.D. → Rajajipuram Bus Terminus via Kathauta"
+        }
+      ]
+    },
+    "LKO-13": {
+      "route_id": "LKO-13",
+      "route_name": "Dubagga Bus Station → Mohanlalganj Bus Terminal",
+      "start": "DUBAGGA BUS STATION",
+      "end": "MOHANLALGANJ BUS TERMINAL",
+      "via": "Buddheshwar / Telibagh / SGPGI / Kalli",
+      "stop_count": 41,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "DUBAGGA BUS STATION",
+          "role": "START",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 2,
+          "name": "SITAPUR BY-PASS",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 3,
+          "name": "DUBAGGA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 4,
+          "name": "DUBAGGA CHAURAHA PANI TANK",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 5,
+          "name": "FARIDIPUR CHOWKI",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 6,
+          "name": "AMAR VIHAR",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 7,
+          "name": "SIDDHARTH PUBLIC SCHOOL",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 8,
+          "name": "BUDDHESHWAR CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 9,
+          "name": "TIKONIA",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 10,
+          "name": "RAJENDRA PUBLIC INTER COLLEGE",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 11,
+          "name": "DR. KHERA",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 12,
+          "name": "SAINT ANTHONEY",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 13,
+          "name": "PARA CHOWKI",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 14,
+          "name": "DRM OFFICE",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 15,
+          "name": "MANAK NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 16,
+          "name": "AWADH HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 17,
+          "name": "RAJCHANDRA HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 18,
+          "name": "PAKRI PUL",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 19,
+          "name": "GREEN ECO PARK",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 20,
+          "name": "BANGLA BAZAR PUL",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 21,
+          "name": "SHIV MANDIR",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 22,
+          "name": "RAJNI KHAND TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 23,
+          "name": "TELIBAGH NEHRIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 24,
+          "name": "RAJDHANI HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 25,
+          "name": "SOUTH CITY",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 26,
+          "name": "UTTARATHIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 27,
+          "name": "SARDAR PATEL HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 28,
+          "name": "KRISHNA VIHAR COLONY",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 29,
+          "name": "OLD MAWAIYYA",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 30,
+          "name": "S.G.P.G.I. GATE",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 31,
+          "name": "PT. DEEN DAYAL UPADHYAY",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 32,
+          "name": "EKTANAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 33,
+          "name": "KALLI BAZAR",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 34,
+          "name": "KALLI PETROL PUMP",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 35,
+          "name": "HARKANSH GARHI PUL",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 36,
+          "name": "PURSANI TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 37,
+          "name": "SAI NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 38,
+          "name": "RADHA SWAMI",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 39,
+          "name": "VRINDAVAN VIHAR TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 40,
+          "name": "RLY. STATION",
+          "role": "INTERMEDIATE",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        },
+        {
+          "seq": 41,
+          "name": "MOHANLALGANJ BUS TERMINAL",
+          "role": "END",
+          "direction": "Dubagga Bus Station → Mohanlalganj Bus Terminal"
+        }
+      ]
+    },
+    "LKO-14": {
+      "route_id": "LKO-14",
+      "route_name": "Mohanlalganj Bus Terminal → Dubagga Bus Station",
+      "start": "MOHANLALGANJ BUS TERMINAL",
+      "end": "DUBAGGA BUS STATION",
+      "via": "Reverse of LKO-13",
+      "stop_count": 41,
+      "stops": [
+        {
+          "seq": 1,
+          "name": "MOHANLALGANJ BUS TERMINAL",
+          "role": "START",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 2,
+          "name": "RLY. STATION",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 3,
+          "name": "VRINDAVAN VIHAR TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 4,
+          "name": "RADHA SWAMI",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 5,
+          "name": "SAI NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 6,
+          "name": "PURSANI TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 7,
+          "name": "HARKANSH GARHI PUL",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 8,
+          "name": "KALLI PETROL PUMP",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 9,
+          "name": "KALLI BAZAR",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 10,
+          "name": "EKTA NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 11,
+          "name": "PT. DEEN DAYAL UPADHYAY",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 12,
+          "name": "S.G.P.G.I. GATE",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 13,
+          "name": "OLD MAWAIYYA",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 14,
+          "name": "KRISHNA VIHAR COLONY",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 15,
+          "name": "SARDAR PATEL HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 16,
+          "name": "UTTARATHIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 17,
+          "name": "SOUTH CITY",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 18,
+          "name": "RAJDHANI HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 19,
+          "name": "TELIBAGH NEHRIYA",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 20,
+          "name": "RAJNI KHAND TURN",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 21,
+          "name": "SHIV MANDIR",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 22,
+          "name": "BANGLA BAZAR PUL",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 23,
+          "name": "GREEN ECO PARK",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 24,
+          "name": "PAKRI PUL",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 25,
+          "name": "RAJCHANDRA HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 26,
+          "name": "AWADH HOSPITAL",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 27,
+          "name": "MANAK NAGAR",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 28,
+          "name": "DRM OFFICE",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 29,
+          "name": "PARA CHOWKI",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 30,
+          "name": "SAINT ANTHONEY",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 31,
+          "name": "DR. KHERA",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 32,
+          "name": "RAJENDRA PUBLIC INTER COLLEGE",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 33,
+          "name": "TIKONIA",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 34,
+          "name": "BUDDHESHWAR CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 35,
+          "name": "SIDDHARTH PUBLIC SCHOOL",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 36,
+          "name": "AMAR VIHAR",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 37,
+          "name": "FARIDIPUR CHOWKI",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 38,
+          "name": "DUBAGGA CHAURAHA PANI TANK",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 39,
+          "name": "DUBAGGA CHAURAHA",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 40,
+          "name": "SITAPUR BY-PASS",
+          "role": "INTERMEDIATE",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        },
+        {
+          "seq": 41,
+          "name": "DUBAGGA BUS STATION",
+          "role": "END",
+          "direction": "Mohanlalganj Bus Terminal → Dubagga Bus Station"
+        }
+      ]
+    }
+  },
+  "unique_stops": [
+    "1090 CHAURAHA",
+    "AAMRAPALI WATER PARK",
+    "AAYKAR BHAWAN / SHAKTI BHAWAN",
+    "ADORA",
+    "AHIMAMAU",
+    "AIRPORT CROSSING",
+    "AMAN HOSPITAL",
+    "AMAR VIHAR",
+    "AMITY UNIVERSITY",
+    "ANDHE KI CHAUKI",
+    "ARAVALI",
+    "ATIYA",
+    "ATIYA MAJHIGAWAN",
+    "AURANGABAD",
+    "AWADH BUS STATION",
+    "AWADH HOSPITAL",
+    "AWADH SHILP GRAM",
+    "AWADH SHILP GRAM 2",
+    "B.B.D.",
+    "BADI TILUIYA",
+    "BADSHAH NAGAR",
+    "BAGIA NO.-02",
+    "BAGIA NO.-03",
+    "BALAGANJ CHAURAHA",
+    "BANGLA BAZAR PUL",
+    "BANJARAN KHEDA",
+    "BAPU BHAWAN",
+    "BATUIYYA",
+    "BEGAMGANJ",
+    "BENIGANJ",
+    "BHITAULI CROSSING",
+    "BHOOTNATH",
+    "BHUSA MANDI TIRAHA",
+    "BUDDHESHWAR CHAURAHA",
+    "BULBUL KHERA",
+    "BURLINGTON",
+    "CARRIER MEDICAL",
+    "CHANDORA",
+    "CHARBAGH",
+    "CHINHAT TURN",
+    "CM HOUSE",
+    "CMS SCHOOL",
+    "CSC SANDILA",
+    "DALIGANJ PUL",
+    "DAYAL RESIDENCY",
+    "DELHI PUBLIC SCHOOL",
+    "DELHI PUBLIC SCHOOL 2",
+    "DR. KHERA",
+    "DRM OFFICE",
+    "DUBAGGA BUS STATION",
+    "DUBAGGA CHAURAHA",
+    "DUBAGGA CHAURAHA PANI TANK",
+    "DUBAGGA MANDI",
+    "DUBAGGA PETROL PUMP",
+    "EKANA STADIUM",
+    "EKTA NAGAR",
+    "EKTANAGAR",
+    "ENGG. COLLEGE",
+    "ERA HOSPITAL",
+    "EVEREADY TIRAHA",
+    "FARIDIPUR CHOWKI",
+    "FUN MALL / PRIYATAN BHAWAN",
+    "GAURI BAZAR",
+    "GHANTA GHAR (CHOWK)",
+    "GOAL MARKET",
+    "GOKHLE MARG",
+    "GOLA KUA",
+    "GOMTI NAGAR BUS STATION",
+    "GPO",
+    "GREEN ECO PARK",
+    "H.A.L",
+    "HANEMANN CHAURAHA",
+    "HARKANSH GARHI PUL",
+    "HIGH COURT (ISMAIL GANJ)",
+    "HIGH COURT (KAMTA)",
+    "HOME GUARD OFFICE",
+    "HUSARIYA CHAURAHA",
+    "HUSSAINGANJ",
+    "HYDEL COLONY",
+    "I I M TURN",
+    "IMALIYABAGH",
+    "INDUSTRIAL AREA",
+    "ISMAIL GANJ",
+    "JAGRANI",
+    "JALAMAU",
+    "JAWAHAR BHAWAN",
+    "K.K.C.",
+    "KAKORI",
+    "KALLI BAZAR",
+    "KALLI PETROL PUMP",
+    "KAMTA CHAURAHA",
+    "KATAULI",
+    "KATHAUTA CHAURAHA",
+    "KHURAM NAGAR",
+    "KONESHWAR CHAURAHA",
+    "KOTHAWAN",
+    "KRISHNA VIHAR COLONY",
+    "LAKHRAJ",
+    "LOHIA PARK CHAURAHA",
+    "LOHIA PARK TURN",
+    "MAHMOOD NAGAR",
+    "MALHERA",
+    "MALIHABAD",
+    "MANAK NAGAR",
+    "MANDIYAO",
+    "MATIYARI TIRAHA",
+    "MAWAIYA",
+    "MAWAIYYA",
+    "MC SAXENA",
+    "MEENA BEKARI CHAURAHA",
+    "MOHANLALGANJ BUS TERMINAL",
+    "MOTI NEEM",
+    "MUNSI PULIYA",
+    "MUTAKKIPUR",
+    "NADARGANJ",
+    "NAIMISARANYA",
+    "NEELGIRI",
+    "NEW GARORA COLONY",
+    "NISHATGANJ",
+    "OLD MAWAIYYA",
+    "PAKRI PUL",
+    "PAPER MILL COLONY",
+    "PARA CHOWKI",
+    "POLICE CHAUKI RAJAJIPURAM",
+    "POLYTECHNIC",
+    "PRATAP NAGAR",
+    "PT. DEEN DAYAL UPADHYAY",
+    "PURSANI TURN",
+    "RADHA SWAMI",
+    "RAHIMABAD",
+    "RAJAJIPURAM BUS TERMINUS",
+    "RAJCHANDRA HOSPITAL",
+    "RAJDHANI HOSPITAL",
+    "RAJENDRA PUBLIC INTER COLLEGE",
+    "RAJNI KHAND TURN",
+    "RAMABAI MAIDAN",
+    "RLY. STATION",
+    "RNARAYAN PUR TURN",
+    "S.G.P.G.I. GATE",
+    "SAHARA CITY",
+    "SAI NAGAR",
+    "SAINIK SCHOOL",
+    "SAINT ANTHONEY",
+    "SANDILA",
+    "SANTHI NAGAR",
+    "SARDAR PATEL HOSPITAL",
+    "SCOOTER INDIA",
+    "SEC-25",
+    "SEC-8",
+    "SECTOR-08",
+    "SHAHEED SMARAK",
+    "SHAKTI NAGAR DHAL",
+    "SHIV MANDIR",
+    "SHUBHAM SOUTH CITY",
+    "SIDDHARTH PUBLIC SCHOOL",
+    "SIKANDAR BAGH",
+    "SITAPUR BY-PASS",
+    "SOUTH CITY",
+    "SUDHA OFFICE",
+    "SURENDRA NAGAR",
+    "T.P NAGAR",
+    "TAHSEENGANJ",
+    "TARONA",
+    "TEDI PULIYA",
+    "TELIBAGH NEHRIYA",
+    "THAKURGANJ",
+    "TIKONIA",
+    "TILUIYA",
+    "TILUIYA KALA PETROL PUMP",
+    "UNITY TURN",
+    "URDU FARSHI UNIVERSITY",
+    "UTTARATHIYA",
+    "VIJAYPUR",
+    "VIKASDEEP",
+    "VIRAJ KHAND",
+    "VRINDAVAN VIHAR TURN",
+    "VRINDAVAN YOJNA"
+  ],
+  "summary": {
+    "total_routes": 14,
+    "total_stops_sum": 442,
+    "unique_stop_count": 177
+  }
+}

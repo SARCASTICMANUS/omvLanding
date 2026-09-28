@@ -18,12 +18,8 @@ const DRIVING_EXP_OPTIONS = [
   "Master Driver 10+",
 ];
 const VEHICLE_TYPE_OPTIONS = [
-  { value: "bus",    label: "Transit Bus" },
-  { value: "minibus",label: "Minibus" },
-  { value: "van",    label: "Shuttle Van" },
+  { value: "bike",   label: "Bike" },
   { value: "auto",   label: "Auto-Rickshaw" },
-  { value: "tempo",  label: "Tempo Traveller" },
-  { value: "car",    label: "Car" },
 ];
 
 /* ── Design tokens ── */
@@ -72,13 +68,12 @@ function DecoRight() {
   );
 }
 
-/* ── Vayy Logo ── */
-function VayyLogo({ size = 30 }) {
+/* OMV mark */
+function OmvLogo({ size = 30 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
       <rect width="36" height="36" rx="8" fill="#16A34A" />
-      <path d="M10 10L18 26L26 10" stroke="white" strokeWidth="4"
-        strokeLinecap="round" strokeLinejoin="round" />
+      <text x="18" y="25" textAnchor="middle" fill="white" fontSize="21" fontWeight="900">O</text>
     </svg>
   );
 }
@@ -381,7 +376,7 @@ export default function DriverRegister({
       >
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <VayyLogo size={30} />
+          <OmvLogo size={30} />
           <span
             style={{
               fontWeight: 900,
@@ -390,7 +385,7 @@ export default function DriverRegister({
               color: "#0f172a",
             }}
           >
-            VAYY
+            OMV
           </span>
         </div>
 

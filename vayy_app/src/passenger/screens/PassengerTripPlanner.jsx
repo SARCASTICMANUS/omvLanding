@@ -260,37 +260,19 @@ export default function PassengerTripPlanner({ navigation, route }) {
 
   const searchPanelContent = isBike ? (
     <>
-      <View style={styles.pickupRow}>
-        <View style={styles.pickupField}>
-          <LocationSearch
-            key={`pickup-${pickup?.display_name || pickup?.name || "empty"}`}
-            isPickup
-            label="Pickup Stop"
-            onSelect={setPickup}
-            placeholder="Search pickup location"
-            value={pickup}
-          />
-        </View>
-        <TouchableOpacity
-          activeOpacity={0.8}
-          disabled={locating}
-          onPress={handleUseCurrentLocation}
-          style={[styles.useCurrentButton, locating && styles.useCurrentDisabled]}
-        >
-          {locating ? (
-            <ActivityIndicator size="small" color="#009849" />
-          ) : (
-            <Ionicons name="locate" size={18} color="#009849" />
-          )}
-        </TouchableOpacity>
-      </View>
+      <LocationSearch
+        isPickup
+        label="Pickup Stop"
+        onSelect={setPickup}
+        placeholder="Search pickup location"
+        value={pickup}
+      />
 
       <TouchableOpacity activeOpacity={0.8} onPress={handleSwap} style={styles.swapButton}>
         <Ionicons name="swap-vertical" size={20} color="#009849" />
       </TouchableOpacity>
 
       <LocationSearch
-        key={`destination-${destination?.display_name || destination?.name || "empty"}`}
         dropdownLift={90}
         isPickup={false}
         label="Destination"

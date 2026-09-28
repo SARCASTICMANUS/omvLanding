@@ -292,7 +292,7 @@
 
 //         <View style={styles.availabilityRow}>
 //           <View style={styles.availItem}>
-//             <Ionicons name="car" size={16} color="#009849" />
+//             <Ionicons name="bicycle" size={16} color="#009849" />
 //             <Text style={styles.availText}><Text style={styles.availBold}>{vehicleType}</Text></Text>
 //           </View>
 //           <View style={styles.availDot} />
@@ -1115,7 +1115,7 @@ export function AutoPreRideScreen({ navigation, route }) {
 
         <View style={styles.availabilityRow}>
           <View style={styles.availItem}>
-            <Ionicons name="car" size={16} color="#009849" />
+            <Ionicons name="bicycle" size={16} color="#009849" />
             <Text style={styles.availText}><Text style={styles.availBold}>{vehicleType}</Text></Text>
           </View>
           <View style={styles.availDot} />

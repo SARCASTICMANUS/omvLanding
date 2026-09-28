@@ -6,7 +6,7 @@ import {
   MapPin,
   Clock,
   User,
-  Bus,
+  CarFront,
   RefreshCw,
   MoreVertical,
   AlertCircle,
@@ -95,10 +95,10 @@ const ActiveTripManager = ({ cityId }) => {
                   <div className="flex justify-between items-start mb-6">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shadow-inner">
-                        <Bus size={24} />
+                        <CarFront size={24} />
                       </div>
                       <div>
-                        <h3 className="font-black text-slate-900 tracking-tight">{trip.bus_number || "Bus N/A"}</h3>
+                        <h3 className="font-black text-slate-900 tracking-tight">{trip.vehicle_number || trip.vehicle?.vehicle_number || "OMV ride"}</h3>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{trip.route_name}</p>
                       </div>
                     </div>

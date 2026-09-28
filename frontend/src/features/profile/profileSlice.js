@@ -16,11 +16,25 @@ export const fetchProfile = createAsyncThunk(
   }
 );
 
+export const fetchVerificationStatus = createAsyncThunk(
+  "profile/fetchVerificationStatus",
+  async (_, thunkAPI) => {
+    try {
+      const response = await api.get(API_PATHS.auth.verificationStatus);
+      return response.data?.data || response.data;
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data || { error: "Failed to fetch verification status" }
+      );
+    }
+  }
+);
+
 export const updatePassengerProfile = createAsyncThunk(
   "profile/updatePassengerProfile",
-  async ({ id, data }, thunkAPI) => {
+  async ({ data }, thunkAPI) => {
     try {
-      const response = await api.patch(API_PATHS.auth.passengerProfile, data);
+      const response = await api.put(API_PATHS.auth.passengerProfile, data);
       return response.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(
@@ -32,9 +46,9 @@ export const updatePassengerProfile = createAsyncThunk(
 
 export const updateDriverProfile = createAsyncThunk(
   "profile/updateDriverProfile",
-  async ({ id, data }, thunkAPI) => {
+  async ({ data }, thunkAPI) => {
     try {
-      const response = await api.patch(API_PATHS.auth.driverProfile, data);
+      const response = await api.put(API_PATHS.auth.driverProfile, data);
       return response.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(
@@ -66,6 +80,7 @@ const profileSlice = createSlice({
     error: null,
     updateLoading: false,
     updateError: null,
+    verification: null,
   },
   reducers: {
     clearProfileError: (state) => {
@@ -86,6 +101,9 @@ const profileSlice = createSlice({
       .addCase(fetchProfile.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      .addCase(fetchVerificationStatus.fulfilled, (state, action) => {
+        state.verification = action.payload;
       })
       .addCase(updatePassengerProfile.pending, (state) => {
         state.updateLoading = true;
@@ -131,11 +149,11 @@ const profileSlice = createSlice({
         // Deep merge: keep existing profile if the response doesn't have a better one
         const updatedUser = action.payload;
         const currentProfile = state.data?.profile;
-        
-        state.data = { 
-          ...state.data, 
+
+        state.data = {
+          ...state.data,
           ...updatedUser,
-          profile: updatedUser.profile || currentProfile 
+          profile: updatedUser.profile || currentProfile
         };
       })
       .addCase(updateUser.rejected, (state, action) => {

@@ -4,6 +4,7 @@ const DEFAULT_STATE = {
   currentStep: "planner",
   assignedRouteIds: [],
   activeTrip: null,
+  activeRide: null,
   selectedRoute: null,
   source: null,
   destination: null,
@@ -17,9 +18,23 @@ const loadDriverContext = () => {
     const serialized = localStorage.getItem("VAYY_DRIVER_CONTEXT");
     if (!serialized) return null;
     const parsed = JSON.parse(serialized);
-    // Ensure loading is false on boot
-    return { ...parsed, loading: false };
-  } catch (e) {
+    // Older builds persisted review/preflight steps; selected routes now
+    // continue through the mobile-style Pre-Ride Check screen.
+    const currentStep = ["review", "preflight"].includes(parsed.currentStep)
+      ? parsed.selectedRoute
+        ? "preflight"
+        : "planner"
+      : parsed.currentStep;
+    // Ensure loading is false on boot and keys added later exist on
+    // contexts persisted by older builds.
+    return {
+      ...DEFAULT_STATE,
+      ...parsed,
+      currentStep,
+      activeRide: parsed.activeRide ?? null,
+      loading: false,
+    };
+  } catch {
     return null;
   }
 };
@@ -36,6 +51,11 @@ const driverSlice = createSlice({
       state.activeTrip = action.payload;
       state.status = action.payload ? "active" : "idle";
       state.currentStep = action.payload ? "live" : "planner";
+      localStorage.setItem("VAYY_DRIVER_CONTEXT", JSON.stringify(state));
+    },
+    setActiveRide: (state, action) => {
+      state.activeRide = action.payload;
+      state.status = action.payload ? "assigned" : "idle";
       localStorage.setItem("VAYY_DRIVER_CONTEXT", JSON.stringify(state));
     },
     setSelectedRoute: (state, action) => {
@@ -70,6 +90,7 @@ const driverSlice = createSlice({
 export const {
   setStep,
   setDriverActiveTrip,
+  setActiveRide,
   setSelectedRoute,
   setSearchQuery,
   resetDriverState,

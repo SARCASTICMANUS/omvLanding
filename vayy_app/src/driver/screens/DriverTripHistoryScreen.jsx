@@ -125,7 +125,7 @@ export default function DriverTripHistoryScreen({ navigation, route }) {
           renderItem={({ item }) => <TripHistoryCard item={item} accent={accent} />}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
-              <Ionicons name="car-outline" size={48} color={COLORS.textMuted} />
+              <Ionicons name="bicycle-outline" size={48} color={COLORS.textMuted} />
               <Text style={styles.emptyTitle}>No trips yet</Text>
               <Text style={styles.emptySub}>Your completed trips will appear here</Text>
             </View>

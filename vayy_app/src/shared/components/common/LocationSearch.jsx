@@ -16,6 +16,7 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasSelection, setHasSelection] = useState(Boolean(value));
+  const [searched, setSearched] = useState(false);
   const [dropdownHeight, setDropdownHeight] = useState(0);
   const inputRef = useRef(null);
 
@@ -26,6 +27,7 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
 
     if (!query || query.length < 3) {
       setResults([]);
+      setSearched(false);
       setDropdownHeight(0);
       return undefined;
     }
@@ -41,10 +43,11 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
         if (!active) return;
         const data = res.data?.data || res.data;
         setResults(Array.isArray(data) ? data : []);
+        setSearched(true);
       } catch {
         if (!active) return;
         setResults([]);
-        setDropdownHeight(0);
+        setSearched(true);
       } finally {
         if (active) setLoading(false);
       }
@@ -65,15 +68,26 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
     };
     setQuery(next.display_name || next.name || "");
     setResults([]);
+    setSearched(false);
     setDropdownHeight(0);
     setLoading(false);
     setHasSelection(true);
     onSelect(next);
   };
 
+  useEffect(() => {
+    setQuery(value?.name || value?.display_name || "");
+    setHasSelection(Boolean(value));
+    setResults([]);
+    setSearched(false);
+    setDropdownHeight(0);
+    setLoading(false);
+  }, [value]);
+
   const handleChangeText = (text) => {
     setQuery(text);
     setHasSelection(false);
+    setSearched(false);
 
     if (text.length < 3) {
       setResults([]);
@@ -85,17 +99,21 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
     setQuery("");
     setHasSelection(false);
     setResults([]);
+    setSearched(false);
     setDropdownHeight(0);
     inputRef.current?.focus();
   };
 
   const showResults = results.length > 0;
+  const showEmpty =
+    searched && !loading && !showResults && !hasSelection && query.length >= 3;
+  const showDropdown = showResults || showEmpty;
 
   return (
     <View
       style={[
         styles.locationField,
-        showResults && { marginBottom: dropdownHeight + 20, zIndex: 9999 },
+        showDropdown && { marginBottom: dropdownHeight + 20, zIndex: 9999 },
       ]}
     >
       <View style={styles.searchInputWrap}>
@@ -149,6 +167,23 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
             </Pressable>
           ))}
         </ScrollView>
+      ) : showEmpty ? (
+        <View
+          onLayout={(e) => setDropdownHeight(e.nativeEvent.layout.height)}
+          style={[styles.dropdown, { top: dropdownLift }]}
+        >
+          <View style={styles.emptyRow}>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="search-outline" size={16} color="#9CA3AF" />
+            </View>
+            <View style={styles.resultCol}>
+              <Text style={styles.emptyTitle}>No results found</Text>
+              <Text numberOfLines={1} style={styles.emptySubtitle}>
+                {`No matches for "${query}". Try a different search.`}
+              </Text>
+            </View>
+          </View>
+        </View>
       ) : loading ? (
         <Text style={styles.searchingText}>Searching...</Text>
       ) : null}
@@ -264,6 +299,33 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   resultSubtitle: {
+    color: "#9CA3AF",
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  emptyRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  emptyIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyTitle: {
+    color: "#6B7280",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  emptySubtitle: {
     color: "#9CA3AF",
     fontSize: 11,
     fontWeight: "500",

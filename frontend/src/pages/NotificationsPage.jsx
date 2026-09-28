@@ -1,134 +1,379 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Bell, Info, ShieldAlert, Bus, Trash2 } from "lucide-react";
-import { MobileBackButton } from "../components/Layout";
-import { clearPassengerNotifications } from "../redux/slices/passengerSlice";
+import { CheckCheck, Loader2, RefreshCw } from "lucide-react";
+import { VayyCard } from "../components/vayy";
+import api from "../lib/api";
+import { API_PATHS } from "../constants/apiPaths";
+import { useSocketSubscription } from "../hooks/useSocketSubscription";
+import {
+  clearPassengerNotifications,
+  pushPassengerNotification,
+} from "../redux/slices/passengerSlice";
+
+// Sample alerts used only when the notification API is unreachable
+// (mirrors DUMMY_ALERTS in vayy_app PassengerAlertsScreen).
+// Timestamps are computed once at module load so render stays pure.
+const MOCK_ALERTS = [
+  {
+    id: "mock-1",
+    title: "System Update",
+    message:
+      "Multi-city transit maps have been updated with new active routes.",
+    notification_type: "in_app",
+    read: false,
+    created_at: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+  },
+  {
+    id: "mock-2",
+    title: "Kalman Smoothing",
+    message:
+      "GPS smoothing has been upgraded to Kalman Filter v2 for lower jitter.",
+    notification_type: "in_app",
+    read: false,
+    created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+  },
+  {
+    id: "mock-3",
+    title: "Safety Shield Active",
+    message: "OMV Safe-Trip monitoring is fully active for all live rides.",
+    notification_type: "success",
+    read: true,
+    created_at: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+  },
+];
+
+const unwrapList = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+};
+
+const formatRelativeTime = (value, now) => {
+  if (!value) return "";
+  const time = new Date(value).getTime();
+  if (Number.isNaN(time)) return "";
+
+  const diffMs = now - time;
+  const mins = Math.max(0, Math.floor(diffMs / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min${mins !== 1 ? "s" : ""} ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days !== 1 ? "s" : ""} ago`;
+};
+
+const getType = (item) => item?.notification_type || item?.type || "info";
+
+const isRead = (item, readIds, allRead) =>
+  allRead || item?.read === true || item?.is_read === true || readIds[item.id];
+
+// getAlertColor() parity with vayy_app PassengerAlertsScreen:
+// warning / error / info keep the mobile hex values.
+const ALERT_ACCENTS = {
+  success: { dot: "bg-[#009849]", title: "text-[#009849]" },
+  warning: { dot: "bg-[#F59E0B]", title: "text-[#F59E0B]" },
+  error: { dot: "bg-[#EF4444]", title: "text-[#EF4444]" },
+  info: { dot: "bg-[#378ADD]", title: "text-[#378ADD]" },
+};
+
+const getAlertColor = (type) => ALERT_ACCENTS[type] || ALERT_ACCENTS.info;
 
 export default function NotificationsPage() {
   const dispatch = useDispatch();
-  const { user } = useSelector((state) => state.auth || {});
-  const passengerNotifications = useSelector(
-    (state) => state.passenger?.notifications || []
+  const { user, token, isAuthenticated } = useSelector(
+    (state) => state.auth || {},
+  );
+  const liveNotifications = useSelector(
+    (state) => state.passenger?.notifications || [],
   );
 
-  const handleClearAll = () => {
-    if (user?.role !== "driver") {
+  const [history, setHistory] = useState([]);
+  const [liveWs, setLiveWs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const [readIds, setReadIds] = useState({});
+  const [allRead, setAllRead] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [fallbackUserId, setFallbackUserId] = useState(null);
+  // Fixed once per mount so relative timestamps render deterministically.
+  const [now] = useState(() => Date.now());
+  const meRan = useRef(false);
+
+  const accessToken = token || localStorage.getItem("access_token");
+  const userId = user?.id || fallbackUserId;
+
+  const fetchHistory = useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const response = await api.get(API_PATHS.communication.notifications);
+      const payload = response.data?.data ?? response.data;
+      setHistory(unwrapList(payload));
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  // Pre-existing sessions can hold a user object without an id → resolve it once.
+  useEffect(() => {
+    if (meRan.current || user?.id || !isAuthenticated) return;
+    meRan.current = true;
+    api
+      .get(API_PATHS.auth.me)
+      .then((response) => {
+        const payload = response.data?.data ?? response.data;
+        if (payload?.id) setFallbackUserId(payload.id);
+      })
+      .catch(() => {});
+  }, [isAuthenticated, user?.id]);
+
+  const syncBadge = useCallback(
+    (items) => {
       dispatch(clearPassengerNotifications());
+      items
+        .filter((item) => !isRead(item, {}, false))
+        .forEach((item) => dispatch(pushPassengerNotification(item)));
+    },
+    [dispatch],
+  );
+
+  const handleWsMessage = useCallback((message) => {
+    if (!message || typeof message !== "object") return;
+    setLiveWs((previous) => {
+      if (previous.some((item) => String(item.id) === String(message.id))) {
+        return previous;
+      }
+      return [{ ...message, createdAt: Date.now() }, ...previous].slice(0, 50);
+    });
+  }, []);
+
+  useSocketSubscription({
+    key: userId ? `notifications-${userId}` : null,
+    path: userId
+      ? API_PATHS.sockets.passenger(userId, accessToken)
+      : null,
+    enabled: !!userId && !!accessToken,
+    onMessage: handleWsMessage,
+  });
+
+  const notifications = useMemo(() => {
+    const merged = [...history, ...liveWs, ...liveNotifications];
+    const seen = new Set();
+    const deduped = [];
+
+    merged.forEach((item) => {
+      const id = String(item?.id ?? `${item?.title}-${item?.created_at}`);
+      if (seen.has(id)) return;
+      seen.add(id);
+      deduped.push({ ...item, id: item?.id ?? id });
+    });
+
+    return deduped.sort((a, b) => {
+      const timeA = new Date(a.created_at || a.createdAt || 0).getTime() || 0;
+      const timeB = new Date(b.created_at || b.createdAt || 0).getTime() || 0;
+      return timeB - timeA;
+    });
+  }, [history, liveWs, liveNotifications]);
+
+  const unreadCount = useMemo(
+    () =>
+      notifications.filter((item) => !isRead(item, readIds, allRead)).length,
+    [notifications, readIds, allRead],
+  );
+
+  const usingMocks = error && notifications.length === 0;
+  const visible = usingMocks ? MOCK_ALERTS : notifications;
+
+  useEffect(() => {
+    if (loading || error || history.length === 0) return;
+    syncBadge(notifications);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, error, history.length]);
+
+  const handleMarkRead = async (item) => {
+    if (isRead(item, readIds, allRead)) return;
+
+    if (String(item.id).startsWith("mock-")) {
+      setReadIds((previous) => ({ ...previous, [item.id]: true }));
+      return;
+    }
+
+    setActionError("");
+    try {
+      await api.patch(API_PATHS.communication.notificationRead(item.id));
+      const updated = { ...item, read: true };
+      setReadIds((previous) => ({ ...previous, [item.id]: true }));
+      setHistory((previous) =>
+        previous.map((entry) =>
+          String(entry.id) === String(item.id) ? updated : entry,
+        ),
+      );
+      setLiveWs((previous) =>
+        previous.map((entry) =>
+          String(entry.id) === String(item.id) ? updated : entry,
+        ),
+      );
+      syncBadge(
+        notifications.map((entry) =>
+          String(entry.id) === String(item.id) ? updated : entry,
+        ),
+      );
+    } catch {
+      setActionError("Couldn't mark that alert as read. Try again.");
     }
   };
 
-  const mockAlerts = useMemo(() => [
-    {
-      id: "mock-1",
-      createdAt: Date.now() - 1000 * 60 * 5,
-      title: "System Update",
-      message: "Multi-city transit maps have been updated with new active routes.",
-      type: "system",
-    },
-    {
-      id: "mock-2",
-      createdAt: Date.now() - 1000 * 60 * 30,
-      title: "Kalman Smoothing",
-      message: "GPS smoothing has been upgraded to Kalman Filter v2 for lower jitter.",
-      type: "info",
-    },
-    {
-      id: "mock-3",
-      createdAt: Date.now() - 1000 * 60 * 120,
-      title: "Safety Shield Active",
-      message: "Vayy Safe-Trip monitoring is fully active for all live transits.",
-      type: "safety",
-    },
-  ], []);
-
-  const allNotifications = useMemo(() => [...passengerNotifications, ...mockAlerts], [passengerNotifications, mockAlerts]);
-
-  const getAlertIcon = (type) => {
-    switch (type) {
-      case "trip_started":
-      case "bus_nearby":
-        return <Bus size={20} className="text-[#009849]" />;
-      case "proximity_alert":
-      case "safety":
-        return <ShieldAlert size={20} className="text-amber-500" />;
-      case "system":
-        return <Info size={20} className="text-[#00E676]" />;
-      default:
-        return <Bell size={20} className="text-gray-500" />;
-    }
-  };
-
-  const getAlertBg = (type) => {
-    switch (type) {
-      case "trip_started":
-      case "bus_nearby":
-        return "bg-green-50 border-green-100";
-      case "proximity_alert":
-      case "safety":
-        return "bg-amber-50 border-amber-100";
-      case "system":
-        return "bg-emerald-50 border-emerald-100";
-      default:
-        return "bg-slate-50 border-slate-100";
+  const handleMarkAllRead = async () => {
+    if (working || unreadCount === 0) return;
+    setWorking(true);
+    setActionError("");
+    try {
+      await api.patch(API_PATHS.communication.notificationReadAll);
+      setAllRead(true);
+      dispatch(clearPassengerNotifications());
+    } catch {
+      setActionError("Couldn't mark all alerts as read. Try again.");
+    } finally {
+      setWorking(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans pb-24 lg:pb-0">
-      <MobileBackButton />
-
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="mb-8 flex items-center justify-between mt-12 lg:mt-0">
-          <div>
-            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-              Transit Alerts
+    <div className="min-h-screen bg-brand-canvas font-sans pb-6">
+      <div className="mx-auto w-full max-w-2xl px-4 pt-6 lg:max-w-3xl lg:pt-8">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-[28px] font-black leading-tight text-[#111827]">
+              Notifications
             </h1>
-            <p className="text-gray-500 mt-1 text-sm font-medium">
-              Real-time updates and notification history
-            </p>
+            {unreadCount > 0 && (
+              <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-[#009849] px-2 text-xs font-extrabold text-white">
+                {unreadCount}
+              </span>
+            )}
           </div>
-          
-          {passengerNotifications.length > 0 && (
+
+          {unreadCount > 0 && (
             <button
-              onClick={handleClearAll}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-150 text-xs font-bold text-red-500 hover:bg-red-50 transition-colors bg-white"
+              type="button"
+              onClick={handleMarkAllRead}
+              disabled={working}
+              className="flex items-center gap-1.5 rounded-xl border border-[#E5E7EB] bg-white px-3 py-1.5 text-xs font-bold text-[#009849] transition-colors hover:bg-[#E0F5E8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#009849] disabled:opacity-60"
             >
-              <Trash2 size={13} />
-              Clear
+              {working ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <CheckCheck size={13} />
+              )}
+              Mark all read
             </button>
           )}
         </div>
 
-        <div className="space-y-4">
-          {allNotifications.map((alert) => (
-            <div
-              key={alert.id}
-              className={`p-5 rounded-[18px] border bg-white shadow-sm flex items-start gap-4 transition-all duration-200 hover:shadow-md ${getAlertBg(
-                alert.type
-              )}`}
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm border border-slate-100">
-                {getAlertIcon(alert.type)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-extrabold text-gray-900 truncate">
-                    {alert.title || "Notification"}
-                  </h3>
-                  <span className="text-[11px] font-bold text-gray-400 shrink-0">
-                    {new Date(alert.createdAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs leading-5 font-semibold text-gray-600">
-                  {alert.message || alert.body}
-                </p>
-              </div>
+        {actionError && (
+          <div
+            role="alert"
+            className="mb-4 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm font-medium text-[#EF4444]"
+          >
+            {actionError}
+          </div>
+        )}
+
+        {error && !usingMocks && (
+          <div className="mb-4 rounded-xl border border-[#FDE68A] bg-[#FEF3C7] px-4 py-3 text-sm font-medium text-[#92400E]">
+            <div className="flex items-center justify-between gap-3">
+              <span>Couldn&apos;t reach the notification service.</span>
+              <button
+                type="button"
+                onClick={fetchHistory}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#FDE68A] bg-white px-3 py-1.5 text-xs font-bold text-[#92400E] transition-colors hover:bg-[#FEF3C7]"
+              >
+                <RefreshCw size={12} />
+                Retry
+              </button>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
+
+        {usingMocks && (
+          <div className="mb-4 rounded-xl border border-[#FDE68A] bg-[#FEF3C7] px-4 py-3 text-xs font-semibold text-[#92400E]">
+            Showing sample alerts while notifications are unavailable.
+          </div>
+        )}
+
+        {loading && history.length === 0 && !usingMocks ? (
+          <div className="flex flex-col items-center justify-center py-24 text-[#9CA3AF]">
+            <Loader2 size={32} className="animate-spin text-[#009849]" />
+            <p className="mt-4 text-sm font-semibold">Loading notifications…</p>
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="flex flex-col items-center gap-1 py-16 text-center">
+            <p className="text-[15px] text-[#6B7280]">No new alerts</p>
+            <p className="text-[13px] text-[#6B7280]">
+              Your notifications will appear here
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {visible.map((alert) => {
+              const accent = getAlertColor(getType(alert));
+              const read = isRead(alert, readIds, allRead);
+              return (
+                <button
+                  key={String(alert.id)}
+                  type="button"
+                  onClick={() => handleMarkRead(alert)}
+                  disabled={read}
+                  className="block w-full rounded-vayy text-left transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#009849] disabled:cursor-default disabled:hover:opacity-100"
+                >
+                  <VayyCard>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 flex-1 items-center">
+                        {!read && (
+                          <span
+                            aria-hidden="true"
+                            className={`mr-1.5 h-2 w-2 shrink-0 rounded-full ${accent.dot}`}
+                          />
+                        )}
+                        <h3
+                          className={`min-w-0 flex-1 text-base ${
+                            read
+                              ? "font-semibold text-[#374151]"
+                              : `font-extrabold ${accent.title}`
+                          }`}
+                        >
+                          {alert.title || "Notification"}
+                        </h3>
+                      </div>
+                      <span className="shrink-0 text-xs text-[#6B7280]">
+                        {formatRelativeTime(
+                          alert.created_at || alert.createdAt,
+                          now,
+                        )}
+                      </span>
+                    </div>
+                    <p
+                      className={`mt-1 text-sm leading-5 text-[#374151] ${
+                        read ? "opacity-75" : ""
+                      }`}
+                    >
+                      {alert.message || alert.body}
+                    </p>
+                  </VayyCard>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

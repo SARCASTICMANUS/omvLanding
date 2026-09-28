@@ -188,7 +188,7 @@ export default function DriverAutoHomeScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <StatusBar backgroundColor="#fff" style="dark" />
       <View style={styles.flex}>
-        <ScrollView bounces={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+        <ScrollView bounces={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
           {/* ─── Hero ─── */}
           <View style={styles.hero}>
@@ -235,7 +235,7 @@ export default function DriverAutoHomeScreen({ navigation }) {
           {/* ─── Search Panel ─── */}
           <View style={styles.panel}>
             <LocationSearch
-              key={`p-${pickup?.display_name || pickup?.name || "e"}`}
+              isPickup
               label="Start Point"
               onSelect={setPickup}
               placeholder="Search starting location"
@@ -247,7 +247,6 @@ export default function DriverAutoHomeScreen({ navigation }) {
             </TouchableOpacity>
 
             <LocationSearch
-              key={`d-${destination?.display_name || destination?.name || "e"}`}
               dropdownLift={90}
               label="Destination"
               onSelect={setDestination}

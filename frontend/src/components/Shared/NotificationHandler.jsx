@@ -1,79 +1,74 @@
 // VAYY | src/components/Shared/NotificationHandler.jsx
-import React, { useEffect, useRef } from "react";
-import { useSelector } from "react-redux";
-import { getWsUrl } from "../../lib/api";
+// Global real-time notification listener. Shares its socket with
+// NotificationsPage (same `notifications-<userId>` key) so only one
+// WebSocket is opened for the authenticated user.
+import { useEffect, useRef, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import api from "../../lib/api";
+import { API_PATHS } from "../../constants/apiPaths";
+import { useSocketSubscription } from "../../hooks/useSocketSubscription";
+import { pushPassengerNotification } from "../../redux/slices/passengerSlice";
 import notificationService from "../../services/notificationService";
 
+const normalizeNotification = (data) => {
+  if (!data?.title || !data?.message) return null;
+
+  return {
+    id: data.id,
+    title: data.title,
+    message: data.message,
+    notification_type: data.notification_type || data.type || "in_app",
+    created_at: data.created_at || new Date().toISOString(),
+    metadata: data.metadata,
+    read: false,
+  };
+};
+
 const NotificationHandler = () => {
-  const { user } = useSelector((state) => state.auth);
-  const ws = useRef(null);
+  const dispatch = useDispatch();
+  const { user, token, isAuthenticated } = useSelector((state) => state.auth);
+  const [fallbackUserId, setFallbackUserId] = useState(null);
+  const meRan = useRef(false);
+
+  const accessToken = token || localStorage.getItem("access_token");
+  const userId = user?.id || fallbackUserId;
+
+  // Sessions restored before ids were persisted hold a user without `id`.
+  useEffect(() => {
+    if (meRan.current || user?.id || !isAuthenticated) return;
+    meRan.current = true;
+    api
+      .get(API_PATHS.auth.me)
+      .then((response) => {
+        const payload = response.data?.data ?? response.data;
+        if (payload?.id) setFallbackUserId(payload.id);
+      })
+      .catch(() => {});
+  }, [isAuthenticated, user?.id]);
 
   useEffect(() => {
-    if (!user) return;
+    notificationService.requestPermission();
+  }, []);
 
-    // Connect to a global user group for alerts
-    const token = localStorage.getItem("access_token");
-    // We use a generic role since connect() handles user group joining based on authenticated scope
-    const wsUrl = getWsUrl(`/ws/public/global/${user.role}/alerts/?token=${token}`);
-    
-    const connect = () => {
-      ws.current = new WebSocket(wsUrl);
+  const handleWsMessage = (message) => {
+    const notification = normalizeNotification(message);
+    if (!notification) return;
 
-      ws.current.onopen = () => {
-        console.log("[Notifications] Connected to alert stream");
-        notificationService.requestPermission();
-      };
+    dispatch(pushPassengerNotification(notification));
+    notificationService.notify(notification.title, {
+      body: notification.message,
+      tag: `notification-${notification.id || notification.created_at}`,
+    });
+  };
 
-      ws.current.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          
-          if (data.type === "trip_started") {
-            notificationService.notify("Trip Started", {
-              body: data.message,
-              tag: "trip-started"
-            });
-          } else if (data.type === "proximity_alert") {
-            notificationService.notify("Bus Nearby!", {
-              body: data.message,
-              tag: `proximity-${data.trip_id}`
-            });
-          } else if (data.type === "manifest_update" && user.role === "driver") {
-             // Optional: notify driver of manifest changes if app is in background
-             if (document.hidden) {
-                notificationService.notify("Manifest Updated", {
-                  body: "Your trip manifest has new updates.",
-                  tag: "manifest-update"
-                });
-             }
-          }
-        } catch (err) {
-          console.error("[Notifications] Error processing message:", err);
-        }
-      };
+  useSocketSubscription({
+    key: userId ? `notifications-${userId}` : null,
+    path: userId ? API_PATHS.sockets.passenger(userId, accessToken) : null,
+    enabled: !!userId && !!accessToken,
+    onMessage: handleWsMessage,
+  });
 
-      ws.current.onclose = () => {
-        console.log("[Notifications] Reconnecting in 5s...");
-        setTimeout(connect, 5000);
-      };
-
-      ws.current.onerror = (err) => {
-        console.error("[Notifications] WebSocket error:", err);
-        ws.current.close();
-      };
-    };
-
-    connect();
-
-    return () => {
-      if (ws.current) {
-        ws.current.onclose = null;
-        ws.current.close();
-      }
-    };
-  }, [user]);
-
-  return null; // This component doesn't render anything
+  return null;
 };
 
 export default NotificationHandler;

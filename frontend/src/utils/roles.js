@@ -8,6 +8,6 @@ export const normalizeRole = (role) =>
 
 export const getRedirectPathByRole = (role) => {
   const normalizedRole = normalizeRole(role);
-  return ROLE_ROUTES[normalizedRole] || APP_ROUTES.passengerLive;
+  return ROLE_ROUTES[normalizedRole] || APP_ROUTES.root;
 };
 
