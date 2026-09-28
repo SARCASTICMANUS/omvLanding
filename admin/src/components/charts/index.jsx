@@ -228,11 +228,25 @@ export function LineChart({ data, labelKey, valueKey, color = "var(--accent-blue
   );
 }
 
-export function DonutChart({ data, labelKey, valueKey, colors, centerLabel, centerValue }) {
+// `total` is the true size of the population this chart is a slice of. Without
+// it, percentages are computed against the sum of the rows handed in, so any
+// caller that truncates (the API caps several breakdowns) silently renders the
+// visible rows as 100% and drops the remainder off the chart entirely. Pass
+// `total` and the difference becomes an explicit "Other / Unknown" slice.
+export function DonutChart({ data, labelKey, valueKey, colors, centerLabel, centerValue, total, otherLabel = "Other / Unknown" }) {
   if (!data || data.length === 0) {
     return <div className="text-center py-8 text-slate-500 text-sm">No data</div>;
   }
-  const total = data.reduce((s, d) => s + (d[valueKey] || 0), 0);
+  const shownTotal = data.reduce((s, d) => s + (d[valueKey] || 0), 0);
+  const hasRemainder = typeof total === "number" && total > shownTotal;
+  const slices = hasRemainder
+    ? [...data, { [labelKey]: otherLabel, [valueKey]: total - shownTotal, isOther: true }]
+    : data;
+  // Percentage denominator: the real total when known, otherwise the visible rows.
+  const denom = hasRemainder ? total : shownTotal;
+  const grandTotal = denom || 1;
+  const OTHER_COLOR = "#94A3B8";
+  const sliceColor = (d, i) => (d.isOther ? OTHER_COLOR : colors[i % colors.length]);
   let cum = 0;
 
   return (
@@ -240,8 +254,8 @@ export function DonutChart({ data, labelKey, valueKey, colors, centerLabel, cent
       <ChartWash color={colors[0] || getBluePrimary()} />
       <div className="relative z-10">
         <svg viewBox="0 0 36 36" className="h-28 w-28 -rotate-90">
-          {data.map((d, i) => {
-            const pct = total > 0 ? ((d[valueKey] || 0) / total) * 100 : 0;
+          {slices.map((d, i) => {
+            const pct = ((d[valueKey] || 0) / grandTotal) * 100;
             const offset = cum;
             cum += pct;
             return (
@@ -251,7 +265,7 @@ export function DonutChart({ data, labelKey, valueKey, colors, centerLabel, cent
                 cy="18"
                 r="15.4"
                 fill="none"
-                stroke={colors[i % colors.length]}
+                stroke={sliceColor(d, i)}
                 strokeWidth="3.4"
                 strokeLinecap="round"
                 strokeDasharray={`${Math.max(pct - 1, 0.5)} ${100 - Math.max(pct - 1, 0.5)}`}
@@ -262,14 +276,14 @@ export function DonutChart({ data, labelKey, valueKey, colors, centerLabel, cent
         </svg>
         {centerLabel && (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-lg font-black text-slate-800">{centerValue ?? "\u2014"}</span>
+            <span className="text-lg font-black text-slate-800">{(centerValue ?? denom)?.toLocaleString() ?? "\u2014"}</span>
             <span className="glass-label text-[9px]">{centerLabel}</span>
           </div>
         )}
       </div>
       <div className="relative z-10 space-y-2">
-        {data.map((d, i) => {
-          const segColor = colors[i % colors.length];
+        {slices.map((d, i) => {
+          const segColor = sliceColor(d, i);
           const isVarColor = typeof segColor === "string" && segColor.startsWith("var(");
           return (
             <div key={i} className="flex items-center gap-2.5">

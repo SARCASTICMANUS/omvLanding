@@ -246,7 +246,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
       const clampedZoom = Math.max(1, Math.min(nextZoom, 22));
       setCurrentZoomLevel(clampedZoom);
 
-      cameraRef.current.setStop({
+      cameraRef.current?.setStop({
         zoom: clampedZoom,
         duration: 250,
       });
@@ -276,13 +276,13 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
         });
-        cameraRef.current.setStop({
+        cameraRef.current?.setStop({
           center: [loc.coords.longitude, loc.coords.latitude],
           zoom: 16,
           duration: 1000,
         });
       } else {
-        cameraRef.current.setStop({
+        cameraRef.current?.setStop({
           center: initialCenter,
           zoom: 15,
           duration: 800,

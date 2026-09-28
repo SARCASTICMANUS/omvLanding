@@ -93,5 +93,24 @@ class Command(BaseCommand):
             logger.error(f"Invalid JSON in location message: {body}")
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
         except Exception as e:
-            logger.exception(f"Failed to process location message: {e}")
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            # A message that fails the same way twice is a poison message, not a
+            # transient fault. This handler used to requeue unconditionally, so
+            # one bad message (a Celery outage, an unserialisable payload, a
+            # permanent downstream error) was redelivered forever at 100% CPU and
+            # blocked every legitimate GPS update behind it in the same queue.
+            # method.redelivered is set by the broker on the second delivery, so
+            # cap the retry and let the queue's DLX route it to dead.letter.
+            if method.redelivered:
+                logger.error(
+                    "Location message failed again after requeue, dead-lettering "
+                    "(routing_key=%s): %s",
+                    method.routing_key, e,
+                )
+                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            else:
+                logger.warning(
+                    "Failed to process location message, requeueing once "
+                    "(routing_key=%s): %s",
+                    method.routing_key, e,
+                )
+                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)

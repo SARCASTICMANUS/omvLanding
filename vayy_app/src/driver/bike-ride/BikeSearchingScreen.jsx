@@ -1,28 +1,57 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Location from "expo-location";
 import VayyMap, { UserLocation } from "../../shared/components/VayyMap";
-import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import COLORS from "../../shared/constants/colors";
 
-export default function BikeSearchingScreen({ navigation, route }) {
-  const [isMapReady, setIsMapReady] = useState(false);
+export default function BikeSearchingScreen({ navigation }) {
+  const [mapCenter, setMapCenter] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted" || cancelled) return;
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          timeout: 5000,
+        });
+        if (cancelled || !pos?.coords) return;
+        setMapCenter({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        });
+      } catch (error) {
+        console.warn("Failed to get driver location", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <View style={styles.root}>
       <View style={styles.mapArea}>
-        <VayyMap
-          style={styles.map}
-          initialViewState={{
-            center: [DEFAULT_CENTER.longitude, DEFAULT_CENTER.latitude],
-            zoom: 14,
-          }}
-          onDidFinishLoadingMap={() => setIsMapReady(true)}
-        >
-          <UserLocation />
-        </VayyMap>
+        {!mapCenter ? (
+          <View style={styles.gpsLoading}>
+            <Text style={styles.gpsLoadingText}>Getting your location...</Text>
+          </View>
+        ) : (
+          <VayyMap
+            style={styles.map}
+            initialViewState={{
+              center: [mapCenter.longitude, mapCenter.latitude],
+              zoom: 14,
+            }}
+          >
+            <UserLocation visible={true} showsUserHeadingIndicator={true} />
+          </VayyMap>
+        )}
       </View>
 
       <SafeAreaView style={styles.overlay} pointerEvents="box-none">
@@ -60,6 +89,17 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#000" },
   mapArea: { ...StyleSheet.absoluteFillObject },
   map: { flex: 1 },
+  gpsLoading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#000",
+  },
+  gpsLoadingText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
   overlay: { ...StyleSheet.absoluteFillObject, justifyContent: "space-between" },
   header: {
     flexDirection: "row",
@@ -118,10 +158,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.danger,
+    borderColor: COLORS.error,
   },
   cancelText: {
-    color: COLORS.danger,
+    color: COLORS.error,
     fontWeight: "900",
     fontSize: 15,
   },

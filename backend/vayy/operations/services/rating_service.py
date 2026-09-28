@@ -1,6 +1,7 @@
 import logging
 from django.db import transaction
 from django.db.models import Avg
+from rest_framework.exceptions import PermissionDenied
 
 from accounts.models import User, PublicDriverProfile
 from common.constants import TRIP_STATUS_COMPLETED
@@ -21,9 +22,19 @@ class RatingService:
         Submits a rating for a completed trip and updates driver stats.
         """
         trip = ActiveTrip.objects.get(id=trip_id)
-        
+
         if trip.status != TRIP_STATUS_COMPLETED:
             raise ValueError("Only completed trips can be rated")
+
+        # The trip id arrives in the request body, not the URL, so ownership
+        # cannot be enforced by a permission class here. Without this check any
+        # passenger could rate any completed trip, which both misattributes the
+        # review to a driver they never rode with and burns the trip's single
+        # rating, locking out the passenger who was actually there.
+        if not trip.boarding_requests.filter(passenger_id=passenger.id).exists():
+            raise PermissionDenied(
+                "You can only rate a trip you were a passenger on"
+            )
 
         if hasattr(trip, "rating_record"): # Check if already rated
              raise ValueError("Trip has already been rated")

@@ -48,6 +48,40 @@ const readToken = async () => {
   return token || accessToken;
 };
 
+// Single in-flight refresh. Django runs with ROTATE_REFRESH_TOKENS +
+// BLACKLIST_AFTER_ROTATION, so the refresh token we just spent is dead the
+// moment the server answers. Without this lock, N parallel 401s would each
+// POST the same now-blacklisted token; the first succeeds and rotates, the
+// rest 401 and drag the user to the login screen. Callers await this promise
+// instead of firing their own.
+let refreshPromise = null;
+
+const performRefresh = async () => {
+  const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.refreshToken);
+  if (!refreshToken) throw new Error("No refresh token stored");
+
+  const res = await axios.post(`${API_URL}${AUTH.tokenRefresh}`, { refresh: refreshToken });
+
+  const nextAccess = res.data.access || res.data.token;
+  if (!nextAccess) throw new Error("Refresh response contained no access token");
+
+  // SimpleJWT returns a NEW refresh token on every rotation. Persisting it is
+  // mandatory — the previous one is already blacklisted.
+  const nextRefresh = res.data.refresh || null;
+
+  const writes = [
+    AsyncStorage.setItem(STORAGE_KEYS.accessToken, nextAccess),
+    AsyncStorage.setItem(STORAGE_KEYS.token, nextAccess),
+  ];
+  if (nextRefresh) {
+    writes.push(AsyncStorage.setItem(STORAGE_KEYS.refreshToken, nextRefresh));
+  }
+  await Promise.all(writes);
+
+  authHandlers.onRefreshToken?.({ token: nextAccess, refreshToken: nextRefresh });
+  return nextAccess;
+};
+
 api.interceptors.request.use(
   async (config) => {
     const token = await readToken();
@@ -81,30 +115,31 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
-      const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.refreshToken);
 
-      if (!refreshToken) {
-        return Promise.reject(error);
+      // Join an in-flight refresh rather than starting a competing one.
+      if (!refreshPromise) {
+        refreshPromise = performRefresh()
+          .catch((refreshError) => {
+            // Refresh is unrecoverable — the stored token is spent or revoked.
+            // `logout` clears token/accessToken/refreshToken/user/pendingEmail.
+            // This sits on the shared promise so a burst of concurrent 401s
+            // logs the user out once, not once per failed request.
+            authHandlers.onUnauthorized?.();
+            throw refreshError;
+          })
+          .finally(() => {
+            refreshPromise = null;
+          });
       }
 
       try {
-        const res = await axios.post(`${API_URL}${AUTH.tokenRefresh}`, {
-          refresh: refreshToken,
-        });
-        const nextToken = res.data.access || res.data.token;
-
-        if (nextToken) {
-          await AsyncStorage.setItem(STORAGE_KEYS.accessToken, nextToken);
-          await AsyncStorage.setItem(STORAGE_KEYS.token, nextToken);
-          authHandlers.onRefreshToken?.({ token: nextToken });
-          originalRequest.headers.Authorization = `Bearer ${nextToken}`;
-          return api(originalRequest);
-        }
+        const nextToken = await refreshPromise;
+        originalRequest.headers.Authorization = `Bearer ${nextToken}`;
+        return api(originalRequest);
       } catch {
-        // Refresh failed — fall through to logout
+        // Reject with the original 401 so callers see the real failure, not the
+        // refresh error. The shared promise above has already logged out.
       }
-
-      authHandlers.onUnauthorized?.();
     }
 
     return Promise.reject(error);
@@ -124,6 +159,16 @@ export const normalizeApiError = (error, fallbackMessage) => {
     }
   }
   return new Error(fallbackMessage || "An unexpected error occurred");
+};
+
+// DRF list endpoints answer with a paginated envelope, and the admin viewsets
+// wrap that again in { success, data }. Reduce any of those shapes to the array
+// itself so callers can .map without tripping over a nested object.
+export const unwrapList = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (payload?.data !== undefined) return unwrapList(payload.data);
+  return [];
 };
 
 export { getWsUrl } from "./wsUrl";

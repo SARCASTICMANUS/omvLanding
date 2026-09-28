@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 
 from accounts.permissions import IsDriver, IsPassenger
 from operations.models import VehicleState, Vehicle, ActiveTrip, BoardingRequest
@@ -59,13 +59,27 @@ class TripTrackingAPIView(APIView):
         resp = Response(HybridLogSerializer(logs, many=True).data)
         return resp
 
+class GPSDailyRateThrottle(UserRateThrottle):
+    """
+    Per-user/day ceiling for GPS ingestion.
+
+    A throttle scope maps to exactly one rate, so the 1 Hz per-minute budget
+    and the all-day ceiling cannot both live on the "gps" scope. This class
+    applies the "gps_day" rate against the authenticated user's PK, giving the
+    stream a daily bound without loosening the global "user" rate.
+    """
+
+    scope = "gps_day"
+
+
 class GPSIngestAPIView(APIView):
     """
     POST /tracking/gps
     Raw GPS ingestion endpoint for drivers.
-    High-volume real-time endpoint - uses scoped rate (gps: 1000/min).
+    High-volume real-time endpoint - scoped per-minute ("gps") plus a
+    per-user/day ceiling ("gps_day").
     """
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [ScopedRateThrottle, GPSDailyRateThrottle]
     throttle_scope = "gps"
     # permission_classes = [IsAuthenticated, IsDriver]
     # permission_classes = [IsAuthenticated]

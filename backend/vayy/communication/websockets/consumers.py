@@ -1,8 +1,8 @@
 import json
 import logging
-from urllib.parse import parse_qs
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
+from common.websockets.auth import subprotocol_to_echo, token_from_scope
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 logger = logging.getLogger(__name__)
@@ -17,10 +17,9 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     that the authenticated user matches the user_id in the URL.
     """
     async def connect(self):
-        # Parse token from query string properly
-        query_string = self.scope.get('query_string', b'').decode()
-        params = parse_qs(query_string)
-        token = params.get('token', [None])[0]
+        # Shared transport: Sec-WebSocket-Protocol first, legacy "?token="
+        # only while WS_ALLOW_QUERY_STRING_TOKEN is on.
+        token, _legacy = token_from_scope(self.scope)
 
         user = await self._authenticate_token(token) if token else None
         if not user:
@@ -35,6 +34,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             return
 
         self.scope['user'] = user
+        self.user = user
         self.group_name = f"notifications_{self.user_id}"
 
         # Join notification group
@@ -43,7 +43,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             self.channel_name
         )
 
-        await self.accept()
+        await self.accept(subprotocol=subprotocol_to_echo(self.scope))
         logger.info(f"WebSocket connected to {self.group_name}")
 
     @database_sync_to_async

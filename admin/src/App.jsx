@@ -17,7 +17,8 @@ const KPIPage = lazy(() => import("./pages/KPI"));
 const Stops = lazy(() => import("./pages/Stops"));
 // const TripSchedules = lazy(() => import("./pages/TripSchedules"));
 const Users = lazy(() => import("./pages/Users"));
-const Zones = lazy(() => import("./pages/Zones"));
+// const Zones = lazy(() => import("./pages/Zones"));
+const FareConfigurations = lazy(() => import("./pages/FareConfigurations"));
 
 const ADMIN_PATH = "/zxcv";
 
@@ -44,7 +45,8 @@ function AdminLayout({ onLogout }) {
     { id: "route-explorer", label: "Route Explorer", description: "Routes visualized on the interactive map" },
     { id: "routes", label: "Routes", description: "Route library, creation and imports" },
     { id: "stops", label: "Stops", description: "Stops across every city" },
-    { id: "zones", label: "Zone", description: "Zone-based fares and scheduling" },
+    // { id: "zones", label: "Zone", description: "Zone-based fares and scheduling" },
+    { id: "fare-configurations", label: "Fare Configurations", description: "Configure per-vehicle-type fares" },
     // { id: "schedules", label: "Schedules" },
     { id: "drivers", label: "Drivers", description: "Driver onboarding and verification" },
     { id: "users", label: "Users", description: "Passengers and drivers directory" },
@@ -107,7 +109,8 @@ function AdminLayout({ onLogout }) {
               {activeTab === "route-explorer" && <RouteExplorerPage />}
               {activeTab === "routes" && <RoutesPage />}
               {activeTab === "stops" && <Stops />}
-              {activeTab === "zones" && <Zones />}
+              {/* {activeTab === "zones" && <Zones />} */}
+              {activeTab === "fare-configurations" && <FareConfigurations />}
               {/* {activeTab === "schedules" && <TripSchedules />} */}
               {activeTab === "drivers" && <DriverVerification />}
               {activeTab === "users" && <Users />}

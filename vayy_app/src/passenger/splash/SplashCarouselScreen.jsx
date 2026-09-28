@@ -129,9 +129,10 @@ function Slide({ item, index }) {
   );
 }
 
-export default function SplashCarouselScreen({ navigation }) {
+export default function SplashCarouselScreen({ navigation, route }) {
   const flatRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const nextRoute = route?.params?.next || "AuthNavigator";
 
   const onScroll = useCallback((e) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / width);
@@ -142,27 +143,17 @@ export default function SplashCarouselScreen({ navigation }) {
     if (currentIndex < SLIDES.length - 1) {
       flatRef.current?.scrollToIndex({ index: currentIndex + 1 });
     } else {
-      handleDone();
+      finish();
     }
   };
 
-  const handleDone = async () => {
+  // First launch only: flag the install so AppNavigator never routes here again.
+  const finish = async () => {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.onboardingDone, "true");
     } catch {}
     try {
-      navigation.replace("AuthNavigator");
-    } catch {
-      navigation.goBack();
-    }
-  };
-
-  const handleSkip = async () => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.onboardingDone, "true");
-    } catch {}
-    try {
-      navigation.replace("AuthNavigator");
+      navigation.reset({ index: 0, routes: [{ name: nextRoute }] });
     } catch {
       navigation.goBack();
     }
@@ -174,7 +165,7 @@ export default function SplashCarouselScreen({ navigation }) {
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.skipBtn} onPress={finish} activeOpacity={0.7}>
         <Text style={styles.skipText}>Skip</Text>
       </TouchableOpacity>
 

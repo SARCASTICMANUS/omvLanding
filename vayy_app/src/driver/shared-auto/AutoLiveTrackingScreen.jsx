@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useCallback } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -23,6 +23,8 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
   const [liveNextStop, setLiveNextStop] = useState(route?.params?.nextStop || tripData.nextStop || "");
   const [liveProgress, setLiveProgress] = useState(Number(route?.params?.routeProgress) || tripData.routeProgress || 0);
   const dispatchId = route?.params?.dispatchId || tripData.id;
+  const otp = route?.params?.otp || tripData.otp || "";
+  const [endingTrip, setEndingTrip] = useState(false);
   const [liveDistance, setLiveDistance] = useState(route?.params?.distance || tripData.distance || "");
   const [liveDuration, setLiveDuration] = useState(route?.params?.duration || tripData.duration || "");
   const initialLat = route?.params?.latitude || tripData.latitude || DEFAULT_CENTER.latitude;
@@ -51,12 +53,26 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
   });
 
   const handleEndTrip = useCallback(async () => {
-    if (dispatchId) {
-      try { await dispatchRedux(startDispatchTrip(dispatchId)).unwrap(); } catch (_e) { /* already active */ }
-      try { await dispatchRedux(completeDispatch(dispatchId)).unwrap(); } catch (_e) { /* ok */ }
+    if (!dispatchId) {
+      Alert.alert("Trip not found", "This ride has no dispatch id, so it cannot be ended.", [{ text: "OK" }]);
+      return;
+    }
+    if (endingTrip) return;
+    setEndingTrip(true);
+    try {
+      // startDispatchTrip expects { tripId, otp } — a bare id builds
+      // /api/operations/dispatch/undefined/start/ and always 404s.
+      await dispatchRedux(startDispatchTrip({ tripId: dispatchId, otp })).unwrap();
+      await dispatchRedux(completeDispatch(dispatchId)).unwrap();
+    } catch (error) {
+      const message = error?.message || "Could not end the trip. Please try again.";
+      Alert.alert("Could not end trip", message, [{ text: "OK" }]);
+      setEndingTrip(false);
+      return;
     }
     navigation.navigate("AutoTripComplete", {
       dispatchId,
+      mode,
       tripData,
       buddy: {
         name: passengerName,
@@ -66,11 +82,12 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
         distance: liveDistance,
         duration: liveDuration,
         fare: earning,
+        rating: route?.params?.rating,
       },
       summary: { earnings: earning, distance: liveDistance, duration: liveDuration },
       stats: { earnings: earning, distance: liveDistance, duration: liveDuration, passengers: livePassengers, stops: route?.params?.stops, rating: route?.params?.rating },
     });
-  }, [dispatchId, dispatchRedux, navigation, tripData, liveDistance, liveDuration, earning, livePassengers, route?.params?.stops, route?.params?.rating]);
+  }, [dispatchId, otp, endingTrip, mode, dispatchRedux, navigation, tripData, passengerName, pickup, destination, liveDistance, liveDuration, earning, livePassengers, route?.params?.stops, route?.params?.rating]);
 
   return (
     <View style={styles.root}>
@@ -130,12 +147,13 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
         </View>
 
         <TouchableOpacity
-          style={[styles.endBtn, { backgroundColor: colors.danger }]}
+          style={[styles.endBtn, { backgroundColor: colors.danger }, endingTrip && styles.endBtnDisabled]}
           onPress={handleEndTrip}
+          disabled={endingTrip}
           activeOpacity={0.85}
         >
           <Ionicons name="stop-circle" size={20} color="#fff" />
-          <Text style={styles.endBtnText}>End Trip</Text>
+          <Text style={styles.endBtnText}>{endingTrip ? "Ending..." : "End Trip"}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -262,6 +280,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
+  },
+  endBtnDisabled: {
+    opacity: 0.6,
   },
   endBtnText: {
     fontSize: 16,

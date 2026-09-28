@@ -24,9 +24,6 @@ from operations.api.views import (
     DispatchArrivedAPIView,
     DispatchStartAPIView,
     DispatchCompleteAPIView,
-    DriverInitiateRideAPIView,
-    PassengerAcceptRideAPIView,
-    PassengerRejectRideAPIView,
     BroadcastAcceptAPIView,
     BroadcastRejectAPIView,
     BroadcastCancelAPIView,
@@ -35,6 +32,7 @@ from operations.api.views import (
     AdminDriverVerifyAPIView,
     AdminDocumentVerifyAPIView,
     AdminDocumentFileAPIView,
+    FareConfigurationListCreateAPIView,
 )
 
 urlpatterns = [
@@ -204,5 +202,10 @@ urlpatterns = [
         "admin/documents/<uuid:doc_id>/file/",
         AdminDocumentFileAPIView.as_view(),
         name="admin-document-file",
+    ),
+    path(
+        "fare-configurations/",
+        FareConfigurationListCreateAPIView.as_view(),
+        name="fare-configuration-list-create",
     ),
 ]

@@ -1,44 +1,64 @@
 """
 Centralized fare calculation service.
 
-Single source of truth for ride fuel shares across the platform so the fuel share a
-passenger is quoted (estimate), the fuel share shown on a route search, and the
-fuel share charged on completion are always identical.
+Single source of truth for ride fares across the platform so the fare an
+passenger is quoted (estimate), the fare shown on a route search, and the
+fare charged on completion are always identical.
 
-Formula: fare = base_fare + (distance_km * per_km_rate)
+Fare configuration is now stored in the ``FareConfiguration`` model (one row
+per vehicle type, with an ``is_active`` flag).  When no active configuration
+exists the static defaults below are used, so the system degrades gracefully
+until an admin sets new rates.
 """
 
 from typing import Optional
 
+from django.utils import timezone
+
 from common.constants import VEHICLE_BIKE, VEHICLE_AUTO
-
-# Vehicle-type fare rates. Any vehicle type not listed falls back to "default".
-VEHICLE_FARE_RATES = {
-    VEHICLE_AUTO: {"base_fare": 30, "per_km_rate": 10},
-    VEHICLE_BIKE: {"base_fare": 20, "per_km_rate": 5},
-    "default": {"base_fare": 50, "per_km_rate": 15},
-}
+from operations.models import FareConfiguration
 
 
-def _get_rate(vehicle_type: str) -> dict:
-    return VEHICLE_FARE_RATES.get(vehicle_type, VEHICLE_FARE_RATES["default"])
+def _active_fare_config() -> Optional[FareConfiguration]:
+    """
+    Return the currently active ``FareConfiguration`` row, or ``None`` if none
+    is marked ``is_active``.
+    """
+    return FareConfiguration.objects.filter(is_active=True).first()
+
+
+def _default_rate(vehicle_type: str) -> dict:
+    """Fallback rates used when no active configuration exists."""
+    return {
+        VEHICLE_AUTO: {"base_fare": 30, "per_km_rate": 10},
+        VEHICLE_BIKE: {"base_fare": 20, "per_km_rate": 5},
+        "default": {"base_fare": 50, "per_km_rate": 15},
+    }.get(vehicle_type, {"base_fare": 50, "per_km_rate": 15})
+
+
+def _rate_for(vehicle_type: str) -> dict:
+    """Fetch the active configuration rate, falling back to defaults."""
+    config = _active_fare_config()
+    if config is not None:
+        return {"base_fare": config.base_fare, "per_km_rate": config.per_km_rate}
+    return _default_rate(vehicle_type)
 
 
 class FareService:
-    """Static fare calculation helpers used by all fare call sites."""
+    """Fare calculation helpers backed by the ``FareConfiguration`` model."""
 
     @staticmethod
     def get_base_fare(vehicle_type: str) -> int:
-        return _get_rate(vehicle_type)["base_fare"]
+        return _rate_for(vehicle_type)["base_fare"]
 
     @staticmethod
     def get_per_km_rate(vehicle_type: str) -> int:
-        return _get_rate(vehicle_type)["per_km_rate"]
+        return _rate_for(vehicle_type)["per_km_rate"]
 
     @staticmethod
     def calculate_fare(distance_km: float, vehicle_type: str) -> float:
         """Total fare for a given road distance (km) and vehicle type."""
-        rate = _get_rate(vehicle_type)
+        rate = _rate_for(vehicle_type)
         return round(float(rate["base_fare"] + (distance_km * rate["per_km_rate"])), 2)
 
     @staticmethod
@@ -51,7 +71,7 @@ class FareService:
         The fare model is base + per-km only; duration is informational and is
         never charged, so base_fare + distance_fare always equals total_fare.
         """
-        rate = _get_rate(vehicle_type)
+        rate = _rate_for(vehicle_type)
         base_fare = rate["base_fare"]
         per_km_rate = rate["per_km_rate"]
         distance_fare = round(float(distance_km * per_km_rate), 2)

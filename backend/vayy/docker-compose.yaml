@@ -62,7 +62,7 @@ services:
   celery:
     build: .
     container_name: vayy-celery
-    command: sh -c "celery -A vayy worker -l info -Q celery,dispatch,matching,notifications"
+    command: sh -c "celery -A vayy worker -l info -Q celery,dispatch,matching,notifications,dispatch_timeouts"
     volumes:
       - static_volume:/app/staticfiles
       - geoip_data:/app/geoip
@@ -127,6 +127,26 @@ services:
         condition: service_healthy
     deploy:
       replicas: 2
+
+  consume-notifications:
+    build: .
+    # container_name: vayy-consume-notifications
+    # Bridges notification.events -> send_notification Celery task. Without
+    # this service nothing consumed that queue, so NotificationService.create
+    # published into the void and every row stayed pending forever.
+    command: python manage.py consume_notifications
+    restart: always
+    volumes:
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   redis:
     image: redis:7-alpine

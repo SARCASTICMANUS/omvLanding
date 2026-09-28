@@ -1,4 +1,4 @@
-import { Globe, MapPin, Layers, Clock } from "lucide-react";
+import { Globe, MapPin, Layers, Clock, Activity } from "lucide-react";
 
 const ICON_STYLES = [
   { background: "rgb(var(--accent-blue-rgb) / 0.1)", color: "var(--accent-blue)" },
@@ -38,13 +38,16 @@ function MiniStat({ icon, label, value, idx }) {
 
 export default function GeoStatsCards({ data }) {
   const items = [
+    // total_events is the raw event count in the window and was being returned
+    // by /kpi/geo-stats/ but never rendered.
+    { icon: <Activity size={18} />, label: "Events", value: data?.total_events },
     { icon: <Globe size={18} />, label: "Countries", value: data?.unique_countries },
     { icon: <MapPin size={18} />, label: "Cities", value: data?.unique_cities },
     { icon: <Layers size={18} />, label: "Regions", value: data?.unique_regions },
     { icon: <Clock size={18} />, label: "Timezones", value: data?.timezone_distribution?.length },
   ];
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
       {items.map((item, i) => (
         <MiniStat key={item.label} {...item} idx={i} />
       ))}

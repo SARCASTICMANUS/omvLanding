@@ -210,13 +210,19 @@ class MatchingService:
             "distance_to_pickup_m": driver_info["distance_to_pickup_m"],
         }
         try:
-            # Publish to the dispatch exchange, routed to the specific vehicle
+            # Event-stream record of the targeted push. The routing key was
+            # f"dispatch.{vehicle_id}": dispatch.direct is a DIRECT exchange, so
+            # only an exact binding matches and no per-vehicle queue exists -
+            # the broker silently discarded every one of these. A static key
+            # plus vehicle_id in the payload keeps the event inspectable.
+            # Actual driver delivery is the WebSocket notification, which the
+            # dispatch flow sends separately; this publish is not a delivery path.
             from communication.services.rabbitmq_service import RabbitMQService
-            from common.constants import EXCHANGE_DISPATCH, RK_DISPATCH_ASSIGN
+            from common.constants import EXCHANGE_DISPATCH, RK_DISPATCH_PUSH
 
             RabbitMQService.publish(
                 exchange=EXCHANGE_DISPATCH,
-                routing_key=f"dispatch.{driver_info['vehicle_id']}",
+                routing_key=RK_DISPATCH_PUSH,
                 payload=payload,
             )
             logger.info(f"Published ride request {ride_request['request_id']} to vehicle {driver_info['vehicle_id']}")

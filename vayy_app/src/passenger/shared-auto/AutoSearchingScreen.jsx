@@ -20,7 +20,7 @@ import {
 } from "@expo/vector-icons";
 import { ConfirmPopup } from "../bike-ride/ConfirmPopup";
 import { NoRideFoundPopup } from "../bike-ride/NoRideFoundPopup";
-import { fetchActiveRouteTrips, createBoardingRequest, setDispatchStatus } from "../../store/slices/dispatchSlice";
+import { requestDispatch, cancelBroadcast, setDispatchStatus, updateDispatchStatus } from "../../store/slices/dispatchSlice";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import { cancelBoardingRequest, getNearbyVehicles } from "../services/passengerService";
@@ -42,7 +42,6 @@ export function AutoSearchingScreen({ navigation, route }) {
   const [cancelling, setCancelling] = useState(false);
   const [nearbyCount, setNearbyCount] = useState(null);
   const [activeTripData, setActiveTripData] = useState(null);
-  const timerRef = useRef(null);
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
   const didFitRef = useRef(false);
@@ -81,80 +80,108 @@ export function AutoSearchingScreen({ navigation, route }) {
   }, [pickupLat, pickupLon]);
 
   const [activeTripId, setActiveTripId] = useState(null);
+  const [activeRequestId, setActiveRequestId] = useState(null);
+  const searchStartedRef = useRef(false);
 
   const handleWsMessage = useCallback((data) => {
     if (data.type === "trip_update" && data.status === "active") {
       dispatch(setDispatchStatus("accepted"));
     } else if (data.type === "boarding_update" && data.event === "boarded") {
       dispatch(setDispatchStatus("accepted"));
+    } else if (data.status === "accepted" || data.status === "assigned") {
+      dispatch(setDispatchStatus("accepted"));
+      if (data.driver_name || data.vehicle_number || data.otp) {
+        dispatch(updateDispatchStatus({
+          driver_name: data.driver_name,
+          vehicle_number: data.vehicle_number,
+          otp: data.otp,
+          fare: data.fare,
+          distance: data.distance,
+        }));
+      }
+    } else if (data.status === "rejected" || data.status === "cancelled") {
+      dispatch(setDispatchStatus("failed"));
     }
   }, [dispatch]);
 
-  useWebSocket(activeTripId ? WS.trackingTrip(activeTripId) : null, {
+  useWebSocket(activeTripId ? WS.dispatch(activeTripId) : null, {
     enabled: !!activeTripId,
     onMessage: handleWsMessage,
   });
 
+  const handleBroadcastWsMessage = useCallback((data) => {
+    if (data.type === "no_drivers_available") {
+      setShowNoRide(true);
+      setSearchStatus("failed");
+      setActiveRequestId(null);
+      setActiveTripId(null);
+    }
+  }, []);
+
+  useWebSocket(activeRequestId ? WS.dispatchBroadcast(activeRequestId) : null, {
+    enabled: !!activeRequestId,
+    onMessage: handleBroadcastWsMessage,
+  });
+
   const startSearch = useCallback(async () => {
+    if (searchStartedRef.current) return;
+    searchStartedRef.current = true;
+
     setShowNoRide(false);
     setSearchStatus("searching");
 
-    if (route_id && pickup_stop_id) {
-      try {
-        const result = await dispatch(fetchActiveRouteTrips(route_id)).unwrap();
-        const trips = result.data || result;
-        if (Array.isArray(trips) && trips.length > 0) {
-          const activeTrip = trips[0];
-          setActiveTripId(activeTrip.trip_id);
-          setActiveTripData(activeTrip);
-          dispatch(createBoardingRequest({ trip: activeTrip.trip_id, pickup_stop: pickup_stop_id, drop_stop: drop_stop_id }));
-        } else {
-          setShowNoRide(true);
-          setSearchStatus("failed");
-        }
-      } catch (err) {
+    if (!route_id || !pickup_stop_id) {
+      setShowNoRide(true);
+      setSearchStatus("failed");
+      return;
+    }
+
+    try {
+      const result = await dispatch(requestDispatch({
+        route_id,
+        pickup_stop_id,
+        drop_stop_id,
+        mode: "broadcast",
+      })).unwrap();
+
+      const payload = result?.data || result;
+      if (payload?.status === "no_drivers_available") {
+        setShowNoRide(true);
+        setSearchStatus("failed");
+        return;
+      }
+
+      const requestId = payload?.request_id || null;
+      setActiveRequestId(requestId);
+
+      const tripId = payload?.trip_id || payload?.id || null;
+      setActiveTripId(tripId);
+      setActiveTripData(tripId ? payload : null);
+
+      if (!tripId && !requestId) {
         setShowNoRide(true);
         setSearchStatus("failed");
       }
-    } else {
-      timerRef.current = setTimeout(() => {
-        setShowNoRide(true);
-        setSearchStatus("failed");
-      }, 4000);
+    } catch (err) {
+      console.warn("Dispatch request failed:", err);
+      setShowNoRide(true);
+      setSearchStatus("failed");
     }
-  }, [route_id, pickup_stop_id, dispatch]);
+  }, [route_id, pickup_stop_id, drop_stop_id, dispatch]);
 
   async function handleTryAgain() {
     setShowNoRide(false);
     setSearchStatus("searching");
-    clearTimeout(timerRef.current);
-
-    if (route_id && pickup_stop_id) {
-      try {
-        const result = await dispatch(fetchActiveRouteTrips(route_id)).unwrap();
-        const trips = result.data || result;
-        if (Array.isArray(trips) && trips.length > 0) {
-          const activeTrip = trips[0];
-          setActiveTripId(activeTrip.trip_id);
-          dispatch(createBoardingRequest({ trip: activeTrip.trip_id, pickup_stop: pickup_stop_id, drop_stop: drop_stop_id }));
-        } else {
-          setShowNoRide(true);
-          setSearchStatus("failed");
-        }
-      } catch (err) {
-        setShowNoRide(true);
-        setSearchStatus("failed");
-      }
-    } else {
-      timerRef.current = setTimeout(() => {
-        setSearchStatus("found");
-        setShowBoardConfirm(true);
-      }, 4000);
-    }
+    setActiveTripId(null);
+    setActiveRequestId(null);
+    searchStartedRef.current = false;
+    await startSearch();
   }
 
   useEffect(() => {
-    if (dispatchStatus === "requested" || dispatchStatus === "accepted") {
+    // "requested" only means the request was accepted by the API — a driver
+    // has NOT been matched yet, so it must never flip the UI to "found".
+    if (["accepted", "active", "arrived", "broadcast_accepted"].includes(dispatchStatus)) {
       setSearchStatus("found");
       setShowBoardConfirm(true);
     }
@@ -182,11 +209,8 @@ export function AutoSearchingScreen({ navigation, route }) {
       ])
     ).start();
 
+    searchStartedRef.current = false;
     startSearch();
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
   }, [startSearch, scaleAnim, opacityAnim]);
 
   // Fetch nearby vehicles count once on mount
@@ -205,19 +229,24 @@ export function AutoSearchingScreen({ navigation, route }) {
   }, [pickupLat, pickupLon]);
 
   const handleLowerHand = useCallback(async () => {
-    const reqId = boardingRequest?.id || boardingRequest?.request_id || boardingRequestId;
-    if (!reqId || cancelling) return;
+    const broadcastId = activeRequestId || activeDispatch?.request_id || activeDispatch?.id;
+    const boardingId = boardingRequest?.id || boardingRequest?.request_id || boardingRequestId;
+    if ((!broadcastId && !boardingId) || cancelling) return;
     setCancelling(true);
     try {
-      await cancelBoardingRequest(reqId);
+      if (broadcastId) {
+        await dispatch(cancelBroadcast(broadcastId));
+      } else {
+        await cancelBoardingRequest(boardingId);
+      }
       setHandRaised(false);
       navigation.goBack();
     } catch (error) {
-      console.error("Failed to cancel boarding request:", error);
+      console.error("Failed to cancel request:", error);
       setHandRaised(false);
       navigation.goBack();
     }
-  }, [boardingRequest, boardingRequestId, cancelling, navigation]);
+  }, [activeRequestId, activeDispatch, boardingRequest, boardingRequestId, cancelling, dispatch, navigation]);
 
   return (
     <View style={styles.container}>
@@ -384,22 +413,29 @@ export function AutoSearchingScreen({ navigation, route }) {
         onConfirm={() => {
           setShowBoardConfirm(false);
           const tripObj = activeTripData || trip || {};
-          const tripId = tripObj.trip_id || tripObj.id || "";
-          const fare = tripObj.fare || 0;
+          const dispatchObj = activeDispatch || {};
+          const tripId = dispatchObj.trip_id || tripObj.trip_id || dispatchObj.id || tripObj.id || activeTripId || "";
+          const dispatchId = dispatchObj.id || tripId || "";
+          const fare = dispatchObj.fare || tripObj.fare || 0;
           const distMeters = tripObj.total_distance_meters || 0;
           const etaSec = tripObj.eta_seconds || 0;
-          const distKm = distMeters > 1000 ? `${(distMeters / 1000).toFixed(1)} km` : `${distMeters} m`;
+          const distKm = dispatchObj.distance
+            ? `${dispatchObj.distance} km`
+            : distMeters > 1000
+              ? `${(distMeters / 1000).toFixed(1)} km`
+              : `${distMeters} m`;
           const durMin = Math.max(1, Math.round(etaSec / 60));
           navigation.navigate('AutoRideActive', {
             tripId,
-            dispatchId: activeDispatch?.id || "",
+            dispatchId,
+            otp: dispatchObj.otp || tripObj.otp || "",
             destination: tripObj.destination || destination,
             fare,
             distance: distKm,
             eta: `${durMin} min`,
-            driverName: tripObj.driver?.name || tripObj.driver_name || "Auto Driver",
-            vehicle: tripObj.vehicle?.number || tripObj.vehicle_number || "",
-            tripData: tripObj,
+            driverName: dispatchObj.driver_name || tripObj.driver?.name || tripObj.driver_name || "Auto Driver",
+            vehicle: dispatchObj.vehicle_number || tripObj.vehicle?.number || tripObj.vehicle_number || "",
+            tripData: { ...tripObj, ...dispatchObj },
             route_id,
           });
         }}

@@ -71,6 +71,8 @@ vayy_app/.expo/
 vayy_app/dist/
 vayy_app/web-build/
 vayy_app/.env
+# Android bugreport archives picked up from a connected device
+bugreport-sdk_*.zip
 vayy_app/npm-debug.log*
 vayy_app/yarn-debug.log*
 vayy_app/yarn-error.log*

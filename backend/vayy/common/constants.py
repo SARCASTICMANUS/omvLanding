@@ -94,6 +94,10 @@ TRIP_STATUS_REJECTED = "rejected"
 TRIP_STATUS_ARRIVED = "arrived"
 TRIP_STATUS_ACTIVE = "active"
 TRIP_STATUS_COMPLETED = "completed"
+# Settlement ran but at least one passenger debit is still outstanding. The
+# trip is over (vehicle is released, ended_at is set); only the money is
+# unfinished. It transitions to COMPLETED once the last debit succeeds.
+TRIP_STATUS_PARTIALLY_SETTLED = "partially_settled"
 TRIP_STATUS_CANCELLED = "cancelled"
 
 TRIP_STATUS_CHOICES = (
@@ -104,6 +108,7 @@ TRIP_STATUS_CHOICES = (
     (TRIP_STATUS_ARRIVED, "Arrived"),
     (TRIP_STATUS_ACTIVE, "Active"),
     (TRIP_STATUS_COMPLETED, "Completed"),
+    (TRIP_STATUS_PARTIALLY_SETTLED, "Partially Settled"),
     (TRIP_STATUS_CANCELLED, "Cancelled"),
 )
 
@@ -186,6 +191,10 @@ QUEUE_LOCATION_AUTO = "auto.location"
 QUEUE_LOCATION_BIKE = "bike.location"
 QUEUE_LOCATION_PASSENGER = "passenger.location"
 QUEUE_DISPATCH_ASSIGNMENT = "dispatch.assignment"
+# Recipients for the two fixed dispatch keys above. These are event-stream
+# queues, not delivery paths: driver-facing delivery happens over WebSocket.
+QUEUE_DISPATCH_EVENTS = "dispatch.events"
+QUEUE_DISPATCH_PUSH = "dispatch.pushes"
 QUEUE_NOTIFICATION_EVENTS = "notification.events"
 QUEUE_BOARDING = "boarding.requests"
 QUEUE_TRIP_EVENTS = "trip.events"
@@ -207,6 +216,12 @@ RK_LOCATION_ANY = "location.*"
 
 RK_DISPATCH_ASSIGN = "dispatch.assign"
 RK_DISPATCH_CANCEL = "dispatch.cancel"
+# dispatch.direct is a DIRECT exchange, so wildcards do not apply and a key
+# built from a trip status or a vehicle id ("dispatch.arrived",
+# "dispatch.<uuid>") can never match a binding. Those two publishers now use
+# these fixed keys and carry the status / vehicle_id in the payload instead.
+RK_DISPATCH_EVENT = "dispatch.event"
+RK_DISPATCH_PUSH = "dispatch.push"
 
 # --- Routing Keys: Notification ---
 
@@ -220,7 +235,11 @@ RK_NOTIFICATION_ANY = "notification.*"
 RK_BOARDING_CREATED = "boarding.request.created"
 RK_BOARDING_CANCELLED = "boarding.request.cancelled"
 RK_BOARDING_BOARDED = "boarding.request.boarded"
-RK_BOARDING_ANY = "boarding.*"
+# Must be "boarding.#", not "boarding.*": in a topic exchange "*" matches
+# exactly ONE word, so "boarding.*" does not match the three-word keys above
+# and every boarding event was silently discarded. "#" matches zero or more
+# words, so it holds for the current keys and any future boarding.* shape.
+RK_BOARDING_ANY = "boarding.#"
 
 # --- Routing Keys: Trip ---
 
@@ -270,3 +289,17 @@ BOARDING_EXCHANGE = EXCHANGE_BOARDING
 BOARDING_CREATED_KEY = RK_BOARDING_CREATED
 BOARDING_CANCELLED_KEY = RK_BOARDING_CANCELLED
 BOARDING_BOARDED_KEY = RK_BOARDING_BOARDED
+
+# =============================================================================
+# WebSocket Channel Groups
+# =============================================================================
+
+# Fan-out group for the operations console. Every GPS fix is mirrored here in
+# addition to the per-vehicle and per-trip groups so an admin can hold a single
+# socket open and watch the whole fleet, instead of needing one socket per
+# vehicle (browsers cap concurrent sockets per origin, and the per-id groups are
+# correctly owner-scoped so an admin cannot join them).
+#
+# Membership is gated by AdminMonitorConsumer (staff/admin only) because this
+# group carries every vehicle's live position.
+WS_GROUP_ADMIN_FLEET = "admin_fleet"

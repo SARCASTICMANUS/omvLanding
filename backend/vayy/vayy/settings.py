@@ -165,18 +165,30 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle"
     ],
-    # "DEFAULT_THROTTLE_RATES": {
-    #     "anon": "100/day",
-    #     # Raised from 1000/day - the old cap silently killed GPS ingestion
-    #     # (a driver pinging every 5s for 8h needs ~5,700 requests/day);
-    #     # the SCOPED rates below govern the high-volume real-time endpoints.
-    #     "user": "10000/day",
-    #     "gps": "1000/min",
-    #     "search": "60/min",
-    #     "dispatch": "120/min",
-    #     "kpi_track": "500/min",
-    #     "waitlist": "10/hour",
-    # }
+    # NOTE: every scope referenced by a view's `throttle_scope` MUST exist here.
+    # A missing key makes ScopedRateThrottle raise ImproperlyConfigured, which
+    # surfaces as an HTTP 500 on that endpoint rather than as a 429.
+    "DEFAULT_THROTTLE_RATES": {
+        # Public endpoints (register / login / OTP / forgot-password). Carriers
+        # in India put large numbers of users behind a single NAT address, so a
+        # tight per-IP cap would lock out legitimate users.
+        "anon": "1000/day",
+        # Default ceiling for ordinary authenticated endpoints. GPS ingestion
+        # is capped separately by "gps" + "gps_day" and does not consume this.
+        "user": "10000/day",
+        # Driver stream: 1 Hz == 60 req/min. 90/min leaves 50% headroom for
+        # jitter and retry storms without letting a stuck client flood ingest.
+        "gps": "90/min",
+        # Per-user/day ceiling for GPS. 1 Hz over a 12h shift is ~43,200 req,
+        # so 50,000/day bounds a full day of streaming while still capping a
+        # client that ignores the per-minute limit.
+        "gps_day": "50000/day",
+        # Page-view ingestion. Generous enough for a real SPA burst, still
+        # bounded for a scraped client.
+        "kpi_track": "600/min",
+        # Public waitlist signup: strict, this is pure lead capture.
+        "waitlist": "10/hour",
+    }
 }
 
 SPECTACULAR_SETTINGS = {
@@ -236,6 +248,24 @@ CACHES = {
         }
     }
 }
+
+# ── WebSocket auth ──────────────────────────────────────────────────────
+# WebSocket tokens are read from the Sec-WebSocket-Protocol header, because
+# query strings end up in nginx/Daphne access logs, browser history and proxy
+# referrers. Browsers cannot set arbitrary headers on a WS handshake, which is
+# why the subprotocol channel is used instead.
+#
+# The legacy "?token=" form is still honoured while this flag is True so a
+# client fleet can be migrated without a flag-day outage. Set it to False once
+# every WebSocket client sends the subprotocol; the query-string path then
+# returns 4001 and logs a deprecation warning.
+#
+# Rollout: the mobile client stopped sending "?token=" in the socketManager
+# subprotocol change, so this flag now only decides whether app builds older
+# than that release still work. Flip it to False when those builds have aged
+# out of the fleet; it is an env change, not a code change.
+WS_ALLOW_QUERY_STRING_TOKEN = env.bool("WS_ALLOW_QUERY_STRING_TOKEN", default=True)
+WS_SUBPROTOCOL = "vayy.jwt.v1"
 
 # CELERY
 CELERY_BROKER_URL = env(
@@ -368,6 +398,26 @@ EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@vayy.com")
+
+# ── Push (Expo) ─────────────────────────────────────────────────────────────
+# The mobile clients register an Expo push token (expo-notifications
+# getExpoPushTokenAsync) against POST /api/accounts/push-token/, stored on
+# User.push_token. Delivery therefore goes through the Expo Push API, not raw
+# FCM, so no firebase-admin dependency is needed.
+EXPO_PUSH_URL = env("EXPO_PUSH_URL", default="https://exp.host/--/api/v2/push/send")
+# Optional. Expo accepts either ExponentPushToken[...] or
+# ExponentPushToken[xxx] and AccessToken[...] when a security key is in use.
+EXPO_ACCESS_TOKEN = env("EXPO_ACCESS_TOKEN", default="")
+
+# ── SMS ─────────────────────────────────────────────────────────────────────
+# Provider-agnostic HTTP gateway. Unset means "not configured", in which case
+# SMSService refuses to pretend it delivered anything: the notification goes to
+# failed status instead of being silently marked sent.
+SMS_PROVIDER_URL = env("SMS_PROVIDER_URL", default="")
+SMS_PROVIDER_TOKEN = env("SMS_PROVIDER_TOKEN", default="")
+SMS_SENDER_ID = env("SMS_SENDER_ID", default="VAYY")
+SMS_TIMEOUT_SECONDS = env.int("SMS_TIMEOUT_SECONDS", default=10)
+PUSH_TIMEOUT_SECONDS = env.int("PUSH_TIMEOUT_SECONDS", default=10)
 
 LOGGING = {
     "version": 1,

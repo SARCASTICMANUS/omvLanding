@@ -1,11 +1,61 @@
 import json
 import logging
-from asgiref.sync import sync_to_async
+
+from channels.db import database_sync_to_async
 from common.websockets.auth import BaseAuthenticatedConsumer
+from operations.websockets.consumers import user_owns_trip
+from operations.models import ActiveTrip, Vehicle
 from tracking.services.location_service import LocationService
 from tracking.tasks import process_location_update
 
 logger = logging.getLogger(__name__)
+
+
+@database_sync_to_async
+def user_owns_vehicle(user, vehicle_id):
+    """
+    True only for the driver the vehicle is assigned to.
+
+    Without this any authenticated user could subscribe to any driver's live
+    position feed, and the consumer's receive() handler accepts inbound
+    location writes keyed only on the URL-supplied vehicle id.
+    """
+    return Vehicle.objects.filter(id=vehicle_id, driver_id=user.id).exists()
+
+
+@database_sync_to_async
+def user_drives_route(user, route_id):
+    """
+    True when the user drives a vehicle serving the given route.
+
+    The route_passengers_ feed carries live passenger coordinates, user ids and
+    display names, so it is restricted to the drivers actually working the
+    route.
+    """
+    if Vehicle.objects.filter(route_id=route_id, driver_id=user.id).exists():
+        return True
+    return ActiveTrip.objects.filter(route_id=route_id, driver_id=user.id).exists()
+
+
+@database_sync_to_async
+def user_may_view_route(user, route_id):
+    """
+    Route-level vehicle tracking is an intentionally open feed.
+
+    A route is a public transit line: a passenger waiting at a stop has no trip
+    on that route yet, so scoping this group to trip participants would break
+    the core "watch my bus" flow. Any authenticated user may read it.
+
+    This is deliberately explicit rather than leaving owner_resolver unset, so
+    the open policy is auditable in one place. The trip-scoped fields that used
+    to leak through this group (trip_id, pickup_distance_km,
+    pickup_duration_min) are now nulled before publish in
+    LocationService.update_vehicle_state: trip_id would otherwise let every
+    route watcher enumerate live trips, and the pickup figures are measured
+    against one trip's boarding stop.
+    """
+    return True
+
 
 class VehicleTrackingConsumer(BaseAuthenticatedConsumer):
     """
@@ -15,8 +65,15 @@ class VehicleTrackingConsumer(BaseAuthenticatedConsumer):
     Hot path is fully async: Redis pipeline + Channel layer broadcast.
     Zero DB queries, zero blocking calls. Cold path is fire-and-forget Celery.
     """
+
+    resource_name = "vehicle"
+    owner_resolver = staticmethod(user_owns_vehicle)
+
     async def connect(self):
         await super().connect()
+        if not self.authorized:
+            return
+
         self.vehicle_id = self.scope['url_route']['kwargs']['vehicle_id']
         self.group_name = f"vehicle_{self.vehicle_id}"
 
@@ -80,9 +137,18 @@ class TripTrackingConsumer(BaseAuthenticatedConsumer):
     """
     Consumer for live trip tracking.
     Groups: trip_{trip_id}
+
+    Restricted to the trip's driver and boarding passengers.
     """
+
+    resource_name = "trip"
+    owner_resolver = staticmethod(user_owns_trip)
+
     async def connect(self):
         await super().connect()
+        if not self.authorized:
+            return
+
         self.trip_id = self.scope['url_route']['kwargs']['trip_id']
         self.group_name = f"trip_{self.trip_id}"
 
@@ -117,9 +183,19 @@ class RouteTrackingConsumer(BaseAuthenticatedConsumer):
     """
     Consumer for real-time vehicle updates on an entire route.
     Groups: route_{route_id}
+
+    Open to any authenticated user - see user_may_view_route for why this is a
+    deliberate open feed rather than an oversight.
     """
+
+    resource_name = "route"
+    owner_resolver = staticmethod(user_may_view_route)
+
     async def connect(self):
         await super().connect()
+        if not self.authorized:
+            return
+
         self.route_id = str(self.scope['url_route']['kwargs']['route_id'])
         self.group_name = f"route_{self.route_id}"
 
@@ -149,9 +225,19 @@ class RoutePassengerTrackingConsumer(BaseAuthenticatedConsumer):
     """
     Consumer for driver to receive real-time passenger locations on a route.
     Groups: route_passengers_{route_id}
+
+    Restricted to drivers working that route - the feed exposes passenger
+    coordinates, user ids and display names.
     """
+
+    resource_name = "route-passengers"
+    owner_resolver = staticmethod(user_drives_route)
+
     async def connect(self):
         await super().connect()
+        if not self.authorized:
+            return
+
         self.route_id = str(self.scope['url_route']['kwargs']['route_id'])
         self.group_name = f"route_passengers_{self.route_id}"
 
@@ -184,9 +270,18 @@ class RideRequestConsumer(BaseAuthenticatedConsumer):
     """
     Consumer for driver to receive ride requests.
     Groups: driver_{driver_id}
+
+    No owner_resolver needed: the group name is derived from the
+    authenticated user's own id, so it cannot be pointed at another driver.
     """
+
+    resource_name = "ride-requests"
+
     async def connect(self):
         await super().connect()
+        if not self.authorized:
+            return
+
         self.driver_id = str(self.user.id)
         self.group_name = f"driver_{self.driver_id}"
 

@@ -6,6 +6,7 @@ from operations.models import (
     ActiveTrip,
     BoardingRequest,
     TripRating,
+    FareConfiguration,
 )
 from operations.selectors.trip_selector import TripSelector
 from transport.models import (
@@ -213,6 +214,19 @@ class BoardingRequestSerializer(
             "status",
             "created_at",
             "updated_at",
+        )
+
+
+class FareConfigurationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FareConfiguration
+        fields = (
+            "id",
+            "vehicle_type",
+            "base_fare",
+            "per_km_rate",
+            "effective_from",
+            "is_active",
         )
 
 

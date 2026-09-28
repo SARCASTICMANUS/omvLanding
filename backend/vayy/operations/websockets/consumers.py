@@ -1,17 +1,56 @@
 import json
 import logging
+
+from channels.db import database_sync_to_async
 from common.websockets.auth import BaseAuthenticatedConsumer
+from operations.models import ActiveTrip, BoardingRequest, DispatchRequest
 
 logger = logging.getLogger(__name__)
+
+
+@database_sync_to_async
+def user_owns_trip(user, trip_id):
+    """
+    True when the user is the trip's driver or a passenger boarding it.
+
+    ActiveTrip has no passenger FK - the passenger link lives on
+    BoardingRequest, so a trip's participants are the driver plus every
+    passenger with a boarding request against it.
+    """
+    trip = (
+        ActiveTrip.objects.filter(id=trip_id)
+        .only("id", "driver_id")
+        .first()
+    )
+    if trip is None:
+        return False
+    if trip.driver_id == user.id:
+        return True
+    return BoardingRequest.objects.filter(trip_id=trip.id, passenger_id=user.id).exists()
+
+
+@database_sync_to_async
+def user_owns_dispatch_request(user, request_id):
+    """True only for the passenger who raised the broadcast dispatch request."""
+    return DispatchRequest.objects.filter(id=request_id, passenger_id=user.id).exists()
+
 
 class DispatchStatusConsumer(BaseAuthenticatedConsumer):
     """
     Consumer for real-time dispatch status updates.
-    Groups: dispatch_{dispatch_id}
+    Groups: dispatch_{trip_id}
+
+    Restricted to the trip's driver and its boarding passengers: the payload
+    carries the trip OTP (see DispatchService._notify_ws on accept), driver
+    name and vehicle number.
     """
+
+    resource_name = "dispatch"
+    owner_resolver = staticmethod(user_owns_trip)
+
     async def connect(self):
         await super().connect()
-        if self.scope.get('user') is None:
+        if not self.authorized:
             return
 
         self.dispatch_id = self.scope['url_route']['kwargs']['dispatch_id']
@@ -48,10 +87,17 @@ class DispatchBroadcastConsumer(BaseAuthenticatedConsumer):
 
     Passenger joins this group after creating a broadcast request.
     Receives: driver accepted, request expired, no drivers available.
+
+    Restricted to the requesting passenger - the 'request_accepted' payload
+    carries the trip OTP plus pickup and drop coordinates.
     """
+
+    resource_name = "dispatch-broadcast"
+    owner_resolver = staticmethod(user_owns_dispatch_request)
+
     async def connect(self):
         await super().connect()
-        if self.scope.get('user') is None:
+        if not self.authorized:
             return
 
         self.request_id = self.scope['url_route']['kwargs']['request_id']

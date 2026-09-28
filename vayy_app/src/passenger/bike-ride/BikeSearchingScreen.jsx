@@ -20,35 +20,52 @@ import {
 
 import { NoRideFoundPopup } from "./NoRideFoundPopup";
 import { ConfirmPopup } from "./ConfirmPopup";
-import { requestDispatch, cancelDispatch, cancelBroadcast, setDispatchStatus, clearDispatch } from "../../store/slices/dispatchSlice";
+import {
+  requestDispatch,
+  cancelDispatch,
+  cancelBroadcast,
+  setDispatchStatus,
+  updateDispatchStatus,
+  clearDispatch,
+} from "../../store/slices/dispatchSlice";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import locationService from "../../shared/lib/locationService";
 
 const USER_TOP_IMAGE = require("../../../assets/VayyUserTop.webp");
 
-
 export function BikeSearchingScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const { activeDispatch, status: dispatchStatus } = useSelector((state) => state.dispatch);
+
+  // Animations
   const waveAnim1 = useRef(new Animated.Value(0)).current;
   const waveAnim2 = useRef(new Animated.Value(0)).current;
   const waveAnim3 = useRef(new Animated.Value(0)).current;
+
+  // Local state
   const [showNoRide, setShowNoRide] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [searchStatus, setSearchStatus] = useState("locating");
-  const timerRef = useRef(null);
-  const { route_id, pickup_stop_id, drop_stop_id } = route?.params || {};
-  const mapRef = useRef(null);
-  const cameraRef = useRef(null);
   const [currentPosition, setCurrentPosition] = useState(null);
-  const locationReadyRef = useRef(false);
-  const searchStartedRef = useRef(false);
   const [activeTripId, setActiveTripId] = useState(null);
   const [activeRequestId, setActiveRequestId] = useState(null);
   const [driversNotified, setDriversNotified] = useState(null);
+
+  // Refs
+  const requestIdRef = useRef(null);
+  const mapRef = useRef(null);
+  const cameraRef = useRef(null);
+  const locationReadyRef = useRef(false);
+  const searchStartedRef = useRef(false);
   const timeoutRef = useRef(null);
+  const didFlyRef = useRef(false);
+  const navigatedRiderPopupRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  // Route Parameters Destructuring
+  const { route_id, pickup_stop_id, drop_stop_id, pickup, pickupName, destination, fare, trip } = route?.params || {};
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
@@ -63,33 +80,51 @@ export function BikeSearchingScreen({ navigation, route }) {
     }
   };
 
-  const didFlyRef = useRef(false);
-  const navigatedRiderPopupRef = useRef(false);
+  // Safe Navigation Helper to prevent duplicate pushes to navigation stack
+  const navigateToRiderPopup = useCallback((screenParams) => {
+    if (navigatedRiderPopupRef.current) return;
+    navigatedRiderPopupRef.current = true;
 
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    requestIdRef.current = null;
+
+    if (isMountedRef.current && navigation.isFocused()) {
+      navigation.replace("RiderPopup", screenParams);
+    }
+  }, [navigation]);
+
+  // Mount/Unmount Cleanup
   useEffect(() => {
+    isMountedRef.current = true;
     didFlyRef.current = false;
     locationReadyRef.current = false;
     searchStartedRef.current = false;
+    navigatedRiderPopupRef.current = false;
+
     setSearchStatus("locating");
     setShowNoRide(false);
     setShowCancelConfirm(false);
     dispatch(clearDispatch());
 
     return () => {
-      clearTimeout(timeoutRef.current);
-      // locationService.stopTracking();
-      if (activeRequestId && !navigatedRiderPopupRef.current) {
-        dispatch(cancelBroadcast(activeRequestId));
+      isMountedRef.current = false;
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      const requestId = requestIdRef.current;
+      if (requestId && !navigatedRiderPopupRef.current) {
+        dispatch(cancelBroadcast(requestId));
       }
       dispatch(clearDispatch());
     };
-  }, []);
+  }, [dispatch]);
 
+  // Location Tracking Effect
   useEffect(() => {
     let unsub;
     locationService.startTracking((coords) => {
+      if (!isMountedRef.current) return;
       const pos = { latitude: coords.latitude, longitude: coords.longitude };
       setCurrentPosition(pos);
+
       if (!didFlyRef.current) {
         didFlyRef.current = true;
         if (cameraRef.current) {
@@ -100,34 +135,38 @@ export function BikeSearchingScreen({ navigation, route }) {
           });
         }
         setTimeout(() => {
-          locationReadyRef.current = true;
-          setSearchStatus("searching");
+          if (isMountedRef.current) {
+            locationReadyRef.current = true;
+            setSearchStatus("searching");
+          }
         }, 1400);
       }
     }, { distanceInterval: 10, timeInterval: 5000 });
+
     unsub = () => locationService.stopTracking();
     return () => { if (unsub) unsub(); };
   }, []);
 
-  // ── WebSocket: listen for broadcast dispatch updates (passenger) ──
+  // Handle WS Broadcast Messages (Passenger match)
   const handleBroadcastWsMessage = useCallback((data) => {
+    if (!isMountedRef.current) return;
+
     if (data.type === "request_accepted" && data.trip_id) {
-      // A driver accepted — navigate to RiderPopup with trip data
-      clearTimeout(timeoutRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       dispatch(setDispatchStatus("accepted"));
       setActiveTripId(data.trip_id);
       setSearchStatus("found");
 
-      const pickupRaw = route?.params?.pickup;
-      const pickupStr = typeof pickupRaw === "string" ? pickupRaw : pickupRaw?.name || pickupRaw?.display_name || "Pickup";
+      const pickupStr = typeof pickup === "string" ? pickup : pickup?.name || pickup?.display_name || "Pickup";
       const distMeters = data.distance_km ? Math.round(data.distance_km * 1000) : null;
       const distKm = data.distance_km ? `${data.distance_km} km` : "—";
       const distLabels = distMeters ? [distKm, `${Math.round(distMeters * 0.66)}m`, `${Math.round(distMeters * 0.33)}m`, "Arrived"] : [distKm];
       const etaMin = data.eta || 5;
       const etaLabels = [`${etaMin} min`, `${Math.max(1, Math.round(etaMin * 0.6))} min`, `${Math.max(1, Math.round(etaMin * 0.3))} min`, "0 min"];
       const dropName = data.drop_name
-        || (route?.params?.destination && (route.params.destination.name || route.params.destination.display_name))
+        || (destination && (destination.name || destination.display_name))
         || "Destination";
+
       const tripData = {
         ...data,
         pickup_name: data.pickup_name || pickupStr,
@@ -137,60 +176,64 @@ export function BikeSearchingScreen({ navigation, route }) {
         dropLat: data.drop_lat != null ? Number(data.drop_lat) : null,
         dropLng: data.drop_lng != null ? Number(data.drop_lng) : null,
       };
-      navigatedRiderPopupRef.current = true;
-      setTimeout(() => navigation.navigate("RiderPopup", {
-        driverName: data.driver_name || "Driver",
-        vehicle: data.vehicle_number || "",
-        otp: data.otp || "—",
-        distanceLabels: distLabels,
-        etaLabels: etaLabels,
-        dispatchId: data.trip_id,
-        destination: route?.params?.destination || "Destination",
-        pickup: pickupStr,
-        pickupName: route?.params?.pickupName || pickupStr,
-        pickupLat: tripData.pickupLat,
-        pickupLng: tripData.pickupLng,
-        dropLat: tripData.dropLat,
-        dropLng: tripData.dropLng,
-        dropName,
-        route_name: data.route_name || "",
-        eta: String(etaMin),
-        distance: distMeters ? String(distMeters) : "—",
-        fare: route?.params?.fare || "—",
-        route_id,
-        tripData,
-      }), 600);
+
+      setTimeout(() => {
+        navigateToRiderPopup({
+          driverName: data.driver_name || "Driver",
+          vehicle: data.vehicle_number || "",
+          otp: data.otp || "—",
+          distanceLabels: distLabels,
+          etaLabels: etaLabels,
+          dispatchId: data.trip_id,
+          destination: destination || "Destination",
+          pickup: pickupStr,
+          pickupName: pickupName || pickupStr,
+          pickupLat: tripData.pickupLat,
+          pickupLng: tripData.pickupLng,
+          dropLat: tripData.dropLat,
+          dropLng: tripData.dropLng,
+          dropName,
+          route_name: data.route_name || "",
+          eta: String(etaMin),
+          distance: distMeters ? String(distMeters) : "—",
+          fare: fare || "—",
+          route_id,
+          tripData,
+        });
+      }, 600);
     } else if (data.type === "no_drivers_available") {
-      clearTimeout(timeoutRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      requestIdRef.current = null;
       setShowNoRide(true);
       setSearchStatus("failed");
       setActiveRequestId(null);
       setDriversNotified(null);
     }
-  }, [dispatch, navigation, route?.params, route_id]);
+  }, [dispatch, pickup, destination, pickupName, fare, route_id, navigateToRiderPopup]);
 
   useWebSocket(activeRequestId ? WS.dispatchBroadcast(activeRequestId) : null, {
     enabled: !!activeRequestId,
     onMessage: handleBroadcastWsMessage,
   });
 
-  // ── WebSocket: listen for driver accept/reject on the dispatch channel (direct mode fallback) ──
+  // Handle direct WS dispatch Updates
   const handleWsMessage = useCallback((data) => {
-    // Backend sends raw payload: { trip_id, status, updated_at, ... }
-    // "accepted" / "assigned" means a driver was matched
+    if (!isMountedRef.current) return;
+
     if (data.status === "accepted" || data.status === "assigned") {
       dispatch(setDispatchStatus("accepted"));
       if (data.driver_name || data.vehicle_number || data.otp) {
-        dispatch({ type: "dispatch/updateDispatchStatus", payload: {
+        dispatch(updateDispatchStatus({
           driver_name: data.driver_name,
           vehicle_number: data.vehicle_number,
           otp: data.otp,
           fare: data.fare,
           distance: data.distance,
-        }});
+        }));
       }
     } else if (data.status === "rejected" || data.status === "cancelled") {
-      clearTimeout(timeoutRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      requestIdRef.current = null;
       dispatch(setDispatchStatus("failed"));
     }
   }, [dispatch]);
@@ -200,11 +243,14 @@ export function BikeSearchingScreen({ navigation, route }) {
     onMessage: handleWsMessage,
   });
 
+  // Dispatch Request Initiator
   const startSearch = useCallback(async () => {
     if (!locationReadyRef.current || searchStartedRef.current) return;
     searchStartedRef.current = true;
-    setShowNoRide(false);
-    setSearchStatus("searching");
+    if (isMountedRef.current) {
+      setShowNoRide(false);
+      setSearchStatus("searching");
+    }
 
     if (route_id && pickup_stop_id) {
       try {
@@ -214,6 +260,9 @@ export function BikeSearchingScreen({ navigation, route }) {
           drop_stop_id,
           mode: "broadcast",
         })).unwrap();
+
+        if (!isMountedRef.current) return;
+
         const payload = result.data || result;
         if (payload.status === "no_drivers_available") {
           setShowNoRide(true);
@@ -221,9 +270,10 @@ export function BikeSearchingScreen({ navigation, route }) {
           setDriversNotified(null);
           return;
         }
-        // Store request_id for broadcast WS listener
+
         const requestId = payload.request_id;
         if (requestId) {
+          requestIdRef.current = requestId;
           setActiveRequestId(requestId);
         }
         setDriversNotified(payload.drivers_notified ?? null);
@@ -231,8 +281,11 @@ export function BikeSearchingScreen({ navigation, route }) {
         if (tripId) {
           setActiveTripId(tripId);
         }
-        // 3min timeout: if no driver responds, cancel and show retry
+
+        // 3 minute timeout fallback
         timeoutRef.current = setTimeout(() => {
+          if (!isMountedRef.current) return;
+          requestIdRef.current = null;
           if (requestId) dispatch(cancelBroadcast(requestId));
           setShowNoRide(true);
           setSearchStatus("failed");
@@ -241,125 +294,97 @@ export function BikeSearchingScreen({ navigation, route }) {
         }, 180000);
       } catch (err) {
         console.warn("Dispatch request failed:", err);
-        setShowNoRide(true);
-        setSearchStatus("failed");
+        if (isMountedRef.current) {
+          setShowNoRide(true);
+          setSearchStatus("failed");
+        }
       }
     }
-  }, [route_id, pickup_stop_id, dispatch]);
+  }, [route_id, pickup_stop_id, drop_stop_id, dispatch]);
 
   useEffect(() => {
     if (locationReadyRef.current && !searchStartedRef.current) {
       startSearch();
     }
-  }, [currentPosition, searchStatus, startSearch]);
+  }, [searchStatus, startSearch]);
 
   async function handleTryAgain() {
     setShowNoRide(false);
     setSearchStatus("searching");
-    clearTimeout(timerRef.current);
-    clearTimeout(timeoutRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setActiveTripId(null);
     setActiveRequestId(null);
+    requestIdRef.current = null;
+    searchStartedRef.current = false;
 
-    if (route_id && pickup_stop_id) {
-      try {
-        const result = await dispatch(requestDispatch({
-          route_id,
-          pickup_stop_id,
-          drop_stop_id,
-          mode: "broadcast",
-        })).unwrap();
-        const payload = result.data || result;
-        if (payload.status === "no_drivers_available") {
-          setShowNoRide(true);
-          setSearchStatus("failed");
-          setDriversNotified(null);
-          return;
-        }
-        const requestId = payload.request_id;
-        if (requestId) {
-          setActiveRequestId(requestId);
-        }
-        setDriversNotified(payload.drivers_notified ?? null);
-        const tripId = payload.trip_id || payload.id;
-        if (tripId) {
-          setActiveTripId(tripId);
-        }
-        timeoutRef.current = setTimeout(() => {
-          if (requestId) dispatch(cancelBroadcast(requestId));
-          setShowNoRide(true);
-          setSearchStatus("failed");
-          setActiveRequestId(null);
-          setActiveTripId(null);
-        }, 180000);
-      } catch (err) {
-        console.warn("Dispatch request failed:", err);
-        setShowNoRide(true);
-        setSearchStatus("failed");
-      }
-    }
+    await startSearch();
   }
 
+  // Handle Redux state synchronization for accepted or failed dispatch
   useEffect(() => {
     if (dispatchStatus === "accepted" && !navigatedRiderPopupRef.current) {
-      clearTimeout(timeoutRef.current);
       setSearchStatus("found");
       const driverData = activeDispatch || {};
-      const pickupRaw = route?.params?.pickup;
-      const pickupStr = typeof pickupRaw === "string" ? pickupRaw : pickupRaw?.name || pickupRaw?.display_name || "Pickup";
-      const pickupName = route?.params?.pickupName || pickupStr;
-                const rawDist = Number(driverData.distance) || null;
+      const pickupStr = typeof pickup === "string" ? pickup : pickup?.name || pickup?.display_name || "Pickup";
+      const resolvedPickupName = pickupName || pickupStr;
+      const rawDist = Number(driverData.distance) || null;
       const rawEta = Number(driverData.eta) || null;
       const fmtDist = (d) => d == null ? "—" : d > 1000 ? `${(d / 1000).toFixed(1)} km` : `${d} m`;
       const distanceLabels = rawDist != null ? [fmtDist(rawDist), fmtDist(Math.round(rawDist * 0.66)), fmtDist(Math.round(rawDist * 0.33)), "Arrived"] : ["—"];
       const etaLabels = rawEta != null ? [`${rawEta} min`, `${Math.max(1, Math.round(rawEta * 0.6))} min`, `${Math.max(1, Math.round(rawEta * 0.3))} min`, "0 min"] : ["—"];
-      const trip = route?.params?.trip || {};
+
       const pickupStop = trip?.pickup_stop || {};
       const dropoffStop = trip?.dropoff_stop || {};
       const pickupLat = typeof pickupStop?.lat === "number" ? pickupStop.lat : null;
       const pickupLng = typeof pickupStop?.lon === "number" ? pickupStop.lon : null;
       const dropLat = typeof dropoffStop?.lat === "number" ? dropoffStop.lat : null;
       const dropLng = typeof dropoffStop?.lon === "number" ? dropoffStop.lon : null;
-      const dropName = (route?.params?.destination && (route.params.destination.name || route.params.destination.display_name)) || "Destination";
+      const dropName = (destination && (destination.name || destination.display_name)) || "Destination";
+
       const tripData = {
         ...driverData,
-        pickup_name: pickupName,
+        pickup_name: resolvedPickupName,
         drop_name: dropName,
         pickupLat,
         pickupLng,
         dropLat,
         dropLng,
       };
-      setTimeout(() => navigation.navigate('RiderPopup', {
-        driverName: driverData.driver_name || driverData.driver?.full_name || "Driver",
-        vehicle: driverData.vehicle_number || driverData.vehicle?.vehicle_number || "",
-                  otp: driverData.otp || "—",
-        distanceLabels,
-        etaLabels,
-        dispatchId: driverData.trip_id || driverData.id,
-        destination: route?.params?.destination || "Destination",
-        pickup: pickupStr,
-        pickupName: pickupName,
-        pickupLat,
-        pickupLng,
-        dropLat,
-        dropLng,
-        dropName,
-        route_name: driverData.route_name || trip?.name || "",
-                  eta: driverData.eta || "—",
-        distance: driverData.distance || "1200",
-                  fare: driverData.fare || route?.params?.fare || "—",
-        route_id,
-        tripData,
-      }), 600);
+
+      setTimeout(() => {
+        navigateToRiderPopup({
+          driverName: driverData.driver_name || driverData.driver?.full_name || "Driver",
+          vehicle: driverData.vehicle_number || driverData.vehicle?.vehicle_number || "",
+          otp: driverData.otp || "—",
+          distanceLabels,
+          etaLabels,
+          dispatchId: driverData.trip_id || driverData.id,
+          destination: destination || "Destination",
+          pickup: pickupStr,
+          pickupName: resolvedPickupName,
+          pickupLat,
+          pickupLng,
+          dropLat,
+          dropLng,
+          dropName,
+          route_name: driverData.route_name || trip?.name || "",
+          eta: driverData.eta || "—",
+          distance: driverData.distance || "—",
+          fare: driverData.fare || fare || "—",
+          route_id,
+          tripData,
+        });
+      }, 600);
     }
+
     if (dispatchStatus === "failed") {
-      clearTimeout(timeoutRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setShowNoRide(true);
       setSearchStatus("failed");
     }
-  }, [dispatchStatus, navigation, activeDispatch, route?.params?.destination, route_id]);
+  }, [dispatchStatus, activeDispatch, pickup, pickupName, destination, fare, trip, route_id, navigateToRiderPopup]);
 
+  // Wave Animations
   useEffect(() => {
     const makeWave = (anim, delay) =>
       Animated.loop(
@@ -392,7 +417,6 @@ export function BikeSearchingScreen({ navigation, route }) {
       w1.stop();
       w2.stop();
       w3.stop();
-      if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [waveAnim1, waveAnim2, waveAnim3]);
 
@@ -484,7 +508,7 @@ export function BikeSearchingScreen({ navigation, route }) {
           </View>
         </View>
 
-        {/* Floating Buttons */}
+        {/* Floating Controls */}
         <View style={styles.floatingContainer}>
           <TouchableOpacity style={styles.floatBtn} onPress={zoomIn}>
             <Ionicons name="add" size={22} color="#111827" />
@@ -533,7 +557,7 @@ export function BikeSearchingScreen({ navigation, route }) {
               style={styles.raisedBtn}
               disabled={true}
             >
-              <Text style={styles.raisedText}>✋  Hand Raised</Text>
+              <Text style={styles.raisedText}>✋ Hand Raised</Text>
             </TouchableOpacity>
           </>
         )}
@@ -548,34 +572,34 @@ export function BikeSearchingScreen({ navigation, route }) {
               activeOpacity={0.9}
               style={styles.foundBtn}
               onPress={() => {
-                const pickupRaw = route?.params?.pickup;
-                const pickupStr = typeof pickupRaw === "string" ? pickupRaw : pickupRaw?.name || pickupRaw?.display_name || "Pickup";
+                const pickupStr = typeof pickup === "string" ? pickup : pickup?.name || pickup?.display_name || "Pickup";
                 const driverData = activeDispatch || {};
-      const rawDist = Number(driverData.distance) || null;
+                const rawDist = Number(driverData.distance) || null;
                 const rawEta = Number(driverData.eta) || null;
                 const fmtDist = (d) => d == null ? "—" : d > 1000 ? `${(d / 1000).toFixed(1)} km` : `${d} m`;
                 const distLabels = rawDist != null ? [fmtDist(rawDist), fmtDist(Math.round(rawDist * 0.66)), fmtDist(Math.round(rawDist * 0.33)), "Arrived"] : ["—"];
                 const etaLbls = rawEta != null ? [`${rawEta} min`, `${Math.max(1, Math.round(rawEta * 0.6))} min`, `${Math.max(1, Math.round(rawEta * 0.3))} min`, "0 min"] : ["—"];
-                navigation.replace('RiderPopup', {
+
+                navigateToRiderPopup({
                   driverName: driverData.driver_name || driverData.driver?.full_name || "Driver",
                   vehicle: driverData.vehicle_number || driverData.vehicle?.vehicle_number || "",
-        otp: driverData.otp || "—",
+                  otp: driverData.otp || "—",
                   distanceLabels: distLabels,
                   etaLabels: etaLbls,
                   dispatchId: driverData.trip_id || driverData.id || activeTripId,
-                  destination: route?.params?.destination || "Destination",
+                  destination: destination || "Destination",
                   pickup: pickupStr,
-                  pickupName: route?.params?.pickupName || pickupStr,
-        eta: driverData.eta || "—",
+                  pickupName: pickupName || pickupStr,
+                  eta: driverData.eta || "—",
                   distance: driverData.distance || "—",
-        fare: driverData.fare || route?.params?.fare || "—",
+                  fare: driverData.fare || fare || "—",
                   route_id,
                   tripData: driverData,
                 });
               }}
             >
               <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
-              <Text style={styles.foundBtnText}>  Marshal Found! Tap to view</Text>
+              <Text style={styles.foundBtnText}> Marshal Found! Tap to view</Text>
             </TouchableOpacity>
           </>
         )}
@@ -637,7 +661,7 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   gradBase: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "#009849",
   },
   gradRay1: {
@@ -687,8 +711,6 @@ const styles = StyleSheet.create({
   mapArea: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#F9FAFB",
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   mapBg: {
     ...StyleSheet.absoluteFillObject,
@@ -712,16 +734,16 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 5,
     borderWidth: 4,
-    borderColor: '#FFFFFF',
-    overflow: 'hidden',
+    borderColor: "#FFFFFF",
+    overflow: "hidden",
   },
   userDotImage: {
     width: 56,
@@ -734,17 +756,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
     paddingVertical: 6,
-    shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 8,
     zIndex: 20,
     bottom: 200,
   },
   floatBtn: {
-    width: 48, height: 44,
-    justifyContent: "center", alignItems: "center",
+    width: 48,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
   },
   floatDivider: {
-    height: 1, backgroundColor: "#F0F0F0", marginHorizontal: 12,
+    height: 1,
+    backgroundColor: "#F0F0F0",
+    marginHorizontal: 12,
   },
   bottomSheet: {
     position: "absolute",
@@ -799,20 +828,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#A7F3C4",
   },
   searchingInfo: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 24,
   },
   searchingTitle: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
+    fontWeight: "800",
+    color: "#111827",
   },
   searchingSub: {
     fontSize: 13,
-    color: '#6B7280',
-    textAlign: 'center',
+    color: "#6B7280",
+    textAlign: "center",
     marginTop: 4,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   raisedBtn: {
     height: 60,
@@ -846,11 +875,11 @@ const styles = StyleSheet.create({
   },
   cancelLink: {
     marginTop: 16,
-    alignItems: 'center',
+    alignItems: "center",
   },
   cancelLinkText: {
-    color: '#EF4444',
+    color: "#EF4444",
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });

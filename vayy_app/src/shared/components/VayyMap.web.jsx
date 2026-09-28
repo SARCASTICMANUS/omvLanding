@@ -294,9 +294,14 @@ const VayyMap = forwardRef(function VayyMap(
   cameraHandle.current.fitBounds = fitBoundsImpl;
 
   useEffect(() => {
-    activeCameraRef.current = cameraHandle.current;
-    return () => { activeCameraRef.current = null; };
-  }, [activeCameraRef]);
+    const handle = cameraHandle.current;
+    activeCameraRef.current = handle;
+    return () => {
+      if (!cameraRef && activeCameraRef.current === handle) {
+        activeCameraRef.current = null;
+      }
+    };
+  }, [activeCameraRef, cameraRef, cameraHandle]);
 
   const viewState =
     initialViewState ||

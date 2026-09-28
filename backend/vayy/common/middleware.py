@@ -126,9 +126,14 @@ class GeoIPMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # Capture client_ip from request body before DRF consumes it
+        # Capture client_ip from request body before DRF consumes it.
+        # Must match the real route in kpi/api/urls.py ("track/"). This used to
+        # be "track-page-view", which is not a registered URL, so _client_ip
+        # always stayed "" and the guard below returned early on every request —
+        # meaning no GeoEvent row was ever written and /api/kpi/geo-stats/
+        # ?source=geoevent always came back empty.
         _client_ip = ""
-        if request.path.startswith("/api/kpi/track-page-view"):
+        if request.path.startswith("/api/kpi/track/"):
             try:
                 import json
                 body = json.loads(request.body) if request.body else {}
@@ -139,7 +144,7 @@ class GeoIPMiddleware:
         response = self.get_response(request)
 
         try:
-            if not _client_ip and not request.path.startswith("/api/kpi/track-page-view"):
+            if not _client_ip and not request.path.startswith("/api/kpi/track/"):
                 return response
 
             from tracking.services.geoip_service import lookup_geoip

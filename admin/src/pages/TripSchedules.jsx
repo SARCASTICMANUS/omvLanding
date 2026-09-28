@@ -23,7 +23,7 @@ export default function TripSchedules() {
       ]);
       setSchedules(Array.isArray(schRes.data) ? schRes.data : schRes.data.results || []);
       setRoutes(Array.isArray(rRes.data) ? rRes.data : rRes.data.results || []);
-    } catch { /* ignore */ }
+    } catch (err) { console.error("TripSchedules error:", err); alert("Failed to load trips"); }
     setLoading(false);
   };
 
@@ -48,9 +48,9 @@ export default function TripSchedules() {
     e.preventDefault();
     try {
       if (editing) {
-        await api.put(`/transport/schedules/${editing.id}/`, form);
+        await api.put(`/transport/admin/schedules/${editing.id}/`, form);
       } else {
-        await api.post("/transport/schedules/", form);
+        await api.post("/transport/admin/schedules/", form);
       }
       setModal(false);
       fetchData();
@@ -62,9 +62,9 @@ export default function TripSchedules() {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this schedule?")) return;
     try {
-      await api.delete(`/transport/schedules/${id}/`);
+      await api.delete(`/transport/admin/schedules/${id}/`);
       fetchData();
-    } catch { /* ignore */ }
+    } catch (err) { console.error("TripSchedules error:", err); alert("Failed to load trips"); }
   };
 
   const getRouteName = (routeId) => {

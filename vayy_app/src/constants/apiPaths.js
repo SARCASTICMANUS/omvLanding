@@ -78,8 +78,9 @@ export const COMMUNICATION = {
 };
 
 export const ADMIN = {
-  routes: "/api/admin/routes/",
-  stops: "/api/admin/stops/",
+  routes: "/api/transport/admin/routes/",
+  stops: "/api/transport/admin/stops/",
+  schedules: "/api/transport/admin/schedules/",
   driversPending: "/api/operations/admin/drivers/pending/",
   driverVerify: (id) => `/api/operations/admin/drivers/${id}/verify/`,
   users: "/api/accounts/users/",

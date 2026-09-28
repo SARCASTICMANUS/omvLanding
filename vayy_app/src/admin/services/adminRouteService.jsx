@@ -1,9 +1,9 @@
-import API from "../../shared/lib/api";
+import API, { unwrapList } from "../../shared/lib/api";
 import { ADMIN } from "../../constants";
 
 export const fetchRoutesAPI = async () => {
   const res = await API.get(ADMIN.routes);
-  return res.data?.data ?? res.data;
+  return unwrapList(res.data);
 };
 
 export const createRouteAPI = async (data) => {

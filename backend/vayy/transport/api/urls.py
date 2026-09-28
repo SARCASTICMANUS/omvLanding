@@ -23,6 +23,9 @@ from transport.api.views import (
     GeocodeReverseAPIView,
     AdminRouteViewSet,
     AdminStopViewSet,
+    AdminTripScheduleViewSet,
+    AdminStopTimeViewSet,
+    AdminCityViewSet,
     AdminRouteImportAPIView,
 )
 
@@ -36,6 +39,9 @@ router.register(r"stop-times", StopTimeViewSet, basename="stop-time")
 admin_router = DefaultRouter()
 admin_router.register(r"routes", AdminRouteViewSet, basename="admin-route")
 admin_router.register(r"stops", AdminStopViewSet, basename="admin-stop")
+admin_router.register(r"schedules", AdminTripScheduleViewSet, basename="admin-schedule")
+admin_router.register(r"stop-times", AdminStopTimeViewSet, basename="admin-stop-time")
+admin_router.register(r"cities", AdminCityViewSet, basename="admin-city")
 
 urlpatterns = [
     path(

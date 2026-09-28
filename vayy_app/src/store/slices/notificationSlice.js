@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import api from "../../shared/lib/api";
+import api, { unwrapList } from "../../shared/lib/api";
 import { COMMUNICATION } from "../../constants";
 
 export const fetchNotifications = createAsyncThunk(
@@ -37,7 +37,7 @@ const notificationSlice = createSlice({
   reducers: {
     addNotification: (state, action) => {
       state.list.unshift(action.payload);
-      if (!action.payload.is_read) {
+      if (!action.payload.read) {
         state.unreadCount += 1;
       }
     },
@@ -52,8 +52,8 @@ const notificationSlice = createSlice({
       })
       .addCase(fetchNotifications.fulfilled, (state, action) => {
         state.loading = false;
-        state.list = action.payload?.data || action.payload?.results || action.payload || [];
-        state.unreadCount = state.list.filter((n) => !n.is_read).length;
+        state.list = unwrapList(action.payload);
+        state.unreadCount = state.list.filter((n) => !n.read).length;
       })
       .addCase(fetchNotifications.rejected, (state, action) => {
         state.loading = false;
@@ -62,7 +62,7 @@ const notificationSlice = createSlice({
       .addCase(markNotificationRead.fulfilled, (state, action) => {
         const index = state.list.findIndex(n => n.id === action.payload.id);
         if (index !== -1) {
-          state.list[index].is_read = true;
+          state.list[index].read = true;
           if (state.unreadCount > 0) state.unreadCount -= 1;
         }
       });
