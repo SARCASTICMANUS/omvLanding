@@ -204,6 +204,16 @@ jobs:
             # 3. Gracefully restart services
             docker compose -f docker-compose-prod.yaml up -d --remove-orphans
 
+            # 3b. Reload nginx so config changes actually take effect.
+            # nginx.prod.conf is bind-mounted, so editing it does NOT recreate the
+            # container and `up -d` does not reload it. A running nginx keeps
+            # serving its old config until reloaded - which silently left /omv/
+            # routed to the admin SPA (location /omv/ was in the file on disk but
+            # not in the loaded config). Reload so the on-disk config is live.
+            echo "Reloading nginx to pick up config changes..."
+            docker compose -f docker-compose-prod.yaml exec -T nginx nginx -s reload || \
+              echo "::warning::nginx reload failed (container may not be running yet); continuing"
+
             # 4. Run database migrations safely
             echo "Running database migrations..."
             docker compose -f docker-compose-prod.yaml exec -T web python manage.py migrate --fake
