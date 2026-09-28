@@ -1,8 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 
+// Base path for all built asset URLs, router basename, and public asset paths.
+// Local dev defaults to "/" (http://localhost:5173/).
+// The Docker production build sets BASE_PATH=/omv/ so the SPA is served under
+// https://onmyvayy.com/omv/. Always include leading + trailing slashes when set.
+const base = process.env.BASE_PATH || "/";
+
 // https://vite.dev/config/
 export default defineConfig({
+  base,
   plugins: [react()],
   server: {
     watch: {

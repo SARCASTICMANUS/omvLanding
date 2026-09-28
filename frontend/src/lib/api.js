@@ -60,9 +60,19 @@ api.interceptors.response.use(
 );
 
 export const getWsUrl = (path) => {
-  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  // API_PATHS and WS paths already carry their own /api/ and /ws/ prefixes, so
+  // VITE_API_URL must be an ORIGIN (e.g. https://onmyvayy.com) - never "/api".
+  // In production the SPA is same-origin with the API, so window.location.origin
+  // is a safe fallback and prevents malformed "ws:///api/..." URLs.
+  const baseUrl =
+    import.meta.env.VITE_API_URL || "http://localhost:8000";
+  if (!/^https?:\/\//i.test(baseUrl)) {
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "http://localhost:8000";
+    return `${origin.replace(/^http/i, "ws")}${path}`;
+  }
   const wsProtocol = baseUrl.startsWith("https") ? "wss" : "ws";
-  const wsHost = baseUrl.replace(/^https?:\/\//, "");
+  const wsHost = baseUrl.replace(/^https?:\/\//i, "");
   return `${wsProtocol}://${wsHost}${path}`;
 };
 

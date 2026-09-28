@@ -100,6 +100,20 @@ services:
     depends_on:
       - web
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        BASE_PATH: /omv/
+        VITE_API_URL: ${VITE_API_URL:-https://onmyvayy.com}
+    container_name: vayy-frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      - web
+
   nginx:
     image: nginx:alpine
     container_name: vayy-nginx
@@ -116,6 +130,7 @@ services:
     depends_on:
       - web
       - admin
+      - frontend
 
   osrm-download:
     image: alpine:3.20

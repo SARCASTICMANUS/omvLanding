@@ -1,11 +1,17 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "../../constants/routes";
 
 export default function UnknownRoleScreen({ role }) {
+  const navigate = useNavigate();
+
+  // Client-side navigation (not window.location.replace) so React Router keeps
+  // its basename. A full page load with an absolute path like "/login" would
+  // drop the "/omv" prefix in the production build and 404 on nginx.
   const handleBackToLogin = () => {
     localStorage.clear();
     sessionStorage.clear();
-    window.location.replace(APP_ROUTES.login);
+    navigate(APP_ROUTES.login, { replace: true });
   };
 
   return (

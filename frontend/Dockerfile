@@ -1,61 +1,39 @@
-# FROM node:18-alpine
-
-# WORKDIR /app
-
-# # Copy package files first for caching
-# COPY package.json package-lock.json ./
-
-# # Install dependencies
-# RUN npm install
-
-# # Copy source code
-# COPY . .
-
-# # Vite runs on 5173 by default, but we configured it to 3000 in vite.config.js
-# EXPOSE 3000
-
-# # Bind to 0.0.0.0 so Docker can map ports
-# CMD ["npm", "run", "dev"]
-# Change from node:18-alpine to node:22-alpine
-# FROM node:22-alpine
-
-# WORKDIR /app
-
-# # Copy package files first for caching
-# COPY package.json package-lock.json ./
-
-# # Install dependencies
-# RUN npm install
-
-# # Copy source code
-# COPY . .
-
-# EXPOSE 3000
-
-# # Bind to 0.0.0.0 so Docker can map ports
-# CMD ["npm", "run", "dev", "--", "--host"]
-
-FROM node:22-alpine
+# syntax=docker/dockerfile:1
+# Multi-stage build: compile the Vite SPA, then serve the static files via nginx.
+# Mirrors ../admin/Dockerfile. The built app is hosted under the /omv base path
+# and is proxied by the root nginx (see ../nginx.conf and ../nginx.prod.conf).
+# Vite 7 requires Node 20.19+ / 22.12+.
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
-# Copy package files
 COPY package.json package-lock.json ./
+RUN npm ci
 
-# Install dependencies 
-# We use 'ci' for faster, more reliable builds if you have a lockfile
-RUN npm install
-
-# Copy source code
 COPY . .
 
-# Fix permissions for the node_modules binaries
-# This ensures 'vite' can be executed even if the mount messes with flags
-RUN chmod -R +x /app/node_modules/.bin
+# Public deployment path. Must include leading and trailing slashes.
+# BASE_PATH drives Vite's `base`, which in turn drives the router basename,
+# the service worker scope, and every emitted asset URL.
+ARG BASE_PATH=/omv/
+ENV BASE_PATH=${BASE_PATH}
 
-EXPOSE 3000
+# API origin only - API_PATHS already include the "/api/" prefix and the WS
+# paths include "/ws/", so this must NOT be set to "/api".
+# Same-origin in production (nginx proxies /api/ and /ws/ to the Django web
+# service), which keeps the app free of CORS issues.
+ARG VITE_API_URL=https://onmyvayy.com
+ENV VITE_API_URL=${VITE_API_URL}
 
-# Ensure we use the 'node' user for better security, 
-# but only if your volume mounts allow it. 
-# For now, we stay as root to fix the permission issue.
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+RUN npm run build
+
+# --- Runtime: static server ---
+FROM nginx:alpine
+
+# Copy into the "omv" subdirectory so that the /omv/... URLs emitted by Vite
+# resolve to real files without any rewriting.
+COPY --from=build /app/dist /usr/share/nginx/html/omv
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

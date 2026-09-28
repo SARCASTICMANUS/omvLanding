@@ -1,5 +1,8 @@
 // VAYY | src/services/notificationService.js
 
+// Base-aware public asset path: "/" in dev, "/omv/" in the production build.
+const ICON = `${import.meta.env.BASE_URL}vite.svg`;
+
 class NotificationService {
   constructor() {
     this.permission = "default";
@@ -27,8 +30,8 @@ class NotificationService {
     }
 
     const defaultOptions = {
-      icon: "/vite.svg",
-      badge: "/vite.svg",
+      icon: ICON,
+      badge: ICON,
       vibrate: [200, 100, 200],
       timestamp: Date.now(),
       ...options,
@@ -61,7 +64,7 @@ class NotificationService {
     if ("serviceWorker" in navigator) {
       const registration = await navigator.serviceWorker.ready;
       registration.showNotification(title, {
-        icon: "/vite.svg",
+        icon: ICON,
         ...options,
       });
     }

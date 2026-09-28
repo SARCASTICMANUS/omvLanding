@@ -229,7 +229,7 @@ const PassengerLiveTracking = ({
         notificationService.notify("Your ride is nearby", {
           body: data.message,
           tag: `proximity-${tripId}`,
-          icon: "/vite.svg"
+          icon: `${import.meta.env.BASE_URL}vite.svg`
         });
       }
     };

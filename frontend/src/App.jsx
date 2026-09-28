@@ -9,11 +9,15 @@ import { FullScreenLoader } from "./components/Shared";
 import { useAuthExpiryGuard } from "./hooks/useAuthExpiryGuard";
 import { appRouteConfig } from "./routes/routeConfig";
 
+// Single source of truth is Vite's `base` (see vite.config.js).
+// "/" -> "" (app served at domain root), "/omv/" -> "/omv".
+const basename = import.meta.env.BASE_URL.replace(/\/+$/, "");
+
 function App() {
   useAuthExpiryGuard();
 
   return (
-    <Router>
+    <Router basename={basename}>
       <Suspense fallback={<FullScreenLoader />}>
         <Routes>
           {appRouteConfig.map((route) => (
