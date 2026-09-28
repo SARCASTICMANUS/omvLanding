@@ -94,6 +94,9 @@ export default function DriverTripPlanner({
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [sheetDragging, setSheetDragging] = useState(false);
   const rootRef = useRef(null);
+  // Measured height of the root container. Kept in state (not read off the ref
+  // during render) so the locate button offset stays reactive to resize.
+  const [rootHeight, setRootHeight] = useState(0);
   const sheetHeightRef = useRef(COMPACT_SHEET_HEIGHT);
   const sheetDragRef = useRef({
     active: false,
@@ -172,8 +175,24 @@ export default function DriverTripPlanner({
       .catch(err => console.error("Failed to fetch recent searches", err));
   }, []);
 
+  // Track the root container height so getMaxSheetHeight() stays accurate
+  // without reading a ref during render.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return undefined;
+    const measure = () => setRootHeight(el.clientHeight || 0);
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const getMaxSheetHeight = () => {
-    const viewportHeight = rootRef.current?.clientHeight || window.innerHeight;
+    const viewportHeight = rootHeight || window.innerHeight;
     return Math.max(
       COMPACT_SHEET_HEIGHT,
       Math.min(viewportHeight - 16, Math.round(viewportHeight * 0.9)),

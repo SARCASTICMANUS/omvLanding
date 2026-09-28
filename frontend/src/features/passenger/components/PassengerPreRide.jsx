@@ -221,13 +221,6 @@ export default function PassengerPreRide({
   const ready = canRequest && !missingCoords && isNearby;
   const waitMinutes = Math.max(1, Math.ceil((selectedTrip?.eta_seconds || 300) / 60));
 
-  const routeMeters =
-    selectedTrip?.total_distance_meters != null &&
-    Number.isFinite(Number(selectedTrip.total_distance_meters))
-      ? Number(selectedTrip.total_distance_meters)
-      : estimate.data?.distance_km != null && Number.isFinite(Number(estimate.data.distance_km))
-        ? Number(estimate.data.distance_km) * 1000
-        : null;
   const distText = formatDistance(pickupDistance);
   const walkText = walkingTimeText(pickupDistance);
 

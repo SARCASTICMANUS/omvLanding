@@ -130,6 +130,7 @@ const LiveMap = React.memo(function LiveMap({
   is3D,
   isSatellite,
   mapRef,
+  vehicleType,
 }) {
   const mapContainer = useRef(null);
   const isInitialized = useRef(false);
@@ -237,7 +238,7 @@ const LiveMap = React.memo(function LiveMap({
       if (!markers.current.bus) {
         const el = document.createElement('div');
         el.className = 'vehicle-marker-container';
-        const vehicleIcon = (activeTrip?.vehicle_type || activeTrip?.vehicle?.vehicle_type) === 'bike'
+        const vehicleIcon = vehicleType === 'bike'
           ? '<circle cx="6" cy="17" r="3"></circle><circle cx="18" cy="17" r="3"></circle><path d="m9 17 3-8 4 8H9l-3-7h5m1-2h3"></path>'
           : '<path d="M3 16V9l2-4h14l2 4v7"></path><path d="M3 11h18M5 16h14M6 16v3m12-3v3"></path><circle cx="7" cy="15" r="1"></circle><circle cx="17" cy="15" r="1"></circle>';
         el.innerHTML = `
@@ -271,7 +272,7 @@ const LiveMap = React.memo(function LiveMap({
         markers.current.dest.setLngLat(dest);
       }
     }
-  }, [currentPos, path, is3D, isSatellite]);
+  }, [currentPos, path, is3D, isSatellite, vehicleType]);
 
   return <div ref={mapContainer} className="w-full h-full block relative" />;
 });
@@ -496,6 +497,7 @@ export default function DriverLiveTracking({ activeTrip, onBack, onEndTrip }) {
           is3D={is3D}
           isSatellite={isSatellite}
           mapRef={mapRef}
+          vehicleType={activeTrip?.vehicle_type || activeTrip?.vehicle?.vehicle_type}
         />
       </div>
 

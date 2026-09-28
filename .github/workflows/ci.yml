@@ -48,8 +48,58 @@ jobs:
           npm ci
           npm run build 
 
+  frontend-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Lint frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run lint
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      # Build with the same base path the production image uses so a broken
+      # BASE_PATH (assets emitted at "/" instead of "/omv/") fails here rather
+      # than at runtime.
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          BASE_PATH=/omv/ VITE_API_URL=https://onmyvayy.com npm run build
+
+      - name: Verify /omv asset base path
+        run: |
+          set -e
+          cd frontend
+          if ! grep -q 'src="/omv/assets/' dist/index.html; then
+            echo "::error::dist/index.html does not reference /omv/assets/ - BASE_PATH is wrong"
+            grep -o 'src="[^"]*"' dist/index.html || true
+            exit 1
+          fi
+          echo "dist/index.html correctly references /omv/assets/"
+
   deploy:
-    needs: [lint, admin-build]
+    needs: [lint, admin-build, frontend-lint, frontend-build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     
@@ -88,6 +138,19 @@ jobs:
             admin/ \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/${{ secrets.VM_USER }}/vayy/admin/
 
+      # The prod compose builds `frontend` from ./frontend, so the build context
+      # must exist on the VM or the image build fails.
+      # .env is excluded on purpose: frontend/.env is a LOCAL dev file that pins
+      # VITE_API_URL=http://127.0.0.1:8000. The image gets its API origin from
+      # the BASE_PATH/VITE_API_URL build args in docker-compose-prod.yaml, so
+      # syncing .env would silently ship the loopback URL.
+      - name: Sync frontend to VM
+        run: |
+          rsync -avz --delete -e "ssh" \
+            --exclude "node_modules" --exclude "dist" --exclude ".env" \
+            frontend/ \
+            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/${{ secrets.VM_USER }}/vayy/frontend/
+
       # Write the three .env files the stack consumes:
       #   /home/<user>/vayy/.env              -> compose ${VAR} interpolation (POSTGRES_*, RABBITMQ_*)
       #   /home/<user>/vayy/backend/vayy/.env -> web/celery env_file
@@ -119,7 +182,7 @@ jobs:
             cd /home/${{ secrets.VM_USER }}/vayy
             # Own the synced code, but leave the osrm tree untouched: the OSRM
             # containers create those files as root and chown would fail below.
-            find backend/vayy admin \( -name osrm -prune \) -o -print0 | xargs -0 chown ${{ secrets.VM_USER }}:${{ secrets.VM_USER }}
+            find backend/vayy admin frontend \( -name osrm -prune \) -o -print0 | xargs -0 chown ${{ secrets.VM_USER }}:${{ secrets.VM_USER }}
           EOF
 
       - name: Build and restart containers

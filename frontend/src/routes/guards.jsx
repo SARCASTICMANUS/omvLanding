@@ -1,7 +1,7 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
 import { useSelector } from "react-redux";
-import { ADMIN_ROLES } from "../constants/roles";
+import { ADMIN_ROLES, DRIVER_ROLES } from "../constants/roles";
 import { APP_ROUTES } from "../constants/routes";
 import { UnknownRoleScreen } from "../components/Shared";
 import { getRedirectPathByRole, normalizeRole } from "../utils/roles";
