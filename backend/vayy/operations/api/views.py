@@ -7,6 +7,7 @@ from rest_framework.exceptions import (
     ValidationError,
 )
 from rest_framework.permissions import (
+    BasePermission,
     IsAuthenticated,
 )
 from rest_framework.response import Response
@@ -29,6 +30,7 @@ from operations.api.serializers import (
     RideEstimateSerializer,
     RideEstimateResponseSerializer,
     TripRatingSerializer,
+    FareConfigurationSerializer,
 )
 from operations.selectors.boarding_selector import (
     BoardingSelector,
@@ -54,10 +56,13 @@ from transport.api.serializers import (
     StopTimeSerializer,
 )
 from transport.models import StopTime
-from operations.models import ActiveTrip, DispatchRequest, VehicleState
+from operations.models import ActiveTrip, DispatchRequest, VehicleState, FareConfiguration
+from operations.permissions import (
+    HasBoardingRequestAccess,
+    HasTripAccess,
+    HasVehicleAccess,
+)
 from common.constants import (
-    TRIP_STATUS_REQUESTED,
-    TRIP_STATUS_ACCEPTED,
     TRIP_STATUS_CANCELLED,
     TRIP_STATUS_COMPLETED,
     ROLE_BIKE_DRIVER,
@@ -149,17 +154,39 @@ class DispatchRequestAPIView(APIView):
             logger.exception("[DispatchRequest] Dispatch request failed")
             return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class IsAdminUser(BasePermission):
+    """
+    Admin access.
+
+    Deliberately not DRF's IsAdminUser, which only tests ``is_staff``: in this
+    project admins are identified by ``role == "admin"`` and a staff flag is
+    not guaranteed. Defined here, above the admin views that reference it,
+    because ``permission_classes`` is evaluated at class-definition time.
+    """
+
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and (
+            request.user.role == ROLE_ADMIN or request.user.is_staff
+        )
+
+
 class DispatchAssignAPIView(APIView):
     """
-    POST /api/v1/dispatch/assign
-    Admin or automated system assigns a driver/vehicle to a route.
+    POST /api/operations/dispatch/assign
+    Admin assigns a driver/vehicle to a route, creating an ASSIGNED trip.
+
+    Operator override, not part of the passenger dispatch funnel: there is no
+    passenger, so the created trip has no boarding request and does not
+    participate in settlement.
     """
-    permission_classes = [IsAuthenticated] # Should be IsAdmin/IsStaff in real app
+    # Creates trips and pins them to a specific vehicle, so this is an
+    # operator action: any authenticated user could otherwise park the fleet.
+    permission_classes = [IsAuthenticated, IsAdminUser]
 
     def post(self, request):
         serializer = DispatchAssignSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         try:
             trip = DispatchService.assign_trip(
                 vehicle_id=str(serializer.validated_data["vehicle_id"]),
@@ -170,9 +197,11 @@ class DispatchAssignAPIView(APIView):
             resp = Response(ActiveTripSerializer(trip).data, status=status.HTTP_201_CREATED)
             return resp
         except ValueError as e:
-            logger.warning(f"[DispatchAssign] Value error: {e}")
+            logger.warning(f"[DispatchAssign] Rejected: {e}")
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
+        except Exception:
+            # Deliberately does not echo str(e): anything reaching here is an
+            # unexpected fault, and the detail may carry internals.
             logger.exception("[DispatchAssign] Dispatch assignment failed")
             return Response({"detail": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -181,12 +210,12 @@ class DispatchCancelAPIView(APIView):
     POST /api/v1/dispatch/cancel
     Cancels an active dispatch/trip.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasTripAccess]
 
     def post(self, request, trip_id):
         serializer = DispatchCancelSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         try:
             trip = DispatchService.cancel_dispatch(
                 trip_id=trip_id,
@@ -195,6 +224,11 @@ class DispatchCancelAPIView(APIView):
             )
             resp = Response(ActiveTripSerializer(trip).data)
             return resp
+        except PermissionDenied:
+            # Ownership is enforced by HasTripAccess and again inside
+            # cancel_dispatch; an authorisation failure must not be reported
+            # as a 500.
+            raise
         except Exception as e:
             logger.exception(f"[DispatchCancel] Cancellation failed for trip {trip_id}")
             return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -204,226 +238,14 @@ class DispatchDetailAPIView(APIView):
     GET /api/v1/dispatch/{trip_id}
     Returns details of a dispatch assignment (ActiveTrip).
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasTripAccess]
 
     def get(self, request, trip_id):
-        try:
-            trip = TripSelector.get_trip(trip_id)
-            resp = Response(ActiveTripSerializer(trip).data)
-            return resp
-        except ActiveTrip.DoesNotExist:
-            logger.warning(f"[DispatchDetail] Trip {trip_id} not found")
-            return Response({"detail": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
+        # Already fetched and authorised by HasTripAccess.
+        trip = self._owned_object
+        resp = Response(ActiveTripSerializer(trip).data)
+        return resp
 
-class DriverInitiateRideAPIView(APIView):
-    """
-    POST /api/operations/dispatch/initiate-ride/
-    Driver initiates a ride request to a specific passenger.
-    Creates an ActiveTrip in 'requested' state and notifies the passenger via WebSocket.
-    """
-    permission_classes = [IsAuthenticated, IsDriver]
-
-    def post(self, request):
-        passenger_id = request.data.get("passenger_id")
-        route_id = request.data.get("route_id")
-        pickup_stop_id = request.data.get("pickup_stop_id")
-
-        if not all([passenger_id, route_id, pickup_stop_id]):
-            return Response(
-                {"success": False, "message": "passenger_id, route_id, and pickup_stop_id are required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            driver = request.user
-            passenger = User.objects.get(id=passenger_id)
-            route = Route.objects.get(id=route_id)
-            from transport.models import Stop
-            pickup_stop = Stop.objects.get(id=pickup_stop_id)
-
-            vehicle = VehicleSelector.get_driver_vehicle(driver.id)
-            if not vehicle:
-                return Response(
-                    {"success": False, "message": "Driver has no assigned vehicle"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            trip = ActiveTrip.objects.create(
-                vehicle=vehicle,
-                route=route,
-                driver=driver,
-                status=TRIP_STATUS_REQUESTED,
-                started_at=timezone.now(),
-            )
-
-            BoardingRequest.objects.create(
-                passenger=passenger,
-                trip=trip,
-                pickup_stop=pickup_stop,
-                status=BOARDING_PENDING,
-            )
-
-            payload = {
-                "trip_id": str(trip.id),
-                "passenger_id": str(passenger_id),
-                "driver_id": str(driver.id),
-                "driver_name": driver.get_full_name(),
-                "route_id": route_id,
-                "route_name": route.name,
-                "pickup_stop_id": pickup_stop_id,
-                "pickup_stop_name": pickup_stop.name,
-                "vehicle_number": vehicle.vehicle_number,
-                "vehicle_type": vehicle.vehicle_type,
-                "status": trip.status,
-                "requested_at": timezone.now().isoformat(),
-            }
-
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
-                f"dispatch_{trip.id}",
-                {"type": "dispatch_update", "data": payload},
-            )
-            async_to_sync(channel_layer.group_send)(
-                f"notifications_{passenger_id}",
-                {
-                    "type": "notification_broadcast",
-                    "data": {
-                        "title": "Ride Request",
-                        "message": f"{driver.get_full_name()} wants to pick you up for {route.name}",
-                        "trip_id": str(trip.id),
-                        "type": "ride_request",
-                        **payload,
-                    },
-                },
-            )
-
-            from operations.tasks import check_assignment_timeout
-            check_assignment_timeout.apply_async((str(trip.id),), countdown=120)
-
-            resp = Response(
-                {
-                    "success": True,
-                    "message": "Ride request sent to passenger",
-                    "data": {
-                        "trip_id": str(trip.id),
-                        "passenger_name": passenger.get_full_name(),
-                        "status": trip.status,
-                    },
-                },
-                status=status.HTTP_201_CREATED,
-            )
-            return resp
-
-        except User.DoesNotExist:
-            logger.warning(f"[DriverInitiateRide] Passenger {passenger_id} not found")
-            return Response(
-                {"success": False, "message": "Passenger not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        except Route.DoesNotExist:
-            logger.warning(f"[DriverInitiateRide] Route {route_id} not found")
-            return Response(
-                {"success": False, "message": "Route not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        except Exception as e:
-            logger.exception(f"[DriverInitiateRide] Driver initiate ride failed: {e}")
-            return Response(
-                {"success": False, "message": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-class PassengerAcceptRideAPIView(APIView):
-    """
-    PATCH /api/operations/dispatch/{trip_id}/passenger-accept/
-    Passenger accepts a driver-initiated ride request.
-    """
-    permission_classes = [IsAuthenticated, IsPassenger]
-
-    def patch(self, request, trip_id):
-        try:
-            trip = ActiveTrip.objects.get(id=trip_id)
-            if trip.status != TRIP_STATUS_REQUESTED:
-                return Response(
-                    {"success": False, "message": f"Cannot accept trip in '{trip.status}' status"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            trip.status = TRIP_STATUS_ACCEPTED
-            trip.save()
-
-            payload = {
-                "trip_id": str(trip.id),
-                "status": trip.status,
-                "updated_at": timezone.now().isoformat(),
-            }
-
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
-                f"dispatch_{trip.id}",
-                {"type": "dispatch_update", "data": payload},
-            )
-
-            resp = Response({"success": True, "message": "Ride accepted", "data": payload})
-            return resp
-
-        except ActiveTrip.DoesNotExist:
-            logger.warning(f"[PassengerAcceptRide] Trip {trip_id} not found")
-            return Response({"success": False, "message": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            logger.exception(f"[PassengerAcceptRide] Passenger accept ride failed: {e}")
-            return Response({"success": False, "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-class PassengerRejectRideAPIView(APIView):
-    """
-    PATCH /api/operations/dispatch/{trip_id}/passenger-reject/
-    Passenger rejects a driver-initiated ride request.
-    """
-    permission_classes = [IsAuthenticated, IsPassenger]
-
-    def patch(self, request, trip_id):
-        try:
-            trip = ActiveTrip.objects.get(id=trip_id)
-            if trip.status != TRIP_STATUS_REQUESTED:
-                return Response(
-                    {"success": False, "message": f"Cannot reject trip in '{trip.status}' status"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            trip.status = TRIP_STATUS_CANCELLED
-            trip.ended_at = timezone.now()
-            trip.save()
-
-            state, _ = VehicleState.objects.get_or_create(vehicle=trip.vehicle)
-            state.active_trip = None
-            state.save()
-
-            payload = {
-                "trip_id": str(trip.id),
-                "status": trip.status,
-                "updated_at": timezone.now().isoformat(),
-            }
-
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
-                f"dispatch_{trip.id}",
-                {"type": "dispatch_update", "data": payload},
-            )
-
-            resp = Response({"success": True, "message": "Ride rejected", "data": payload})
-            return resp
-
-        except ActiveTrip.DoesNotExist:
-            logger.warning(f"[PassengerRejectRide] Trip {trip_id} not found")
-            return Response({"success": False, "message": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            logger.exception(f"[PassengerRejectRide] Passenger reject ride failed: {e}")
-            return Response({"success": False, "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-DRIVER_ROLES = [
-    ROLE_BIKE_DRIVER,
-    ROLE_AUTO_DRIVER,
-]
 
 class VehicleListAPIView(APIView):
     permission_classes = [
@@ -495,7 +317,8 @@ class DriverVehicleAPIView(APIView):
 
 class VehicleDetailAPIView(APIView):
     permission_classes = [
-        IsAuthenticated
+        IsAuthenticated,
+        HasVehicleAccess,
     ]
 
     def get(
@@ -503,17 +326,7 @@ class VehicleDetailAPIView(APIView):
         request,
         vehicle_id,
     ):
-        try:
-            vehicle = (
-                VehicleSelector
-                .get_vehicle(vehicle_id)
-            )
-        except Exception:
-            logger.warning(f"[VehicleDetail] Vehicle {vehicle_id} not found")
-            return Response(
-                {"detail": "Vehicle not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        vehicle = self._owned_object
 
         resp = Response(
             VehicleSerializer(vehicle).data
@@ -522,7 +335,8 @@ class VehicleDetailAPIView(APIView):
 
 class VehicleStateAPIView(APIView):
     permission_classes = [
-        IsAuthenticated
+        IsAuthenticated,
+        HasVehicleAccess,
     ]
 
     def get(
@@ -530,17 +344,7 @@ class VehicleStateAPIView(APIView):
         request,
         vehicle_id,
     ):
-        try:
-            vehicle = (
-                VehicleSelector
-                .get_vehicle(vehicle_id)
-            )
-        except Exception:
-            logger.warning(f"[VehicleState] Vehicle {vehicle_id} not found")
-            return Response(
-                {"detail": "Vehicle not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        vehicle = self._owned_object
 
         state = getattr(
             vehicle,
@@ -603,7 +407,8 @@ class ActiveTripListAPIView(APIView):
 
 class ActiveTripDetailAPIView(APIView):
     permission_classes = [
-        IsAuthenticated
+        IsAuthenticated,
+        HasTripAccess,
     ]
 
     def get(
@@ -611,16 +416,7 @@ class ActiveTripDetailAPIView(APIView):
         request,
         trip_id,
     ):
-        try:
-            trip = TripSelector.get_trip(
-                trip_id
-            )
-        except Exception:
-            logger.warning(f"[TripDetail] Trip {trip_id} not found")
-            return Response(
-                {"detail": "Trip not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        trip = self._owned_object
 
         resp = Response(
             ActiveTripSerializer(trip).data
@@ -817,28 +613,12 @@ class DispatchCompleteAPIView(APIView):
     Driver or passenger completes the trip.
     Only the assigned driver or a passenger on the trip can complete it.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasTripAccess]
 
     def patch(self, request, trip_id):
-        try:
-            trip = ActiveTrip.objects.get(id=trip_id)
-        except ActiveTrip.DoesNotExist:
-            return Response(
-                {"success": False, "message": "Trip not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        # Authorization: only driver or passenger on this trip
-        is_driver = trip.driver_id == request.user.id
-        is_passenger = trip.boarding_requests.filter(
-            passenger_id=request.user.id
-        ).exists()
-        if not is_driver and not is_passenger:
-            return Response(
-                {"success": False, "message": "You are not authorized to complete this trip"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
+        # Ownership (assigned driver, passenger on the trip, or city admin) is
+        # enforced by HasTripAccess before this runs; the former inline
+        # driver/passenger check moved there so the rule lives in one place.
         try:
             trip = DispatchService.complete_trip(trip_id, request.user)
             resp = Response({
@@ -853,7 +633,8 @@ class DispatchCompleteAPIView(APIView):
 
 class TripNextStopsAPIView(APIView):
     permission_classes = [
-        IsAuthenticated
+        IsAuthenticated,
+        HasTripAccess,
     ]
 
     def get(
@@ -861,9 +642,7 @@ class TripNextStopsAPIView(APIView):
         request,
         trip_id,
     ):
-        trip = TripSelector.get_trip(
-            trip_id
-        )
+        trip = self._owned_object
 
         if not trip.trip_schedule_id:
             logger.info(f"[TripNextStops] Trip {trip_id} has no schedule")
@@ -984,7 +763,8 @@ class BoardingRequestListAPIView(APIView):
 
 class BoardingRequestDetailAPIView(APIView):
     permission_classes = [
-        IsAuthenticated
+        IsAuthenticated,
+        HasBoardingRequestAccess,
     ]
 
     def get(
@@ -992,14 +772,7 @@ class BoardingRequestDetailAPIView(APIView):
         request,
         request_id,
     ):
-        boarding_request = (
-            BoardingSelector
-            .get_request(request_id)
-        )
-        self._check_access(
-            request.user,
-            boarding_request,
-        )
+        boarding_request = self._owned_object
 
         resp = Response(
             BoardingRequestSerializer(
@@ -1013,10 +786,11 @@ class BoardingRequestDetailAPIView(APIView):
         request,
         request_id,
     ):
-        boarding_request = (
-            BoardingSelector
-            .get_request(request_id)
-        )
+        boarding_request = self._owned_object
+
+        # Stricter than HasBoardingRequestAccess on purpose: the trip driver may
+        # *read* a boarding request, but withdrawing it is the passenger's call
+        # alone.
         if (
             boarding_request.passenger_id
             != request.user.id
@@ -1037,25 +811,6 @@ class BoardingRequestDetailAPIView(APIView):
             ).data
         )
         return resp
-
-    def _check_access(
-        self,
-        user,
-        boarding_request,
-    ):
-        if boarding_request.passenger_id == user.id:
-            return
-
-        if (
-            user.role in DRIVER_ROLES
-            and boarding_request.trip.driver_id == user.id
-        ):
-            return
-
-        raise PermissionDenied(
-            "You do not have access "
-            "to this request."
-        )
 
 class BoardingRequestBoardedAPIView(APIView):
     permission_classes = [
@@ -1111,6 +866,9 @@ class TripRatingAPIView(APIView):
             )
             resp = Response(TripRatingSerializer(rating).data, status=status.HTTP_201_CREATED)
             return resp
+        except PermissionDenied:
+            # Caller was not a passenger on this trip; surface as 403.
+            raise
         except Exception as e:
             logger.exception("[TripRating] Rating failed")
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1237,6 +995,10 @@ class BroadcastAcceptAPIView(APIView):
                 {"status": "not_found", "message": "Dispatch request not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        except PermissionDenied:
+            # Raised by accept_broadcast_request when this driver was not among
+            # the broadcast candidates; must not be reported as a 500.
+            raise
         except Exception as e:
             logger.exception(f"[BroadcastAccept] Failed for request {request_id}")
             return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1274,6 +1036,10 @@ class BroadcastCancelAPIView(APIView):
                 {"status": "not_found", "message": "Dispatch request not found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        except PermissionDenied:
+            # Raised by cancel_broadcast_request when the caller is not the
+            # passenger who raised it; must not be reported as a 500.
+            raise
         except Exception as e:
             logger.exception(f"[BroadcastCancel] Failed for request {request_id}")
             return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1284,17 +1050,17 @@ class TripFareDetailAPIView(APIView):
     GET /api/ride/trip/<trip_id>/fare/
     Returns fare breakdown for a completed/active trip.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasTripAccess]
 
     def get(self, request, trip_id):
         from operations.services.fare_service import FareService
         from operations.services.ride_service import RideService
         from operations.models import BoardingRequest
 
-        try:
-            trip = ActiveTrip.objects.get(id=trip_id)
-        except ActiveTrip.DoesNotExist:
-            return Response({"detail": "Trip not found"}, status=status.HTTP_404_NOT_FOUND)
+        # Authorised by HasTripAccess. Without it this endpoint returned the
+        # route-level total_fare to any authenticated user, which leaked a
+        # driver's revenue for any trip id.
+        trip = self._owned_object
 
         vehicle_type = trip.vehicle.vehicle_type if trip.vehicle else VEHICLE_BIKE
 
@@ -1429,14 +1195,6 @@ from common.constants import (
     DOC_STATUS_PENDING, DOC_STATUS_VERIFIED, DOC_STATUS_REJECTED,
     VEHICLE_STATUS_PENDING, VEHICLE_STATUS_APPROVED, VEHICLE_STATUS_REJECTED,
 )
-from rest_framework.permissions import BasePermission
-
-
-class IsAdminUser(BasePermission):
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and (
-            request.user.role == ROLE_ADMIN or request.user.is_staff
-        )
 
 
 class AdminPendingDriversAPIView(APIView):
@@ -1716,3 +1474,45 @@ class AdminDocumentFileAPIView(APIView):
         response["Content-Disposition"] = 'inline; filename="' + filename + '"'
         response["Cache-Control"] = "no-cache"
         return response
+
+
+class FareConfigurationListCreateAPIView(APIView):
+    """
+    GET /api/operations/fare-configurations/
+    List all fare configurations (admin only).
+
+    POST /api/operations/fare-configurations/
+    Create a new fare configuration (admin only).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != "admin":
+            return Response(
+                {"success": False, "message": "Admin access required"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        configs = FareConfiguration.objects.all().order_by("-effective_from")
+        serializer = FareConfigurationSerializer(configs, many=True)
+        return Response(
+            {"success": True, "data": serializer.data},
+            status=status.HTTP_200_OK,
+        )
+
+    def post(self, request):
+        if request.user.role != "admin":
+            return Response(
+                {"success": False, "message": "Admin access required"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        serializer = FareConfigurationSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"success": True, "data": serializer.data},
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(
+            {"success": False, "message": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST,
+        )

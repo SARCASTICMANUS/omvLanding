@@ -176,7 +176,7 @@ export default function Routes() {
     try {
       const res = await api.get(`/transport/routes/${route.id}/`);
       setSelectedRoute(res.data);
-    } catch { setSelectedRoute(route); }
+    } catch (err) { console.error("Route error:", err); alert("Failed to select route"); }
   };
 
   useEffect(() => {
@@ -214,7 +214,7 @@ export default function Routes() {
         if (map.current && map.current.getLayer("route-path-layer")) {
           map.current.setPaintProperty("route-path-layer", "line-color", getAccentColor().hex);
         }
-      } catch {}
+      } catch (err) { console.error("Route error:", err); alert("An error occurred"); }
     };
     window.addEventListener(ACCENT_CHANGE_EVENT, onAccent);
     return () => window.removeEventListener(ACCENT_CHANGE_EVENT, onAccent);
@@ -274,7 +274,7 @@ export default function Routes() {
       );
       const data = res.data;
       if (data.display_name) cb(data.display_name);
-    } catch { /* ignore */ }
+    } catch (err) { console.error("Route error:", err); alert("An error occurred"); }
   };
 
   const fetchPreview = async (s, e, st, sn, en) => {
@@ -287,7 +287,7 @@ export default function Routes() {
       });
       setPreviews(Array.isArray(res.data) ? res.data : []);
       setSelectedPreview(0);
-    } catch { setPreviews([]); }
+    } catch (err) { console.error("Route error:", err); alert("Failed to load previews"); }
   };
 
   const fitToBounds = () => {
@@ -339,7 +339,7 @@ export default function Routes() {
           const pos = mk.getLngLat();
           const newCoords = [pos.lng, pos.lat];
           s.location.coordinates = newCoords;
-          await api.patch(`/transport/stops/${s.id}/`, {
+          await api.patch(`/transport/admin/stops/${s.id}/`, {
             location: { type: "Point", coordinates: newCoords },
           });
         });
@@ -434,7 +434,7 @@ export default function Routes() {
     const preview = previews[selectedPreview];
     const pathCoords = preview?.path || [[end.lon, end.lat], [start.lon, start.lat]];
     try {
-      const res = await api.post("/transport/routes/", {
+      const res = await api.post("/transport/admin/routes/", {
         city: selectedCity,
         name: routeName || "New Route",
         start_name: startName,
@@ -442,14 +442,14 @@ export default function Routes() {
         path: { type: "LineString", coordinates: pathCoords },
         total_distance_meters: preview?.distance || 0,
       });
-      const routeId = res.data.id;
+      const routeId = res.data.data.id;
       const allStops = [
         { name: startName || "Start", location: { type: "Point", coordinates: [start.lon, start.lat] }, order: 0 },
         ...stops.map((s, i) => ({ name: s.name, location: { type: "Point", coordinates: [s.lon, s.lat] }, order: i + 1 })),
         { name: endName || "End", location: { type: "Point", coordinates: [end.lon, end.lat] }, order: stops.length + 1 },
       ];
       for (const s of allStops) {
-        await api.post("/transport/stops/", { ...s, route: routeId });
+        await api.post("/transport/admin/stops/", { ...s, route: routeId });
       }
       resetForm();
       api.get(`/transport/routes/?city_id=${selectedCity}`).then((r) => {
@@ -483,21 +483,21 @@ export default function Routes() {
   const editRouteStop = async (stop) => {
     const newName = prompt("Enter new stop name:", stop.name);
     if (newName && newName !== stop.name) {
-      await api.patch(`/transport/stops/${stop.id}/`, { name: newName });
+      await api.patch(`/transport/admin/stops/${stop.id}/`, { name: newName });
       fetchRouteDetail(selectedRoute);
     }
   };
 
   const deleteRouteStop = async (stop) => {
     if (!window.confirm(`Delete stop "${stop.name}"?`)) return;
-    await api.delete(`/transport/stops/${stop.id}/`);
+    await api.delete(`/transport/admin/stops/${stop.id}/`);
     fetchRouteDetail(selectedRoute);
   };
 
   const handleDeleteRoute = async (route) => {
     if (!window.confirm(`Delete route "${route.name}"? This will also delete all its stops.`)) return;
     try {
-      await api.delete(`/transport/routes/${route.id}/`);
+      await api.delete(`/transport/admin/routes/${route.id}/`);
       if (selectedRoute?.id === route.id) setSelectedRoute(null);
       api.get(`/transport/routes/?city_id=${selectedCity}`).then((r) => {
         setRoutes(Array.isArray(r.data) ? r.data : r.data.results || []);

@@ -395,6 +395,7 @@ class RouteSearchResponseSerializer(serializers.Serializer):
     nearest_road = NearestRoadSerializer(allow_null=True, required=False)
     nearest_road_distance = serializers.IntegerField()
     nearest_road_stop_distance = serializers.IntegerField()
+    walking_path = serializers.JSONField(required=False, allow_null=True)
 
 class DriverRouteSearchResponseSerializer(serializers.Serializer):
     """

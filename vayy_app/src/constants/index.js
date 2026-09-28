@@ -1,6 +1,6 @@
 export { AUTH, OPERATIONS, TRANSPORT, RIDE, TRACKING, COMMUNICATION, ADMIN } from "./apiPaths";
 export { default as API_PATHS } from "./apiPaths";
-export { WS } from "./wsPaths";
+export { WS, WS_SUBPROTOCOL } from "./wsPaths";
 export { ROLE, PASSENGER_ROLES, DRIVER_ROLES, ALL_ROLES, isDriverRole, isPassengerRole } from "./roles";
 export { STORAGE_KEYS } from "./storageKeys";
 export { SCREEN } from "./navigation";

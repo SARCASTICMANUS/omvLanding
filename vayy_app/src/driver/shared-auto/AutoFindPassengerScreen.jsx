@@ -58,10 +58,11 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
   const handleWsMessage = useCallback((data) => {
     if (data.type === "new_dispatch_request" && data.dispatch) {
       const req = data.dispatch;
-      const dispatchId = req.id || req.trip_id;
+      const dispatchId = req.request_id;
       const passengerName = req.passenger_name || req.user_name || "Passenger";
       navigation.navigate("AheadAlert", {
         dispatchId,
+        requestId: dispatchId,
         passengerName,
         destination: req.drop_name || req.drop || null,
         nextStop: req.next_stop || null,

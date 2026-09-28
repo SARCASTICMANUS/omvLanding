@@ -254,11 +254,13 @@ export function RiderPopupScreen({ navigation, route }) {
               <Layer
                 id="routeLayer"
                 type="line"
+                layout={{
+                  "line-join": "round",
+                  "line-cap": "round",
+                }}
                 paint={{
                   "line-color": "#009849",
                   "line-width": 5,
-                  "line-join": "round",
-                  "line-cap": "round",
                 }}
               />
             </GeoJSONSource>

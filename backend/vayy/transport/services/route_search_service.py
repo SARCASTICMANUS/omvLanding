@@ -244,7 +244,7 @@ class RouteSearchService:
                 dropoff_coords = (dropoff["location"].x, dropoff["location"].y)
 
                 first_mile_futures[route_id] = executor.submit(
-                    cls._safe_get_road_metrics, passenger_origin_coords, pickup_coords
+                    cls._safe_get_road_path, passenger_origin_coords, pickup_coords
                 )
                 last_mile_futures[route_id] = executor.submit(
                     cls._safe_get_road_metrics, dropoff_coords, passenger_dest_coords
@@ -274,6 +274,8 @@ class RouteSearchService:
             else:
                 nearest_road_stop_distance = pickup["dist_to_origin_m"]
                 first_mile_duration_s = nearest_road_stop_distance / cls.WALKING_SPEED_MPS
+
+            walking_path = first_mile_res.get("geometry") if first_mile_res else None
 
             # Last mile metric resolution
             last_mile_res = last_mile_futures[route_id].result()
@@ -381,6 +383,7 @@ class RouteSearchService:
                 "nearest_road": nearest_road_payload,
                 "nearest_road_distance": round(nearest_road_distance),
                 "nearest_road_stop_distance": round(nearest_road_stop_distance),
+                "walking_path": walking_path,
             })
 
         results.sort(key=lambda x: (x["distance_km"], x["walk_distance_meters"]))
@@ -395,5 +398,17 @@ class RouteSearchService:
         except Exception as e:
             logger.warning(
                 f"OSRM road metrics query failed for {origin} -> {destination}: {e}"
+            )
+            return None
+
+    @staticmethod
+    def _safe_get_road_path(
+        origin: Tuple[float, float], destination: Tuple[float, float]
+    ) -> Optional[Dict[str, Any]]:
+        try:
+            return OSRMService.get_road_path(origin, destination)
+        except Exception as e:
+            logger.warning(
+                f"OSRM road path query failed for {origin} -> {destination}: {e}"
             )
             return None

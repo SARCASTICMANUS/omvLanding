@@ -340,11 +340,13 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
               <Layer
                 id="routeRemainingLayer"
                 type="line"
+                layout={{
+                  "line-join": "round",
+                  "line-cap": "round",
+                }}
                 paint={{
                   "line-color": "#009849",
                   "line-width": 5,
-                  "line-join": "round",
-                  "line-cap": "round",
                 }}
               />
             </GeoJSONSource>
@@ -360,12 +362,14 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
               <Layer
                 id="routeCoveredLayer"
                 type="line"
+                layout={{
+                  "line-join": "round",
+                  "line-cap": "round",
+                }}
                 paint={{
                   "line-color": "#D1D5DB",
                   "line-width": 3,
                   "line-opacity": 0.5,
-                  "line-join": "round",
-                  "line-cap": "round",
                 }}
               />
             </GeoJSONSource>

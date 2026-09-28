@@ -19,6 +19,8 @@ from accounts.api.views import (
     DriverProfileAPIView,
     WalletAPIView,
     AddFundsAPIView,
+    PaymentOrderCreateAPIView,
+    PaymentWebhookAPIView,
     DriverDocumentAPIView,
     DriverBankDetailAPIView,
     VerificationStatusAPIView,
@@ -62,6 +64,11 @@ urlpatterns = [
 
     # Financial
     path("wallet/", WalletAPIView.as_view()),
+    # Top-up pipeline. The order records intent only; the webhook is the sole
+    # path that credits a wallet.
+    path("wallet/orders/", PaymentOrderCreateAPIView.as_view()),
+    path("wallet/webhook/", PaymentWebhookAPIView.as_view()),
+    # Admin-only manual ledger credit.
     path("wallet/add-funds/", AddFundsAPIView.as_view()),
 
     # KYC

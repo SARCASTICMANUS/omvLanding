@@ -47,25 +47,25 @@ function buildPayload(page, clientIp) {
   };
 }
 
-function sendViaBeacon(payload) {
-  try {
-    const blob = new Blob([JSON.stringify(payload)], {
-      type: "application/json",
-    });
-    return navigator.sendBeacon(TRACK_URL, blob);
-  } catch {
-    return false;
-  }
+function authHeader() {
+  const token = localStorage.getItem("admin_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+// POST /api/kpi/track/ is IsAuthenticated, and sendBeacon cannot set headers
+// (it also reports success regardless of the response, so a 401 would be
+// invisible). Every send therefore goes through fetch with keepalive, and the
+// localStorage buffer below is the fallback for when even that cannot run.
 function sendViaKeepalive(payload) {
   try {
     return fetch(TRACK_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeader() },
       body: JSON.stringify(payload),
       keepalive: true,
-    }).then(() => true).catch(() => false);
+    })
+      .then((res) => res.ok)
+      .catch(() => false);
   } catch {
     return Promise.resolve(false);
   }
@@ -85,16 +85,11 @@ function bufferEvent(payload) {
 }
 
 async function sendOrBuffer(payload) {
-  const sent = await sendViaBeacon(payload);
-  if (sent) return;
-
-  const keepaliveOk = await sendViaKeepalive(payload);
-  if (keepaliveOk) return;
-
+  if (await sendViaKeepalive(payload)) return;
   bufferEvent(payload);
 }
 
-function flushBufferedEvents() {
+async function flushBufferedEvents() {
   let pending;
   try {
     pending = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
@@ -107,17 +102,14 @@ function flushBufferedEvents() {
   const eventsToSend = [...pending];
   localStorage.removeItem(STORAGE_KEY);
 
-  for (const event of eventsToSend) {
-    const sent = sendViaBeacon(event);
-    if (!sent) {
-      sendViaKeepalive(event).then((ok) => {
-        if (!ok) bufferEvent(event);
-      });
-      // Re-buffer remaining events for later flush
-      for (let i = eventsToSend.indexOf(event) + 1; i < eventsToSend.length; i++) {
-        bufferEvent(eventsToSend[i]);
+  for (let i = 0; i < eventsToSend.length; i++) {
+    if (!(await sendViaKeepalive(eventsToSend[i]))) {
+      // Stop at the first failure and re-buffer it plus everything after it,
+      // so ordering is preserved and nothing is silently dropped.
+      for (let j = i; j < eventsToSend.length; j++) {
+        bufferEvent(eventsToSend[j]);
       }
-      break;
+      return;
     }
   }
 }

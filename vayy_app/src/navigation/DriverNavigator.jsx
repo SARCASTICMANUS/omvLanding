@@ -165,7 +165,11 @@ export default function DriverNavigator() {
         <Stack.Screen name="DriverFindPassengers" component={DriverFindPassengersScreen} />
         <Stack.Screen name="AheadAlert" component={AutoAheadAlertScreen} />
         <Stack.Screen name="BoardedPopup" component={AutoBoardedPopupScreen} />
-        <Stack.Screen name="AutoRideActive" component={AutoLiveTrackingScreen} />
+        <Stack.Screen
+          name="AutoRideActive"
+          component={AutoLiveTrackingScreen}
+          initialParams={{ mode: "auto" }}
+        />
         <Stack.Screen name="BikeSearching" component={BikeSearchingScreen} />
         <Stack.Screen name="BikeOTPEntry" component={BikeOTPEntryScreen} />
         <Stack.Screen name="BikeRideToPickup" component={BikeRideToPickupScreen} />

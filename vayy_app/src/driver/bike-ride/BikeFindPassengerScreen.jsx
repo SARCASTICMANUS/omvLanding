@@ -15,12 +15,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import * as Location from "expo-location";
-import * as Notifications from "expo-notifications";
-import { AUTH, WS } from "../../constants";
+import { WS } from "../../constants";
 import { acceptBroadcast, rejectBroadcast, acceptDispatch, rejectDispatch } from "../../store/slices/dispatchSlice";
 import { getAssignedVehicle } from "../services/driverService";
 import useDriverLocationPush from "../hooks/useDriverLocationPush";
-import api from "../../shared/lib/api";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import COLORS from "../../shared/constants/colors";
 import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
@@ -248,22 +246,10 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
     return () => { cancelled = true; };
   }, [userId]);
 
-  useEffect(() => {
-    (async () => {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-      if (existingStatus !== "granted") {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-      if (finalStatus !== "granted") return;
-      const tokenData = await Notifications.getExpoPushTokenAsync();
-      const pushToken = tokenData.data || tokenData;
-      if (pushToken) {
-        api.post(AUTH.pushToken, { push_token: pushToken }).catch(() => {});
-      }
-    })();
-  }, [userId]);
+  // Push token registration moved to the app-wide notification layer
+  // (shared/lib/pushNotifications.js via useNotificationListener). It used to
+  // live only here, so autodrivers never registered a token and PushService had
+  // nothing to deliver to.
 
   useDriverLocationPush({
     enabled: online && vehicleReady,

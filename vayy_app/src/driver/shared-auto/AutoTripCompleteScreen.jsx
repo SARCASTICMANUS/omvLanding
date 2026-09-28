@@ -20,6 +20,8 @@ export default function AutoTripCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const buddy = route.params?.buddy || {};
   const tripData = route.params?.tripData || {};
+  const mode = route.params?.mode || "auto";
+  const isBike = mode === "bike";
 
   const distanceNum = Number(buddy.distance) || Number(tripData.distance) || 0;
   const fare = Number(buddy.fare) || Number(tripData.fare) || 0;
@@ -27,7 +29,12 @@ export default function AutoTripCompleteScreen({ navigation, route }) {
   const baseFare = breakdown.baseFare;
   const distanceFare = breakdown.distanceFare;
   const perKmRate = breakdown.perKmRate;
-  const rating = buddy.rating || tripData.rating || 0;
+  const rating = Number(buddy.rating ?? tripData.rating) || 0;
+  const filledStars = Math.min(5, Math.max(0, Math.round(rating)));
+
+  // Auto drivers return to the auto radar; the bike radar is a different screen.
+  const nextRideRoute = isBike ? "FindPassenger" : "AutoFindPassenger";
+  const nextRideLabel = isBike ? "  Next Ride" : "  Back to Radar";
 
   const now = new Date();
   const timeStr = `${now.toLocaleDateString("en-IN", { weekday: "short" })}, ${now.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}`;
@@ -140,21 +147,29 @@ export default function AutoTripCompleteScreen({ navigation, route }) {
         {/* Passenger Feedback */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Passenger Feedback</Text>
-          <View style={styles.starRow}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <Ionicons
-                key={star}
-                name={star <= 5 ? "star" : "star-outline"}
-                size={32}
-                color={star <= 5 ? "#FFB800" : "#D1D5DB"}
-              />
-            ))}
-          </View>
-          <Text style={styles.feedbackText}>"{buddy.feedback || "Thanks for riding!"}"</Text>
-          <View style={styles.feedbackAuthor}>
-            <Ionicons name="chatbubble-ellipses" size={14} color={COLORS.primary} />
-            <Text style={styles.feedbackAuthorText}>— {buddy?.name || "Passenger"}</Text>
-          </View>
+          {rating > 0 ? (
+            <>
+              <View style={styles.starRow}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Ionicons
+                    key={star}
+                    name={star <= filledStars ? "star" : "star-outline"}
+                    size={32}
+                    color={star <= filledStars ? "#FFB800" : "#D1D5DB"}
+                  />
+                ))}
+              </View>
+              <Text style={styles.feedbackText}>"{buddy.feedback || "Thanks for riding!"}"</Text>
+              <View style={styles.feedbackAuthor}>
+                <Ionicons name="chatbubble-ellipses" size={14} color={COLORS.primary} />
+                <Text style={styles.feedbackAuthorText}>— {buddy?.name || "Passenger"}</Text>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.noFeedbackText}>
+              No rating yet — the passenger rates this trip after drop-off.
+            </Text>
+          )}
         </View>
 
         {/* Actions */}
@@ -162,7 +177,7 @@ export default function AutoTripCompleteScreen({ navigation, route }) {
           <TouchableOpacity
             activeOpacity={0.9}
             style={styles.primaryBtn}
-            onPress={() => navigation.navigate("FindPassenger", {})}
+            onPress={() => navigation.navigate(nextRideRoute, {})}
           >
             <Ionicons name="bicycle" size={20} color="#fff" />
             <Text style={styles.primaryBtnText}>  Next Ride</Text>
@@ -433,6 +448,13 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     lineHeight: 18,
     marginBottom: 8,
+  },
+  noFeedbackText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 18,
   },
   feedbackAuthor: {
     flexDirection: "row",

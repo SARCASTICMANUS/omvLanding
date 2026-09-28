@@ -136,7 +136,7 @@ function RouteDetail({ route, onBack }) {
         if (!m) return;
         if (m.getLayer("route-line-bg")) m.setPaintProperty("route-line-bg", "line-color", getAccentColor().hex);
         if (m.getLayer("route-line-fg")) m.setPaintProperty("route-line-fg", "line-color", getAccentColor().dark);
-      } catch {}
+      } catch (err) { console.error("RouteExplorer error:", err); alert("An error occurred"); }
     };
     window.addEventListener(ACCENT_CHANGE_EVENT, onAccent);
     return () => window.removeEventListener(ACCENT_CHANGE_EVENT, onAccent);
@@ -271,7 +271,7 @@ function RouteDetail({ route, onBack }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.patch(`/transport/routes/${route.id}/`, {
+      await api.patch(`/transport/admin/routes/${route.id}/`, {
         name: editName,
         start_name: editStartName,
         end_name: editEndName,
@@ -280,7 +280,7 @@ function RouteDetail({ route, onBack }) {
       for (const s of editStops) {
         if (!s.id) continue;
         try {
-          await api.patch(`/transport/stops/${s.id}/`, {
+          await api.patch(`/transport/admin/stops/${s.id}/`, {
             name: s.name,
             location: { type: "Point", coordinates: [s.lon, s.lat] },
             order: s.order,

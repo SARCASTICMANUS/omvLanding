@@ -6,7 +6,7 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import api from "../../shared/lib/api";
+import api, { unwrapList } from "../../shared/lib/api";
 import { TRANSPORT, ADMIN } from "../../constants/apiPaths";
 import { DRIVER_ROLES } from "../../constants";
 import AdminMap from "../components/AdminMap";
@@ -65,7 +65,8 @@ export default function AdminScreen({ navigation }) {
     dispatch(fetchRoutes());
     dispatch(fetchStops());
     api.get(TRANSPORT.cities).then((res) => {
-      const data = res.data?.data || res.data || [];
+      // CityViewSet answers with bare DRF pagination — no {success,data} envelope.
+      const data = unwrapList(res.data);
       setCities(data);
       if (data.length > 0) setSelectedCity(data[0]);
     }).catch(() => {});

@@ -89,8 +89,10 @@ export default function useDriverLocationPush({ enabled, vehicleId, tripId, onLo
 
     return () => {
       stopped = true;
+      // Stop only this hook's watcher — stopTracking() with no handle would
+      // also tear down any screen that is tracking at the same time.
       if (sub) {
-        locationService.stopTracking();
+        locationService.stopTracking(sub);
       }
     };
   }, [enabled, vehicleId, handleLocation]);

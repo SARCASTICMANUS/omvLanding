@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db.models import Avg, Count, Sum
 from django.utils import timezone
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -83,7 +83,7 @@ class AdminStatsAPI(APIView):
     array lengths. Results are cached in Redis for 5 minutes.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
         cached = cache.get(ADMIN_STATS_CACHE_KEY)
@@ -124,9 +124,14 @@ class TrackPageViewAPI(APIView):
       5. Return 202 Accepted immediately
 
     The Celery consumer writes the PageView row to PostgreSQL.
+
+    Auth: this endpoint is IsAuthenticated like the rest of the KPI surface.
+    Callers MUST send `Authorization: Bearer <token>`; navigator.sendBeacon
+    cannot set headers and will be rejected with 401, so the web admin posts
+    via fetch(keepalive) and buffers to localStorage when the tab is going away.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     throttle_scope = "kpi_track"
 
     def post(self, request: Request) -> Response:
@@ -210,7 +215,7 @@ class KPIOverviewAPI(APIView):
       - Combined totals returned in the response
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
         platform = request.query_params.get("platform", "web")
@@ -285,17 +290,30 @@ class KPIOverviewAPI(APIView):
             .order_by("day")
         )
 
+        # NOTE: these two used to read from live_today_qs (today only) while
+        # every neighbouring breakdown — referrer/country/city/region/timezone
+        # and all three UTM breakdowns — reads from all_qs (the selected range).
+        # That made Top Pages and Device Breakdown ignore the ?days= selector
+        # and disagree with the cards sitting next to them. PageView rows are
+        # never pruned, so all_qs is a complete window and is the right source.
+        # See also: total_visits == all_qs.count() (the snapshot sum covers
+        # date < today and live_total covers today, so they don't overlap).
         top_pages = list(
-            live_today_qs.values("page")
+            all_qs.values("page")
             .annotate(views=Count("id"))
             .order_by("-views")[:10]
         )
 
+        # Cap raised 5 -> 10 to match the other breakdowns. The DonutChart
+        # normalises against the rows it is given, so a tight cap silently
+        # renders the remainder as if it did not exist; the frontend now passes
+        # summary.total_visits and folds the difference into an
+        # "Other / Unknown" slice.
         device_stats = list(
-            live_today_qs.exclude(device_type="")
+            all_qs.exclude(device_type="")
             .values("device_type")
             .annotate(views=Count("id"))
-            .order_by("-views")[:5]
+            .order_by("-views")[:10]
         )
 
         referrer_stats = list(
@@ -572,7 +590,7 @@ class KPIOverviewAPI(APIView):
 class KPISnapshotAPI(APIView):
     """GET /api/kpi/snapshots/ — Historical KPI snapshots."""
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
         days = int(request.query_params.get("days", 30))
@@ -594,7 +612,7 @@ class GeoStatsAPI(APIView):
     breakdowns, timezone distribution, and map point data.
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
         source = request.query_params.get("source", "geoevent")

@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import {
   BarChart3, Users, MapPin, Route, Bus, Activity, Globe, Smartphone, Monitor,
   TrendingUp, ArrowUpRight, MousePointerClick, Repeat, Car, UserPlus,
-  CalendarCheck, MapPinned, RefreshCw, Target, BarChart2,
+  CalendarCheck, MapPinned, RefreshCw, Target, BarChart2, Ban, Database,
   Flame, CircleDot, Palette, Layers, Clock, ChevronDown,
 } from "lucide-react";
 import api from "../api/client";
 import { getBluePalette, getBluePrimary, SPECTRUM_PALETTE } from "../colors";
 import Loader from "../components/Loader";
-import { StatCard, LineChart, DonutChart, ProgressBar, DataTable } from "../components/charts";
+import { StatCard, LineChart, BarChart, DonutChart, ProgressBar, DataTable } from "../components/charts";
 import MapLibreMap from "../components/geo/LeafletMap";
 import HeatmapLayer from "../components/geo/HeatmapLayer";
 import useAccentTick from "../hooks/useAccentTick";
@@ -128,11 +128,15 @@ function GeoSection() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="glass-card p-5">
               <h3 className="glass-label mb-3">Timezone Distribution</h3>
-              <LineChart data={tzData} labelKey="timezone" valueKey="count" color={getBluePalette()[4]} maxItems={10} />
+              <BarChart data={tzData} labelKey="timezone" valueKey="count" color={getBluePalette()[4]} maxItems={8} />
             </div>
             <div className="glass-card p-5">
               <h3 className="glass-label mb-3">Top Timezones</h3>
-              <DonutChart data={tzData.slice(0, 6)} labelKey="timezone" valueKey="count" colors={SPECTRUM_PALETTE} centerLabel="zones" centerValue={tzData.length} />
+              {/* slice(0, 6) of up to 20 timezones — total_events is the true
+                  denominator so the rest shows as "Other / Unknown" rather than
+                  the top 6 silently rendering as 100%. centreValue used to be
+                  tzData.length (a count of zones) under a full ring. */}
+              <DonutChart data={tzData.slice(0, 6)} labelKey="timezone" valueKey="count" colors={SPECTRUM_PALETTE} centerLabel="events" total={data?.total_events} />
             </div>
           </div>
         </div>
@@ -158,7 +162,7 @@ function GeoSection() {
             </div>
             <div className="glass-card p-5">
               <h3 className="glass-label mb-3">Top Cities</h3>
-              <LineChart data={cityData} labelKey="city" valueKey="count" color={getBluePalette()[6]} maxItems={10} />
+              <BarChart data={cityData} labelKey="city" valueKey="count" color={getBluePalette()[6]} maxItems={8} />
             </div>
           </div>
         </div>
@@ -187,19 +191,34 @@ function WebMetrics({ data, loading }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="glass-card p-6">
           <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><TrendingUp size={16} style={{ color: "var(--accent-blue)" }} /> Daily Visits</h3>
-          <LineChart data={data?.daily?.map((d) => ({ label: d.day, views: d.views }))} labelKey="label" valueKey="views" />
+          {/* `visitors` came back from /kpi/overview/ but was dropped here. Two
+              LineCharts instead of one overlay because LineChart renders a
+              single valueKey series. Distinct valueKeys also keep the generated
+              SVG gradient ids (mg-${valueKey}) unique on the page. */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div>
+              <p className="glass-label mb-2">Page views</p>
+              <LineChart data={data?.daily?.map((d) => ({ label: d.day, views: d.views }))} labelKey="label" valueKey="views" />
+            </div>
+            <div>
+              <p className="glass-label mb-2">Unique visitors</p>
+              <LineChart data={data?.daily?.map((d) => ({ label: d.day, visitors: d.visitors }))} labelKey="label" valueKey="visitors" color={getBluePalette()[5]} />
+            </div>
+          </div>
         </div>
         <div className="glass-card p-6">
           <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><Globe size={16} style={{ color: "var(--accent-blue-light)" }} /> Top Pages</h3>
-          <LineChart data={data?.top_pages?.map((p) => ({ label: p.page || "/", views: p.views }))} labelKey="label" valueKey="views" color={getBluePalette()[4]} />
+          <BarChart data={data?.top_pages?.map((p) => ({ label: p.page || "/", views: p.views }))} labelKey="label" valueKey="views" color={getBluePalette()[4]} maxItems={10} />
         </div>
         <div className="glass-card p-6">
           <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><Monitor size={16} style={{ color: "var(--accent-blue-dark)" }} /> Device Breakdown</h3>
-          <DonutChart data={data?.device_stats?.map((d) => ({ label: d.device_type || "Unknown", views: d.views }))} labelKey="label" valueKey="views" colors={SPECTRUM_PALETTE} />
+          {/* total = summary.total_visits so the API's top-10 cap surfaces as an
+              "Other / Unknown" slice instead of the top rows reading as 100%. */}
+          <DonutChart data={data?.device_stats?.map((d) => ({ label: d.device_type || "Unknown", views: d.views }))} labelKey="label" valueKey="views" colors={SPECTRUM_PALETTE} centerLabel="views" total={s.total_visits} />
         </div>
         <div className="glass-card p-6">
           <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><ArrowUpRight size={16} style={{ color: "var(--accent-blue)" }} /> Top Referrers</h3>
-          <LineChart data={data?.referrer_stats?.map((r) => { let label = r.referrer; try { label = new URL(r.referrer).hostname; } catch {} return { label, views: r.views }; })} labelKey="label" valueKey="views" color={getBluePalette()[5]} />
+          <BarChart data={data?.referrer_stats?.map((r) => { let label = r.referrer; try { label = new URL(r.referrer).hostname; } catch {} return { label, views: r.views }; })} labelKey="label" valueKey="views" color={getBluePalette()[5]} maxItems={10} />
         </div>
       </div>
 
@@ -207,7 +226,7 @@ function WebMetrics({ data, loading }) {
         <div className="glass-card p-6">
           <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><Target size={16} style={{ color: "var(--accent-blue)" }} /> UTM Sources</h3>
           {data?.utm_source_stats?.length ? (
-            <LineChart data={data.utm_source_stats.map((s) => ({ label: s.utm_source, views: s.views }))} labelKey="label" valueKey="views" color={getBluePrimary()} />
+            <BarChart data={data.utm_source_stats.map((s) => ({ label: s.utm_source, views: s.views }))} labelKey="label" valueKey="views" color={getBluePrimary()} maxItems={8} />
           ) : (
             <p className="text-xs text-slate-500">No UTM data yet</p>
           )}
@@ -215,7 +234,7 @@ function WebMetrics({ data, loading }) {
         <div className="glass-card p-6">
           <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><Layers size={16} style={{ color: "var(--accent-blue-light)" }} /> UTM Medium</h3>
           {data?.utm_medium_stats?.length ? (
-            <LineChart data={data.utm_medium_stats.map((s) => ({ label: s.utm_medium, views: s.views }))} labelKey="label" valueKey="views" color={getBluePalette()[4]} />
+            <BarChart data={data.utm_medium_stats.map((s) => ({ label: s.utm_medium, views: s.views }))} labelKey="label" valueKey="views" color={getBluePalette()[4]} maxItems={8} />
           ) : (
             <p className="text-xs text-slate-500">No UTM data yet</p>
           )}
@@ -223,7 +242,7 @@ function WebMetrics({ data, loading }) {
         <div className="glass-card p-6">
           <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><Flame size={16} style={{ color: "var(--accent-blue)" }} /> UTM Campaigns</h3>
           {data?.utm_campaign_stats?.length ? (
-            <LineChart data={data.utm_campaign_stats.map((s) => ({ label: s.utm_campaign, views: s.views }))} labelKey="label" valueKey="views" color={getBluePalette()[5]} />
+            <BarChart data={data.utm_campaign_stats.map((s) => ({ label: s.utm_campaign, views: s.views }))} labelKey="label" valueKey="views" color={getBluePalette()[5]} maxItems={8} />
           ) : (
             <p className="text-xs text-slate-500">No UTM data yet</p>
           )}
@@ -233,11 +252,17 @@ function WebMetrics({ data, loading }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="glass-card p-6">
           <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><Globe size={16} style={{ color: "var(--accent-blue)" }} /> Browser Breakdown</h3>
+          {/* Parsed from at most the first 500 user agents of TODAY, so these
+              are sample-relative shares, not totals for the selected range.
+              No `total` prop is passed deliberately — anchoring the ring to a
+              true total would imply sample precision the API does not have. */}
           <DonutChart data={data?.browser_stats?.map((d) => ({ label: d.browser, views: d.views }))} labelKey="label" valueKey="views" colors={SPECTRUM_PALETTE} />
+          <p className="glass-label mt-3">Sampled from up to 500 requests today, not the full range.</p>
         </div>
         <div className="glass-card p-6">
           <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><Monitor size={16} style={{ color: "var(--accent-blue-light)" }} /> OS Breakdown</h3>
           <DonutChart data={data?.os_stats?.map((d) => ({ label: d.os, views: d.views }))} labelKey="label" valueKey="views" colors={SPECTRUM_PALETTE} />
+          <p className="glass-label mt-3">Sampled from up to 500 requests today, not the full range.</p>
         </div>
         <div className="glass-card p-6">
           <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><MapPin size={16} style={{ color: "var(--accent-blue-light)" }} /> Top Countries</h3>
@@ -253,13 +278,13 @@ function WebMetrics({ data, loading }) {
         {data?.city_stats?.length > 0 && (
           <div className="glass-card p-6">
             <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><MapPin size={16} style={{ color: "var(--accent-blue)" }} /> Top Cities</h3>
-            <LineChart data={data.city_stats} labelKey="city" valueKey="views" color={getBluePrimary()} maxItems={10} />
+            <BarChart data={data.city_stats} labelKey="city" valueKey="views" color={getBluePrimary()} maxItems={10} />
           </div>
         )}
         {data?.region_stats?.length > 0 && (
           <div className="glass-card p-6">
             <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><Layers size={16} style={{ color: "var(--accent-blue-light)" }} /> Top Regions</h3>
-            <LineChart data={data.region_stats} labelKey="region" valueKey="views" color={getBluePalette()[4]} maxItems={10} />
+            <BarChart data={data.region_stats} labelKey="region" valueKey="views" color={getBluePalette()[4]} maxItems={10} />
           </div>
         )}
       </div>
@@ -267,7 +292,7 @@ function WebMetrics({ data, loading }) {
       {data?.timezone_stats?.length > 0 && (
         <div className="glass-card p-6 mb-8">
           <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><Clock size={16} style={{ color: "var(--accent-blue)" }} /> Timezone Distribution</h3>
-          <LineChart data={data.timezone_stats} labelKey="timezone" valueKey="views" color={getBluePalette()[5]} maxItems={10} />
+          <BarChart data={data.timezone_stats} labelKey="timezone" valueKey="views" color={getBluePalette()[5]} maxItems={10} />
         </div>
       )}
     </>
@@ -280,22 +305,30 @@ function AppMetrics({ data, loading }) {
 
   const s = data?.summary || {};
   const ub = s.users_breakdown || {};
-  const totalDriverCount = (ub.bike_drivers || 0) + (ub.auto_drivers || 0);
+  // The backend sends total_bike_drivers / total_auto_drivers directly
+  // (kpi/api/views.py _app_metrics) and they were being thrown away in favour of
+  // re-deriving the sum from users_breakdown. Prefer the direct values and fall
+  // back to the breakdown so an older deploy degrades instead of showing 0.
+  const bikeDrivers = s.total_bike_drivers ?? ub.bike_drivers ?? 0;
+  const autoDrivers = s.total_auto_drivers ?? ub.auto_drivers ?? 0;
+  const totalDriverCount = bikeDrivers + autoDrivers;
 
   return (
     <>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard icon={<Users size={20} />} label="Total Users" value={s.total_users} color="var(--accent-blue-light)" sub={`${s.total_passengers} passengers, ${totalDriverCount} drivers`} />
-        <StatCard icon={<UserPlus size={20} />} label="New Users" value={s.new_users_period} color="var(--accent-blue-light)" sub={`Last ${data?.period_days || 30} days`} />
-        <StatCard icon={<Bus size={20} />} label="Completed Trips" value={s.total_trips} color="var(--accent-blue-dark)" sub={`${s.trips_period} in period`} />
-        <StatCard icon={<MapPinned size={20} />} label="Active Trips" value={s.active_trips} color="var(--accent-blue)" sub="Happening now" />
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <StatCard icon={<Users size={20} />} label="Total Users" value={s.total_users ?? 0} color="var(--accent-blue-light)" sub={`${s.total_passengers ?? 0} passengers, ${totalDriverCount} drivers`} />
+        <StatCard icon={<UserPlus size={20} />} label="New Users" value={s.new_users_period ?? 0} color="var(--accent-blue-light)" sub={`Last ${data?.period_days || 30} days`} />
+        <StatCard icon={<Bus size={20} />} label="Completed Trips" value={s.total_trips ?? 0} color="var(--accent-blue-dark)" sub={`${s.trips_period ?? 0} in period`} />
+        <StatCard icon={<MapPinned size={20} />} label="Active Trips" value={s.active_trips ?? 0} color="var(--accent-blue)" sub="Happening now" />
+        {/* summary.cancelled_trips was always computed and sent, never rendered. */}
+        <StatCard icon={<Ban size={20} />} label="Cancelled Trips" value={s.cancelled_trips ?? 0} color="var(--accent-blue)" sub="All time" />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard icon={<Route size={20} />} label="Routes" value={s.total_routes} color="var(--accent-blue)" sub={`${s.total_stops} stops`} />
-        <StatCard icon={<MapPin size={20} />} label="Cities" value={s.total_cities} color="var(--accent-blue-light)" sub={`${s.total_schedules} schedules`} />
-        <StatCard icon={<Car size={20} />} label="Vehicles" value={s.total_vehicles} color="var(--accent-blue)" sub={`${s.active_vehicles} active`} />
-        <StatCard icon={<CalendarCheck size={20} />} label="Boardings" value={s.total_boardings} color="var(--accent-blue)" sub={`${s.boardings_period} in period`} />
+        <StatCard icon={<Route size={20} />} label="Routes" value={s.total_routes ?? 0} color="var(--accent-blue)" sub={`${s.total_stops ?? 0} stops`} />
+        <StatCard icon={<MapPin size={20} />} label="Cities" value={s.total_cities ?? 0} color="var(--accent-blue-light)" sub={`${s.total_schedules ?? 0} schedules`} />
+        <StatCard icon={<Car size={20} />} label="Vehicles" value={s.total_vehicles ?? 0} color="var(--accent-blue)" sub={`${s.active_vehicles ?? 0} active`} />
+        <StatCard icon={<CalendarCheck size={20} />} label="Boardings" value={s.total_boardings ?? 0} color="var(--accent-blue)" sub={`${s.boardings_period ?? 0} in period`} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -303,14 +336,14 @@ function AppMetrics({ data, loading }) {
           <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><Users size={16} style={{ color: "var(--accent-blue-light)" }} /> User Breakdown</h3>
           <ProgressBar segments={[
             { label: "Passengers", value: ub.passengers || 0, color: SPECTRUM_PALETTE[0] },
-            { label: "Bike Drivers", value: ub.bike_drivers || 0, color: SPECTRUM_PALETTE[1] },
-            { label: "Auto Drivers", value: ub.auto_drivers || 0, color: SPECTRUM_PALETTE[3] },
+            { label: "Bike Drivers", value: bikeDrivers, color: SPECTRUM_PALETTE[1] },
+            { label: "Auto Drivers", value: autoDrivers, color: SPECTRUM_PALETTE[3] },
           ]} />
           <div className="flex items-center gap-4 mt-3">
             {[
               { label: "Passengers", value: ub.passengers, color: SPECTRUM_PALETTE[0] },
-              { label: "Bike Drivers", value: ub.bike_drivers, color: SPECTRUM_PALETTE[1] },
-              { label: "Auto Drivers", value: ub.auto_drivers, color: SPECTRUM_PALETTE[3] },
+              { label: "Bike Drivers", value: bikeDrivers, color: SPECTRUM_PALETTE[1] },
+              { label: "Auto Drivers", value: autoDrivers, color: SPECTRUM_PALETTE[3] },
             ].map((item) => (
               <div key={item.label} className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full" style={{ background: item.color }} />
@@ -350,6 +383,119 @@ function AppMetrics({ data, loading }) {
   );
 }
 
+// ─── Snapshot Trends (KPISnapshot history) ──────────────
+// GET /kpi/snapshots/ had no consumer anywhere in the admin app. It returns one
+// KPISnapshot row per day, written nightly by kpi.tasks.create_daily_kpi_snapshot.
+//
+// NOTE on column semantics (see kpi/models.py): web_visits / app_visits are true
+// per-day deltas, but total_users / total_trips / total_routes / total_stops /
+// total_cities / total_passengers / total_drivers are LIFETIME counts snapshotted
+// onto a daily row. The charts below are labelled accordingly so the cumulative
+// ones are not misread as daily activity.
+function SnapshotTrends({ snapshots, loading, days }) {
+  if (loading) return <Loader />;
+
+  const rows = snapshots || [];
+  if (rows.length === 0) {
+    return (
+      <>
+        <div className="glass-divider my-4" />
+        <div className="flex items-center gap-2 mb-6">
+          <Database size={18} className="shrink-0" style={{ color: "var(--accent-blue)" }} />
+          <div>
+            <h2 className="glass-section-title text-xl">Snapshot Trends</h2>
+            <p className="glass-label">Daily rollup history</p>
+          </div>
+        </div>
+        <div className="glass-card p-6">
+          <p className="text-sm text-slate-500">
+            No snapshots recorded for the last {days} days. Snapshots are written nightly at 01:00 by the{" "}
+            <span className="font-semibold">create_daily_kpi_snapshot</span> Celery task, so the most recent
+            available day is always yesterday.
+          </p>
+        </div>
+      </>
+    );
+  }
+
+  // API returns Meta.ordering = ["-date"] (newest first); charts read left→right
+  // in time, so flip to chronological.
+  const chronological = [...rows].reverse();
+  const latest = rows[0];
+
+  return (
+    <>
+      <div className="glass-divider my-4" />
+      <div className="flex items-center gap-2 mb-6">
+        <Database size={18} className="shrink-0" style={{ color: "var(--accent-blue)" }} />
+        <div>
+          <h2 className="glass-section-title text-xl">Snapshot Trends</h2>
+          <p className="glass-label">Daily rollup history · {rows.length} day{rows.length === 1 ? "" : "s"} recorded</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <StatCard icon={<CalendarCheck size={20} />} label="Latest Snapshot" value={latest?.date || "—"} color="var(--accent-blue-light)" sub={`${rows.length} day${rows.length === 1 ? "" : "s"} in range`} />
+        <StatCard icon={<Users size={20} />} label="Cumulative Users" value={latest?.total_users ?? 0} color="var(--accent-blue)" sub="All-time at snapshot" />
+        <StatCard icon={<Bus size={20} />} label="Cumulative Trips" value={latest?.total_trips ?? 0} color="var(--accent-blue-dark)" sub="All-time completed" />
+        <StatCard icon={<Globe size={20} />} label="Cumulative Visits" value={(latest?.web_visits ?? 0) + (latest?.app_visits ?? 0)} color="var(--accent-blue-light)" sub="Web + app, all-time" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="glass-card p-6">
+          <h3 className="glass-section-title text-base mb-1 flex items-center gap-2"><Globe size={16} style={{ color: "var(--accent-blue)" }} /> Daily Visits by Platform</h3>
+          <p className="glass-label mb-4">True per-day deltas from the snapshot rollup</p>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div>
+              <p className="glass-label mb-2">Website</p>
+              <LineChart data={chronological.map((r) => ({ label: r.date, snap_web: r.web_visits ?? 0 }))} labelKey="label" valueKey="snap_web" height={170} />
+            </div>
+            <div>
+              <p className="glass-label mb-2">Mobile app</p>
+              <LineChart data={chronological.map((r) => ({ label: r.date, snap_app: r.app_visits ?? 0 }))} labelKey="label" valueKey="snap_app" color={getBluePalette()[5]} height={170} />
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card p-6">
+          <h3 className="glass-section-title text-base mb-1 flex items-center gap-2"><TrendingUp size={16} style={{ color: "var(--accent-blue-light)" }} /> Cumulative Growth</h3>
+          <p className="glass-label mb-4">Lifetime totals captured at each daily snapshot</p>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div>
+              <p className="glass-label mb-2">Total users</p>
+              <LineChart data={chronological.map((r) => ({ label: r.date, snap_users: r.total_users ?? 0 }))} labelKey="label" valueKey="snap_users" color={getBluePalette()[4]} height={170} />
+            </div>
+            <div>
+              <p className="glass-label mb-2">Total trips</p>
+              <LineChart data={chronological.map((r) => ({ label: r.date, snap_trips: r.total_trips ?? 0 }))} labelKey="label" valueKey="snap_trips" color={getBluePalette()[6]} height={170} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="glass-card p-6 mb-8">
+        <h3 className="glass-section-title text-base mb-4 flex items-center gap-2"><BarChart2 size={16} style={{ color: "var(--accent-blue-dark)" }} /> Snapshot Rollup (oldest → newest)</h3>
+        <DataTable
+          columns={[
+            { key: "date", label: "Date" },
+            { key: "total_users", label: "Users", align: "right" },
+            { key: "total_passengers", label: "Passengers", align: "right" },
+            { key: "total_drivers", label: "Drivers", align: "right" },
+            { key: "total_routes", label: "Routes", align: "right" },
+            { key: "total_stops", label: "Stops", align: "right" },
+            { key: "total_cities", label: "Cities", align: "right" },
+            { key: "total_trips", label: "Trips", align: "right" },
+            { key: "web_visits", label: "Web Visits", align: "right" },
+            { key: "app_visits", label: "App Visits", align: "right" },
+          ]}
+          rows={chronological}
+          emptyMessage="No snapshots recorded yet"
+        />
+      </div>
+    </>
+  );
+}
+
 // ─── Main KPI Page ──────────────────────────────────────
 export default function KPI() {
   useAccentTick();
@@ -357,6 +503,8 @@ export default function KPI() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
+  const [snapshots, setSnapshots] = useState([]);
+  const [snapLoading, setSnapLoading] = useState(true);
 
   useEffect(() => {
     window.dispatchEvent(
@@ -376,6 +524,16 @@ export default function KPI() {
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [platform, days]);
+
+  // Snapshot history is platform-agnostic (each KPISnapshot row holds both
+  // web_visits and app_visits), so it is keyed on `days` only.
+  useEffect(() => {
+    setSnapLoading(true);
+    api.get(`/kpi/snapshots/?days=${days}`)
+      .then((r) => setSnapshots(r.data?.data || r.data || []))
+      .catch(() => setSnapshots([]))
+      .finally(() => setSnapLoading(false));
+  }, [days]);
 
   return (
     <div className="pt-4 pb-6 px-6 md:pt-5 md:pb-8 md:px-8 h-full overflow-y-auto">
@@ -410,6 +568,8 @@ export default function KPI() {
       ) : (
         <AppMetrics data={data} loading={loading} />
       )}
+
+      <SnapshotTrends snapshots={snapshots} loading={snapLoading} days={days} />
 
       {platform === "web" && <GeoSection />}
     </div>

@@ -14,6 +14,8 @@ from transport.models import (
 )
 
 from common.constants import (
+    VEHICLE_AUTO,
+    VEHICLE_BIKE,
     VEHICLE_TYPE_CHOICES,
     VEHICLE_STATUS_CHOICES,
     VEHICLE_STATUS_PENDING,
@@ -368,7 +370,49 @@ class VehicleState(models.Model):
         return (
             f"{self.vehicle.vehicle_number}"
         )
-    
+
+
+class FareConfiguration(models.Model):
+    """
+    Per-vehicle-type fare rates that can be configured via the admin.
+    Replaces the hardcoded ``VEHICLE_FARE_RATES`` dict in
+    ``operations/services/fare_service.py``.
+    """
+
+    VEHICLE_TYPE_CHOICES = [
+        (VEHICLE_AUTO, "auto"),
+        (VEHICLE_BIKE, "bike"),
+    ]
+
+    vehicle_type = models.CharField(
+        max_length=10,
+        choices=VEHICLE_TYPE_CHOICES,
+    )
+    base_fare = models.IntegerField(
+        help_text="Base fare in the smallest currency unit (e.g. cents)."
+    )
+    per_km_rate = models.IntegerField(
+        help_text="Rate per kilometre in the smallest currency unit per km."
+    )
+    effective_from = models.DateTimeField(
+        default=timezone.now,
+        help_text="When this configuration becomes active.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this configuration is the one currently in force.",
+    )
+
+    class Meta:
+        verbose_name = "Fare Configuration"
+        verbose_name_plural = "Fare Configurations"
+        ordering = ["vehicle_type", "-effective_from"]
+        unique_together = (("vehicle_type", "is_active"),)
+
+    def __str__(self):
+        return f"{self.get_vehicle_type_display()} fare (₪{self.base_fare / 100:.2f} + {self.per_km_rate / 100:.2f}/km)"
+
+
 class BoardingRequest(models.Model):
     """
     Passenger boarding intent.
@@ -514,6 +558,29 @@ class DispatchRequest(models.Model):
     notified_drivers = models.JSONField(
         default=list,
         help_text="List of driver IDs who received the broadcast",
+    )
+
+    # Drivers who explicitly dismissed this broadcast. Kept separate from
+    # notified_drivers: that field is the authoritative "was this ride ever
+    # offered to you" list for the accept guard and for the post-accept
+    # dismissal sweep, so it must never shrink. This one only ever grows, and
+    # it is the exclusion set the expiry cascade consults before re-notifying.
+    dismissed_drivers = models.JSONField(
+        default=list,
+        help_text="Driver IDs who dismissed this broadcast; never re-notified",
+    )
+
+    # How many expiry rounds this request has been through, and how many it is
+    # allowed. Without a persisted counter the cascade is unbounded: each round
+    # re-schedules itself, so a request whose drivers all sit idle would
+    # re-notify them every 45s indefinitely.
+    attempt_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Expiry cascade rounds already spent on this request",
+    )
+    max_rounds = models.PositiveIntegerField(
+        default=3,
+        help_text="Maximum expiry cascade rounds before the request is expired",
     )
 
     pickup_lat = models.FloatField(null=True, blank=True)

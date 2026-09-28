@@ -64,6 +64,20 @@ export const getRoadDistance = async (originLat, originLng, destLat, destLng) =>
   }
 };
 
+export const getWalkingPath = async (originLat, originLng, destLat, destLng) => {
+  try {
+    const response = await api.post(TRANSPORT.walkingPath, {
+      origin_lat: originLat,
+      origin_lng: originLng,
+      dest_lat: destLat,
+      dest_lng: destLng,
+    });
+    return response.data?.data || response.data;
+  } catch (error) {
+    throw normalizeApiError(error, "Unable to fetch walking path.");
+  }
+};
+
 export default {
   fetchRouteDetail,
   fetchRouteList,
@@ -71,4 +85,5 @@ export default {
   fetchRouteSchedule,
   previewRoute,
   getRoadDistance,
+  getWalkingPath,
 };

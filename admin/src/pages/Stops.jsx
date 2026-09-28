@@ -24,7 +24,7 @@ export default function Stops() {
       ]);
       setStops(Array.isArray(sRes.data) ? sRes.data : sRes.data.results || []);
       setRoutes(Array.isArray(rRes.data) ? rRes.data : rRes.data.results || []);
-    } catch { /* ignore */ }
+    } catch (err) { alert(err.response?.data?.detail || "Failed to delete stop"); }
     setLoading(false);
   };
 
@@ -60,9 +60,9 @@ export default function Stops() {
     };
     try {
       if (editing) {
-        await api.put(`/transport/stops/${editing.id}/`, payload);
+        await api.put(`/transport/admin/stops/${editing.id}/`, payload);
       } else {
-        await api.post("/transport/stops/", payload);
+        await api.post("/transport/admin/stops/", payload);
       }
       setModal(false);
       fetchData();
@@ -74,9 +74,9 @@ export default function Stops() {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this stop?")) return;
     try {
-      await api.delete(`/transport/stops/${id}/`);
+      await api.delete(`/transport/admin/stops/${id}/`);
       fetchData();
-    } catch { /* ignore */ }
+    } catch (err) { alert(err.response?.data?.detail || "Failed to delete stop"); }
   };
 
   const getRouteName = (routeId) => {

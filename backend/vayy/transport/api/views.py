@@ -41,33 +41,38 @@ from transport.services.route_search_service import RouteSearchService
 
 logger = logging.getLogger(__name__)
 
-class CityViewSet(viewsets.ModelViewSet):
+class CityViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Public catalogue of cities.
+
+    Read-only for authenticated users. Writes go through
+    /transport/admin/cities/ (AdminCityViewSet, IsAdmin).
+    """
     queryset = City.objects.all()
     serializer_class = CitySerializer
-    permission_classes = [AllowAny, IsAuthenticated]
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "head", "options"]
 
     def get_queryset(self):
         return CitySelector.list_cities()
 
-    def list(self, request, *args, **kwargs):
-        resp = super().list(request, *args, **kwargs)
-        return resp
+class RouteViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Public route catalogue.
 
-    def create(self, request, *args, **kwargs):
-        resp = super().create(request, *args, **kwargs)
-        return resp
-
-    def update(self, request, *args, **kwargs):
-        resp = super().update(request, *args, **kwargs)
-        return resp
-
-    def destroy(self, request, *args, **kwargs):
-        resp = super().destroy(request, *args, **kwargs)
-        return resp
-
-class RouteViewSet(viewsets.ModelViewSet):
+    Read-only for authenticated users. This is the same queryset the admin
+    editor reads from, so the admin UI keeps listing routes here; every write
+    goes through /transport/admin/routes/ (AdminRouteViewSet, IsAdmin).
+    """
     queryset = Route.objects.all()
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
+    # "post" is here only so the admin-gated recalculate_distance action below
+    # is reachable; it is NOT a blanket write allowance. ReadOnlyModelViewSet
+    # contributes no create/update/destroy, so the router maps POST to nothing
+    # except that action. If a write method is ever added to this class, the
+    # router would expose it and get_permissions() would fall through to
+    # IsAuthenticated — put writes on AdminRouteViewSet instead.
+    http_method_names = ["get", "head", "options", "post"]
 
     def get_serializer_class(self):
         if self.action in ['list']:
@@ -96,21 +101,14 @@ class RouteViewSet(viewsets.ModelViewSet):
             )
         )
 
-    def list(self, request, *args, **kwargs):
-        resp = super().list(request, *args, **kwargs)
-        return resp
-
-    def create(self, request, *args, **kwargs):
-        resp = super().create(request, *args, **kwargs)
-        return resp
-
-    def update(self, request, *args, **kwargs):
-        resp = super().update(request, *args, **kwargs)
-        return resp
-
-    def destroy(self, request, *args, **kwargs):
-        resp = super().destroy(request, *args, **kwargs)
-        return resp
+    def get_permissions(self):
+        """
+        recalculate_distance is a POST that mutates the route, so it stays off
+        the public read-only surface and is admin-gated.
+        """
+        if self.action == "recalculate_distance":
+            return [IsAdmin()]
+        return super().get_permissions()
 
     @action(detail=True, methods=['post'])
     def recalculate_distance(self, request, pk=None):
@@ -122,68 +120,41 @@ class RouteViewSet(viewsets.ModelViewSet):
         })
         return resp
 
-class StopViewSet(viewsets.ModelViewSet):
+class StopViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Public stop catalogue.
+
+    Read-only for authenticated users. Writes go through
+    /transport/admin/stops/ (AdminStopViewSet, IsAdmin).
+    """
     queryset = Stop.objects.all()
     serializer_class = StopSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "head", "options"]
 
-    def list(self, request, *args, **kwargs):
-        resp = super().list(request, *args, **kwargs)
-        return resp
+class TripScheduleViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Public schedule catalogue.
 
-    def create(self, request, *args, **kwargs):
-        resp = super().create(request, *args, **kwargs)
-        return resp
-
-    def update(self, request, *args, **kwargs):
-        resp = super().update(request, *args, **kwargs)
-        return resp
-
-    def destroy(self, request, *args, **kwargs):
-        resp = super().destroy(request, *args, **kwargs)
-        return resp
-
-class TripScheduleViewSet(viewsets.ModelViewSet):
+    Read-only for authenticated users. Writes go through
+    /transport/admin/schedules/ (AdminTripScheduleViewSet, IsAdmin).
+    """
     queryset = TripSchedule.objects.all()
     serializer_class = TripScheduleSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "head", "options"]
 
-    def list(self, request, *args, **kwargs):
-        resp = super().list(request, *args, **kwargs)
-        return resp
+class StopTimeViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Public stop-time catalogue.
 
-    def create(self, request, *args, **kwargs):
-        resp = super().create(request, *args, **kwargs)
-        return resp
-
-    def update(self, request, *args, **kwargs):
-        resp = super().update(request, *args, **kwargs)
-        return resp
-
-    def destroy(self, request, *args, **kwargs):
-        resp = super().destroy(request, *args, **kwargs)
-        return resp
-
-class StopTimeViewSet(viewsets.ModelViewSet):
+    Read-only for authenticated users. Writes go through
+    /transport/admin/stop-times/ (AdminStopTimeViewSet, IsAdmin).
+    """
     queryset = StopTime.objects.all()
     serializer_class = StopTimeSerializer
-    permission_classes = [AllowAny]
-
-    def list(self, request, *args, **kwargs):
-        resp = super().list(request, *args, **kwargs)
-        return resp
-
-    def create(self, request, *args, **kwargs):
-        resp = super().create(request, *args, **kwargs)
-        return resp
-
-    def update(self, request, *args, **kwargs):
-        resp = super().update(request, *args, **kwargs)
-        return resp
-
-    def destroy(self, request, *args, **kwargs):
-        resp = super().destroy(request, *args, **kwargs)
-        return resp
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "head", "options"]
 
 class RouteScheduleAPIView(APIView):
     """
@@ -685,6 +656,64 @@ class RoadDistanceAPIView(APIView):
         })
 
 
+class WalkingPathInputSerializer(serializers.Serializer):
+    origin_lat = serializers.FloatField()
+    origin_lng = serializers.FloatField()
+    dest_lat = serializers.FloatField()
+    dest_lng = serializers.FloatField()
+
+
+class WalkingPathAPIView(APIView):
+    """
+    POST /api/transport/walking-path/
+    Returns the road path (GeoJSON LineString) plus distance/duration between
+    two coordinates via OSRM. Used to draw the walking route from the
+    passenger's current location to the nearest stop.
+
+    Request:
+    {
+        "origin_lat": 26.8467,
+        "origin_lng": 80.9462,
+        "dest_lat": 26.8567,
+        "dest_lng": 80.9562
+    }
+
+    Response:
+    {
+        "success": true,
+        "data": {
+            "path": { "type": "LineString", "coordinates": [[lon, lat], ...] },
+            "distance_m": 1234.5,
+            "duration_s": 180
+        }
+    }
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = WalkingPathInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        origin = (serializer.validated_data["origin_lng"], serializer.validated_data["origin_lat"])
+        dest = (serializer.validated_data["dest_lng"], serializer.validated_data["dest_lat"])
+
+        result = OSRMService.get_road_path(origin, dest)
+        if not result or not result.get("geometry"):
+            return Response(
+                {"success": False, "message": "OSRM routing failed", "data": None},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response({
+            "success": True,
+            "data": {
+                "path": result["geometry"],
+                "distance_m": result["distance"],
+                "duration_s": result["duration"],
+            },
+        })
+
+
 class GeocodeSearchAPIView(APIView):
     permission_classes = [AllowAny]
 
@@ -830,6 +859,96 @@ class AdminStopViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         super().destroy(request, *args, **kwargs)
         return Response({"success": True, "message": "Stop deleted"}, status=status.HTTP_200_OK)
+
+
+class AdminTripScheduleViewSet(viewsets.ModelViewSet):
+    """
+    Guarded replacement for TripScheduleViewSet's writes.
+
+    The public TripScheduleViewSet is read-only, so schedule editing has to
+    live somewhere; this is that somewhere.
+    """
+    queryset = TripSchedule.objects.all().select_related("route")
+    serializer_class = TripScheduleSerializer
+    permission_classes = [IsAdmin]
+
+    def list(self, request, *args, **kwargs):
+        resp = super().list(request, *args, **kwargs)
+        return Response({"success": True, "data": resp.data})
+
+    def create(self, request, *args, **kwargs):
+        resp = super().create(request, *args, **kwargs)
+        return Response({"success": True, "data": resp.data}, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, *args, **kwargs):
+        resp = super().retrieve(request, *args, **kwargs)
+        return Response({"success": True, "data": resp.data})
+
+    def update(self, request, *args, **kwargs):
+        resp = super().update(request, *args, **kwargs)
+        return Response({"success": True, "data": resp.data})
+
+    def destroy(self, request, *args, **kwargs):
+        super().destroy(request, *args, **kwargs)
+        return Response({"success": True, "message": "Schedule deleted"}, status=status.HTTP_200_OK)
+
+
+class AdminStopTimeViewSet(viewsets.ModelViewSet):
+    """
+    Guarded replacement for StopTimeViewSet's writes.
+    """
+    queryset = StopTime.objects.all().select_related("schedule", "stop")
+    serializer_class = StopTimeSerializer
+    permission_classes = [IsAdmin]
+
+    def list(self, request, *args, **kwargs):
+        resp = super().list(request, *args, **kwargs)
+        return Response({"success": True, "data": resp.data})
+
+    def create(self, request, *args, **kwargs):
+        resp = super().create(request, *args, **kwargs)
+        return Response({"success": True, "data": resp.data}, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, *args, **kwargs):
+        resp = super().retrieve(request, *args, **kwargs)
+        return Response({"success": True, "data": resp.data})
+
+    def update(self, request, *args, **kwargs):
+        resp = super().update(request, *args, **kwargs)
+        return Response({"success": True, "data": resp.data})
+
+    def destroy(self, request, *args, **kwargs):
+        super().destroy(request, *args, **kwargs)
+        return Response({"success": True, "message": "Stop time deleted"}, status=status.HTTP_200_OK)
+
+
+class AdminCityViewSet(viewsets.ModelViewSet):
+    """
+    Guarded replacement for CityViewSet's writes.
+    """
+    queryset = City.objects.all()
+    serializer_class = CitySerializer
+    permission_classes = [IsAdmin]
+
+    def list(self, request, *args, **kwargs):
+        resp = super().list(request, *args, **kwargs)
+        return Response({"success": True, "data": resp.data})
+
+    def create(self, request, *args, **kwargs):
+        resp = super().create(request, *args, **kwargs)
+        return Response({"success": True, "data": resp.data}, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, *args, **kwargs):
+        resp = super().retrieve(request, *args, **kwargs)
+        return Response({"success": True, "data": resp.data})
+
+    def update(self, request, *args, **kwargs):
+        resp = super().update(request, *args, **kwargs)
+        return Response({"success": True, "data": resp.data})
+
+    def destroy(self, request, *args, **kwargs):
+        super().destroy(request, *args, **kwargs)
+        return Response({"success": True, "message": "City deleted"}, status=status.HTTP_200_OK)
 
 
 class AdminRouteImportAPIView(APIView):

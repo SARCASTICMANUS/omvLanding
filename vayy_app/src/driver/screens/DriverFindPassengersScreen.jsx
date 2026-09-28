@@ -277,11 +277,13 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
             <Layer
               id="route-line-layer"
               type="line"
+              layout={{
+                "line-cap": "round",
+                "line-join": "round",
+              }}
               paint={{
                 "line-color": COLORS.primary,
                 "line-width": 4,
-                "line-cap": "round",
-                "line-join": "round",
               }}
             />
           </GeoJSONSource>

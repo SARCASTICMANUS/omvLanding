@@ -149,13 +149,13 @@ export default function Users() {
         try {
           const docsRes = await api.get(`/accounts/driver/documents/?user_id=${userId}`);
           profileData.documents = Array.isArray(docsRes.data) ? docsRes.data : docsRes.data?.data || [];
-        } catch {}
+        } catch (err) { alert(err.response?.data?.detail || "Failed to update user"); }
       }
       try {
         const walletRes = await api.get(`/accounts/wallet/?user_id=${userId}`);
         const wdata = walletRes.data?.data || walletRes.data || {};
         profileData.wallet = wdata.wallet || wdata || {};
-      } catch {}
+      } catch (err) { alert(err.response?.data?.detail || "Failed to update user"); }
       setUserDetails({ ...user, ...profileData });
     } catch (err) {
       console.error("Failed to fetch user details:", err);

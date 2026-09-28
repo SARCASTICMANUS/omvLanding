@@ -92,7 +92,7 @@ export default function DriverVerification() {
       await api.patch(`/operations/admin/drivers/${driverId}/verify/`, { action });
       setDrivers((prev) => prev.filter((d) => d.id !== driverId));
       if (expanded === driverId) setExpanded(null);
-    } catch {} finally {
+    } catch (err) { console.error("Verification error:", err); alert("Verification failed"); } finally {
       setProcessing(null);
     }
   };
@@ -115,7 +115,7 @@ export default function DriverVerification() {
           ),
         }))
       );
-    } catch {} finally {
+    } catch (err) { console.error("Verification error:", err); alert("Verification failed"); } finally {
       setProcessing(null);
     }
   };

@@ -2,8 +2,20 @@ import { DEFAULT_CENTER } from "../../constants/mapConfig";
 
 export { DEFAULT_CENTER };
 
-export const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_API_KEY || "VHJ2bQbYo88r3CZHiOKU";
-export const MAPTILER_STYLE = `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`;
+// Sourced from the environment only — this module is bundled into the shipped
+// app, so a committed fallback would leak the key. See .env.example.
+export const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_API_KEY || "";
+
+if (!MAPTILER_KEY) {
+  console.warn(
+    "[VAYY] EXPO_PUBLIC_MAPTILER_API_KEY is unset — the map will not load. " +
+      "Copy .env.example to .env and fill in your MapTiler key."
+  );
+}
+
+export const MAPTILER_STYLE = MAPTILER_KEY
+  ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`
+  : null;
 
 export function hexToGray(hex) {
   let h = hex.slice(1);

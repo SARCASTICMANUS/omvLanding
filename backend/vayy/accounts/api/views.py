@@ -1,8 +1,15 @@
+import os
 import json
 import logging
+import hmac
+import hashlib
+from decimal import Decimal, InvalidOperation
 from django.utils import timezone
+from django.conf import settings
 from django.core.cache import cache
-from rest_framework import status, viewsets
+from django.db import transaction
+from django.db.utils import IntegrityError
+from rest_framework import status, viewsets, serializers
 from rest_framework.views import APIView
 from rest_framework.permissions import (
     IsAuthenticated,
@@ -17,6 +24,7 @@ from accounts.models import (
     Wallet,
     Transaction,
     PaymentMethod,
+    PaymentOrder,
     DriverDocument,
     RecentSearch,
     DriverBankDetail,
@@ -51,7 +59,6 @@ from accounts.api.serializers import (
     MergedDriverProfileUpdateSerializer,
     WalletSerializer,
     TransactionSerializer,
-    AddFundsSerializer,
     DriverDocumentSerializer,
     DriverDocumentListSerializer,
     RecentSearchSerializer,
@@ -704,6 +711,64 @@ class DriverProfileAPIView(APIView):
         return resp
 
 # WALLET
+# Signature/tolerance constants for the top-up pipeline. Any tolerance beyond
+# these should be a deliberate product decision, never a silent default.
+_MAX_TOPUP_AMOUNT = 100000
+_MIN_TOPUP_AMOUNT = 10
+# Guards the duplicate-key race on concurrent creates with the same
+# idempotency key.
+_IDEMPOTENCY_MAX_RETRIES = 3
+
+
+class PaymentOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentOrder
+        fields = (
+            "id",
+            "order_id",
+            "amount",
+            "currency",
+            "status",
+            "gateway",
+            "gateway_payment_id",
+            "failure_reason",
+            "created_at",
+            "paid_at",
+        )
+        read_only_fields = fields
+
+
+class PaymentOrderCreateSerializer(serializers.Serializer):
+    """
+    Creates an *intent* only. The amount here never reaches a wallet — it is
+    recorded on the order and re-verified against the gateway callback.
+    """
+
+    amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=_MIN_TOPUP_AMOUNT,
+        max_value=_MAX_TOPUP_AMOUNT,
+    )
+    currency = serializers.CharField(required=False, max_length=10, default="INR")
+    idempotency_key = serializers.CharField(required=False, max_length=128)
+
+
+class _ManualCreditSerializer(serializers.Serializer):
+    """
+    Admin-only ledger adjustment. Still cannot target another user's wallet:
+    the target is always the requesting admin's own wallet.
+    """
+
+    amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=1.00,
+        max_value=_MAX_TOPUP_AMOUNT,
+    )
+    reason = serializers.CharField(max_length=255)
+
+
 class WalletAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -730,21 +795,323 @@ class WalletAPIView(APIView):
         )
         return resp
 
-class AddFundsAPIView(APIView):
+
+class PaymentOrderCreateAPIView(APIView):
+    """
+    POST /api/accounts/wallet/orders/
+    Create a top-up intent and return the server-generated order_id.
+
+    This endpoint deliberately does NOT credit anything. The wallet is credited
+    later, by PaymentWebhookAPIView, once the gateway has confirmed payment.
+    """
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        serializer = AddFundsSerializer(data=request.data)
+        serializer = PaymentOrderCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
-        # In a real app, integrate with a payment gateway here
+
+        idempotency_key = (
+            request.headers.get("Idempotency-Key")
+            or serializer.validated_data.get("idempotency_key")
+        )
+        if not idempotency_key:
+            return error_response(
+                message="Idempotency-Key header is required to create a top-up order.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = request.user
+        amount = serializer.validated_data["amount"]
+
+        # Idempotent create: a replayed key returns the original order instead
+        # of minting a second one.
+        for attempt in range(_IDEMPOTENCY_MAX_RETRIES):
+            existing = PaymentOrder.objects.filter(idempotency_key=idempotency_key).first()
+            if existing:
+                if existing.user_id != user.id:
+                    return error_response(
+                        message="Idempotency key already used by another account.",
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
+                return success_response(
+                    data=PaymentOrderSerializer(existing).data,
+                    message="Existing order returned for this idempotency key.",
+                )
+
+            try:
+                with transaction.atomic():
+                    order = PaymentOrder.objects.create(
+                        user=user,
+                        amount=amount,
+                        currency=serializer.validated_data.get("currency") or "INR",
+                        idempotency_key=idempotency_key,
+                        status=PaymentOrder.STATUS_PENDING,
+                        metadata={"source": "app_topup"},
+                    )
+                break
+            except IntegrityError:
+                # Lost the race against a concurrent create on the same key.
+                if attempt == _IDEMPOTENCY_MAX_RETRIES - 1:
+                    return error_response(
+                        message="Could not create order, please retry.",
+                        status_code=status.HTTP_409_CONFLICT,
+                    )
+        else:  # pragma: no cover - loop always breaks or returns
+            return error_response(
+                message="Could not create order, please retry.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+
+        return success_response(
+            data=PaymentOrderSerializer(order).data,
+            message="Top-up order created. Awaiting payment.",
+            status_code=status.HTTP_201_CREATED,
+        )
+
+
+class PaymentWebhookAPIView(APIView):
+    """
+    POST /api/accounts/wallet/webhook/
+    Gateway callback. The ONLY path that may credit a wallet from a top-up.
+
+    Order of checks is deliberate and each one is a hard stop:
+      1. HMAC signature over the raw body (constant-time compare).
+      2. Order exists and belongs to the stated user.
+      3. Callback amount equals the amount stored on the order.
+      4. Row lock + status re-read so concurrent webhooks cannot double-credit.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        # A Django setting wins if one is ever added, otherwise fall back to the
+        # process environment so the secret stays configurable via deployment
+        # env vars without this module hard-coding a default.
+        secret = getattr(settings, "PAYMENT_GATEWAY_WEBHOOK_SECRET", None) or os.environ.get(
+            "PAYMENT_GATEWAY_WEBHOOK_SECRET"
+        )
+        if not secret:
+            # Fail closed. An unset secret must never mean "accept everything".
+            logger.error(
+                "[PaymentWebhook] PAYMENT_GATEWAY_WEBHOOK_SECRET is not configured; rejecting."
+            )
+            return error_response(
+                message="Webhook verification is not configured.",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        raw_body = request.body
+        provided_signature = request.headers.get("X-Signature") or request.headers.get(
+            "X-Webhook-Signature"
+        )
+        if not provided_signature:
+            return error_response(
+                message="Missing signature header.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        expected_signature = hmac.new(
+            secret.encode("utf-8"),
+            raw_body,
+            hashlib.sha256,
+        ).hexdigest()
+
+        # Constant-time compare; never use == on a signature.
+        if not hmac.compare_digest(expected_signature, provided_signature.strip()):
+            logger.warning("[PaymentWebhook] Signature mismatch; rejecting payload.")
+            return error_response(
+                message="Invalid signature.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            payload = json.loads(raw_body.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return error_response(
+                message="Malformed payload.", status_code=status.HTTP_400_BAD_REQUEST
+            )
+
+        order_id = payload.get("order_id")
+        status_str = payload.get("status")
+        gateway_payment_id = payload.get("payment_id") or payload.get("gateway_payment_id")
+        gateway = payload.get("gateway")
+
+        if not order_id or not status_str:
+            return error_response(
+                message="order_id and status are required.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # The amount is mandatory. An absent amount must never be treated as a
+        # match, otherwise stripping the field would skip verification entirely.
+        raw_amount = payload.get("amount")
+        if raw_amount is None:
+            return error_response(
+                message="amount is required.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            callback_amount = Decimal(str(raw_amount))
+        except (InvalidOperation, TypeError, ValueError):
+            return error_response(
+                message="Invalid amount in payload.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Only a known status may drive a transition. An unrecognised value is
+        # never coerced into a valid one.
+        if status_str not in PaymentOrder.ALL_STATUSES:
+            return error_response(
+                message=f"Unsupported status '{status_str}'.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            order = (
+                PaymentOrder.objects.select_for_update()
+                .select_related("user")
+                .filter(order_id=order_id)
+                .first()
+            )
+            if order is None:
+                logger.warning(f"[PaymentWebhook] Unknown order_id: {order_id}")
+                return error_response(
+                    message="Unknown order.", status_code=status.HTTP_404_NOT_FOUND
+                )
+
+            if order.status in PaymentOrder.TERMINAL_STATUSES:
+                # Gateway retry of an already-settled order. Acknowledge so the
+                # gateway stops retrying; no second credit is possible.
+                return success_response(
+                    data=PaymentOrderSerializer(order).data,
+                    message=f"Order already {order.status}.",
+                )
+
+            # The DB row is the authority. A tampered or mismatched amount is
+            # rejected outright, never reconciled.
+            if callback_amount != order.amount:
+                logger.error(
+                    f"[PaymentWebhook] Amount mismatch on {order_id}: "
+                    f"callback={callback_amount} order={order.amount}. Rejecting."
+                )
+                return error_response(
+                    message="Amount mismatch.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if status_str == PaymentOrder.STATUS_SUCCEEDED:
+                # WalletService.add_funds requires an existing row.
+                WalletService.get_or_create_wallet(order.user)
+                tx = WalletService.add_funds(
+                    user=order.user,
+                    amount=order.amount,  # server-side value, never the payload
+                    reference=f"payorder_{order.order_id}",
+                    metadata={
+                        "source": "gateway_webhook",
+                        "order_id": order.order_id,
+                        "gateway_payment_id": gateway_payment_id or "",
+                    },
+                )
+                order.status = PaymentOrder.STATUS_SUCCEEDED
+                order.paid_at = timezone.now()
+                order.wallet_transaction = tx
+                if gateway:
+                    order.gateway = gateway[:50]
+                if gateway_payment_id:
+                    order.gateway_payment_id = gateway_payment_id[:128]
+                order.gateway_signature = provided_signature.strip()[:256]
+                order.save(
+                    update_fields=[
+                        "status",
+                        "paid_at",
+                        "wallet_transaction",
+                        "gateway",
+                        "gateway_payment_id",
+                        "gateway_signature",
+                        "updated_at",
+                    ]
+                )
+                logger.info(
+                    f"[PaymentWebhook] Order {order_id} settled: {order.amount} "
+                    f"{order.currency} credited to {order.user_id}."
+                )
+                return success_response(
+                    data=PaymentOrderSerializer(order).data,
+                    message="Payment captured.",
+                )
+
+            if status_str == PaymentOrder.STATUS_FAILED:
+                order.status = PaymentOrder.STATUS_FAILED
+                order.failure_reason = str(payload.get("failure_reason") or "")[:255]
+                if gateway:
+                    order.gateway = gateway[:50]
+                if gateway_payment_id:
+                    order.gateway_payment_id = gateway_payment_id[:128]
+                order.save(
+                    update_fields=[
+                        "status",
+                        "failure_reason",
+                        "gateway",
+                        "gateway_payment_id",
+                        "updated_at",
+                    ]
+                )
+                return success_response(
+                    data=PaymentOrderSerializer(order).data,
+                    message="Payment failed.",
+                )
+
+            # Reached only for 'pending' or 'processing' (unknown values were
+            # rejected above). Record progress; the order stays non-terminal so
+            # a later 'succeeded' callback can still settle it.
+            order.status = PaymentOrder.STATUS_PROCESSING
+            order.save(update_fields=["status", "updated_at"])
+            return success_response(
+                data=PaymentOrderSerializer(order).data,
+                message="Payment processing.",
+                status_code=status.HTTP_202_ACCEPTED,
+            )
+
+
+class AddFundsAPIView(APIView):
+    """
+    POST /api/accounts/wallet/add-funds/
+    Admin-only manual ledger credit (cash top-up at a depot, support goodwill
+    adjustment). This is NOT the top-up pipeline — passengers cannot credit
+    themselves here; use POST /wallet/orders/ + the gateway webhook.
+    """
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def post(self, request):
+        # Belt-and-braces: the permission class already gates this, but the
+        # 403 must not depend on a single check.
+        if not (request.user.role == ROLE_ADMIN or request.user.is_staff):
+            return error_response(
+                message=IsAdmin.message,
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = _ManualCreditSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        amount = serializer.validated_data["amount"]
+        reason = serializer.validated_data["reason"]
+
+        WalletService.get_or_create_wallet(request.user)
         tx = WalletService.add_funds(
             user=request.user,
-            amount=serializer.validated_data["amount"],
+            amount=amount,
             reference=f"manual_{request.user.id}_{timezone.now().timestamp()}",
-            metadata={"source": "app_manual_add"}
+            metadata={
+                "source": "admin_manual_credit",
+                "reason": reason,
+                "credited_by": str(request.user.id),
+                "credited_by_role": request.user.role,
+            },
         )
-        
+
         resp = success_response(
             data=TransactionSerializer(tx).data,
             message="Funds added successfully",
@@ -1217,7 +1584,12 @@ class PushTokenAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        token = request.data.get("token")
+        # The clients send {"push_token": ...} (see
+        # BikeFindPassengerScreen.jsx) while this endpoint only ever read
+        # "token", so every registration was rejected with 400 and the app
+        # swallowed it with .catch(() => {}) - leaving User.push_token empty and
+        # no push notification deliverable. Accept both spellings.
+        token = request.data.get("token") or request.data.get("push_token")
         if not token:
             return Response(
                 {"success": False, "message": "token is required"},

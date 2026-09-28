@@ -19,7 +19,7 @@ export default function Cities() {
     try {
       const res = await api.get("/transport/cities/");
       setCities(Array.isArray(res.data) ? res.data : res.data.results || []);
-    } catch { /* ignore */ }
+    } catch (err) { alert(err.response?.data?.detail || "Failed to delete city"); }
     setLoading(false);
   };
 
@@ -39,9 +39,9 @@ export default function Cities() {
     e.preventDefault();
     try {
       if (editing) {
-        await api.put(`/transport/cities/${editing.id}/`, form);
+        await api.put(`/transport/admin/cities/${editing.id}/`, form);
       } else {
-        await api.post("/transport/cities/", form);
+        await api.post("/transport/admin/cities/", form);
       }
       setModal(false);
       fetchCities();
@@ -53,9 +53,9 @@ export default function Cities() {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this city?")) return;
     try {
-      await api.delete(`/transport/cities/${id}/`);
+      await api.delete(`/transport/admin/cities/${id}/`);
       fetchCities();
-    } catch { /* ignore */ }
+    } catch (err) { alert(err.response?.data?.detail || "Failed to delete city"); }
   };
 
   return (

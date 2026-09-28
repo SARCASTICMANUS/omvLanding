@@ -5,6 +5,13 @@ export const STORAGE_KEYS = {
   user: "user",
   pendingEmail: "pending_email",
   onboardingDone: "@vayy_onboarding_done",
+  // Last Expo push token successfully POSTed to /api/accounts/push-token/.
+  // Kept so a cold start does not re-register on every launch, and so a token
+  // rotation is detected without a round trip.
+  pushToken: "@vayy_push_token",
+  // Notifications that arrived while the app was backgrounded or killed and
+  // have not been surfaced in the UI yet.
+  pushQueue: "@vayy_push_queue",
 };
 
 export default STORAGE_KEYS;

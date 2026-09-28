@@ -1,9 +1,20 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
+import * as Notifications from "expo-notifications";
+
 import socketManager from "../lib/socketManager";
 import { WS } from "../../constants";
+import { isDriverRole, ROLE } from "../../constants/roles";
 import { addNotification } from "../../store/slices/notificationSlice";
+import {
+  configureNotificationHandler,
+  drainBackgroundNotifications,
+  ensureAndroidChannel,
+  registerBackgroundHandler,
+  registerPushToken,
+  toNotificationPayload,
+} from "../lib/pushNotifications";
 
 let _idCounter = 0;
 function uniqueId() {
@@ -11,13 +22,33 @@ function uniqueId() {
   return `ntf_${Date.now()}_${_idCounter}`;
 }
 
+// The backend fans the same notification out over both the WebSocket and
+// push, so a driver with the app open would otherwise see every message twice.
+// Suppress an identical title+message that lands on the other channel.
+const DUPE_WINDOW_MS = 10000;
+const _recentlyShown = new Map();
+
+function isDuplicate(notification) {
+  if (!notification) return false;
+  const key = `${notification.title}|${notification.message}`;
+  const now = Date.now();
+  for (const [k, at] of _recentlyShown) {
+    if (now - at > DUPE_WINDOW_MS) _recentlyShown.delete(k);
+  }
+  if (_recentlyShown.has(key)) return true;
+  _recentlyShown.set(key, now);
+  return false;
+}
+
 export default function useNotificationListener(toastRef) {
   const dispatch = useDispatch();
   const navigation = useNavigation();
   const { user } = useSelector((state) => state.auth);
   const userId = user?.id;
+  const role = user?.role;
   const navigationRef = useRef(navigation);
   const dispatchRef = useRef(dispatch);
+  const roleRef = useRef(role);
 
   useEffect(() => {
     navigationRef.current = navigation;
@@ -28,29 +59,120 @@ export default function useNotificationListener(toastRef) {
   }, [dispatch]);
 
   useEffect(() => {
+    roleRef.current = role;
+  }, [role]);
+
+  const present = useRef((notification) => {
+    if (!notification) return;
+    if (isDuplicate(notification)) return;
+    dispatchRef.current(addNotification(notification));
+    toastRef.current?.show({
+      id: notification.id,
+      title: notification.title,
+      message: notification.message,
+      type: notification.type,
+      timestamp: notification.timestamp,
+      onPress: () => handleNotificationPress(notification, navigationRef.current, roleRef.current),
+    });
+  }).current;
+
+  // Foreground presentation is shared by the WebSocket channel, the push
+  // listener and the drained background queue.
+  const handleIncoming = useCallback((raw) => {
+    const notification = normalizeNotification(raw);
+    if (!notification) return;
+    present(notification);
+  }, [present]);
+
+  // A tap that launched the app from the killed state never reaches
+  // addNotificationResponseReceivedListener, so it is picked up here instead.
+  const lastResponse = Notifications.useLastNotificationResponse();
+  const handledResponseRef = useRef(null);
+
+  useEffect(() => {
+    const response = lastResponse?.notification?.request?.identifier;
+    if (!response || handledResponseRef.current === response) return;
+    handledResponseRef.current = response;
+
+    const payload = toNotificationPayload(lastResponse.notification);
+    if (!payload) return;
+    const notification = normalizeNotification({ ...payload.data, type: "push" });
+    if (!notification) return;
+    handleNotificationPress(notification, navigationRef.current, roleRef.current);
+  }, [lastResponse]);
+
+  useEffect(() => {
     if (!userId) return;
 
     const wsPath = WS.notifications(userId);
 
     const unsub = socketManager.subscribe(wsPath, {
-      onMessage: (data) => {
-        const notification = normalizeNotification(data);
-        if (!notification) return;
-
-        dispatchRef.current(addNotification(notification));
-
-        toastRef.current?.show({
-          id: notification.id,
-          title: notification.title,
-          message: notification.message,
-          type: notification.type,
-          timestamp: notification.timestamp,
-          onPress: () => handleNotificationPress(notification, navigationRef.current),
-        });
-      },
+      onMessage: (data) => handleIncoming(data),
     });
 
     return unsub;
+  }, [userId, handleIncoming]);
+
+  // Push: foreground banner/handler, tap-to-navigate, background queue, and
+  // token registration for every authenticated role (previously bike drivers
+  // on one screen only, so autodriver pushes had no registered token).
+  useEffect(() => {
+    let cancelled = false;
+
+    configureNotificationHandler();
+    ensureAndroidChannel();
+    registerBackgroundHandler();
+
+    const drain = async () => {
+      if (cancelled) return;
+      const queued = await drainBackgroundNotifications();
+      for (const item of queued) {
+        handleIncoming({
+          title: item.title,
+          message: item.message,
+          data: item.data,
+          type: "push",
+          created_at: new Date(item.queuedAt || Date.now()).toISOString(),
+        });
+      }
+    };
+
+    drain();
+
+    const receivedSub = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        const payload = toNotificationPayload(notification);
+        if (!payload) return;
+        handleIncoming({ ...payload.data, type: "push" });
+      }
+    );
+
+    const responseSub = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const payload = toNotificationPayload(response?.notification);
+        if (!payload) return;
+        const notification = normalizeNotification({
+          ...payload.data,
+          type: "push",
+        });
+        if (!notification) return;
+        handleNotificationPress(notification, navigationRef.current, roleRef.current);
+      }
+    );
+
+    return () => {
+      cancelled = true;
+      receivedSub.remove();
+      responseSub.remove();
+    };
+  }, [handleIncoming]);
+
+  // Register (or re-register for a new owner / rotated token) once
+  // authenticated. Passing userId matters: the Expo token is per device, so a
+  // different account on the same phone has to be POSTed separately.
+  useEffect(() => {
+    if (!userId) return;
+    registerPushToken({ userId });
   }, [userId]);
 }
 
@@ -146,22 +268,58 @@ function resolveType(data) {
   return data.type || "info";
 }
 
-function handleNotificationPress(notification, navigation) {
+/**
+ * Tap-to-navigate.
+ *
+ * Priority is an explicit `target_screen` from the backend payload, then the
+ * identifiers the backend actually sends today. Driver screens are chosen by
+ * role: the old code always sent a driver to "FindPassenger" (the bike radar),
+ * which is the wrong screen for an autodriver.
+ */
+function handleNotificationPress(notification, navigation, role) {
   if (!navigation) return;
 
-  if (notification.trip_id) {
+  const data = notification?.raw?.data || notification?.raw?.metadata || {};
+  const targetScreen =
+    notification.target_screen || data.target_screen || null;
+  const params = data.params && typeof data.params === "object" ? data.params : {};
+
+  if (targetScreen) {
+    navigation.navigate(targetScreen, params);
+    return;
+  }
+
+  const dispatchId = notification.dispatch_id || data.dispatch_id || data.request_id;
+  const tripId = notification.trip_id || data.trip_id;
+
+  if (isDriverRole(role)) {
+    const radar = role === ROLE.AUTO_DRIVER ? "AutoFindPassenger" : "FindPassenger";
+    if (dispatchId) {
+      navigation.navigate("DriverNavigator", {
+        screen: radar,
+        params: { dispatchId, ...params },
+      });
+      return;
+    }
+    // A driver tap without a dispatch id cannot reconstruct a live-trip screen
+    // (those need otp/driver/vehicle params), so land on the driver home
+    // rather than pushing a screen that would read undefined route params.
+    navigation.navigate("DriverNavigator", { screen: "DriverTabs" });
+    return;
+  }
+
+  if (tripId) {
     navigation.navigate("PassengerNavigator", {
       screen: "PassengerLiveTracking",
-      params: { tripId: notification.trip_id },
+      params: { tripId, ...params },
     });
     return;
   }
 
-  if (notification.dispatch_id) {
+  if (dispatchId) {
     navigation.navigate("DriverNavigator", {
       screen: "FindPassenger",
-      params: { dispatchId: notification.dispatch_id },
+      params: { dispatchId, ...params },
     });
-    return;
   }
 }

@@ -10,7 +10,7 @@ from channels.db import database_sync_to_async
 from channels.layers import get_channel_layer
 
 from operations.models import Vehicle, ActiveTrip, VehicleState, BoardingRequest
-from common.constants import BOARDING_PENDING, BOARDING_APPROACHING, TRIP_STATUS_ACCEPTED, TRIP_STATUS_ARRIVED, TRIP_STATUS_ACTIVE
+from common.constants import BOARDING_PENDING, BOARDING_APPROACHING, TRIP_STATUS_ACCEPTED, TRIP_STATUS_ARRIVED, TRIP_STATUS_ACTIVE, WS_GROUP_ADMIN_FLEET
 from tracking.models import HybridLog
 from tracking.services.geo_service import GeoService
 from tracking.services.redis_geo_service import RedisGeoService
@@ -296,6 +296,7 @@ class LocationService:
             "timestamp": timezone.now().isoformat(),
         }
         LocationService._notify_ws(f"vehicle_{vehicle_id}", "vehicle_update", ws_payload)
+        LocationService._notify_ws(WS_GROUP_ADMIN_FLEET, "vehicle_update", ws_payload)
         if trip_id:
             LocationService._notify_ws(f"trip_{trip_id}", "trip_update", ws_payload)
 
@@ -363,6 +364,13 @@ class LocationService:
         }
         await channel_layer.group_send(
             f"vehicle_{vehicle_id}",
+            {"type": "vehicle_update", "data": ws_payload},
+        )
+        # Mirror to the ops console. One extra Redis pub/sub per fix, against a
+        # hot path that already does two - negligible next to the DB and Celery
+        # work a cold path triggers.
+        await channel_layer.group_send(
+            WS_GROUP_ADMIN_FLEET,
             {"type": "vehicle_update", "data": ws_payload},
         )
         if trip_id:
@@ -666,10 +674,22 @@ class LocationService:
             LocationService._notify_ws(f"vehicle_{vehicle_id}", "vehicle_update", ws_payload)
             if active_trip:
                 LocationService._notify_ws(f"trip_{active_trip.id}", "trip_update", ws_payload)
+
+                # route_{route_id} is deliberately open to any authenticated
+                # user, so it must not carry trip-scoped data: trip_id would
+                # let every route watcher enumerate live trips, and the pickup
+                # figures are measured against one trip's boarding stop.
+                # Keys are kept (nulled) rather than dropped so the message
+                # shape stays identical to the trip feed.
+                route_payload = dict(ws_payload)
+                route_payload["trip_id"] = None
+                route_payload["pickup_distance_km"] = None
+                route_payload["pickup_duration_min"] = None
+
                 LocationService._notify_ws(
                     f"route_{active_trip.route_id}",
                     "route_vehicle_update",
-                    ws_payload,
+                    route_payload,
                 )
 
             logger.info(
