@@ -8,11 +8,25 @@ from django.core.management.base import BaseCommand
 from django.conf import settings
 
 from communication.services.rabbitmq_service import RabbitMQService
+from common.constants import (
+    QUEUE_LOCATION_AUTO,
+    QUEUE_LOCATION_BIKE,
+    QUEUE_LOCATION_PASSENGER,
+    QUEUE_DLX,
+    QUEUE_DEAD_LETTER,
+)
 from tracking.tasks import process_location_update
 
 logger = logging.getLogger(__name__)
 
-QUEUES = ["auto.location", "bike.location", "passenger.location"]
+QUEUES = [QUEUE_LOCATION_AUTO, QUEUE_LOCATION_BIKE, QUEUE_LOCATION_PASSENGER]
+
+# Must match the DLX arguments setup_infrastructure applies, or the broker
+# treats the declare as inequivalent.
+DLX_ARGS = {
+    'x-dead-letter-exchange': QUEUE_DLX,
+    'x-dead-letter-routing-key': QUEUE_DEAD_LETTER,
+}
 
 
 class Command(BaseCommand):
@@ -45,14 +59,21 @@ class Command(BaseCommand):
             channel.basic_qos(prefetch_count=10)
 
             for queue in QUEUES:
-                channel.queue_declare(
-                    queue=queue,
-                    durable=True,
-                    arguments={
-                        'x-dead-letter-exchange': 'vayy.dlx',
-                        'x-dead-letter-routing-key': 'dead.letter'
-                    }
-                )
+                # Declared through RabbitMQService rather than queue_declare
+                # directly: this connection is separate from the one
+                # setup_infrastructure declared on, and RabbitMQ rejects a
+                # redeclare whose arguments differ from the existing queue.
+                # A hand-rolled declare here omitted the length/TTL caps and
+                # was refused with 406 PRECONDITION_FAILED on 'x-message-ttl',
+                # which closed the channel and killed the consumer.
+                if not RabbitMQService.declare_queue(channel, queue, DLX_ARGS):
+                    self.stderr.write(
+                        f"Could not declare queue {queue!r}; the broker refused "
+                        "the arguments. See RabbitMQService._declare_bounded_queue "
+                        "for the one-time queue recreate command list."
+                    )
+                    sys.exit(1)
+
                 channel.basic_consume(
                     queue=queue,
                     on_message_callback=self._callback,

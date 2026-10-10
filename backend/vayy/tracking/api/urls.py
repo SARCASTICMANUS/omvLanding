@@ -9,6 +9,13 @@ from tracking.api.views import (
     DriverLocationAPIView,
     StartRouteTripView,
     EndRouteTripView,
+    StartJourneyAPIView,
+    PreviewJourneyAPIView,
+    ActiveJourneyAPIView,
+    EndJourneyAPIView,
+    JourneyDetailAPIView,
+    CorridorVehiclesAPIView,
+    PassingVehiclesAPIView,
     PassengerRaiseHandView,
     RideLifecycleView,
     RouteStopsView,
@@ -64,11 +71,47 @@ urlpatterns = [
         EndRouteTripView.as_view(),
         name="end-route-trip",
     ),
+    # ── Journeys (free-form, no fixed route) ──────────────────
+    path(
+        "journeys/start/",
+        StartJourneyAPIView.as_view(),
+        name="journey-start",
+    ),
+    path(
+        "journeys/preview/",
+        PreviewJourneyAPIView.as_view(),
+        name="journey-preview",
+    ),
+    path(
+        "journeys/active/",
+        ActiveJourneyAPIView.as_view(),
+        name="journey-active",
+    ),
+    path(
+        "journeys/end/",
+        EndJourneyAPIView.as_view(),
+        name="journey-end",
+    ),
+    path(
+        "journeys/<uuid:trip_id>/",
+        JourneyDetailAPIView.as_view(),
+        name="journey-detail",
+    ),
     # ── Passenger ride request ───────────────────────────────
     path(
         "raise-hand/",
         PassengerRaiseHandView.as_view(),
         name="passenger-raise-hand",
+    ),
+    path(
+        "corridor/vehicles/",
+        CorridorVehiclesAPIView.as_view(),
+        name="corridor-vehicles",
+    ),
+    path(
+        "stops/<uuid:stop_id>/passing-vehicles/",
+        PassingVehiclesAPIView.as_view(),
+        name="stop-passing-vehicles",
     ),
     # ── Ride lifecycle ───────────────────────────────────────
     path(

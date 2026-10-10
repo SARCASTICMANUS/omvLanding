@@ -16,7 +16,12 @@ import {
 import { StatusBar } from "expo-status-bar";
 import * as Location from "expo-location";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { getRecentSearches, saveRecentSearch, searchRoutesByLocation } from "../services/passengerService";
+import {
+  getRecentSearches,
+  saveRecentSearch,
+  searchCorridorVehicles,
+  searchRoutesByLocation,
+} from "../services/passengerService";
 import LocationSearch from "../../shared/components/common/LocationSearch";
 import { NOMINATIM_REVERSE } from "../../constants/geocoding";
 
@@ -191,6 +196,14 @@ export default function PassengerTripPlanner({ navigation, route }) {
         destination_lon: destination.lon,
       });
 
+      // Live vehicles running the searched road. Kept alongside the existing
+      // route search so the results page can show both from one navigation,
+      // rather than adding a second button or a new screen.
+      const corridor = await searchCorridorVehicles(
+        { lat: pickup.lat, lng: pickup.lon },
+        { lat: destination.lat, lng: destination.lon },
+      ).catch(() => null);
+
       const trips = await searchRoutesByLocation(
         pickup.lat,
         pickup.lon,
@@ -198,7 +211,14 @@ export default function PassengerTripPlanner({ navigation, route }) {
         destination.lon,
       );
 
-      navigation.navigate("PassengerRouteList", { pickup, destination, mode, trips, loading: false });
+      navigation.navigate("PassengerRouteList", {
+        pickup,
+        destination,
+        mode,
+        trips,
+        corridor,
+        loading: false,
+      });
     } catch (error) {
       console.error("Search failed:", error);
     } finally {

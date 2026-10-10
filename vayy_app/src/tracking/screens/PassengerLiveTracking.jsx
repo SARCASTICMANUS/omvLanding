@@ -1,7 +1,9 @@
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { Alert, Linking, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useSelector } from "react-redux";
+import { notifyAction } from "../../shared/lib/confirmAction";
+import { Linking, Platform, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -30,6 +32,9 @@ const toMapCoord = (point) => {
 
 export default function PassengerLiveTracking({ navigation, route }) {
   const tripId = route?.params?.tripId;
+  // Used to pick this rider's own settled segment out of a trip_completed
+  // frame, which lists every passenger on the journey.
+  const userId = useSelector((state) => state.auth?.user?.id);
   const [tripData, setTripIdData] = useState(null);
   const [vehicleData, setVehicleData] = useState({ pos: null, eta: [] });
   const [vehicleHeading, setVehicleHeading] = useState(null);
@@ -44,10 +49,39 @@ export default function PassengerLiveTracking({ navigation, route }) {
   const zoomOut = () => mapRef.current?.zoomOut();
 
   const handleWsMessage = useCallback((data) => {
+    /* Trip completion.
+       The driver ends the journey, which settles this passenger's own
+       pickup->drop segment and announces it on the trip socket. Without this
+       branch the passenger sat on the live-tracking screen forever with no fare
+       page, because nothing else navigates them out. */
+    if (data.type === "trip_completed") {
+      const me = (data.passengers || []).find((p) =>
+        p.passenger_id ? String(p.passenger_id) === String(userId) : false
+      );
+      // Only redirect if this ride was mine; the same socket carries every
+      // rider on the journey.
+      if (!me && (data.passengers || []).length > 0) return;
+      navigation.replace("RideComplete", {
+        tripId: data.trip_id,
+        fare: me?.fare,
+        distance: me?.segment_distance_m
+          ? `${(me.segment_distance_m / 1000).toFixed(1)} km`
+          : undefined,
+        pickup: me?.pickup_stop_name,
+        dropoff: me?.drop_stop_name,
+        driverName: route?.params?.driverName,
+        vehicleText: route?.params?.vehicleNumber,
+      });
+      return;
+    }
     if (data.type === "city_vehicle_update" || data.type === "vehicle_update") {
       setVehicleData({
         pos: [data.lat, data.lng || data.lon],
         eta: data.next_stop_eta || [],
+        // The lead time to this passenger's own pickup, which is what the card
+        // counts down; `next_stop_eta[0]` is simply the next stop on the road.
+        pickupDurationMin: data.pickup_duration_min,
+        pickupDistanceKm: data.pickup_distance_km,
       });
       if (data.speed != null) setVehicleSpeed(Number(data.speed));
       if (data.heading != null) setVehicleHeading(Number(data.heading));
@@ -124,22 +158,45 @@ export default function PassengerLiveTracking({ navigation, route }) {
     [vehicleCoord, destinationCoord, myCoord],
   );
   const initial = myCoord || vehicleCoord || destinationCoord || { latitude: 26.8467, longitude: 80.9462 };
-  const etaMinutes = vehicleData.eta?.[0]?.duration_seconds
-    ? Math.ceil(vehicleData.eta[0].duration_seconds / 60)
-    : "--";
+  /* The server names each stop's lead time `eta_seconds`; the screen used to
+     read `duration_seconds`, which the payload never carried, so the card showed
+     "-- min" for the whole ride. Read the field that is actually sent, and fall
+     back to the pickup ETA the broadcast carries for this passenger. */
+  const etaSeconds =
+    vehicleData.pickupDurationMin != null
+      ? vehicleData.pickupDurationMin * 60
+      : vehicleData.eta?.[0]?.eta_seconds;
+  const etaMinutes =
+    etaSeconds != null && Number(etaSeconds) > 0
+      ? Math.max(1, Math.ceil(Number(etaSeconds) / 60))
+      : "--";
 
   const handleShareTrip = async () => {
+    const message = `Track my trip on VAYY! Trip ID: ${tripId || "N/A"}`;
+    // Share.share has no react-native-web implementation: it throws, and the
+    // catch swallowed it, so the button looked broken in a browser. Web Share is
+    // the browser's own API where it exists.
     try {
-      await Share.share({ message: `Track my trip on VAYY! Trip ID: ${tripId || "N/A"}` });
-    } catch {}
+      if (Platform.OS === "web") {
+        if (typeof navigator !== "undefined" && navigator.share) {
+          await navigator.share({ title: "VAYY trip", text: message });
+        } else if (typeof window !== "undefined") {
+          await window.navigator.clipboard?.writeText(message);
+          notifyAction({ title: "Copied", message: "Trip link copied to your clipboard." });
+        }
+        return;
+      }
+      await Share.share({ message });
+    } catch {
+      // User dismissed the share sheet, or the platform refused. Nothing to do.
+    }
   };
 
   const handleSOS = () => {
-    Alert.alert(
-      "SOS Emergency",
-      "Emergency assistance has been notified. Stay calm, help is on the way.",
-      [{ text: "OK", style: "default" }],
-    );
+    notifyAction({
+      title: "SOS Emergency",
+      message: "Emergency assistance has been notified. Stay calm, help is on the way.",
+    });
   };
 
   const handleCallDriver = () => {
@@ -147,20 +204,19 @@ export default function PassengerLiveTracking({ navigation, route }) {
     if (phone) {
       Linking.openURL(`tel:${phone}`);
     } else {
-      Alert.alert("Call Driver", "Driver contact number is not available yet.");
+      notifyAction({ title: "Call Driver", message: "Driver contact number is not available yet." });
     }
   };
 
   const handleReportIssue = () => {
-    Alert.alert(
-      "Report Issue",
-      "Please contact support at support@vayy.app.",
-      [{ text: "OK" }],
-    );
+    notifyAction({
+      title: "Report Issue",
+      message: "Please contact support at support@vayy.app.",
+    });
   };
 
   const handleOnBoard = () => {
-    Alert.alert("Boarding Confirmed", "You are now on board! Enjoy your ride.");
+    notifyAction({ title: "Boarding Confirmed", message: "You are now on board! Enjoy your ride." });
   };
 
   if (loading) {

@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
   StyleSheet,
@@ -9,6 +10,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useDispatch } from "react-redux";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import { WS } from "../../constants";
+import { raiseHandAtStop } from "../../passenger/services/passengerService";
+import {
+  setSelectedStop,
+  clearPassengerStopState,
+} from "../../store/slices/journeySlice";
 
 /* ─────────────────────────────────────────────
    HELPERS
@@ -219,7 +228,106 @@ export default function PassengerRouteList({ navigation, route }) {
     pickup: initialPickup,
     destination: initialDestination,
     mode = "auto",
+    // Live vehicles running this corridor, from the trip planner's existing
+    // search. Rendered in the same header card as the routes rather than on a
+    // screen of its own.
+    corridor = null,
   } = route?.params || {};
+
+  const liveVehicles = corridor?.vehicles || [];
+  const corridorDistance = corridor?.distance_m ?? null;
+  // Stops walkable from where the passenger searched. The corridor itself can
+  // run for kilometres, so this is the slice they could actually reach on foot.
+  const nearbyStops = corridor?.nearby_stops || [];
+  // Only the vehicle the passenger would board first. The corridor endpoint
+  // already ranks these by earliest boardable stop then ETA, so the head of the
+  // list is the one worth acting on; showing every vehicle as an equal option
+  // pushed the actionable one into a list.
+  const activeVehicle = liveVehicles[0] || null;
+  // The stops along that corridor, ordered nearest-first from the origin. These
+  // are where a hand can actually be raised: a driver only serves a stop its
+  // journey passes.
+  const corridorStops = corridor?.stops || [];
+
+  /* ── Boarding ─────────────────────────────────────────────
+     Choosing a vehicle here raises the passenger's hand at the stop that
+     vehicle would be boarded at, and waits for a driver to accept on the
+     broadcast channel. Previously this lived on a separate screen.
+  */
+  const dispatch = useDispatch();
+  const [requestId, setRequestId] = useState(null);
+  const [raising, setRaising] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  useEffect(() => () => dispatch(clearPassengerStopState()), [dispatch]);
+
+  const handleRaiseHand = useCallback(
+    async (stop) => {
+      if (!stop || raising) return;
+      setRaising(true);
+      setMessage(null);
+      try {
+        const response = await raiseHandAtStop({
+          pickupStopId: stop.id,
+          // The passenger may not have granted location yet; the stop is where
+          // they are going to walk to, and the server still applies its own
+          // 1 km proximity check.
+          lat: stop.lat,
+          lon: stop.lng,
+        });
+        const data = response?.data || response || {};
+        if (data.request_id) {
+          setRequestId(data.request_id);
+          dispatch(setSelectedStop(stop));
+          setMessage(
+            data.drivers_notified
+              ? `${data.drivers_notified} Marshal(s) on their way notified`
+              : "Request raised — looking for a Marshal"
+          );
+        } else {
+          setMessage(data.message || "Could not raise your hand.");
+        }
+      } catch (err) {
+        setMessage(err.message || "Could not raise your hand.");
+      } finally {
+        setRaising(false);
+      }
+    },
+    [dispatch, raising]
+  );
+
+  const broadcastWsPath = requestId ? WS.dispatchBroadcast(requestId) : null;
+  const handleBroadcast = useCallback(
+    (msg) => {
+      if (!msg?.type) return;
+      if (msg.type === "request_accepted") {
+        // The accept payload carries the driver, their vehicle, a first ETA and
+        // the pickup coordinates; the live-tracking screen follows the vehicle
+        // from there.
+        navigation.navigate("PassengerLiveTracking", {
+          tripId: msg.trip_id,
+          driverName: msg.driver_name,
+          vehicleNumber: msg.vehicle_number,
+          otp: msg.otp,
+          eta: msg.eta,
+          distance: msg.distance_km,
+          pickupLat: msg.pickup_lat,
+          pickupLng: msg.pickup_lng,
+          destination: msg.drop_name,
+        });
+        return;
+      }
+      if (msg.type === "no_drivers_available" || msg.type === "request_expired") {
+        setMessage("No Marshals are passing this stop right now.");
+        setRequestId(null);
+      }
+    },
+    [navigation]
+  );
+  useWebSocket(broadcastWsPath, {
+    enabled: Boolean(broadcastWsPath),
+    onMessage: handleBroadcast,
+  });
 
   const isBike = mode === "bike";
   const accent = "#009849";
@@ -287,6 +395,226 @@ export default function PassengerRouteList({ navigation, route }) {
         keyExtractor={(item, i) => String(item?.id || i)}
         ListHeaderComponent={() => (
           <>
+            {activeVehicle && (
+              <View style={s.liveCard}>
+                <View style={s.liveCardHead}>
+                  <Ionicons
+                    name={activeVehicle.vehicle_type === "auto" ? "car" : "bicycle"}
+                    size={15}
+                    color={accent}
+                  />
+                  <Text style={s.liveCardTitle}>
+                    {activeVehicle.vehicle_number}
+                    {liveVehicles.length > 1
+                      ? `  (+${liveVehicles.length - 1} more on this route)`
+                      : ""}
+                  </Text>
+                  {activeVehicle.driver_rating != null && (
+                    <Text style={s.liveCardDist}>★ {activeVehicle.driver_rating}</Text>
+                  )}
+                </View>
+
+                {/* The one vehicle, with who is driving it and where they are
+                    going - enough to decide whether to wait for it. */}
+                <View style={s.vehDetailRow}>
+                  <Text style={s.vehDetail} numberOfLines={1}>
+                    {activeVehicle.driver_name || "Marshal"}
+                    {activeVehicle.vehicle_type ? ` · ${activeVehicle.vehicle_type}` : ""}
+                  </Text>
+                </View>
+                {activeVehicle.destination?.name && (
+                  <View style={s.vehDetailRow}>
+                    <Ionicons name="flag-outline" size={12} color="#6B7280" />
+                    <Text style={s.vehDest} numberOfLines={1}>
+                      Heading to {activeVehicle.destination.name}
+                    </Text>
+                  </View>
+                )}
+                <View style={s.vehStatRow}>
+                  <View style={s.vehStat}>
+                    <Text style={s.vehStatValue}>
+                      {activeVehicle.distance_km != null
+                        ? `${activeVehicle.distance_km} km`
+                        : "—"}
+                    </Text>
+                    <Text style={s.vehStatLabel}>Away</Text>
+                  </View>
+                  <View style={s.vehStat}>
+                    <Text style={s.vehStatValue}>
+                      {activeVehicle.eta_minutes != null
+                        ? `${activeVehicle.eta_minutes} min`
+                        : "—"}
+                    </Text>
+                    <Text style={s.vehStatLabel}>Arriving</Text>
+                  </View>
+                  {corridorDistance != null && (
+                    <View style={s.vehStat}>
+                      <Text style={s.vehStatValue}>
+                        {(corridorDistance / 1000).toFixed(1)} km
+                      </Text>
+                      <Text style={s.vehStatLabel}>Your route</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Upcoming stops on the driver's journey: what lies between
+                    boarding and where they are going. */}
+                {(activeVehicle.upcoming_stops || []).length > 0 && (
+                  <View style={s.upcomingBlock}>
+                    <Text style={s.blockLabel}>Upcoming stops</Text>
+                    {activeVehicle.upcoming_stops.map((s, i) => (
+                      <View key={s.id || i} style={s.upcomingRow}>
+                        <Text style={s.upcomingIndex}>{i + 1}</Text>
+                        <Text style={s.upcomingName} numberOfLines={1}>
+                          {s.name}
+                        </Text>
+                        <Text style={s.upcomingDist}>
+                          {s.dist_along_m != null
+                            ? `${(s.dist_along_m / 1000).toFixed(1)} km`
+                            : "—"}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Stops walkable from where the passenger searched, so they can
+                    choose somewhere to stand rather than only the vehicle's
+                    own boarding point. */}
+                {nearbyStops.length > 0 && (
+                  <View style={s.upcomingBlock}>
+                    <Text style={s.blockLabel}>Nearby stops you can walk to</Text>
+                    {nearbyStops.map((st, i) => (
+                      <TouchableOpacity
+                        key={st.id || i}
+                        activeOpacity={0.85}
+                        style={[s.upcomingRow, requestId && { opacity: 0.55 }]}
+                        disabled={raising || Boolean(requestId)}
+                        onPress={() => handleRaiseHand(st)}
+                      >
+                        <Ionicons name="location" size={13} color={accent} />
+                        <Text style={s.upcomingName} numberOfLines={1}>
+                          {st.name}
+                        </Text>
+                        <Text style={s.upcomingDist}>
+                          {st.distance_m != null
+                            ? st.distance_m >= 1000
+                              ? `${(st.distance_m / 1000).toFixed(1)} km`
+                              : `${Math.round(st.distance_m)} m`
+                            : "—"}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Boarding state: once a hand is raised, the card reflects it
+                    instead of offering every vehicle again. */}
+                {message && (
+                  <View style={s.boardMsg}>
+                    <Ionicons
+                      name={requestId ? "information-circle" : "alert-circle"}
+                      size={14}
+                      color={requestId ? "#1D4ED8" : "#B91C1C"}
+                    />
+                    <Text style={s.boardMsgText}>{message}</Text>
+                  </View>
+                )}
+
+                {activeVehicle &&
+                  [activeVehicle].map((v) => (
+                  <TouchableOpacity
+                    key={v.trip_id}
+                    activeOpacity={0.85}
+                    style={[s.liveRow, requestId && s.liveRowMuted]}
+                    // Raising the hand here boards at the stop this vehicle
+                    // serves, which is what the driver will accept against.
+                    onPress={() => handleRaiseHand(v.board_stop)}
+                    disabled={raising || Boolean(requestId)}
+                  >
+                    <View style={s.liveIcon}>
+                      <Ionicons name="car" size={13} color={accent} />
+                    </View>
+                    <View style={s.liveInfo}>
+                      <Text style={s.liveName} numberOfLines={1}>
+                        {v.vehicle_number}
+                        {v.driver_name ? ` · ${v.driver_name}` : ""}
+                      </Text>
+                      <Text style={s.liveMeta} numberOfLines={1}>
+                        Boards at {v.board_stop?.name || "nearby stop"}
+                        {v.distance_km != null ? ` · ${v.distance_km} km away` : ""}
+                        {v.eta_minutes != null ? ` · ~${v.eta_minutes} min` : ""}
+                      </Text>
+                    </View>
+                    {raising ? (
+                      <ActivityIndicator size="small" color={accent} />
+                    ) : (
+                      <Text style={s.liveRaise}>
+                        {requestId ? "Raised" : "Raise hand"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                  ))}
+              </View>
+            )}
+
+            {/* Nothing running on the route: still offer the corridor's stops,
+                which is where a hand would be raised once a driver arrives. */}
+            {liveVehicles.length === 0 && corridorStops.length > 0 && (
+              <View style={s.liveCard}>
+                <View style={s.liveCardHead}>
+                  <Ionicons name="location" size={15} color={accent} />
+                  <Text style={s.liveCardTitle}>
+                    No vehicles on this route yet
+                  </Text>
+                </View>
+                <Text style={s.liveHint}>
+                  {nearbyStops.length > 0
+                    ? "No Marshal is running this route yet. Raise your hand at a nearby stop and one heading your way will be notified."
+                    : "These are the stops along your route. A Marshal running it can pick you up."}
+                </Text>
+                {(nearbyStops.length > 0 ? nearbyStops : corridorStops).map((stop) => (
+                  <TouchableOpacity
+                    key={stop.stop_id}
+                    activeOpacity={0.85}
+                    style={[s.liveRow, requestId && s.liveRowMuted]}
+                    onPress={() =>
+                      handleRaiseHand({
+                        id: stop.stop_id,
+                        name: stop.name,
+                        lat: stop.lat,
+                        lng: stop.lng,
+                      })
+                    }
+                    disabled={raising || Boolean(requestId)}
+                  >
+                    <View style={s.liveIcon}>
+                      <Ionicons name="location" size={13} color={accent} />
+                    </View>
+                    <View style={s.liveInfo}>
+                      <Text style={s.liveName} numberOfLines={1}>
+                        {stop.name}
+                      </Text>
+                      <Text style={s.liveMeta} numberOfLines={1}>
+                        {stop.distance_m != null
+                          ? stop.distance_m >= 1000
+                            ? `${(stop.distance_m / 1000).toFixed(1)} km away`
+                            : `${Math.round(stop.distance_m)} m away`
+                          : `${(stop.dist_along_m / 1000).toFixed(1)} km along your route`}
+                      </Text>
+                    </View>
+                    {raising ? (
+                      <ActivityIndicator size="small" color={accent} />
+                    ) : (
+                      <Text style={s.liveRaise}>
+                        {requestId ? "Raised" : "Raise hand"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
             {!loading && routeCount > 0 && (
               <Text style={s.countText}>{routeCount} routes found for your journey</Text>
             )}
@@ -325,6 +653,94 @@ const CARD_SHADOW = Platform.select({
 const s = StyleSheet.create({
   safe: { backgroundColor: "#F4F6F4", flex: 1 },
   listContent: { paddingBottom: 24, paddingHorizontal: 16, paddingTop: 4 },
+
+  liveCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    padding: 12,
+    marginBottom: 12,
+  },
+  liveCardHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
+  liveCardTitle: { fontSize: 13, fontWeight: "800", color: "#111827", flex: 1 },
+  liveCardDist: { fontSize: 11, fontWeight: "700", color: "#6B7280" },
+  liveRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 6,
+  },
+  liveIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  liveInfo: { flex: 1 },
+  liveName: { fontSize: 13, fontWeight: "800", color: "#111827" },
+  liveMeta: { fontSize: 11, fontWeight: "600", color: "#6B7280", marginTop: 1 },
+  liveHint: { fontSize: 11, fontWeight: "500", color: "#6B7280", marginBottom: 8 },
+
+  vehDetailRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 },
+  vehDetail: { flex: 1, fontSize: 13, fontWeight: "800", color: "#111827" },
+  vehDest: { flex: 1, fontSize: 11, fontWeight: "600", color: "#6B7280" },
+  vehStatRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  vehStat: {
+    flex: 1,
+    backgroundColor: "#F8FAF9",
+    borderRadius: 10,
+    paddingVertical: 6,
+    alignItems: "center",
+  },
+  vehStatValue: { fontSize: 13, fontWeight: "900", color: "#009849" },
+  vehStatLabel: { fontSize: 10, fontWeight: "700", color: "#6B7280", marginTop: 1 },
+  upcomingBlock: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    paddingTop: 10,
+  },
+  blockLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#6B7280",
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  upcomingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 5,
+  },
+  upcomingIndex: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#F59E0B",
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "800",
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  upcomingName: { flex: 1, fontSize: 12, fontWeight: "700", color: "#111827" },
+  upcomingDist: { fontSize: 11, fontWeight: "700", color: "#6B7280" },
+  liveRowMuted: { opacity: 0.55 },
+  liveRaise: { fontSize: 11, fontWeight: "800", color: "#009849" },
+  boardMsg: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 10,
+    padding: 8,
+    marginBottom: 8,
+  },
+  boardMsgText: { flex: 1, fontSize: 11, fontWeight: "600", color: "#1E40AF" },
 
   header: {
     alignItems: "center",

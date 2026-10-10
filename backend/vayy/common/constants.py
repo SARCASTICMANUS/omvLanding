@@ -138,6 +138,28 @@ DISPATCH_MODE_CHOICES = (
     (DISPATCH_MODE_BROADCAST, "Broadcast Assignment"),
 )
 
+# --- Journeys (route-free driver trips) ---
+#
+# A driver declares origin -> destination; the server builds one direct OSRM
+# path, attaches the admin-managed global stops that fall inside the corridor
+# around it, and holds both in Redis for the life of the trip. The Route table
+# is untouched and unused by this flow.
+
+# How far a global stop may sit from the journey path and still be considered
+# "on the way".
+JOURNEY_CORRIDOR_RADIUS_M = 5000
+
+# How close a passenger must be to a global stop to raise a hand there.
+PASSENGER_STOP_RADIUS_M = 1000
+
+# Safety net for the Redis journey documents. Journey end deletes them
+# explicitly; this only catches keys orphaned by a crash mid-trip.
+JOURNEY_PATH_TTL_SECONDS = 43200  # 12 hours
+
+# Reported path precision. Keeps the Redis document small; OSRM geometry is
+# far denser than any GPS fix this platform consumes.
+JOURNEY_PATH_POINT_LIMIT = 4000
+
 # --- Notification Types & Status ---
 
 NOTIFICATION_EMAIL = "email"

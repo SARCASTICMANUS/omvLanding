@@ -162,6 +162,28 @@ class RabbitMQService:
             cls._channel = None
 
     @classmethod
+    def declare_queue(cls, channel, name, arguments=None):
+        """
+        Declare one bounded queue on a caller-supplied channel.
+
+        Public entry point for anything outside setup_infrastructure that needs
+        a queue declared on its *own* connection - notably the consume_location
+        management command, which consumes these queues over a separate
+        connection from the one setup_infrastructure declared them on.
+
+        Such a consumer must not call ``channel.queue_declare`` itself. RabbitMQ
+        compares arguments on every redeclare, so omitting the length/TTL caps
+        that this build applies is refused with
+        ``PRECONDITION_FAILED ... inequivalent arg 'x-message-ttl'`` (406), which
+        also closes the channel. Routing through the same helper makes the two
+        declarations identical by construction instead of by convention.
+
+        Returns True when the queue is declared and usable, False when the
+        broker refused it (the channel is then closed and unusable).
+        """
+        return cls._declare_bounded_queue(channel, name, arguments)
+
+    @classmethod
     def _declare_bounded_queue(cls, channel, name, arguments=None):
         """
         Declare a durable queue with a length cap, drop-head overflow and a TTL.

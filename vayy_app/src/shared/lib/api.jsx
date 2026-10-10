@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 import { STORAGE_KEYS, AUTH, API_TIMEOUT, DEFAULT_API_URL } from "../../constants";
 
 const getApiUrl = () => {
@@ -170,6 +171,69 @@ export const unwrapList = (payload) => {
   if (payload?.data !== undefined) return unwrapList(payload.data);
   return [];
 };
+
+// A { uri, name, type } triple only becomes a real multipart file part on
+// native. React Native Web's FormData stringifies anything that is not a Blob,
+// so on web the endpoint receives `file` as a plain string and the backend
+// cannot read it (it answers 400 "Failed to read uploaded file"). The same
+// happens for blob:/data: URIs anywhere, and if the picked asset has no uri.
+const NATIVE_FILE_PART =
+  Platform.OS !== "web" && !/^(blob:|data:)/;
+
+async function uriToBase64(uri) {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Upload one driver document (KYC) in a way that works on native and on web.
+ *
+ * Native sends multipart; everything else sends the base64 field the endpoint
+ * already accepts. Content-Type is deliberately not set by hand: FormData needs
+ * the runtime to append the multipart boundary, and overriding the header drops
+ * it, which the server cannot parse at all.
+ *
+ * @returns the parsed document object.
+ */
+export async function postDriverDocument({
+  documentType,
+  docKey,
+  uri,
+  base64,
+  fileName,
+  mimeType = "image/jpeg",
+}) {
+  const name = fileName || (uri || "").split("/").pop() || "upload.jpg";
+
+  if (NATIVE_FILE_PART && uri) {
+    const formData = new FormData();
+    formData.append("document_type", documentType);
+    if (docKey) formData.append("doc_key", docKey);
+    formData.append("file", { uri, name, type: mimeType });
+    const response = await api.post(AUTH.driverDocuments, formData);
+    return response.data?.data || response.data;
+  }
+
+  let encoded = base64;
+  if (!encoded && uri) encoded = await uriToBase64(uri);
+  if (!encoded) {
+    throw new Error("Could not read the selected image");
+  }
+
+  const response = await api.post(AUTH.driverDocuments, {
+    document_type: documentType,
+    doc_key: docKey || "",
+    file_base64: encoded,
+    file_name: name,
+  });
+  return response.data?.data || response.data;
+}
 
 export { getWsUrl } from "./wsUrl";
 export default api;

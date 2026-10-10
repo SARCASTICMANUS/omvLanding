@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { notifyAction } from "../../../shared/lib/confirmAction";
 import { Alert } from "react-native";
 import PassengerStep1Basic from "./PassengerStep1Basic";
 import PassengerStep2Permissions from "./PassengerStep2Permissions";
@@ -42,13 +43,14 @@ export default function PassengerRegistrationScreen({ navigation }) {
       if (!registerUser.fulfilled.match(result)) {
         const errorMsg = result.payload?.email?.[0] || result.payload?.error || "";
         if (errorMsg.toLowerCase().includes("already exists")) {
-          Alert.alert(
-            "Account Exists",
-            "An account already exists with this email. Please login with your existing password.",
-            [
-              { text: "Go to Login", onPress: () => navigation.navigate("LoginPage") },
-            ],
-          );
+          // Routed through notifyAction: Alert.alert renders nothing on web,
+          // so the passenger never learned their email was already taken.
+          notifyAction({
+            title: "Account Exists",
+            message:
+              "An account already exists with this email. Please login with your existing password.",
+          });
+          navigation.navigate("LoginPage");
           return;
         }
         setRegisterError(errorMsg || "Registration failed");

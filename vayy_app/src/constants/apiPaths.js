@@ -17,7 +17,6 @@ export const AUTH = {
   pushToken: "/api/accounts/push-token/",
   driverDocuments: "/api/accounts/driver/documents/",
   driverDocumentDetail: (id) => `/api/accounts/driver/documents/${id}/`,
-  driverDocumentDelete: (id) => `/api/accounts/driver/documents/${id}/`,
   driverBankDetails: "/api/accounts/driver/bank-details/",
   verificationStatus: "/api/accounts/verification-status/",
 };
@@ -25,9 +24,7 @@ export const AUTH = {
 export const OPERATIONS = {
   trips: "/api/operations/trips/",
   tripDetail: (id) => `/api/operations/trips/${id}/`,
-  tripNextStops: (id) => `/api/operations/trips/${id}/next-stops/`,
   tripsStart: "/api/operations/trips/start/",
-  tripsMeActive: "/api/operations/trips/me/active/",
   vehicles: "/api/operations/vehicles/",
   vehiclesMe: "/api/operations/vehicles/me/",
   vehicleRegister: "/api/operations/vehicles/register/",
@@ -51,7 +48,8 @@ export const TRANSPORT = {
   routesSearchByLocation: "/api/transport/routes/search-by-location/",
   routesNearbyPassengers: (routeId) => `/api/transport/routes/${routeId}/nearby-passengers/`,
   driverRoutes: "/api/transport/driver/routes/",
-  stopsNearby: "/api/transport/stops/nearby/",
+  // Admin-created boarding points that belong to no route. These are what a
+  // driver journey is matched against and what a passenger raises a hand at.
   cities: "/api/transport/cities/",
   roadDistance: "/api/transport/road-distance/",
   walkingPath: "/api/transport/walking-path/",
@@ -61,16 +59,30 @@ export const RIDE = {
   estimate: "/api/ride/estimate/",
   history: "/api/ride/history/",
   rating: "/api/ride/rating/",
-  earnings: "/api/ride/earnings/",
   tripFare: (id) => `/api/ride/trip/${id}/fare/`,
 };
 
 export const TRACKING = {
-  ingest: "/api/tracking/ingest/",
   passengerLocation: "/api/tracking/passenger-location/",
-  driverLocation: "/api/tracking/driver-location/",
   nearbyVehicles: "/api/tracking/nearby/",
   activeRouteTrips: (routeId) => `/api/tracking/route/${routeId}/active-trips/`,
+  // ── Journeys: free-form driver trips, no fixed route ──
+  journeyStart: "/api/tracking/journeys/start/",
+  // Resolves the road and its stops without starting anything, so the driver
+  // can see the actual journey before committing. Safe to call on every edit.
+  journeyPreview: "/api/tracking/journeys/preview/",
+  journeyEnd: "/api/tracking/journeys/end/",
+  // The driver's in-progress journey, or null. Lets a cold start put the driver
+  // back on their journey without the app knowing the trip id.
+  journeyActive: "/api/tracking/journeys/active/",
+  journey: (id) => `/api/tracking/journeys/${id}/`,
+  // ── Passenger hand raise ──
+  // route_id is optional: omitting it makes this journey-scoped, so the request
+  // goes to the drivers whose journeys pass the pickup stop.
+  raiseHand: "/api/tracking/raise-hand/",
+  // Live vehicles running the corridor between two searched points. Read-only:
+  // returns the resolved road, its stops, and the vehicles serving them.
+  corridorVehicles: "/api/tracking/corridor/vehicles/",
 };
 
 export const COMMUNICATION = {
@@ -80,7 +92,6 @@ export const COMMUNICATION = {
 export const ADMIN = {
   routes: "/api/transport/admin/routes/",
   stops: "/api/transport/admin/stops/",
-  schedules: "/api/transport/admin/schedules/",
   driversPending: "/api/operations/admin/drivers/pending/",
   driverVerify: (id) => `/api/operations/admin/drivers/${id}/verify/`,
   users: "/api/accounts/users/",

@@ -266,6 +266,64 @@ class RoutePassengerTrackingConsumer(BaseAuthenticatedConsumer):
         await self.send(text_data=json.dumps(event["data"]))
 
 
+@database_sync_to_async
+def user_may_view_stop(user, stop_id):
+    """
+    True for any authenticated user.
+
+    A global stop is a public boarding point: a passenger standing there has no
+    trip yet, and scoping this group to trip participants would break the core
+    "see who is coming to my stop" flow. This is the same explicit open policy
+    as user_may_view_route, kept here so the decision is auditable in one place.
+    """
+    return True
+
+
+class StopTrackingConsumer(BaseAuthenticatedConsumer):
+    """
+    Live vehicle positions for one stop.
+
+    Groups: stop_{stop_id}
+
+    The journey counterpart of RouteTrackingConsumer. A journey vehicle's
+    position is published here whenever its path serves this stop, which is what
+    lets a passenger at the stop watch vehicles approach without knowing about
+    routes at all.
+    """
+
+    resource_name = "stop"
+    owner_resolver = staticmethod(user_may_view_stop)
+
+    async def connect(self):
+        await super().connect()
+        if not self.authorized:
+            return
+
+        self.stop_id = str(self.scope['url_route']['kwargs']['stop_id'])
+        self.group_name = f"stop_{self.stop_id}"
+
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+        logger.info(f"WebSocket connected to stop {self.group_name}")
+
+    async def disconnect(self, close_code):
+        if not hasattr(self, 'group_name'):
+            return
+        await self.channel_layer.group_discard(
+            self.group_name,
+            self.channel_name
+        )
+        logger.info(f"WebSocket disconnected from stop {self.group_name}")
+
+    async def stop_vehicle_update(self, event):
+        await self.send(text_data=json.dumps(event["data"]))
+
+    async def vehicle_update(self, event):
+        await self.send(text_data=json.dumps(event["data"]))
+
+
 class RideRequestConsumer(BaseAuthenticatedConsumer):
     """
     Consumer for driver to receive ride requests.

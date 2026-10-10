@@ -70,16 +70,57 @@ class RideService:
         return estimate.get("estimated_fare", 0.0)
 
     @staticmethod
+    def calculate_segment_metrics(pickup_stop, drop_stop, vehicle_type: str) -> Dict[str, Any]:
+        """
+        The full priced segment for a pickup→drop pair: distance, duration and
+        fare together.
+
+        ``calculate_segment_fare`` returns only the fare, which is all the
+        pre-existing settlement call sites need. The fare screens need the
+        distance and duration as well, and they must come from the *same*
+        estimate as the fare -- recomputing them separately would let a
+        distance and a fare disagree whenever OSRM answers differently twice.
+
+        Returns ``{"distance_m", "duration_s", "fare"}``. ``fare`` is 0.0 when
+        either stop is missing, matching ``calculate_segment_fare``.
+        """
+        if not pickup_stop or not drop_stop:
+            return {"distance_m": 0.0, "duration_s": 0.0, "fare": 0.0}
+
+        estimate = RideService.calculate_estimate(
+            pickup_stop.location.y,
+            pickup_stop.location.x,
+            drop_stop.location.y,
+            drop_stop.location.x,
+            vehicle_type,
+        )
+        distance_km = estimate.get("distance_km") or 0.0
+        return {
+            "distance_m": round(distance_km * 1000.0, 1),
+            "duration_s": round((estimate.get("duration_minutes") or 0.0) * 60.0, 1),
+            "fare": estimate.get("estimated_fare", 0.0),
+        }
+
+    @staticmethod
     def calculate_final_fare(trip) -> float:
         """
         Calculates the final fare for a completed trip.
+
+        Route trips measure the whole route; a journey measures the distance it
+        actually drove, recorded on the trip when it started. The previous
+        implementation dereferenced ``trip.route``, which is NULL for a journey
+        and would have raised rather than billed.
         """
-        distance_km = trip.route.total_distance_meters / 1000.0
+        if trip.route_id:
+            distance_km = trip.route.total_distance_meters / 1000.0
+        else:
+            distance_km = (trip.total_distance_m or 0) / 1000.0
+
         if distance_km == 0:
             distance_km = 5.0 # Default fallback
-            
+
         vehicle_type = trip.vehicle.vehicle_type
-        
+
         return FareService.calculate_fare(distance_km, vehicle_type)
 
     @staticmethod

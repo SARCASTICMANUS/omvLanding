@@ -71,6 +71,7 @@ def process_passenger_location(self, payload):
         from channels.layers import get_channel_layer
         from django.contrib.gis.geos import Point
         from django.contrib.gis.db.models.functions import Distance
+        from django.contrib.gis.measure import D
         from transport.models import Stop
 
         user_id = payload.get("user_id")
@@ -86,10 +87,13 @@ def process_passenger_location(self, payload):
         point = Point(float(lng), float(lat), srid=4326)
         channel_layer = get_channel_layer()
 
-        # Find routes this passenger is near by checking stops within 2km
+        # Find routes this passenger is near by checking route-owned stops within
+        # 2km. Global stops are excluded: they have no route to broadcast on, and
+        # a passenger at one is served by the stop feed instead.
         stops_near = list(
             Stop.objects.filter(
-                location__distance_lte=(point, D(m=2000))
+                is_global=False,
+                location__distance_lte=(point, D(m=2000)),
             )
             .annotate(distance_m=Distance("location", point))
             .select_related("route")

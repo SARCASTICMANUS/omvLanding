@@ -13,6 +13,7 @@ import AdminMap from "../components/AdminMap";
 import AdminRouteForm from "../components/AdminRouteForm";
 import AdminStopsList from "../components/AdminStopsList";
 import { fetchRoutes, createRoute, fetchStops } from "../adminSlice";
+import { notifyAction } from "../../shared/lib/confirmAction";
 
 const DRIVER_ROLES_SET = new Set(DRIVER_ROLES);
 
@@ -92,11 +93,11 @@ export default function AdminScreen({ navigation }) {
   const handleDriverAction = async (driverId, action) => {
     try {
       await api.patch(ADMIN.driverVerify(driverId), { action });
-      Alert.alert("Success", `Driver ${action === "approve" ? "approved" : "rejected"}`);
+      notifyAction({ title: "Success", message: `Driver ${action === "approve" ? "approved" : "rejected"}` });
       setPendingDrivers((prev) => prev.filter((d) => d.id !== driverId));
       setExpandedDriver(null);
     } catch (err) {
-      Alert.alert("Error", err?.response?.data?.message || "Action failed");
+      notifyAction({ title: "Error", message: err?.response?.data?.message || "Action failed" });
     }
   };
 
@@ -143,7 +144,7 @@ export default function AdminScreen({ navigation }) {
       });
     } catch (err) {
       console.error("Failed to fetch profile:", err);
-      Alert.alert("Error", "Failed to load profile");
+      notifyAction({ title: "Error", message: "Failed to load profile" });
     } finally {
       setProfileLoading(false);
     }
@@ -157,11 +158,11 @@ export default function AdminScreen({ navigation }) {
       const url = isDriver ? ADMIN.driverProfile(selectedUser.id) : ADMIN.passengerProfile(selectedUser.id);
       const payload = { ...editForm };
       await api.put(url, payload);
-      Alert.alert("Success", "Profile updated");
+      notifyAction({ title: "Success", message: "Profile updated" });
       setEditMode(false);
       fetchUserProfile(selectedUser);
     } catch (err) {
-      Alert.alert("Error", err?.response?.data?.message || "Failed to update profile");
+      notifyAction({ title: "Error", message: err?.response?.data?.message || "Failed to update profile" });
     } finally {
       setSaving(false);
     }
@@ -184,12 +185,12 @@ export default function AdminScreen({ navigation }) {
 
   const handleSaveRoute = useCallback(async () => {
     if (!routeName.trim()) {
-      Alert.alert("Error", "Route name is required");
+      notifyAction({ title: "Error", message: "Route name is required" });
       return;
     }
     const { startPoint, endPoint, stops: waypoints } = routeData;
     if (!startPoint || !endPoint) {
-      Alert.alert("Error", "Tap start and end points on the map");
+      notifyAction({ title: "Error", message: "Tap start and end points on the map" });
       return;
     }
     try {
@@ -210,10 +211,10 @@ export default function AdminScreen({ navigation }) {
       setRouteName("");
       setRouteData({ startPoint: null, endPoint: null, stops: [] });
       setMapKey((k) => k + 1);
-      Alert.alert("Success", "Route created");
+      notifyAction({ title: "Success", message: "Route created" });
       dispatch(fetchRoutes());
     } catch (err) {
-      Alert.alert("Error", err?.message || "Failed to create route");
+      notifyAction({ title: "Error", message: err?.message || "Failed to create route" });
     }
   }, [routeName, routeData, dispatch, selectedCity]);
 

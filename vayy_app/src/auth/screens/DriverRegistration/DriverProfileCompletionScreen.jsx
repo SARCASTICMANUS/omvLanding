@@ -23,8 +23,9 @@ import { completeRegistration } from "../../authSlice";
 import { fetchProfile, fetchVerificationStatus } from "../../../store/slices/profileSlice";
 import { clearFields } from "../../../store/slices/onboardingSlice";
 import { VALIDATORS, VALIDATION_MESSAGES } from "../../validators";
-import api from "../../../shared/lib/api";
+import api, { postDriverDocument } from "../../../shared/lib/api";
 import { AUTH, OPERATIONS } from "../../../constants";
+import { notifyAction, confirmAction } from "../../../shared/lib/confirmAction";
 
 const DOC_SECTIONS = [
   { key: "dl", label: "Driving Licence", type: "LICENSE", back: true },
@@ -258,7 +259,7 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
   const pickVehiclePhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission Required", "Please grant gallery access.");
+      notifyAction({ title: "Permission Required", message: "Please grant gallery access." });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -282,22 +283,21 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
     const existingDoc = docs[field];
     const statusLabel = existingDoc?.docStatus || existingDoc?.status === "success" ? "uploaded" : null;
     if (existingDoc?.id) {
-      const action = await new Promise((resolve) => {
-        Alert.alert(
-          "Replace Document",
-          `This slot already has a ${statusLabel || "uploaded"} document. Replace it?`,
-          [
-            { text: "Cancel", style: "cancel", onPress: () => resolve("cancel") },
-            { text: "Replace", onPress: () => resolve("replace") },
-          ]
-        );
+      // A real yes/no choice, so confirmAction rather than notifyAction: on web
+      // this dialog previously rendered nothing and the promise never settled,
+      // leaving the document picker dead.
+      const replace = await confirmAction({
+        title: "Replace Document",
+        message: `This slot already has a ${statusLabel || "uploaded"} document. Replace it?`,
+        confirmLabel: "Replace",
+        cancelLabel: "Cancel",
       });
-      if (action !== "replace") return;
+      if (!replace) return;
     }
 
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission Required", "Please grant gallery access.");
+      notifyAction({ title: "Permission Required", message: "Please grant gallery access." });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -305,6 +305,10 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.8,
+      // Requested so the web/blob path has something to send: a {uri,name,type}
+      // triple is not a file part outside native. Unused on native, where the
+      // multipart upload is smaller.
+      base64: true,
     });
     if (result.canceled || !result.assets?.[0]?.uri) return;
 
@@ -313,18 +317,12 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
     setDocs((p) => ({ ...p, [field]: { uri, id: p[field]?.id, status: "uploading", docStatus: null } }));
 
     try {
-      const formData = new FormData();
-      formData.append("document_type", documentType);
-      formData.append("doc_key", field);
-      formData.append("file", {
+      const docData = await postDriverDocument({
+        documentType,
+        docKey: field,
         uri,
-        name: uri.split("/").pop() || "upload.jpg",
-        type: "image/jpeg",
+        base64: result.assets[0].base64,
       });
-      const response = await api.post(AUTH.driverDocuments, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      const docData = response.data?.data || response.data;
       const docId = docData?.id;
       const updatedStatus = docData?.status || "PENDING";
       console.log(`[Completion] Upload success: field=${field} docId=${docId} status=${updatedStatus}`);
@@ -343,7 +341,7 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
     } catch (e) {
       console.error(`[Completion] Upload failed: field=${field}`, e?.response?.status, e?.response?.data || e?.message);
       setDocs((p) => ({ ...p, [field]: { ...p[field], uri, status: "error" } }));
-      Alert.alert("Upload Failed", "Could not upload document. Tap to retry.");
+      notifyAction({ title: "Upload Failed", message: "Could not upload document. Tap to retry." });
     }
   };
 
@@ -429,7 +427,7 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
   // ── Submit ──
   const handleSubmit = async () => {
     if (!validate()) {
-      Alert.alert("Missing Fields", "Please fill all required fields and upload all documents.");
+      notifyAction({ title: "Missing Fields", message: "Please fill all required fields and upload all documents." });
       return;
     }
 
@@ -497,7 +495,7 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
           result.payload?.message ||
           "Submission failed";
         console.error("[Completion] Submit error:", errorMsg, result.payload);
-        Alert.alert(isManage ? "Update Failed" : "Registration Failed", errorMsg);
+        notifyAction({ title: isManage ? "Update Failed" : "Registration Failed", message: errorMsg });
         return;
       }
 
@@ -512,7 +510,7 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
     } catch (err) {
       setSubmitting(false);
       const errMsg = err?.response?.data?.message || err?.message || "Something went wrong. Please try again.";
-      Alert.alert(isManage ? "Update Failed" : "Registration Failed", errMsg);
+      notifyAction({ title: isManage ? "Update Failed" : "Registration Failed", message: errMsg });
     }
   };
 

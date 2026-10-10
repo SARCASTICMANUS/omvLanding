@@ -22,6 +22,7 @@ from accounts.services.wallet_service import WalletService
 from operations.services.ride_service import RideService
 from operations.services.fare_service import FareService
 from tracking.services.redis_geo_service import RedisGeoService
+from tracking.services.corridor_service import CorridorService
 from common.constants import (
     EXCHANGE_DISPATCH, RK_DISPATCH_ASSIGN, RK_DISPATCH_CANCEL, RK_DISPATCH_EVENT,
     BOARDING_PENDING, BOARDING_BOARDED, BOARDING_COMPLETED, BOARDING_CANCELLED,
@@ -38,6 +39,51 @@ logger = logging.getLogger(__name__)
 # Mirrors accounts.permissions.IsDriver, which is a permission class and so
 # cannot be reused from the service layer.
 DRIVER_ROLES = (ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER)
+
+
+def _passenger_display_name(dispatch_request) -> str:
+    """
+    The name a driver should see for the rider they just accepted.
+
+    Prefers the passenger profile's display name, since that is what the
+    passenger chose to be called; falls back to the account name and email so a
+    rider without a profile is still identifiable rather than blank.
+    """
+    return _user_display_name(dispatch_request.passenger)
+
+
+def _user_display_name(user) -> str:
+    """
+    A person's display name, preferring their profile over their account row.
+
+    Shared because ``get_full_name()`` reads first/last name, which this User
+    model does not define - it is empty for every account, so using it directly
+    showed drivers an email or a blank string instead of a name.
+    """
+    if user is None:
+        return ""
+    for attr in ("passenger_profile", "driver_profile"):
+        profile = getattr(user, attr, None)
+        if profile and profile.display_name:
+            return profile.display_name
+    return user.get_full_name() or user.email
+
+
+def _passenger_phone(dispatch_request) -> str:
+    """
+    The passenger's contact number for the driver's call action.
+
+    Read from the profile: the account row carries no phone, and exposing a
+    number a rider did not register for contact would be the wrong one to dial.
+    """
+    return _user_phone(dispatch_request.passenger)
+
+
+def _user_phone(user) -> str:
+    if user is None:
+        return ""
+    profile = getattr(user, "passenger_profile", None)
+    return (profile.phone_number if profile else "") or ""
 
 
 class DispatchService:
@@ -61,23 +107,40 @@ class DispatchService:
         """
         Initiates a ride request and triggers the matching engine.
         Supports 'direct' and 'broadcast' modes.
+
+        ``route_id`` is optional: a journey-scoped request (route NULL) is
+        raised at a global stop and offered to whichever drivers' journeys pass
+        that stop.
         """
         logger.info(f"Dispatch requested by passenger {passenger.id} for route {route_id} (mode: {mode})")
-        
-        # 1. Find candidates
-        candidates = DispatchService.find_best_candidates(route_id, pickup_stop_id)
-        
+
+        if route_id:
+            # Find candidates
+            candidates = DispatchService.find_best_candidates(route_id, pickup_stop_id)
+        else:
+            candidates = DispatchService.find_candidates_for_stop(pickup_stop_id)
+
         if not candidates:
             return {"status": "no_drivers_available", "message": "No drivers found nearby"}
 
-        if mode == DISPATCH_MODE_BROADCAST:
+        # A journey request is always broadcast. Its candidates are drivers
+        # already mid-journey, so a direct assign would conflict with the live
+        # trip they are running; attaching them is what the accept path does.
+        if route_id is None or mode == DISPATCH_MODE_BROADCAST:
             return DispatchService._handle_broadcast_dispatch(passenger, route_id, pickup_stop_id, drop_stop_id, candidates)
 
         best_candidate = candidates[0]
         return DispatchService._assign_to_driver(passenger, route_id, pickup_stop_id, best_candidate, drop_stop_id)
 
     @staticmethod
-    def _assign_to_driver(passenger: User, route_id: str, pickup_stop_id: str, candidate: Dict[str, Any], drop_stop_id: str = None) -> Dict[str, Any]:
+    def _assign_to_driver(passenger: User, route_id: Optional[str], pickup_stop_id: str, candidate: Dict[str, Any], drop_stop_id: str = None) -> Dict[str, Any]:
+        """
+        Direct (non-broadcast) assignment of a passenger to one driver.
+
+        Route-scoped only. A journey-scoped request is always broadcast,
+        because its candidates are mid-journey and this path would reject them
+        all as "on another trip".
+        """
         # Guard: ensure driver is still available
         vehicle_state = VehicleState.objects.filter(vehicle=candidate['vehicle']).first()
         if not vehicle_state:
@@ -158,7 +221,7 @@ class DispatchService:
         from operations.tasks import check_assignment_timeout
         check_assignment_timeout.apply_async((str(trip.id),), countdown=10)
         
-        return {"status": "assigned", "trip_id": str(trip.id), "driver_name": trip.driver.get_full_name()}
+        return {"status": "assigned", "trip_id": str(trip.id), "driver_name": _user_display_name(trip.driver)}
 
     def assign_trip(
         vehicle_id: str,
@@ -296,7 +359,7 @@ class DispatchService:
         return trip
 
     @staticmethod
-    def _handle_broadcast_dispatch(passenger: User, route_id: str, pickup_stop_id: str, drop_stop_id: str, candidates: List[Dict], dispatch_request: Optional[DispatchRequest] = None) -> Dict[str, Any]:
+    def _handle_broadcast_dispatch(passenger: User, route_id: Optional[str], pickup_stop_id: str, drop_stop_id: str, candidates: List[Dict], dispatch_request: Optional[DispatchRequest] = None) -> Dict[str, Any]:
         """
         Broadcasts the dispatch request to ALL nearby drivers on the route.
         First driver to accept wins; others get dismissed via WS.
@@ -304,18 +367,24 @@ class DispatchService:
         When dispatch_request is provided (re-dispatch after expiry), the SAME
         request_id is reused so the passenger's broadcast WS group
         (broadcast_{request_id}) stays valid across all retry rounds.
+
+        ``route_id`` may be None for a journey-scoped request. The drop stop is
+        then taken only from the request, never inferred from the route end,
+        because there is no route end to infer it from.
         """
         from transport.models import Stop
 
         stop = Stop.objects.get(id=pickup_stop_id)
-        route = Route.objects.get(id=route_id)
-        passenger_name = passenger.get_full_name() or passenger.email
+        route = Route.objects.get(id=route_id) if route_id else None
+        passenger_name = _user_display_name(passenger)
 
-        # Get drop stop if provided, otherwise fallback to route end
+        # Get drop stop if provided
         drop_stop = None
         if drop_stop_id:
             try:
-                drop_stop = Stop.objects.get(id=drop_stop_id, route_id=route_id)
+                drop_stop = Stop.objects.get(
+                    id=drop_stop_id, **({"route_id": route_id} if route_id else {})
+                )
             except Stop.DoesNotExist:
                 pass
 
@@ -351,7 +420,7 @@ class DispatchService:
             drop_name = drop_stop.name
             drop_lat = drop_stop.location.y
             drop_lng = drop_stop.location.x
-        else:
+        elif route:
             drop_name = route.end_name or route.name
             drop_lat = drop_lng = None
             try:
@@ -359,6 +428,12 @@ class DispatchService:
                     drop_lng, drop_lat = route.path.coords[-1]
             except Exception:
                 pass
+        else:
+            # Journey request with no drop stop: the destination is wherever the
+            # passenger says it is, so leave it unstated rather than inventing
+            # the end of a route that does not exist.
+            drop_name = ""
+            drop_lat = drop_lng = None
 
         passenger_rating = None
         passenger_trips = 0
@@ -376,6 +451,15 @@ class DispatchService:
 
             # Fare estimate from pickup stop to route end (vehicle-type specific)
             fare = None
+            # A journey hand-raise names the destination as a stop rather than
+            # sending coordinates, so fall back to it; otherwise the driver saw
+            # no fare at all on every journey request.
+            if (drop_lat is None or drop_lng is None) and drop_stop is not None:
+                try:
+                    drop_lat = drop_stop.location.y
+                    drop_lng = drop_stop.location.x
+                except Exception:
+                    pass
             if drop_lat is not None and drop_lng is not None:
                 try:
                     estimate = RideService.calculate_estimate(
@@ -399,7 +483,10 @@ class DispatchService:
                     "passenger_rating": passenger_rating,
                     "passenger_trips": passenger_trips,
                     "route_id": route_id,
-                    "route_name": route.name,
+                    # route_name is null on a journey request; the driver reads
+                    # pickup/drop below, and the driver app labels a journey by
+                    # its own endpoints.
+                    "route_name": route.name if route else None,
                     "pickup_stop_id": pickup_stop_id,
                     "pickup_name": stop.name,
                     "pickup_lat": stop.location.y,
@@ -430,7 +517,7 @@ class DispatchService:
 
         logger.info(
             f"Broadcast dispatch {dispatch_request.id} sent to {len(candidates)} drivers "
-            f"on route {route.name}"
+            f"on route {route.name if route else f'stop {pickup_stop_id}'}"
         )
 
         return {
@@ -450,6 +537,14 @@ class DispatchService:
         broadcast to. Without this, any driver who learned a request id could
         claim a ride they were never offered, winning the atomic claim and
         stranding the drivers who were.
+
+        Two accept shapes:
+
+        * journey-scoped request (``route`` is NULL) - the driver already has an
+          ACTIVE journey passing the pickup stop. The passenger is attached to
+          that journey as a BoardingRequest; no second trip is created, because
+          the journey is the trip and it carries many riders.
+        * route-scoped request (legacy) - one trip per passenger, as before.
         """
         # Checked before the claim so an ineligible driver cannot consume the
         # request. notified_drivers is written when the request is created and
@@ -484,6 +579,9 @@ class DispatchService:
         # Re-read the claimed request (now STATUS_ACCEPTED) for downstream use
         dispatch_request = DispatchRequest.objects.get(id=request_id)
 
+        if dispatch_request.route_id is None:
+            return DispatchService._accept_journey_request(dispatch_request, driver)
+
         # Find driver's vehicle
         vehicle_state = VehicleState.objects.select_related("vehicle").filter(
             vehicle__driver=driver,
@@ -514,13 +612,17 @@ class DispatchService:
         # Link the passenger to the trip + pickup stop so live tracking can
         # report the true distance to pickup (not remaining route distance).
         try:
-            BoardingRequest.objects.create(
-                passenger=dispatch_request.passenger,
-                trip=trip,
-                pickup_stop=dispatch_request.pickup_stop,
-                drop_stop=dispatch_request.drop_stop,
-                status=BOARDING_PENDING,
-            )
+            # Savepoint for the same reason as the journey branch: a caught
+            # IntegrityError inside this @transaction.atomic still aborts the
+            # transaction, and the notifications below would then all fail.
+            with transaction.atomic():
+                BoardingRequest.objects.create(
+                    passenger=dispatch_request.passenger,
+                    trip=trip,
+                    pickup_stop=dispatch_request.pickup_stop,
+                    drop_stop=dispatch_request.drop_stop,
+                    status=BOARDING_PENDING,
+                )
         except Exception as e:
             logger.warning(f"Failed to link boarding request for trip {trip.id}: {e}")
 
@@ -557,7 +659,7 @@ class DispatchService:
             {
                 "trip_id": str(trip.id),
                 "status": trip.status,
-                "driver_name": driver.get_full_name(),
+                "driver_name": _user_display_name(driver),
                 "vehicle_number": vehicle_state.vehicle.vehicle_number,
                 "otp": otp,
                 "requested_at": timezone.now().isoformat(),
@@ -599,7 +701,7 @@ class DispatchService:
                 "type": "request_accepted",
                 "trip_id": str(trip.id),
                 "request_id": str(dispatch_request.id),
-                "driver_name": driver.get_full_name(),
+                "driver_name": _user_display_name(driver),
                 "vehicle_number": vehicle_state.vehicle.vehicle_number,
                 "otp": otp,
                 "distance_km": dist_km,
@@ -622,9 +724,361 @@ class DispatchService:
         return {
             "status": "accepted",
             "trip_id": str(trip.id),
-            "driver_name": driver.get_full_name(),
+            "driver_name": _user_display_name(driver),
             "otp": otp,
         }
+
+    @staticmethod
+    @transaction.atomic
+    def _accept_journey_request(
+        dispatch_request: DispatchRequest, driver: User
+    ) -> Dict[str, Any]:
+        """
+        Accept a stop-scoped request onto the driver's existing journey.
+
+        The claim on the DispatchRequest has already been won by the caller, so
+        this runs only for the single winning driver. It must therefore never
+        leave the request accepted with nobody on board: every early return
+        releases the claim so the request goes back to the pool.
+
+        Differences from the route accept:
+
+        * no new ActiveTrip. The driver's journey is already ACTIVE and its path
+          in Redis already serves the pickup stop; the passenger joins it as a
+          BoardingRequest with its own OTP.
+        * a journey serves many passengers, so "already on this trip" is a
+          normal state rather than a conflict, and the safety code is
+          per-boarding.
+        """
+        def _release(message: str) -> Dict[str, Any]:
+            dispatch_request.status = DispatchRequest.STATUS_PENDING
+            dispatch_request.accepted_by = None
+            dispatch_request.save(update_fields=["status", "accepted_by"])
+            return {"status": "no_vehicle", "message": message}
+
+        vehicle = Vehicle.objects.select_related("city").filter(
+            driver=driver, is_active=True
+        ).first()
+        if not vehicle:
+            return _release("No active vehicle found for this driver")
+
+        trip = ActiveTrip.objects.select_related("vehicle").filter(
+            vehicle=vehicle,
+            status=TRIP_STATUS_ACTIVE,
+            route__isnull=True,
+        ).first()
+
+        if not trip:
+            # The driver was offered this because a journey of theirs passed the
+            # stop; that journey has since ended. Put the request back rather
+            # than inventing a trip, which would have no path.
+            return _release("Your journey is no longer active")
+
+        # The journey must still actually serve this stop. The passing-trip set
+        # is written once at journey start and cleared on end, but a journey can
+        # have ended between the broadcast and this accept without the key
+        # expiring, so the claim is re-verified against the trip itself.
+        from tracking.services.journey_cache_service import JourneyCacheService
+
+        if not JourneyCacheService.journey_serves_stop(
+            str(trip.id), str(dispatch_request.pickup_stop_id)
+        ):
+            return _release("This stop is no longer on your journey")
+
+        if dispatch_request.drop_stop_id and not CorridorService.is_drop_after_pickup(
+            str(trip.id),
+            dispatch_request.pickup_stop_id,
+            dispatch_request.drop_stop_id,
+        ):
+            return _release("The destination is not ahead of you on this journey")
+
+        otp = f"{random.randint(1000, 9999)}"
+        boarding = DispatchService._create_boarding_request(
+            dispatch_request=dispatch_request,
+            trip=trip,
+            otp=otp,
+        )
+        if boarding is None:
+            return _release("Could not create the booking")
+
+        # A journey outlasts the default key TTL when it keeps taking riders, so
+        # an accepted boarding pushes the documents' expiry out.
+        JourneyCacheService.refresh_ttl(str(trip.id))
+
+        pickup_stop = dispatch_request.pickup_stop
+        drop_stop = dispatch_request.drop_stop
+
+        # Winner gets the boarding and its safety code.
+        DispatchService._notify_ws(
+            f"notifications_{driver.id}",
+            "notification_broadcast",
+            {
+                "type": "request_accepted",
+                "trip_id": str(trip.id),
+                "boarding_request_id": str(boarding.id),
+                "request_id": str(dispatch_request.id),
+                "pickup_name": pickup_stop.name if pickup_stop else None,
+                "otp": otp,
+                # Driver-side identity, matching the accept response so the
+                # card renders from either source.
+                "passenger_name": _passenger_display_name(dispatch_request),
+                "passenger_phone": _passenger_phone(dispatch_request),
+            },
+        )
+
+        # Everyone else who was offered it drops the popup.
+        for driver_id_str in dispatch_request.notified_drivers or []:
+            if str(driver.id) != driver_id_str:
+                DispatchService._notify_ws(
+                    f"notifications_{driver_id_str}",
+                    "notification_broadcast",
+                    {
+                        "type": "request_cancelled",
+                        "request_id": str(dispatch_request.id),
+                        "reason": "accepted_by_other",
+                    },
+                )
+
+        # Passenger learns who is coming. Distance/ETA are measured against the
+        # vehicle, which for a journey may already be past the stop - the
+        # passenger can then decide to wait for the next one.
+        vehicle_state = VehicleState.objects.filter(vehicle=vehicle).first()
+        dist_km = None
+        eta = None
+        if vehicle_state and vehicle_state.current_location and pickup_stop:
+            driver_loc = (
+                vehicle_state.current_location.y,
+                vehicle_state.current_location.x,
+            )
+            pickup_loc = (pickup_stop.location.y, pickup_stop.location.x)
+            dist_km = round(geopy_distance(driver_loc, pickup_loc).km, 2)
+            eta = max(1, round(dist_km / 30 * 60))
+
+        journey = JourneyCacheService.get_journey(str(trip.id)) or {}
+
+        # Driver contact/rating for the passenger's arrival screen. Read from the
+        # driver's profile, matching where the passenger registered their number.
+        driver_profile = getattr(driver, "driver_profile", None)
+
+        DispatchService._notify_ws(
+            f"broadcast_{dispatch_request.id}",
+            "broadcast_update",
+            {
+                "type": "request_accepted",
+                "trip_id": str(trip.id),
+                "boarding_request_id": str(boarding.id),
+                "request_id": str(dispatch_request.id),
+                "driver_name": _user_display_name(driver),
+                "vehicle_number": vehicle.vehicle_number,
+                "otp": otp,
+                "distance_km": dist_km,
+                "eta": eta,
+                "pickup_stop_id": str(dispatch_request.pickup_stop_id),
+                "pickup_name": pickup_stop.name if pickup_stop else None,
+                "pickup_lat": pickup_stop.location.y if pickup_stop else None,
+                "pickup_lng": pickup_stop.location.x if pickup_stop else None,
+                "drop_stop_id": (
+                    str(dispatch_request.drop_stop_id) if drop_stop else None
+                ),
+                "drop_name": drop_stop.name if drop_stop else None,
+                "origin": journey.get("origin"),
+                "destination": journey.get("destination"),
+                # The passenger's arrival screen needs these to render who is
+                # coming and to let them open the trip socket for live position.
+                "vehicle_id": str(vehicle.id),
+                "vehicle_type": vehicle.vehicle_type,
+                "driver_rating": (
+                    float(driver_profile.rating) if driver_profile else None
+                ),
+                "driver_phone": (
+                    (driver_profile.phone_number if driver_profile else "") or ""
+                ),
+            },
+        )
+
+        DispatchService._notify_ws(
+            f"stop_{dispatch_request.pickup_stop_id}",
+            "stop_vehicle_update",
+            {
+                "type": "vehicle_boarded_passenger",
+                "stop_id": str(dispatch_request.pickup_stop_id),
+                "trip_id": str(trip.id),
+                "vehicle_id": str(vehicle.id),
+            },
+        )
+
+        logger.info(
+            "Journey request %s accepted by driver %s → journey %s (boarding %s)",
+            dispatch_request.id,
+            driver.id,
+            trip.id,
+            boarding.id,
+        )
+
+        # The driver's view of who they just picked up. Without this the driver
+        # only sees a pickup stop name and an OTP, with nothing to match the
+        # person standing there against.
+        passenger = dispatch_request.passenger
+        passenger_rating = getattr(
+            getattr(passenger, "driver_profile", None), "rating", None
+        )
+
+        return {
+            "status": "accepted",
+            "trip_id": str(trip.id),
+            "boarding_request_id": str(boarding.id),
+            "driver_name": _user_display_name(driver),
+            "otp": otp,
+            # Passenger identity for the driver's accepted-rider card.
+            "passenger_id": str(passenger.id),
+            "passenger_name": _passenger_display_name(dispatch_request),
+            "passenger_phone": _passenger_phone(dispatch_request),
+            "passenger_rating": passenger_rating,
+            "pickup_stop_id": str(dispatch_request.pickup_stop_id),
+            "pickup_stop_name": pickup_stop.name if pickup_stop else None,
+            "drop_stop_id": (
+                str(dispatch_request.drop_stop_id) if drop_stop else None
+            ),
+            "drop_stop_name": drop_stop.name if drop_stop else None,
+            "distance_km": dist_km,
+            "eta_minutes": eta,
+            "vehicle_number": vehicle.vehicle_number,
+        }
+
+    @staticmethod
+    def _create_boarding_request(
+        dispatch_request: DispatchRequest,
+        trip: ActiveTrip,
+        otp: str,
+    ) -> Optional[BoardingRequest]:
+        """
+        Link a passenger to a trip. Returns None if the link cannot be made.
+
+        Failure is returned rather than raised because the caller's claim on the
+        dispatch request has to be released; letting this raise would leave a
+        request marked accepted with the passenger never attached.
+
+        The insert runs in its own savepoint. Without it, catching the
+        ``IntegrityError`` from ``unique_pending_boarding_request`` (the
+        passenger already has a pending boarding on this trip) would still leave
+        the enclosing transaction unusable: a constraint violation aborts the
+        transaction even when the exception is caught, so the caller's release
+        save() then failed with
+        "An error occurred in the current transaction. You can't execute
+        queries until the end of the 'atomic' block." and the driver got a 500
+        instead of being told the passenger was already on their way.
+        """
+        try:
+            with transaction.atomic():
+                return BoardingRequest.objects.create(
+                    passenger=dispatch_request.passenger,
+                    trip=trip,
+                    pickup_stop=dispatch_request.pickup_stop,
+                    drop_stop=dispatch_request.drop_stop,
+                    status=BOARDING_PENDING,
+                    otp=otp,
+                )
+        except Exception as exc:
+            logger.warning(
+                "Failed to link boarding request %s to trip %s: %s",
+                dispatch_request.id,
+                trip.id,
+                exc,
+            )
+            return None
+
+    @staticmethod
+    def find_candidates_for_stop(
+        stop_id: str,
+        exclude_drivers: Optional[set] = None,
+        limit: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """
+        Drivers whose current journey passes a global stop.
+
+        The candidate set is the reverse index built at journey start
+        (``vayy:stop:passing_trips``), so this is a set lookup rather than a
+        spatial search - the corridor was already evaluated against the driver's
+        own path. Stops the driver has already gone past are dropped: they
+        cannot still pick the passenger up.
+
+        Returns the same candidate shape as ``find_best_candidates`` so the
+        broadcast path treats both sources identically.
+        """
+        from tracking.services.journey_cache_service import JourneyCacheService
+
+        trip_ids = JourneyCacheService.get_passing_trips(stop_id)
+        if not trip_ids:
+            return []
+
+        trips = ActiveTrip.objects.filter(
+            id__in=trip_ids,
+            status=TRIP_STATUS_ACTIVE,
+            route__isnull=True,
+        ).select_related(
+            "vehicle", "vehicle__driver", "vehicle__driver__driver_profile",
+            "vehicle__state",
+        )
+
+        candidates: List[Dict[str, Any]] = []
+        for trip in trips:
+            driver = trip.vehicle.driver
+            if driver is None:
+                continue
+            if exclude_drivers and str(driver.id) in exclude_drivers:
+                continue
+
+            try:
+                profile = driver.driver_profile
+            except Exception:
+                continue
+
+            state = trip.vehicle.state
+            progress = CorridorService.progress_m(
+                str(trip.id),
+                location=(
+                    (state.current_location.x, state.current_location.y)
+                    if state and state.current_location
+                    else None
+                ),
+            )
+            # Already past the stop: cannot serve a hand raised there.
+            if not CorridorService.is_stop_ahead(str(trip.id), stop_id, progress):
+                continue
+
+            # Straight-line distance from the vehicle to the stop. Whether the
+            # stop is genuinely on the way is expressed by passing-trip
+            # membership, not by this number.
+            from transport.models import Stop
+
+            stop = Stop.objects.filter(id=stop_id).only("location").first()
+            distance_km = None
+            if state and state.current_location and stop:
+                distance_km = round(
+                    geopy_distance(
+                        (state.current_location.y, state.current_location.x),
+                        (stop.location.y, stop.location.x),
+                    ).km,
+                    2,
+                )
+
+            # Same scoring shape and scale as find_best_candidates, so a journey
+            # and a route request rank candidates the same way.
+            dist_score = (
+                max(0, 50 - (distance_km * 5)) if distance_km is not None else 0
+            )
+            rating_score = profile.rating * 6
+
+            candidates.append({
+                "vehicle": trip.vehicle,
+                "driver": driver,
+                "trip": trip,
+                "score": dist_score + rating_score,
+                "distance": distance_km if distance_km is not None else 0,
+            })
+
+        candidates.sort(key=lambda c: c["score"], reverse=True)
+        return candidates[:limit]
 
     @staticmethod
     def dismiss_broadcast_request(request_id: str, driver: User) -> Dict[str, Any]:
@@ -1039,6 +1493,157 @@ class DispatchService:
             "outstanding": outstanding,
         }
 
+    @staticmethod
+    def settle_journey_passengers(trip: ActiveTrip) -> Dict[str, Any]:
+        """
+        Settle every boarded passenger on a finished journey.
+
+        Structurally the same as ``_process_trip_settlement`` — one debit per
+        boarded passenger, failures collected rather than raised so one
+        underfunded rider cannot strand the rest — but it differs in two ways
+        that matter for journeys:
+
+        * the per-passenger fare is measured along the journey between the
+          passenger's own pickup and drop stops, not over a route segment;
+        * the settlement runs when the *driver* ends the journey, which may be
+          long after the passenger boarded, so a retried settle must not double
+          charge. ``BoardingRequest`` carries the idempotency key per rider.
+
+        Returns the same {total, settled, outstanding} shape as the route path.
+        """
+        vehicle_type = trip.vehicle.vehicle_type if trip.vehicle else VEHICLE_BIKE
+        route_label = trip.journey_label if trip.is_journey else (
+            trip.route.name if trip.route_id else None
+        )
+
+        boarding_requests = list(
+            BoardingRequest.objects.filter(trip=trip, status=BOARDING_BOARDED)
+            .select_related("passenger", "pickup_stop", "drop_stop")
+        )
+
+        settled: List[Dict[str, Any]] = []
+        outstanding: List[Dict[str, Any]] = []
+
+        for request in boarding_requests:
+            # One logical settlement per passenger per trip, so a retry of this
+            # whole method can tell what has already been charged.
+            reference = f"trip_{trip.id}:p{request.id}"
+
+            try:
+                # One estimate drives both the charge and what the fare screens
+                # display, so a rider can never be shown a distance that does
+                # not match the fare they were billed.
+                segment = RideService.calculate_segment_metrics(
+                    request.pickup_stop,
+                    request.drop_stop,
+                    vehicle_type,
+                )
+                fare_decimal = Decimal(
+                    str(segment["fare"])
+                ).quantize(Decimal("0.01"))
+
+                result = WalletService.settle_debit(
+                    sender=request.passenger,
+                    receiver=trip.driver,
+                    amount=fare_decimal,
+                    reference=reference,
+                    metadata={
+                        "trip_id": str(trip.id),
+                        "boarding_request_id": str(request.id),
+                        "route": route_label,
+                        "journey": trip.is_journey,
+                        "segment_distance_m": segment["distance_m"],
+                        "segment_duration_s": segment["duration_s"],
+                    },
+                )
+            except Exception as exc:
+                logger.exception(
+                    "Failed to settle journey passenger %s on trip %s: %s",
+                    request.passenger_id, trip.id, exc,
+                )
+                outstanding.append({
+                    "reference": reference,
+                    "boarding_request_id": str(request.id),
+                    "passenger_id": str(request.passenger_id),
+                    "reason": "exception",
+                    "error": str(exc),
+                })
+                continue
+
+            if not result["settled"]:
+                outstanding.append({
+                    "reference": reference,
+                    "boarding_request_id": str(request.id),
+                    "passenger_id": str(request.passenger_id),
+                    "amount": str(fare_decimal),
+                    "reason": result["error"],
+                    "error": result["error"],
+                })
+                logger.warning(
+                    "Outstanding journey settlement for passenger %s on trip %s: %s",
+                    request.passenger_id, trip.id, result["error"],
+                )
+                continue
+
+            request.status = BOARDING_COMPLETED
+            # Persist what this rider was actually charged, so the fare screens
+            # read a stored figure instead of recomputing from stops that may be
+            # edited later. Written on the already-settled path too, so a retry
+            # backfills the record rather than leaving it blank.
+            request.segment_distance_m = segment["distance_m"]
+            request.segment_duration_s = segment["duration_s"]
+            request.fare = fare_decimal
+            request.dropped_off_at = timezone.now()
+            request.save(update_fields=[
+                "status",
+                "segment_distance_m",
+                "segment_duration_s",
+                "fare",
+                "dropped_off_at",
+                "updated_at",
+            ])
+
+            settled.append({
+                "reference": reference,
+                "boarding_request_id": str(request.id),
+                "passenger_id": str(request.passenger_id),
+                "amount": str(fare_decimal),
+                "already_settled": result["already_settled"],
+                # Carried into the end_journey response so the driver's fare
+                # screen renders without a second round trip.
+                "passenger_name": _user_display_name(request.passenger),
+                "pickup_stop_name": request.pickup_stop.name if request.pickup_stop else "",
+                "drop_stop_name": request.drop_stop.name if request.drop_stop else "",
+                "segment_distance_m": segment["distance_m"],
+                "segment_duration_s": segment["duration_s"],
+                "fare": float(fare_decimal),
+            })
+
+            if result["already_settled"]:
+                continue
+
+            NotificationService.create(
+                user=request.passenger,
+                title="Ride Completed",
+                message=(
+                    f"Your share of the journey ({fare_decimal}) has been "
+                    "deducted from your wallet."
+                ),
+                metadata={
+                    "trip_id": str(trip.id),
+                    "boarding_request_id": str(request.id),
+                    "fare": float(fare_decimal),
+                    "segment_distance_m": segment["distance_m"],
+                    "segment_duration_s": segment["duration_s"],
+                },
+            )
+
+        return {
+            "total": len(boarding_requests),
+            "settled": settled,
+            "outstanding": outstanding,
+        }
+
 
     @staticmethod
     def accept_assignment(trip_id: str, driver: User):
@@ -1069,23 +1674,35 @@ class DispatchService:
             from transport.services.osrm_service import OSRMService
             origin = None
             dest = None
-            stops = trip.route.stops.all().order_by("order") if trip.route else []
-            if stops.count() >= 2:
-                origin_coords = stops.first().location
-                dest_coords = stops.last().location
-                if origin_coords and dest_coords:
-                    origin = (origin_coords.x, origin_coords.y)
-                    dest = (dest_coords.x, dest_coords.y)
-            if origin and dest:
-                dist_m = OSRMService.get_road_distance_m(origin, dest)
-                dur_s = OSRMService.get_road_duration_s(origin, dest)
-                if dist_m and dur_s:
-                    trip.total_distance_m = dist_m
-                    trip.total_duration_s = dur_s
-                    dist_km = dist_m / 1000
+
+            if trip.is_journey:
+                # A journey's distance was measured when it started; its fare is
+                # just that distance priced. There are no route stops to take
+                # endpoints from.
+                if trip.total_distance_m:
                     vtype = trip.vehicle.vehicle_type if trip.vehicle else VEHICLE_BIKE
-                    trip.total_fare = FareService.calculate_fare(dist_km, vtype)
-                    trip.save(update_fields=["total_distance_m", "total_duration_s", "total_fare"])
+                    trip.total_fare = FareService.calculate_fare(
+                        trip.total_distance_m / 1000, vtype
+                    )
+                    trip.save(update_fields=["total_fare"])
+            else:
+                stops = trip.route.stops.all().order_by("order") if trip.route else []
+                if stops.count() >= 2:
+                    origin_coords = stops.first().location
+                    dest_coords = stops.last().location
+                    if origin_coords and dest_coords:
+                        origin = (origin_coords.x, origin_coords.y)
+                        dest = (dest_coords.x, dest_coords.y)
+                if origin and dest:
+                    dist_m = OSRMService.get_road_distance_m(origin, dest)
+                    dur_s = OSRMService.get_road_duration_s(origin, dest)
+                    if dist_m and dur_s:
+                        trip.total_distance_m = dist_m
+                        trip.total_duration_s = dur_s
+                        dist_km = dist_m / 1000
+                        vtype = trip.vehicle.vehicle_type if trip.vehicle else VEHICLE_BIKE
+                        trip.total_fare = FareService.calculate_fare(dist_km, vtype)
+                        trip.save(update_fields=["total_distance_m", "total_duration_s", "total_fare"])
         # Update driver stats after status update succeeds
         is_driver = trip.driver == user
         result = DispatchService.update_trip_status(trip_id, TRIP_STATUS_COMPLETED, driver=user if is_driver else None)

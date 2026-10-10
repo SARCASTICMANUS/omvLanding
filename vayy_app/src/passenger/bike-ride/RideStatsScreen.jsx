@@ -232,13 +232,28 @@ export function RideStatsScreen({ navigation, route }) {
     });
   }
 
-  function handleShareTrip() {
+  async function handleShareTrip() {
     const shareText = [
       `📍 ${driverName} is riding me to ${destination} via VAYY!`,
       `⏱ ETA: ${eta} · 📏 ${distanceLeft}`,
       `🆔 Trip: ${tripData.trip_id || dispatchId}`,
     ].join("\n");
-    Share.share({ message: shareText }).catch(() => {});
+    // Share.share is native-only; on web it throws and the catch swallowed it,
+    // leaving the share button looking broken. Use the browser's own share
+    // where available, and fall back to copying the text.
+    try {
+      if (Platform.OS === "web") {
+        if (typeof navigator !== "undefined" && navigator.share) {
+          await navigator.share({ title: "VAYY trip", text: shareText });
+        } else if (typeof window !== "undefined") {
+          await window.navigator.clipboard?.writeText(shareText);
+        }
+        return;
+      }
+      await Share.share({ message: shareText });
+    } catch {
+      // Dismissed or unsupported; nothing to recover.
+    }
   }
 
   function handleEmergency() {
@@ -422,7 +437,7 @@ export function RideStatsScreen({ navigation, route }) {
 
             {endRideCase === "arrived" ? (
               <>
-                <Text style={styles.endTitle}>Looks like you've reached your destination.</Text>
+                <Text style={styles.endTitle}>Looks like you&apos;ve reached your destination.</Text>
                 <Text style={styles.endMessage}>End Ride?</Text>
                 <View style={styles.endActions}>
                   <TouchableOpacity style={styles.endPrimaryBtn} onPress={handleConfirmEndRide}>
@@ -481,7 +496,7 @@ export function RideStatsScreen({ navigation, route }) {
               style={styles.emergencyCloseBtn}
               onPress={() => setShowEmergencyModal(false)}
             >
-              <Text style={styles.emergencyCloseText}>I'm Safe</Text>
+              <Text style={styles.emergencyCloseText}>I&apos;m Safe</Text>
             </TouchableOpacity>
           </View>
         </View>

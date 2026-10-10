@@ -7,14 +7,22 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 
+from django.utils import timezone
+
 from accounts.permissions import IsDriver, IsPassenger
+from common.constants import JOURNEY_CORRIDOR_RADIUS_M
 from operations.models import VehicleState, Vehicle, ActiveTrip, BoardingRequest
+from operations.models import DispatchRequest
 from operations.services.ride_service import RideService
 from tracking.selectors.hybrid_selector import HybridSelector
 from tracking.api.serializers import (
     HybridLogSerializer,
     TelemetryIngestSerializer,
     StartRouteTripSerializer,
+    StartJourneySerializer,
+    CorridorSearchSerializer,
+    PreviewJourneySerializer,
+    EndJourneySerializer,
     PassengerRaiseHandSerializer,
     RideLifecycleSerializer,
     RouteStopListSerializer,
@@ -24,6 +32,11 @@ from tracking.services.gps_service import GPSService
 from tracking.services.redis_geo_service import RedisGeoService
 from tracking.services.redis_route_service import RedisRouteService
 from tracking.services.matching_service import MatchingService
+from tracking.services.corridor_service import CorridorService
+from tracking.services.corridor_search_service import CorridorSearchService
+from tracking.services.journey_cache_service import JourneyCacheService
+from operations.services.journey_service import JourneyService
+from operations.services.dispatch_service import DispatchService, _user_display_name
 from tracking.tasks import (
     process_location_update,
     process_passenger_location,
@@ -511,18 +524,17 @@ class EndRouteTripView(APIView):
 class PassengerRaiseHandView(APIView):
     """
     POST /api/tracking/raise-hand/
-    Passenger requests a ride between two stops on a route.
+    Passenger requests a ride.
 
-    Request:
-        {
-            "route_id": "<uuid>",
-            "pickup_stop_id": "<uuid>",
-            "dropoff_stop_id": "<uuid>",
-            "lat": 28.6139,
-            "lng": 77.209
-        }
+    Two shapes, decided by whether ``route_id`` is sent:
 
-    Creates a BoardingRequest, dispatches matching worker via Celery.
+    * route-scoped - pickup and dropoff stops on a registered fixed route. A
+      BoardingRequest is created against an active trip on that route and the
+      matching worker runs.
+    * journey-scoped - ``route_id`` omitted, pickup is an admin-created global
+      stop. The request is offered to whichever drivers' journeys pass that
+      stop, through the normal broadcast dispatch, and a driver's accept attaches
+      the passenger to their live journey.
     """
     permission_classes = [IsAuthenticated, IsPassenger]
 
@@ -536,6 +548,117 @@ class PassengerRaiseHandView(APIView):
         lat = serializer.validated_data["lat"]
         lng = serializer.validated_data["lng"]
 
+        if route_id is None:
+            return self._raise_hand_on_stop(request, pickup_stop, dropoff_stop)
+
+        return self._raise_hand_on_route(request, route_id, pickup_stop, dropoff_stop, lat, lng)
+
+    def _raise_hand_on_stop(self, request, pickup_stop, dropoff_stop):
+        """Journey-scoped: broadcast to the drivers passing this global stop."""
+        # One open hand per passenger per stop: a second raise at the same stop
+        # would create a second competing request rather than refresh the first.
+        #
+        # ``expires_at`` is honoured here rather than relying on a sweep: the
+        # request lives 45s, and if the sweeper is not running (beat is a
+        # separate, optional service) an expired request would otherwise keep
+        # blocking this passenger from ever raising a hand at that stop again.
+        now = timezone.now()
+        existing = (
+            DispatchRequest.objects.filter(
+                passenger=request.user,
+                pickup_stop=pickup_stop,
+                status=DispatchRequest.STATUS_PENDING,
+            )
+            .filter(expires_at__gt=now)
+            .order_by("-created_at")
+            .first()
+        )
+        if existing:
+            return Response(
+                {
+                    "success": False,
+                    "message": "You already have a pending request at this stop",
+                    "data": {"request_id": str(existing.id)},
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Retire anything already past its deadline so the state matches what the
+        # caller is told, and so a later read does not resurrect it.
+        DispatchRequest.objects.filter(
+            passenger=request.user,
+            pickup_stop=pickup_stop,
+            status=DispatchRequest.STATUS_PENDING,
+            expires_at__lte=now,
+        ).update(status=DispatchRequest.STATUS_EXPIRED)
+
+        result = DispatchService.request_dispatch(
+            passenger=request.user,
+            route_id=None,
+            pickup_stop_id=str(pickup_stop.id),
+            drop_stop_id=str(dropoff_stop.id) if dropoff_stop else None,
+        )
+
+        if result.get("status") == "no_drivers_available":
+            return Response(
+                {
+                    "success": False,
+                    "message": "No vehicles are passing this stop right now",
+                    "data": {},
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # The broadcast request id is what the passenger listens on
+        # (/ws/dispatch/broadcast/{request_id}/), so it is the handle returned.
+        request_id = result.get("request_id")
+        if not request_id:
+            return Response(
+                {
+                    "success": False,
+                    "message": result.get("message", "Could not raise a request"),
+                    "data": {},
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        logger.info(
+            "[PassengerRaiseHand] Journey request %s at stop %s (%s drivers notified)",
+            request_id,
+            pickup_stop.id,
+            result.get("drivers_notified"),
+        )
+
+        return Response(
+            {
+                "success": True,
+                "message": "Searching for vehicles passing this stop...",
+                "data": {
+                    "request_id": str(request_id),
+                    "pickup_stop": {
+                        "id": str(pickup_stop.id),
+                        "name": pickup_stop.name,
+                        "lat": pickup_stop.location.y,
+                        "lng": pickup_stop.location.x,
+                    },
+                    "dropoff_stop": (
+                        {
+                            "id": str(dropoff_stop.id),
+                            "name": dropoff_stop.name,
+                            "lat": dropoff_stop.location.y,
+                            "lng": dropoff_stop.location.x,
+                        }
+                        if dropoff_stop
+                        else None
+                    ),
+                    "drivers_notified": result.get("drivers_notified"),
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    def _raise_hand_on_route(self, request, route_id, pickup_stop, dropoff_stop, lat, lng):
+        """Route-scoped: board an active trip running on a fixed route."""
         try:
             # Check for existing pending request on this route
             existing = BoardingRequest.objects.filter(
@@ -564,6 +687,7 @@ class PassengerRaiseHandView(APIView):
                 passenger=request.user,
                 trip=active_trip,
                 pickup_stop=pickup_stop,
+                drop_stop=dropoff_stop,
                 status=BOARDING_PENDING,
             )
 
@@ -785,3 +909,300 @@ class NearbyRoutesView(APIView):
             "data": routes,
         })
         return resp
+
+
+# ──────────────────────────────────────────────────────────────
+# Journeys — free-form driver trips (no fixed route)
+# ──────────────────────────────────────────────────────────────
+
+
+class StartJourneyAPIView(APIView):
+    """
+    POST /api/tracking/journeys/start/
+    Driver declares where they are going.
+
+    Request:
+        {
+            "vehicle_id": "<uuid>",
+            "origin":      {"lat": 26.73, "lng": 80.85},
+            "destination": {"lat": 26.87, "lng": 81.01},
+            "origin_name": "Amausi",
+            "destination_name": "Kamta High Court"
+        }
+
+    The server builds one direct OSRM road path between the endpoints and
+    attaches the admin-managed global stops falling within the corridor around
+    it, nearest-first from the origin. Both are held in Redis for the life of
+    the journey.
+
+    The path is mandatory: if OSRM cannot route between the two points the
+    request fails rather than starting a journey that could not be driven,
+    snapped to, or matched against stops.
+    """
+
+    permission_classes = [IsAuthenticated, IsDriver]
+
+    def post(self, request):
+        serializer = StartJourneySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+        result = JourneyService.start_journey(
+            driver=request.user,
+            vehicle_id=str(data["vehicle_id"]),
+            origin=(data["origin"]["lat"], data["origin"]["lng"]),
+            destination=(data["destination"]["lat"], data["destination"]["lng"]),
+            origin_name=data.get("origin_name", ""),
+            destination_name=data.get("destination_name", ""),
+        )
+
+        return Response(
+            {
+                "success": True,
+                "message": f"Journey started with {len(result['stops'])} stop(s) on the way",
+                "data": result,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PreviewJourneyAPIView(APIView):
+    """
+    POST /api/tracking/journeys/preview/
+    Resolve the road and its stops for a proposed journey, changing nothing.
+
+    Request:
+        {
+            "origin":      {"lat": 26.73, "lng": 80.85},
+            "destination": {"lat": 26.87, "lng": 81.01}
+        }
+
+    Returns the same path and ordered global stops that starting the journey
+    would produce, so the driver can approve the actual road before it becomes a
+    live trip. No ActiveTrip row, no Redis document, no vehicle state change -
+    unlike /journeys/start/, this is safe to call on every edit.
+    """
+
+    permission_classes = [IsAuthenticated, IsDriver]
+
+    def post(self, request):
+        serializer = PreviewJourneySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+        result = JourneyService.preview_journey(
+            driver=request.user,
+            origin=(data["origin"]["lat"], data["origin"]["lng"]),
+            destination=(data["destination"]["lat"], data["destination"]["lng"]),
+        )
+
+        return Response(
+            {
+                "success": True,
+                "message": (
+                    f"{len(result['stops'])} stop(s) on this road"
+                    if result["stops"]
+                    else "No global stops on this road"
+                ),
+                "data": result,
+            }
+        )
+
+
+class EndJourneyAPIView(APIView):
+    """
+    POST /api/tracking/journeys/end/
+    Driver finishes their journey: settles boarded passengers, frees the
+    vehicle and drops the cached path and stop index.
+    """
+
+    permission_classes = [IsAuthenticated, IsDriver]
+
+    def post(self, request):
+        serializer = EndJourneySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        result = JourneyService.end_journey(
+            trip_id=str(serializer.validated_data["trip_id"]),
+            user=request.user,
+            cancel=serializer.validated_data.get("cancel", False),
+        )
+
+        return Response(
+            {
+                "success": True,
+                "message": "Journey ended",
+                "data": result,
+            }
+        )
+
+
+class ActiveJourneyAPIView(APIView):
+    """
+    GET /api/tracking/journeys/active/
+    The signed-in driver's in-progress journey, or null.
+
+    Exists so the app can put a driver back on their journey without knowing the
+    trip id — after a cold start the id was only ever in memory. Answers 200 with
+    `data: null` when there is nothing to resume, which is the common case and
+    must not be an error.
+    """
+
+    permission_classes = [IsAuthenticated, IsDriver]
+
+    def get(self, request):
+        journey = JourneyService.get_active_journey_for_driver(request.user)
+        if not journey:
+            return Response({"success": True, "data": None})
+        return Response({"success": True, "data": journey})
+
+
+class JourneyDetailAPIView(APIView):
+    """
+    GET /api/tracking/journeys/<trip_id>/
+    The live journey: path, ordered stops and metrics. Used by the driver app
+    to rehydrate after a refresh.
+    """
+
+    permission_classes = [IsAuthenticated, IsDriver]
+
+    def get(self, request, trip_id):
+        trip = ActiveTrip.objects.select_related("vehicle", "driver").filter(
+            id=trip_id
+        ).first()
+        if not trip:
+            return Response(
+                {"success": False, "message": "Journey not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if trip.driver_id != request.user.id:
+            raise PermissionDenied("This journey belongs to another driver.")
+
+        result = JourneyService.get_journey(str(trip.id))
+        if not result:
+            # The trip is a journey but its cached path is gone (Redis flush or
+            # TTL). Say so plainly rather than returning an empty journey that
+            # would render as a vehicle going nowhere.
+            return Response(
+                {
+                    "success": False,
+                    "message": "This journey's route is no longer available",
+                    "data": {"trip_id": str(trip.id), "status": trip.status},
+                },
+                status=status.HTTP_410_GONE,
+            )
+
+        return Response({"success": True, "data": result})
+
+
+class CorridorVehiclesAPIView(APIView):
+    """
+    POST /api/tracking/corridor/vehicles/
+    Live vehicles running the corridor between the passenger's two points.
+
+    This is the passenger-side counterpart to the journey preview: the same road
+    is resolved, but instead of returning the geometry alone it returns the
+    vehicles whose current journey serves a stop on that road and has not passed
+    it yet - which is what the trip planner needs to answer "who can I get on
+    for this route?".
+
+    Read-only. No trip is created, no boarding is attached, and a driver who has
+    already gone past the boarding stop is excluded because they can no longer
+    serve it.
+    """
+
+    permission_classes = [IsAuthenticated, IsPassenger]
+
+    def post(self, request):
+        serializer = CorridorSearchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+        result = CorridorSearchService.find_vehicles(
+            origin=(data["origin"]["lat"], data["origin"]["lng"]),
+            destination=(data["destination"]["lat"], data["destination"]["lng"]),
+            radius_m=data.get("radius", JOURNEY_CORRIDOR_RADIUS_M),
+            limit=data.get("limit", 20),
+        )
+
+        if not result["resolved"]:
+            return Response(
+                {
+                    "success": False,
+                    "message": (
+                        "Could not build a road route between these points. "
+                        "Pick a point on a road and try again."
+                    ),
+                    "data": {"path": [], "stops": [], "vehicles": []},
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response({"success": True, "data": result})
+
+
+class PassingVehiclesAPIView(APIView):
+    """
+    GET /api/tracking/stops/<stop_id>/passing-vehicles/
+    Vehicles whose current journey serves a stop — what a passenger standing at
+    that stop sees before raising a hand.
+
+    Only vehicles that have not yet passed the stop are returned: a vehicle
+    beyond it cannot pick the passenger up, and showing it would offer a
+    choice that cannot be taken.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, stop_id):
+        stop = Stop.objects.filter(id=stop_id).first()
+        if not stop:
+            return Response(
+                {"success": False, "message": "Stop not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        candidates = DispatchService.find_candidates_for_stop(
+            str(stop.id), limit=10
+        )
+
+        vehicles = []
+        for candidate in candidates:
+            trip = candidate["trip"]
+            vehicle_state = candidate["vehicle"].state
+            journey = JourneyCacheService.get_journey(str(trip.id)) or {}
+            vehicles.append({
+                "trip_id": str(trip.id),
+                "vehicle_id": str(candidate["vehicle"].id),
+                "vehicle_number": candidate["vehicle"].vehicle_number,
+                "vehicle_type": candidate["vehicle"].vehicle_type,
+                "driver_id": str(candidate["driver"].id),
+                "driver_name": _user_display_name(candidate["driver"]),
+                "distance_km": candidate["distance"],
+                "eta_minutes": CorridorService.eta_to_stop_s(str(trip.id), str(stop.id)),
+                "lat": (
+                    vehicle_state.current_location.y
+                    if vehicle_state and vehicle_state.current_location
+                    else None
+                ),
+                "lng": (
+                    vehicle_state.current_location.x
+                    if vehicle_state and vehicle_state.current_location
+                    else None
+                ),
+                "destination": journey.get("destination"),
+            })
+
+        return Response({
+            "success": True,
+            "data": {
+                "stop": {
+                    "id": str(stop.id),
+                    "name": stop.name,
+                    "lat": stop.location.y,
+                    "lng": stop.location.x,
+                },
+                "vehicles": vehicles,
+                "count": len(vehicles),
+            },
+        })

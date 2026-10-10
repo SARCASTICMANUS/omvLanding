@@ -8,6 +8,7 @@ from transport.api.views import (
     TripScheduleViewSet,
     StopTimeViewSet,
     NearbyStopListAPIView,
+    GlobalStopListAPIView,
     RouteByRouteCodeAPIView,
     RouteScheduleAPIView,
     StopETAAPIView,
@@ -27,6 +28,7 @@ from transport.api.views import (
     AdminStopTimeViewSet,
     AdminCityViewSet,
     AdminRouteImportAPIView,
+    AdminStopBulkUploadAPIView,
 )
 
 router = DefaultRouter()
@@ -101,6 +103,11 @@ urlpatterns = [
         name="nearby-stop-list",
     ),
     path(
+        "global-stops/nearby/",
+        GlobalStopListAPIView.as_view(),
+        name="global-stop-list",
+    ),
+    path(
         "stops/<uuid:stop_id>/eta/",
         StopETAAPIView.as_view(),
         name="stop-eta",
@@ -116,6 +123,11 @@ urlpatterns = [
         name="walking-path",
     ),
     path("admin/", include(admin_router.urls)),
+    path(
+        "admin/stops-bulk/",
+        AdminStopBulkUploadAPIView.as_view(),
+        name="admin-stop-bulk-upload",
+    ),
     path(
         "admin/route-import/",
         AdminRouteImportAPIView.as_view(),

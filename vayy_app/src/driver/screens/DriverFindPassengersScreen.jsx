@@ -1,8 +1,10 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
+  ActivityIndicator,
   Animated,
   FlatList,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -10,7 +12,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { getNearbyPassengers } from "../services/driverService";
+import { useDispatch, useSelector } from "react-redux";
+import { getAssignedVehicle, getNearbyPassengers } from "../services/driverService";
+import {
+  startJourney,
+  previewJourney,
+  clearJourney,
+  fetchActiveJourney,
+} from "../../store/slices/journeySlice";
 import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import COLORS from "../../shared/constants/colors";
@@ -37,6 +46,149 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
 
   const summary = selectedRoute ? buildRouteSummary(selectedRoute) : null;
   const routeId = selectedRoute?.id;
+
+  /* ── Journey mode ──────────────────────────────────────────
+     A driver may arrive here either with a fixed route (legacy) or with a
+     declared origin→destination (a journey). The journey API resolves the real
+     road and the global stops on it, so the driver can preview it and start it
+     from this same screen rather than a separate one.
+
+     All existing route behaviour below is untouched: when `journeyOrigin` is
+     absent this screen behaves exactly as before.
+  */
+  const dispatch = useDispatch();
+  const journeyStatus = useSelector((st) => st.journey?.status);
+  const journeyError = useSelector((st) => st.journey?.error);
+  const preview = useSelector((st) => st.journey?.preview);
+  const previewStatus = useSelector((st) => st.journey?.previewStatus);
+  const previewError = useSelector((st) => st.journey?.previewError);
+
+  const normalise = useCallback((point) => {
+    if (!point) return null;
+    const lat = Number(point.lat);
+    const lng = Number(point.lng ?? point.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return {
+      lat,
+      lng,
+      name: point.name || point.display_name?.split(",")?.[0] || "Selected point",
+    };
+  }, []);
+
+  const journeyOrigin = useMemo(
+    () => normalise(routeProp?.params?.origin),
+    [routeProp?.params?.origin, normalise]
+  );
+  const journeyDestination = useMemo(
+    () => normalise(routeProp?.params?.destination),
+    [routeProp?.params?.destination, normalise]
+  );
+  const isJourneyFlow = Boolean(journeyOrigin && journeyDestination);
+
+  const [vehicle, setVehicle] = useState(null);
+  const [loadingVehicle, setLoadingVehicle] = useState(false);
+  const [localError, setLocalError] = useState("");
+  const [starting, setStarting] = useState(false);
+
+  // Once started, this screen hands off to live tracking; the start panel must
+  // not linger behind it.
+  const [journeyStarted, setJourneyStarted] = useState(false);
+  const previewing = previewStatus === "loading";
+  const busyStarting = journeyStatus === "starting" || starting;
+
+  // Resolve the road as soon as both endpoints are known. Debounced because
+  // each preview is an OSRM round trip.
+  useEffect(() => {
+    if (!isJourneyFlow) return undefined;
+    const timer = setTimeout(() => {
+      dispatch(
+        previewJourney({ origin: journeyOrigin, destination: journeyDestination })
+      );
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [dispatch, isJourneyFlow, journeyOrigin, journeyDestination]);
+
+  useEffect(() => {
+    if (!isJourneyFlow) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingVehicle(true);
+      try {
+        const data = await getAssignedVehicle();
+        if (cancelled) return;
+        const payload = data?.data || data;
+        setVehicle(Array.isArray(payload) ? payload[0] || null : payload);
+      } catch (err) {
+        if (!cancelled) setLocalError(err.message || "Could not load your vehicle");
+      } finally {
+        if (!cancelled) setLoadingVehicle(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isJourneyFlow]);
+
+  // Leaving must not strand a half-finished journey in the store.
+  useEffect(() => {
+    if (!isJourneyFlow) return undefined;
+    return () => {
+      dispatch(clearJourney());
+    };
+  }, [dispatch, isJourneyFlow]);
+
+  const handleStartJourney = useCallback(async () => {
+    if (!vehicle?.id || busyStarting) return;
+    setLocalError("");
+    setStarting(true);
+    const result = await dispatch(
+      startJourney({
+        vehicleId: vehicle.id,
+        origin: journeyOrigin,
+        destination: journeyDestination,
+        originName: journeyOrigin.name || "",
+        destinationName: journeyDestination.name || "",
+      })
+    );
+    setStarting(false);
+
+    if (startJourney.fulfilled.match(result)) {
+      setJourneyStarted(true);
+      // Hand off to the existing live-tracking screen, which is where a driver
+      // runs a trip and ends it.
+      navigation.navigate("DriverLiveTracking", {
+        route: {
+          id: result.payload?.trip_id,
+          vehicle_number: vehicle.vehicle_number,
+          mode,
+        },
+        activeTrip: {
+          trip_id: result.payload?.trip_id,
+          vehicle_id: result.payload?.vehicle_id,
+          vehicle_type: vehicle.vehicle_type,
+          vehicle_number: vehicle.vehicle_number,
+        },
+        journey: result.payload?.data || result.payload,
+        // Explicit, because the live screen keys its notification subscription
+        // on this and a raised hand is delivered nowhere without it.
+        driverId: result.payload?.driver_id,
+      });
+      return;
+    }
+    setLocalError(
+      (result.payload && (result.payload.message || result.payload.detail)) ||
+        result.error?.message ||
+        "Could not start your journey."
+    );
+  }, [
+    dispatch,
+    navigation,
+    vehicle,
+    busyStarting,
+    journeyOrigin,
+    journeyDestination,
+    mode,
+  ]);
 
   // Initial HTTP fetch to get existing passengers
   const fetchPassengers = useCallback(async () => {
@@ -185,6 +337,15 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
     tryFit(0);
   }, [summary]);
 
+  const journeyPathCoords = useMemo(
+    () =>
+      (preview?.path || [])
+        .filter((c) => Array.isArray(c) && c.length === 2)
+        .map((c) => [c[1], c[0]]),
+    [preview]
+  );
+  const journeyStops = preview?.stops || [];
+
   const routeCoords = summary?.stops
     ?.filter((s) => typeof s.lat === "number" && typeof s.lon === "number")
     ?.map((s) => [s.lon, s.lat]) || [];
@@ -263,28 +424,27 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
           zoom: 14,
         }}
       >
-        {routeCoords.length > 1 && (
+        {/* A journey's road comes from the server preview, which is the exact
+            geometry the started journey will follow. Fixed routes keep using
+            their own stop geometry below. */}
+        {(journeyPathCoords.length > 1 || routeCoords.length > 1) && (
           <GeoJSONSource
-            id="route-line"
+            id={journeyPathCoords.length > 1 ? "journey-path" : "route-line"}
             data={{
               type: "Feature",
               geometry: {
                 type: "LineString",
-                coordinates: routeCoords,
+                // Backend stores [lat, lng]; MapLibre wants [lng, lat].
+                coordinates:
+                  journeyPathCoords.length > 1 ? journeyPathCoords : routeCoords,
               },
             }}
           >
             <Layer
-              id="route-line-layer"
+              id={journeyPathCoords.length > 1 ? "journey-path-layer" : "route-line-layer"}
               type="line"
-              layout={{
-                "line-cap": "round",
-                "line-join": "round",
-              }}
-              paint={{
-                "line-color": COLORS.primary,
-                "line-width": 4,
-              }}
+              layout={{ "line-cap": "round", "line-join": "round" }}
+              paint={{ "line-color": COLORS.primary, "line-width": 4 }}
             />
           </GeoJSONSource>
         )}
@@ -344,8 +504,138 @@ export default function DriverFindPassengersScreen({ navigation, route: routePro
         </View>
       </SafeAreaView>
 
+      {/* Journey panel: shown before the journey starts. Declares the road,
+          previews it and commits it — the same flow the dedicated journey
+          start screen used to own, now inside this screen. */}
+      {isJourneyFlow && !journeyStarted && (
+        <View style={styles.bottomSheet}>
+          <View style={styles.handle} />
+          <Text style={styles.sheetTitle}>Start your journey</Text>
+
+          <ScrollView style={styles.journeyScroll} showsVerticalScrollIndicator={false}>
+            <View style={styles.journeyPoints}>
+              <View style={styles.journeyPointRow}>
+                <View style={[styles.journeyDot, { backgroundColor: COLORS.primary }]} />
+                <Text style={styles.journeyPointText} numberOfLines={1}>
+                  {journeyOrigin.name || "Start point"}
+                </Text>
+              </View>
+              <View style={styles.journeyConnector} />
+              <View style={styles.journeyPointRow}>
+                <View style={[styles.journeyDot, { backgroundColor: "#EF4444" }]} />
+                <Text style={styles.journeyPointText} numberOfLines={1}>
+                  {journeyDestination.name || "Destination point"}
+                </Text>
+              </View>
+            </View>
+
+            {loadingVehicle ? (
+              <View style={styles.journeyMetaRow}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.journeyMetaText}>Checking your vehicle…</Text>
+              </View>
+            ) : vehicle ? (
+              <View style={styles.journeyMetaRow}>
+                <Ionicons name="bicycle" size={16} color="#6B7280" />
+                <Text style={styles.journeyMetaText}>
+                  {vehicle.vehicle_number} · {vehicle.vehicle_type}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.journeyWarnRow}>
+                <Ionicons name="alert-circle" size={16} color="#EF4444" />
+                <Text style={styles.journeyWarnText}>
+                  Register an active vehicle before starting a journey.
+                </Text>
+              </View>
+            )}
+
+            {(localError || journeyError || previewError) && (
+              <View style={styles.journeyWarnRow}>
+                <Ionicons name="close-circle" size={16} color="#EF4444" />
+                <Text style={styles.journeyWarnText}>
+                  {localError || journeyError || previewError}
+                </Text>
+              </View>
+            )}
+
+            {preview && (
+              <View style={styles.journeyPreview}>
+                <View style={styles.journeyPreviewHead}>
+                  <Text style={styles.journeyPreviewTitle}>Road preview</Text>
+                  {previewing && <ActivityIndicator size="small" color={COLORS.primary} />}
+                </View>
+                <View style={styles.journeyStats}>
+                  <Text style={styles.journeyStatValue}>
+                    {preview.distance_m ? `${(preview.distance_m / 1000).toFixed(1)} km` : "—"}
+                  </Text>
+                  <Text style={styles.journeyStatLabel}>Distance</Text>
+                </View>
+                <View style={styles.journeyStats}>
+                  <Text style={styles.journeyStatValue}>
+                    {preview.duration_s ? `~${Math.max(1, Math.round(preview.duration_s / 60))} min` : "—"}
+                  </Text>
+                  <Text style={styles.journeyStatLabel}>Time</Text>
+                </View>
+                <View style={styles.journeyStats}>
+                  <Text style={styles.journeyStatValue}>{journeyStops.length}</Text>
+                  <Text style={styles.journeyStatLabel}>Stops</Text>
+                </View>
+
+                {journeyStops.length === 0 ? (
+                  <Text style={styles.journeyPreviewEmpty}>
+                    No global stops within 5 km of this road. You can still run it —
+                    nobody will be able to flag one along the way.
+                  </Text>
+                ) : (
+                  journeyStops.map((stop, i) => (
+                    <View key={stop.stop_id} style={styles.journeyStopRow}>
+                      <Text style={styles.journeyStopIndex}>{i + 1}</Text>
+                      <View style={styles.journeyStopTextWrap}>
+                        <Text style={styles.journeyStopName} numberOfLines={1}>
+                          {stop.name}
+                        </Text>
+                        {stop.nearby_landmark ? (
+                          <Text style={styles.journeyStopLandmark} numberOfLines={1}>
+                            near {stop.nearby_landmark}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Text style={styles.journeyStopDist}>
+                        {(stop.dist_along_m / 1000).toFixed(1)} km
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </View>
+            )}
+          </ScrollView>
+
+          <TouchableOpacity
+            style={[
+              styles.acceptBtn,
+              (!vehicle?.id || !preview || busyStarting) && { opacity: 0.5 },
+            ]}
+            disabled={!vehicle?.id || !preview || busyStarting}
+            onPress={handleStartJourney}
+            activeOpacity={0.85}
+          >
+            {busyStarting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="navigate" size={20} color="#fff" />
+                <Text style={styles.acceptBtnText}>
+                  {previewing ? "Checking the road…" : "Start journey"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Passenger list bottom sheet */}
-      <View style={styles.bottomSheet}>
+      <View style={[styles.bottomSheet, isJourneyFlow && !journeyStarted && styles.hiddenSheet]}>
         <View style={styles.handle} />
         <Text style={styles.sheetTitle}>Nearby Passengers</Text>
 
@@ -471,6 +761,50 @@ const styles = StyleSheet.create({
   },
   sheetTitle: { fontSize: 16, fontWeight: "800", color: "#111827", marginBottom: 12 },
   listContent: { paddingBottom: 8 },
+
+  /* journey panel */
+  hiddenSheet: { display: "none" },
+  journeyScroll: { flexGrow: 0, maxHeight: 210, marginBottom: 12 },
+  journeyPoints: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+  },
+  journeyPointRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  journeyDot: { width: 10, height: 10, borderRadius: 5 },
+  journeyPointText: { flex: 1, fontSize: 14, fontWeight: "700", color: "#111827" },
+  journeyConnector: {
+    width: 2, height: 8, backgroundColor: "#E5E7EB", marginLeft: 4, marginVertical: 2,
+  },
+  journeyMetaRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6 },
+  journeyMetaText: { fontSize: 13, color: "#6B7280", fontWeight: "600" },
+  journeyWarnRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "#FEF2F2", borderRadius: 12, padding: 10, marginBottom: 8,
+  },
+  journeyWarnText: { flex: 1, fontSize: 12, color: "#991B1B", fontWeight: "600" },
+  journeyPreview: {
+    backgroundColor: "#ECFDF5", borderRadius: 14, borderWidth: 1,
+    borderColor: "#BBF7D0", padding: 12, marginTop: 4,
+  },
+  journeyPreviewHead: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8,
+  },
+  journeyPreviewTitle: { fontSize: 13, fontWeight: "800", color: "#15803D" },
+  journeyStats: { marginBottom: 6 },
+  journeyStatValue: { fontSize: 16, fontWeight: "900", color: "#111827" },
+  journeyStatLabel: { fontSize: 11, color: "#6B7280", fontWeight: "600" },
+  journeyPreviewEmpty: { fontSize: 12, color: "#6B7280", lineHeight: 17 },
+  journeyStopRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 },
+  journeyStopIndex: {
+    width: 20, height: 20, borderRadius: 10, backgroundColor: "#F59E0B",
+    color: "#fff", fontSize: 11, fontWeight: "800", textAlign: "center", lineHeight: 20,
+  },
+  journeyStopTextWrap: { flex: 1 },
+  journeyStopName: { fontSize: 13, fontWeight: "700", color: "#111827" },
+  journeyStopLandmark: { fontSize: 11, color: "#9CA3AF" },
+  journeyStopDist: { fontSize: 12, color: "#6B7280", fontWeight: "600" },
 
   /* passenger card */
   passengerCard: {

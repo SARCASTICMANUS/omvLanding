@@ -23,6 +23,15 @@ class CitySerializer(serializers.ModelSerializer):
 
 
 class StopSerializer(serializers.ModelSerializer):
+    """
+    Read/write a stop, route-owned or global.
+
+    ``route`` is optional: omitting it creates a global stop — an
+    admin-maintained boarding point that is not positioned on any route and is
+    matched against driver journeys by proximity. ``is_global`` is derived, not
+    accepted, so the two can never disagree.
+    """
+
     short_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -30,13 +39,16 @@ class StopSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "route",
+            "city",
             "name",
             "location",
             "order",
+            "is_global",
             "short_name",
             "plus_code",
             "nearby_landmark",
         )
+        read_only_fields = ("is_global",)
 
     def get_short_name(self, obj):
         return obj.name.split(",")[0] if obj.name else obj.name

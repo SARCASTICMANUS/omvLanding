@@ -1070,11 +1070,45 @@ class TripFareDetailAPIView(APIView):
         ).first()
 
         if boarding_request and boarding_request.pickup_stop and boarding_request.drop_stop:
-            # Calculate per-passenger fare
+            # Prefer the fare recorded at settlement. Recomputing here meant the
+            # screen could show a different number from the one the passenger
+            # was actually debited whenever OSRM answered differently or the
+            # fare rates changed between the ride and the lookup.
+            if boarding_request.fare is not None:
+                dist_km = (
+                    round(boarding_request.segment_distance_m / 1000, 2)
+                    if boarding_request.segment_distance_m
+                    else 0.0
+                )
+                dur_min = (
+                    round(boarding_request.segment_duration_s / 60, 1)
+                    if boarding_request.segment_duration_s
+                    else None
+                )
+                breakdown = FareService.calculate_fare_breakdown(
+                    dist_km, vehicle_type, dur_min
+                )
+                breakdown["total_fare"] = float(boarding_request.fare)
+                # The segment, so a screen can label what was paid for.
+                breakdown["segment_distance_m"] = boarding_request.segment_distance_m
+                breakdown["segment_duration_s"] = boarding_request.segment_duration_s
+                breakdown["pickup_stop_name"] = boarding_request.pickup_stop.name
+                breakdown["drop_stop_name"] = (
+                    boarding_request.drop_stop.name
+                    if boarding_request.drop_stop
+                    else None
+                )
+                breakdown["settled"] = True
+                return Response({
+                    "success": True,
+                    "data": breakdown,
+                })
+
+            # Not settled yet (ride still running): fall back to the live
+            # estimate of the same segment so the screen has something to show.
             fare = RideService.calculate_segment_fare(
                 boarding_request.pickup_stop, boarding_request.drop_stop, vehicle_type
             )
-            # Get distance for breakdown
             pickup_lat = boarding_request.pickup_stop.location.y
             pickup_lng = boarding_request.pickup_stop.location.x
             drop_lat = boarding_request.drop_stop.location.y
@@ -1084,6 +1118,13 @@ class TripFareDetailAPIView(APIView):
             dur_min = estimate.get("duration_minutes", 0)
             breakdown = FareService.calculate_fare_breakdown(dist_km, vehicle_type, dur_min)
             breakdown["total_fare"] = fare
+            breakdown["pickup_stop_name"] = boarding_request.pickup_stop.name
+            breakdown["drop_stop_name"] = (
+                boarding_request.drop_stop.name
+                if boarding_request.drop_stop
+                else None
+            )
+            breakdown["settled"] = False
             return Response({
                 "success": True,
                 "data": breakdown,

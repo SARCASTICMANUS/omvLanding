@@ -101,6 +101,21 @@ class Route(models.Model):
     
 
 class Stop(models.Model):
+    """
+    A boarding location.
+
+    Two flavours share this table:
+
+    * route stop - ``route`` is set, ``order`` is its position on the route.
+      These belong to the fixed-route (legacy) dispatch flow.
+    * global stop - ``route`` is NULL. Admin-maintained boarding points that
+      are not bound to any route and are matched against driver journeys by
+      proximity (see tracking.services.corridor_service).
+
+    ``is_global`` is the readable discriminator; it is kept in sync with
+    ``route is null`` so callers never have to test both.
+    """
+
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
@@ -111,6 +126,18 @@ class Stop(models.Model):
         Route,
         related_name="stops",
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        help_text="NULL for admin-created global stops.",
+    )
+
+    city = models.ForeignKey(
+        City,
+        related_name="stops",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        help_text="Owning city for global stops; optional for route stops.",
     )
 
     name = models.CharField(
@@ -121,7 +148,15 @@ class Stop(models.Model):
         geography=True,
     )
 
-    order = models.PositiveIntegerField()
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Position on the route for route stops; unused for global stops.",
+    )
+
+    is_global = models.BooleanField(
+        default=False,
+        help_text="Admin-managed stop not attached to a route.",
+    )
 
     geometry = gis_models.LineStringField(
         geography=True,
@@ -154,7 +189,16 @@ class Stop(models.Model):
 
     class Meta:
         ordering = ["order"]
-        unique_together = [("route", "order")]
+        constraints = [
+            # Route stops must stay uniquely ordered per route. Global stops have
+            # no route, so the (route, order) pair must not be constrained for
+            # them or every global stop would collide at order=0.
+            models.UniqueConstraint(
+                fields=["route", "order"],
+                condition=models.Q(route__isnull=False),
+                name="transport_stop_route_order_unique",
+            ),
+        ]
         indexes = [
             GinIndex(
                 fields=["name"],
@@ -169,7 +213,18 @@ class Stop(models.Model):
 
     def __str__(self):
         return self.name
-    
+
+    def save(self, *args, **kwargs):
+        # Keep is_global consistent with the presence of a route so callers can
+        # query either without having to remember the null convention.
+        self.is_global = self.route_id is None
+        return super().save(*args, **kwargs)
+
+    @property
+    def coords(self):
+        """(lng, lat) tuple for this stop's location."""
+        return (self.location.x, self.location.y)
+
 class TripSchedule(models.Model):
     id = models.UUIDField(
         primary_key=True,

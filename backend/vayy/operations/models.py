@@ -110,6 +110,15 @@ class Vehicle(models.Model):
 class ActiveTrip(models.Model):
     """
     Live running trip.
+
+    Two flavours share this table:
+
+    * route trip - ``route`` is set; the vehicle follows a registered fixed
+      route (legacy dispatch flow, kept for backwards compatibility).
+    * journey - ``route`` is NULL; the driver declared a free-form
+      origin -> destination. The road path and the ordered global stops along
+      it live in Redis (tracking.services.journey_cache_service), while the
+      durable trip facts (origin/destination/distance/fare) stay here.
     """
 
     id = models.UUIDField(
@@ -128,6 +137,9 @@ class ActiveTrip(models.Model):
         Route,
         related_name="active_trips",
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        help_text="NULL for a free-form journey (no fixed route).",
     )
 
     trip_schedule = models.ForeignKey(
@@ -159,6 +171,33 @@ class ActiveTrip(models.Model):
         ),
         default="outbound",
         db_index=True,
+        help_text="Route-direction sense; meaningless for journeys.",
+    )
+
+    origin_point = gis_models.PointField(
+        geography=True,
+        null=True,
+        blank=True,
+        help_text="Journey start (driver-declared). NULL for route trips.",
+    )
+
+    destination_point = gis_models.PointField(
+        geography=True,
+        null=True,
+        blank=True,
+        help_text="Journey end (driver-declared). NULL for route trips.",
+    )
+
+    origin_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    destination_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
     )
 
     current_stop = models.ForeignKey(
@@ -246,10 +285,29 @@ class ActiveTrip(models.Model):
         ]
 
     def __str__(self):
-        return (
-            f"{self.route.name}"
-            f" ({self.status}/{self.direction})"
+        # route is NULL for journeys, so name the declared endpoints instead of
+        # dereferencing it.
+        label = self.route.name if self.route_id else self.journey_label
+        return f"{label} ({self.status})"
+
+    @property
+    def is_journey(self) -> bool:
+        """True when this trip is a free-form journey (no fixed route)."""
+        return self.route_id is None
+
+    @property
+    def journey_label(self) -> str:
+        origin = self.origin_name or (
+            f"{self.origin_point.y:.5f}, {self.origin_point.x:.5f}"
+            if self.origin_point
+            else "Origin"
         )
+        destination = self.destination_name or (
+            f"{self.destination_point.y:.5f}, {self.destination_point.x:.5f}"
+            if self.destination_point
+            else "Destination"
+        )
+        return f"{origin} → {destination}"
 
 
 class TripRating(models.Model):
@@ -457,6 +515,55 @@ class BoardingRequest(models.Model):
         db_index=True,
     )
 
+    otp = models.CharField(
+        max_length=4,
+        null=True,
+        blank=True,
+        help_text=(
+            "4-digit safety code for this boarding. Lives here rather than on "
+            "the trip because a journey serves many passengers at once."
+        ),
+    )
+
+    # ── settled segment ──────────────────────────────────────
+    #
+    # What this one passenger actually rode and paid for. One journey serves
+    # many passengers, so the trip's own distance and fare describe the driver's
+    # whole run, not any single rider -- these three describe the pickup→drop
+    # segment and are written when the journey settles.
+    segment_distance_m = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Road distance in metres for this passenger's pickup→drop "
+            "segment. NULL until the trip settles."
+        ),
+    )
+
+    segment_duration_s = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Road duration in seconds for this passenger's segment.",
+    )
+
+    fare = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=(
+            "Fare charged for this passenger's segment. Recorded at settlement "
+            "so the fare screens show what was actually billed rather than "
+            "recomputing it from stops that may later be edited."
+        ),
+    )
+
+    dropped_off_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the journey settled and this rider's fare was fixed.",
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
     )
@@ -490,8 +597,12 @@ class BoardingRequest(models.Model):
 
 class DispatchRequest(models.Model):
     """
-    Broadcast dispatch request — sent to all nearby drivers on a route.
-    First driver to accept wins; others get dismissed.
+    Broadcast dispatch request — sent to every driver who can serve it.
+
+    For the fixed-route flow the request is scoped by ``route``; for the
+    journey flow ``route`` is NULL and the candidate set comes from the global
+    stops passed on each driver's journey (Redis). First driver to accept wins;
+    the others get dismissed.
     """
 
     STATUS_PENDING = "pending"
@@ -521,6 +632,9 @@ class DispatchRequest(models.Model):
         Route,
         related_name="dispatch_requests",
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        help_text="NULL for a journey-scoped request (pickup by global stop).",
     )
 
     pickup_stop = models.ForeignKey(

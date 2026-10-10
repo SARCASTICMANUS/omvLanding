@@ -264,7 +264,9 @@ def expire_broadcast_request(request_id):
         max_rounds = dispatch_request.max_rounds or 3
         notified = {str(d) for d in (dispatch_request.notified_drivers or [])}
         dismissed = {str(d) for d in (dispatch_request.dismissed_drivers or [])}
-        route_id = str(dispatch_request.route_id)
+        # A journey-scoped request has no route; its candidates come from the
+        # journeys passing the pickup stop instead.
+        route_id = str(dispatch_request.route_id) if dispatch_request.route_id else None
         pickup_stop_id = str(dispatch_request.pickup_stop_id)
         drop_stop_id = str(dispatch_request.drop_stop_id) if dispatch_request.drop_stop else None
 
@@ -279,26 +281,26 @@ def expire_broadcast_request(request_id):
         return
 
     try:
-        # Stage 1: NEW drivers within 5km - skip everyone already pinged and
-        # everyone who dismissed.
-        candidates = DispatchService.find_best_candidates(
-            route_id,
-            pickup_stop_id,
-            limit=5,
-            exclude_drivers=notified | dismissed,
+        find_candidates = (
+            (lambda exclude: DispatchService.find_best_candidates(
+                route_id, pickup_stop_id, limit=5, exclude_drivers=exclude,
+            ))
+            if route_id
+            else (lambda exclude: DispatchService.find_candidates_for_stop(
+                pickup_stop_id, limit=5, exclude_drivers=exclude,
+            ))
         )
+
+        # Stage 1: NEW drivers - skip everyone already pinged and everyone who
+        # dismissed.
+        candidates = find_candidates(notified | dismissed)
 
         stage = "new"
         if not candidates:
             # Stage 2: fall back to ALL available drivers, minus the ones who
             # dismissed. This stage used to pass no exclusion at all, which is
             # what re-notified dismissive drivers every 45s.
-            candidates = DispatchService.find_best_candidates(
-                route_id,
-                pickup_stop_id,
-                limit=5,
-                exclude_drivers=dismissed,
-            )
+            candidates = find_candidates(dismissed)
             stage = "fallback"
 
         if candidates:
@@ -401,7 +403,7 @@ def process_boarding_event(self, payload):
         trip = ActiveTrip.objects.select_related("route").get(id=trip_id)
 
         channel_layer = get_channel_layer()
-        route_id = str(trip.route_id)
+        route_id = str(trip.route_id) if trip.route_id else None
 
         ws_payload = {
             "type": "passenger_update",
@@ -416,12 +418,16 @@ def process_boarding_event(self, payload):
             }
         }
 
-        async_to_sync(channel_layer.group_send)(
-            f"route_passengers_{route_id}",
-            ws_payload,
-        )
+        # A journey has no route, so there is no route_passengers group to tell.
+        # Its drivers hear about boardings through the trip's own socket, which
+        # they already hold.
+        if route_id:
+            async_to_sync(channel_layer.group_send)(
+                f"route_passengers_{route_id}",
+                ws_payload,
+            )
 
-        logger.info(f"Boarding event processed: {event_type} for passenger {passenger_id} on route {route_id}")
+        logger.info(f"Boarding event processed: {event_type} for passenger {passenger_id} on route {route_id or 'journey'}")
 
     except ActiveTrip.DoesNotExist:
         logger.error(f"Trip not found for boarding event: {trip_id}")

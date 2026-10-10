@@ -12,6 +12,7 @@ import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 import COLORS from "../../shared/constants/colors";
 import { colors } from "../../theme/colors";
+import { notifyAction } from "../../shared/lib/confirmAction";
 
 export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto" }) {
   const insets = useSafeAreaInsets();
@@ -54,7 +55,7 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
 
   const handleEndTrip = useCallback(async () => {
     if (!dispatchId) {
-      Alert.alert("Trip not found", "This ride has no dispatch id, so it cannot be ended.", [{ text: "OK" }]);
+      notifyAction({ title: "Trip not found", message: "This ride has no dispatch id, so it cannot be ended." });
       return;
     }
     if (endingTrip) return;
@@ -66,7 +67,7 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
       await dispatchRedux(completeDispatch(dispatchId)).unwrap();
     } catch (error) {
       const message = error?.message || "Could not end the trip. Please try again.";
-      Alert.alert("Could not end trip", message, [{ text: "OK" }]);
+      notifyAction({ title: "Could not end trip", message });
       setEndingTrip(false);
       return;
     }

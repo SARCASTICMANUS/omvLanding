@@ -6,6 +6,10 @@ from channels.layers import get_channel_layer
 from operations.models import (
     BoardingRequest,
 )
+# One name resolver for the whole app: ``get_full_name()`` reads first/last name,
+# which this User model does not define, so it is "" for every account and these
+# payloads were shipping blank or bare-email names to the driver.
+from operations.services.dispatch_service import _user_display_name
 
 from common.constants import (
     BOARDING_PENDING,
@@ -28,11 +32,15 @@ class BoardingService:
     def _notify_driver_boarding_update(trip, passenger_id, passenger_name, event_type, boarding_request_id, pickup_stop_name=None):
         """
         Send real-time WS notification to driver when a passenger raises/lowers hand.
-        Uses route_passengers_{route_id} group so the RoutePassengerTrackingConsumer receives it.
+
+        Route trips go out on ``route_passengers_{route_id}`` for the
+        RoutePassengerTrackingConsumer. A journey has no route, so its drivers
+        are reached on the trip's own group instead — the same trip_{trip_id}
+        socket the driver already holds for live tracking.
         """
         try:
             channel_layer = get_channel_layer()
-            route_id = str(trip.route_id)
+            route_id = str(trip.route_id) if trip.route_id else None
 
             ws_payload = {
                 "type": "passenger_update",
@@ -47,12 +55,18 @@ class BoardingService:
                 }
             }
 
-            async_to_sync(channel_layer.group_send)(
-                f"route_passengers_{route_id}",
-                ws_payload,
-            )
+            if route_id:
+                async_to_sync(channel_layer.group_send)(
+                    f"route_passengers_{route_id}",
+                    ws_payload,
+                )
+            else:
+                async_to_sync(channel_layer.group_send)(
+                    f"trip_{trip.id}",
+                    ws_payload,
+                )
 
-            logger.info(f"Boarding WS notification sent: {event_type} for passenger {passenger_id} on route {route_id}")
+            logger.info(f"Boarding WS notification sent: {event_type} for passenger {passenger_id} on route {route_id or 'journey'}")
         except Exception as e:
             logger.error(f"Failed to send boarding WS notification: {e}")
 
@@ -93,7 +107,7 @@ class BoardingService:
                     "request_id": str(request.id),
                     "trip_id": str(trip.id),
                     "passenger_id": str(passenger.id),
-                    "passenger_name": passenger.get_full_name() or passenger.email,
+                    "passenger_name": _user_display_name(passenger),
                     "pickup_stop_name": pickup_stop.name,
                 },
             )
@@ -104,7 +118,7 @@ class BoardingService:
         BoardingService._notify_driver_boarding_update(
             trip=trip,
             passenger_id=passenger.id,
-            passenger_name=passenger.get_full_name() or passenger.email,
+            passenger_name=_user_display_name(passenger),
             event_type="hand_raised",
             boarding_request_id=request.id,
             pickup_stop_name=pickup_stop.name,
@@ -155,7 +169,7 @@ class BoardingService:
         BoardingService._notify_driver_boarding_update(
             trip=trip,
             passenger_id=passenger.id,
-            passenger_name=passenger.get_full_name() or passenger.email,
+            passenger_name=_user_display_name(passenger),
             event_type="hand_lowered",
             boarding_request_id=request.id,
         )
@@ -202,7 +216,7 @@ class BoardingService:
         BoardingService._notify_driver_boarding_update(
             trip=trip,
             passenger_id=request.passenger.id,
-            passenger_name=request.passenger.get_full_name() or request.passenger.email,
+            passenger_name=_user_display_name(request.passenger),
             event_type="boarded",
             boarding_request_id=request.id,
         )

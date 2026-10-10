@@ -192,18 +192,48 @@ class ActiveTripSerializer(
         return None
 
 
+class BoardingStopNameSerializer(
+    serializers.ModelSerializer
+):
+    """Just enough of a stop to label a fare line."""
+
+    class Meta:
+        model = Stop
+
+        fields = ("id", "name", "nearby_landmark")
+
+        read_only_fields = fields
+
+
 class BoardingRequestSerializer(
     serializers.ModelSerializer
 ):
+    pickup_stop_detail = BoardingStopNameSerializer(
+        source="pickup_stop", read_only=True
+    )
+    drop_stop_detail = BoardingStopNameSerializer(
+        source="drop_stop", read_only=True
+    )
+    passenger_name = serializers.SerializerMethodField()
+
     class Meta:
         model = BoardingRequest
 
         fields = (
             "id",
             "passenger",
+            "passenger_name",
             "trip",
             "pickup_stop",
+            "pickup_stop_detail",
+            "drop_stop",
+            "drop_stop_detail",
             "status",
+            "otp",
+            "segment_distance_m",
+            "segment_duration_s",
+            "fare",
+            "dropped_off_at",
             "created_at",
             "updated_at",
         )
@@ -212,9 +242,27 @@ class BoardingRequestSerializer(
             "id",
             "passenger",
             "status",
+            "otp",
+            "segment_distance_m",
+            "segment_duration_s",
+            "fare",
+            "dropped_off_at",
             "created_at",
             "updated_at",
         )
+
+    def get_passenger_name(self, obj) -> str:
+        """
+        The rider's display name, for the driver's fare screen.
+
+        Read through the profile when present because that is the name shown to
+        other riders; the account name is the fallback when a profile is missing.
+        """
+        user = obj.passenger
+        profile = getattr(user, "passenger_profile", None)
+        if profile and profile.display_name:
+            return profile.display_name
+        return user.get_full_name() or user.email
 
 
 class FareConfigurationSerializer(serializers.ModelSerializer):
@@ -327,39 +375,138 @@ class BoardingRequestCreateSerializer(
                 }
             )
 
-        pickup_stop = (
-            Stop.objects
-            .filter(
-                id=attrs["pickup_stop"],
-                route_id=trip.route_id,
+        if trip.is_journey:
+            # A journey has route_id = NULL, so filtering on route_id would
+            # compile to `route_id IS NULL` and match *every* route-less stop --
+            # including ones that belong to no journey and that this driver will
+            # never pass. The set of stops a journey actually serves lives in
+            # Redis (the ordered-stops document written at journey start), so
+            # membership there is the only correct test.
+            pickup_stop, drop_stop = self._resolve_journey_stops(
+                trip,
+                attrs.get("pickup_stop"),
+                attrs.get("drop_stop"),
             )
-            .first()
-        )
+        else:
+            pickup_stop = (
+                Stop.objects
+                .filter(
+                    id=attrs["pickup_stop"],
+                    route_id=trip.route_id,
+                )
+                .first()
+            )
 
-        if not pickup_stop:
+            if not pickup_stop:
+                raise serializers.ValidationError(
+                    {
+                        "pickup_stop": (
+                            "Pickup stop not found "
+                            "for this trip route."
+                        )
+                    }
+                )
+
+            drop_stop_id = attrs.get("drop_stop")
+            if drop_stop_id:
+                drop_stop = Stop.objects.filter(
+                    id=drop_stop_id,
+                    route_id=trip.route_id,
+                ).first()
+                # Previously an unresolvable drop id silently became None, and
+                # calculate_segment_fare(None, ...) returns 0.0 -- so a bad id
+                # billed the passenger nothing instead of reporting the error.
+                if not drop_stop:
+                    raise serializers.ValidationError(
+                        {
+                            "drop_stop": (
+                                "Drop stop not found "
+                                "for this trip route."
+                            )
+                        }
+                    )
+            else:
+                drop_stop = None
+
+        attrs["trip"] = trip
+        attrs["pickup_stop"] = pickup_stop
+        attrs["drop_stop"] = drop_stop
+
+        return attrs
+
+    def _resolve_journey_stops(self, trip, pickup_stop_id, drop_stop_id):
+        """
+        Resolve and validate the pickup/drop stops of a journey hand-raise.
+
+        Both must be global stops sitting on *this* journey's cached path, and
+        the drop must come after the pickup along it -- otherwise the driver
+        would be asked to drive backwards and the resulting pickup->drop segment
+        fare would be nonsense.
+        """
+        from tracking.services.journey_cache_service import JourneyCacheService
+
+        entries = JourneyCacheService.get_ordered_stops(str(trip.id))
+        if not entries:
+            # Either the journey never cached its stops, or the cache was lost.
+            # Both are server-side faults: the driver's live screen is driven by
+            # that same cache, so it is already unusable for this trip.
             raise serializers.ValidationError(
                 {
                     "pickup_stop": (
-                        "Pickup stop not found "
-                        "for this trip route."
+                        "This journey's stops are no longer available. "
+                        "Please try again shortly."
                     )
                 }
             )
 
-        attrs["trip"] = trip
-        attrs["pickup_stop"] = pickup_stop
+        by_id = {str(e["stop_id"]): e for e in entries}
 
-        drop_stop_id = attrs.get("drop_stop")
+        def _lookup(stop_id, field, label):
+            entry = by_id.get(str(stop_id))
+            if entry is None:
+                raise serializers.ValidationError(
+                    {
+                        field: (
+                            f"{label} is not a stop on this journey. "
+                            "Choose one of the stops the driver is "
+                            "passing."
+                        )
+                    }
+                )
+            stop = Stop.objects.filter(id=entry["stop_id"]).first()
+            if stop is None:
+                # Cached stop no longer exists in the database.
+                raise serializers.ValidationError(
+                    {
+                        field: (
+                            f"{label} is no longer available. "
+                            "Please choose another stop."
+                        )
+                    }
+                )
+            return stop, entry
+
+        pickup_stop, pickup_entry = _lookup(
+            pickup_stop_id, "pickup_stop", "Pickup stop"
+        )
+
         if drop_stop_id:
-            drop_stop = Stop.objects.filter(
-                id=drop_stop_id,
-                route_id=trip.route_id,
-            ).first()
-            attrs["drop_stop"] = drop_stop
+            drop_stop, drop_entry = _lookup(
+                drop_stop_id, "drop_stop", "Drop stop"
+            )
+            if drop_entry["dist_along_m"] < pickup_entry["dist_along_m"]:
+                raise serializers.ValidationError(
+                    {
+                        "drop_stop": (
+                            "Drop stop must come after the pickup stop "
+                            "on this journey."
+                        )
+                    }
+                )
         else:
-            attrs["drop_stop"] = None
+            drop_stop = None
 
-        return attrs
+        return pickup_stop, drop_stop
 
 
 class DispatchRequestSerializer(serializers.Serializer):

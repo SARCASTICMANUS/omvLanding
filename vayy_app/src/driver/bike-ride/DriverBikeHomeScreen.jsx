@@ -235,7 +235,14 @@ export default function DriverBikeHomeScreen({ navigation }) {
   const handleNext = () => {
     if (!canProceed) return;
     persistRecentSearch(pickup, destination);
-    navigation.navigate("DriverRouteSearch", { pickup, destination, mode: "bike" });
+    // Journeys, not routes: the driver declares where they are going and the
+    // server resolves the path plus the global stops along it. The route picker
+    // stays registered for the fixed-route flow.
+    navigation.navigate("DriverFindPassengers", {
+      origin: pickup,
+      destination,
+      mode: "bike",
+    });
   };
 
   const handleSwap = () => {
@@ -355,7 +362,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
                 onPress={handleNext}
               >
                 <Ionicons name="map-outline" size={18} color="#fff" />
-                <Text style={styles.primaryBtnText}>Find Best Route</Text>
+                <Text style={styles.primaryBtnText}>Start Journey</Text>
               </TouchableOpacity>
 
               {recentSearches.length > 0 && (

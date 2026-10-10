@@ -4,15 +4,6 @@ import { AUTH, OPERATIONS, TRANSPORT, TRACKING, RIDE } from "../../constants";
 /**
  * Fetch passenger dashboard data (active trips, etc.)
  */
-export const getPassengerDashboard = async (params) => {
-  try {
-    const response = await api.get(OPERATIONS.trips, { params });
-    return response.data;
-  } catch (error) {
-    throw normalizeApiError(error, "Unable to fetch passenger dashboard.");
-  }
-};
-
 /**
  * Fetch recent searches for the passenger
  */
@@ -41,17 +32,6 @@ export const saveRecentSearch = async (searchData) => {
 /**
  * Fetch nearby stops
  */
-export const getNearbyStops = async (lat, lon, radius = 1500) => {
-  try {
-    const response = await api.get(TRANSPORT.stopsNearby, {
-      params: { lat, lng: lon, radius },
-    });
-    return response.data;
-  } catch (error) {
-    throw normalizeApiError(error, "Unable to fetch nearby stops.");
-  }
-};
-
 /**
  * Fetch nearby vehicles (autos/bikes) near a location.
  */
@@ -84,6 +64,12 @@ export const createBoardingRequest = async (tripId, stopId) => {
   }
 };
 
+/**
+ * The signed-in passenger's own boarding requests.
+ *
+ * Each settled one carries the segment the passenger actually rode and the fare
+ * they were charged, which is what their fare screen renders.
+ */
 /**
  * Cancel a boarding request.
  */
@@ -122,27 +108,6 @@ export const searchRoutesByLocation = async (originLat, originLng, destLat, dest
 /**
  * Fetch full route detail including stops and schedules.
  */
-export const getRouteDetail = async (routeId) => {
-  try {
-    const response = await api.get(`${TRANSPORT.routes}${routeId}/`);
-    return response.data;
-  } catch (error) {
-    throw normalizeApiError(error, "Unable to fetch route details.");
-  }
-};
-
-/**
- * Fetch route geometry (OSRM-backed LineString)
- */
-export const getRouteGeometry = async (routeId) => {
-  try {
-    const response = await api.get(`${TRANSPORT.routes}${routeId}/geometry/`);
-    return response.data;
-  } catch (error) {
-    throw normalizeApiError(error, "Unable to fetch route geometry.");
-  }
-};
-
 export const getRideHistory = async () => {
   try {
     const response = await api.get(RIDE.history);
@@ -152,16 +117,56 @@ export const getRideHistory = async () => {
   }
 };
 
-export default {
-  getPassengerDashboard,
-  getRecentSearches,
-  saveRecentSearch,
-  getNearbyStops,
-  getNearbyVehicles,
-  createBoardingRequest,
-  cancelBoardingRequest,
-  getRouteDetail,
-  getRouteGeometry,
-  searchRoutesByLocation,
-  getRideHistory,
+/**
+ * Find live vehicles running the corridor between two points.
+ *
+ * This is what the trip planner's single button calls: it resolves the road
+ * between the searched pickup and destination and returns the vehicles whose
+ * journey serves a stop on it. Read-only - nothing is created.
+ */
+export const searchCorridorVehicles = async (origin, destination, options = {}) => {
+  try {
+    const response = await api.post(TRACKING.corridorVehicles, {
+      origin: { lat: origin.lat, lng: origin.lng },
+      destination: { lat: destination.lat, lng: destination.lng },
+      ...(options.radius ? { radius: options.radius } : {}),
+      ...(options.limit ? { limit: options.limit } : {}),
+    });
+    const data = response.data?.data || response.data || {};
+    return {
+      path: data.path || [],
+      stops: data.stops || [],
+      vehicles: data.vehicles || [],
+      distance_m: data.distance_m ?? null,
+      duration_s: data.duration_s ?? null,
+      origin: data.origin || null,
+      destination: data.destination || null,
+    };
+  } catch (error) {
+    throw normalizeApiError(error, "Could not find vehicles on this route.");
+  }
 };
+
+/**
+ * Raise a hand at a global stop.
+ *
+ * `routeId` is intentionally not sent: omitting it makes the request
+ * journey-scoped, so it is offered to the drivers whose journeys pass the stop
+ * instead of to whoever happens to run a fixed route.
+ */
+export const raiseHandAtStop = async ({ pickupStopId, dropStopId, lat, lon }) => {
+  try {
+    const response = await api.post(TRACKING.raiseHand, {
+      pickup_stop_id: String(pickupStopId),
+      ...(dropStopId ? { dropoff_stop_id: String(dropStopId) } : {}),
+      lat: Number(lat),
+      lng: Number(lon),
+    });
+    return response.data;
+  } catch (error) {
+    throw normalizeApiError(error, "Unable to raise your hand.");
+  }
+};
+
+// No default export: every consumer imports the named functions directly, and
+// the old default object listed several helpers that nothing called.

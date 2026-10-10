@@ -31,3 +31,21 @@ class TrackingEventPublisher:
             routing_key="boarding.request.event",
             payload=payload,
         )
+
+    @staticmethod
+    def publish_eta_update(payload: dict):
+        """
+        ETA change for a trip.
+
+        Published on the trip exchange rather than the channel layer so ETA
+        consumers outside this process (the trip stream, admin console) see the
+        same events the live path does. Referenced by ETAService; it was called
+        but never defined, so every ETA refresh raised AttributeError and the
+        cache was never even written.
+        """
+        from common.constants import EXCHANGE_TRIP, RK_TRIP_LOCATION
+        RabbitMQService.publish(
+            exchange=EXCHANGE_TRIP,
+            routing_key=RK_TRIP_LOCATION,
+            payload=payload,
+        )

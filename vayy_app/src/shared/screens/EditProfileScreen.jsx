@@ -21,6 +21,7 @@ import RADIUS from "../constants/radius";
 import SPACING from "../constants/spacing";
 import VayyButton from "../components/common/VayyButton";
 import { DRIVER_ROLES } from "../../constants";
+import { notifyAction } from "../lib/confirmAction";
 
 export default function EditProfileScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -46,7 +47,7 @@ export default function EditProfileScreen({ navigation }) {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission needed", "Please allow access to your photos to upload a profile picture.");
+      notifyAction({ title: "Permission needed", message: "Please allow access to your photos to upload a profile picture." });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -71,7 +72,7 @@ export default function EditProfileScreen({ navigation }) {
     if (updateProfile.fulfilled.match(result)) {
       navigation.goBack();
     } else {
-      Alert.alert("Error", result.payload?.message || "Failed to update profile");
+      notifyAction({ title: "Error", message: result.payload?.message || "Failed to update profile" });
     }
   };
 

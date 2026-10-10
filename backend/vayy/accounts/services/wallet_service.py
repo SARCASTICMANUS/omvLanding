@@ -290,7 +290,11 @@ class WalletService:
             return existing
 
         wallet = Wallet.objects.select_for_update().get_or_create(user=user)[0]
-        wallet.balance += amount
+        # A freshly created Wallet has its balance as the field default, which
+        # Django hands back as float 0.0 rather than Decimal. Adding a Decimal to
+        # that raises TypeError, so normalise before arithmetic — otherwise the
+        # first payout to a new account fails.
+        wallet.balance = Decimal(str(wallet.balance)) + amount
         wallet.save(update_fields=["balance", "updated_at"])
 
         if existing is not None:

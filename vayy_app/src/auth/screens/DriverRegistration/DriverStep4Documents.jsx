@@ -7,6 +7,7 @@ import COLORS from "../../../shared/constants/colors";
 import ProgressBar from "../../components/ProgressBar";
 import ImageUploadCard from "../../components/ImageUploadCard";
 import BottomStickyButton from "../../components/BottomStickyButton";
+import { notifyAction } from "../../../shared/lib/confirmAction";
 
 const SECTIONS = [
   { key: "dl", label: "Driving Licence" },
@@ -44,7 +45,7 @@ export default function DriverStep4Documents({ onNext, onBack }) {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission Required", "Please grant gallery access to upload documents.");
+        notifyAction({ title: "Permission Required", message: "Please grant gallery access to upload documents." });
         return;
       }
       setUploadStatus((prev) => ({ ...prev, [field]: "uploading" }));
@@ -70,7 +71,7 @@ export default function DriverStep4Documents({ onNext, onBack }) {
             return next;
           });
         } else {
-          Alert.alert("Conversion Failed", "Could not process the image. Please try selecting it again.");
+          notifyAction({ title: "Conversion Failed", message: "Could not process the image. Please try selecting it again." });
           setUploadStatus((prev) => ({ ...prev, [field]: "idle" }));
           setDocUris((p) => ({ ...p, [field]: null }));
         }

@@ -5,6 +5,7 @@ import DriverStep1Personal from "./DriverStep1Personal";
 import DriverStep6OTP from "./DriverStep6OTP";
 import { sendRegistrationOtp, verifyAndRegister, loginUser } from "../../authSlice";
 import { setField } from "../../../store/slices/onboardingSlice";
+import { notifyAction } from "../../../shared/lib/confirmAction";
 
 export default function DriverRegistrationScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -48,12 +49,14 @@ export default function DriverRegistrationScreen({ navigation }) {
         result.payload?.error ||
         "Failed to send Safety Code";
       if (msg.toLowerCase().includes("already exists")) {
-        Alert.alert("Account Exists", "An account with this email already exists. Please login.", [
-          { text: "Go to Login", onPress: () => navigation.navigate("LoginPage") },
-        ]);
+        notifyAction({
+          title: "Account Exists",
+          message: "An account with this email already exists. Please login.",
+        });
+        navigation.navigate("LoginPage");
         return false;
       }
-      Alert.alert("Error", msg);
+      notifyAction({ title: "Error", message: msg });
       return false;
     }
     return true;
@@ -71,7 +74,7 @@ export default function DriverRegistrationScreen({ navigation }) {
         result.payload?.message ||
         result.payload?.error ||
         "Verification failed";
-      Alert.alert("Verification Failed", msg);
+      notifyAction({ title: "Verification Failed", message: msg });
       return;
     }
 
@@ -90,11 +93,11 @@ export default function DriverRegistrationScreen({ navigation }) {
 
     if (loginUser.rejected.match(loginResult)) {
       console.error("[Reg] Login failed:", loginResult.payload);
-      Alert.alert(
-        "Login Failed",
-        "Account created but login failed. Please go to Login page and sign in.",
-        [{ text: "Go to Login", onPress: () => navigation.navigate("LoginPage") }],
-      );
+      notifyAction({
+        title: "Login Failed",
+        message: "Account created but login failed. Please go to Login page and sign in.",
+      });
+      navigation.navigate("LoginPage");
       return;
     }
 

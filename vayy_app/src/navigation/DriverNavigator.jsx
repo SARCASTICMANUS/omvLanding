@@ -4,6 +4,7 @@ import { createStackNavigator } from "@react-navigation/stack";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AppState } from "react-native";
 
 import COLORS from "../shared/constants/colors";
 import { ROLE } from "../constants";
@@ -21,6 +22,7 @@ import HelpSupportScreen from "../shared/screens/HelpSupportScreen";
 import BikeFindPassengerScreen from "../driver/bike-ride/BikeFindPassengerScreen";
 import VerificationPopup from "../shared/components/VerificationPopup";
 import { fetchVerificationStatus } from "../store/slices/profileSlice";
+import { fetchActiveJourney } from "../store/slices/journeySlice";
 
 // Profile Completion Screen
 import DriverProfileCompletionScreen from "../auth/screens/DriverRegistration/DriverProfileCompletionScreen";
@@ -125,6 +127,63 @@ export default function DriverNavigator() {
   };
 
   useEffect(() => { checkVerification(); }, [dispatch]);
+
+  // A driver with a journey already running must not be left on the home or
+  // start screen: it invites them to begin a second journey, and hides the one
+  // already live. So resume is checked on mount (the cold-start case, where the
+  // trip id was only ever in memory) and on every return to the foreground.
+  const resumeRef = useRef(false);
+  const onJourneyLive = useRef(
+    (journey) =>
+      navigation.navigate(
+        "DriverLiveTracking",
+        journey
+          ? {
+              // The live-tracking screen runs a journey; a fixed-route trip
+              // continues to arrive here with its own route object.
+              journey,
+              driverId: journey.driver_id,
+              route: journey.is_journey
+                ? { id: journey.trip_id, vehicle_number: journey.vehicle_number }
+                : undefined,
+              activeTrip: {
+                trip_id: journey.trip_id,
+                vehicle_id: journey.vehicle_id,
+                vehicle_type: journey.vehicle_type,
+                vehicle_number: journey.vehicle_number,
+              },
+            }
+          : {}
+      )
+  ).current;
+
+  React.useEffect(() => {
+    if (resumeRef.current) return;
+    resumeRef.current = true;
+
+    dispatch(fetchActiveJourney())
+      .unwrap()
+      .then((journey) => {
+        // Null means nothing running, which is the common case.
+        if (journey?.trip_id) onJourneyLive(journey);
+      })
+      .catch(() => {
+        // Offline or the request failed. Leave the driver where they are rather
+        // than blocking the app on a resume check.
+      });
+
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      dispatch(fetchActiveJourney())
+        .unwrap()
+        .then((journey) => {
+          if (journey?.trip_id) onJourneyLive(journey);
+        })
+        .catch(() => {});
+    });
+
+    return () => sub?.remove?.();
+  }, [dispatch, onJourneyLive]);
 
   // Re-check on stack state changes (push/pop within stack)
   useEffect(() => {

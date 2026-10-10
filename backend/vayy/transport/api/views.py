@@ -14,8 +14,15 @@ from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point, LineString
 from django.contrib.gis.measure import D
 
-from common.constants import VEHICLE_AUTO, ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER
+from common.constants import (
+    VEHICLE_AUTO,
+    ROLE_BIKE_DRIVER,
+    ROLE_AUTO_DRIVER,
+    PASSENGER_STOP_RADIUS_M,
+)
 from accounts.permissions import IsAdmin
+from common.responses import error_response, success_response
+from transport.services import stop_import_service
 from transport.api.serializers import (
     CitySerializer,
     NearbyStopSerializer,
@@ -349,6 +356,95 @@ class NearbyStopListAPIView(APIView):
 
         resp = Response(NearbyStopSerializer(stops, many=True).data, status=status.HTTP_200_OK)
         return resp
+
+
+class GlobalStopQuerySerializer(serializers.Serializer):
+    """
+    Query for admin-created global stops near a point.
+
+    The radius defaults to the passenger walking radius, because the question
+    this answers is "can I walk to a stop from here?".
+    """
+
+    lat = serializers.FloatField()
+    lng = serializers.FloatField()
+    radius = serializers.IntegerField(
+        required=False,
+        default=PASSENGER_STOP_RADIUS_M,
+        min_value=1,
+        max_value=10000,
+    )
+
+    def validate_lat(self, value):
+        if value < -90 or value > 90:
+            raise serializers.ValidationError("Latitude must be between -90 and 90.")
+        return value
+
+    def validate_lng(self, value):
+        if value < -180 or value > 180:
+            raise serializers.ValidationError("Longitude must be between -180 and 180.")
+        return value
+
+
+class GlobalStopSerializer(serializers.ModelSerializer):
+    """A global stop, as the passenger app needs it."""
+
+    distance_meters = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Stop
+        fields = [
+            "id",
+            "name",
+            "location",
+            "nearby_landmark",
+            "city",
+            "distance_meters",
+        ]
+
+    def get_distance_meters(self, obj):
+        return getattr(obj, "distance_meters", None)
+
+
+class GlobalStopListAPIView(APIView):
+    """
+    GET /api/transport/global-stops/nearby/?lat=&lng=&radius=
+    Admin-created global stops near a point.
+
+    These are the stops a passenger can raise a hand at, and the ones a driver's
+    journey is matched against. Route stops are excluded: they are ordered
+    positions on a fixed line and mean nothing without their route.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        serializer = GlobalStopQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+
+        lat = serializer.validated_data["lat"]
+        lng = serializer.validated_data["lng"]
+        radius = serializer.validated_data["radius"]
+
+        point = Point(lng, lat, srid=4326)
+
+        stops = (
+            Stop.objects
+            .filter(is_global=True, location__distance_lte=(point, D(m=radius)))
+            .annotate(distance=Distance("location", point))
+            .order_by("distance")[:50]
+        )
+
+        for stop in stops:
+            stop.distance_meters = stop.distance.m if stop.distance else None
+
+        return Response(
+            {
+                "success": True,
+                "data": GlobalStopSerializer(stops, many=True).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 class NearbyStopQuerySerializer(serializers.Serializer):
     lat = serializers.FloatField()
@@ -836,9 +932,26 @@ class AdminRouteViewSet(viewsets.ModelViewSet):
 
 
 class AdminStopViewSet(viewsets.ModelViewSet):
-    queryset = Stop.objects.all().select_related("route")
+    """
+    Admin CRUD for stops, route-owned and global.
+
+    ``?scope=global`` lists only the global stops and ``?scope=route`` only the
+    route-owned ones; no filter returns everything, which is how this behaved
+    before global stops existed.
+    """
+
+    queryset = Stop.objects.all().select_related("route", "city")
     serializer_class = StopSerializer
     permission_classes = [IsAdmin]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        scope = self.request.query_params.get("scope")
+        if scope == "global":
+            return queryset.filter(is_global=True)
+        if scope == "route":
+            return queryset.filter(is_global=False)
+        return queryset
 
     def list(self, request, *args, **kwargs):
         resp = super().list(request, *args, **kwargs)
@@ -949,6 +1062,83 @@ class AdminCityViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         super().destroy(request, *args, **kwargs)
         return Response({"success": True, "message": "City deleted"}, status=status.HTTP_200_OK)
+
+
+class AdminStopBulkUploadAPIView(APIView):
+    """
+    Create many stops from a CSV in one request.
+
+    A row without a route column becomes a global stop; with one, a route stop.
+    Duplicates are skipped rather than created, so re-uploading a corrected file
+    is safe. Send ``dry_run`` to validate and report without writing.
+    """
+
+    permission_classes = [IsAdmin]
+
+    # A spreadsheet of stops is small; the default body limit is fine but the
+    # file is read whole, so cap it to avoid buffering something absurd.
+    MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+
+    def post(self, request):
+        upload = request.FILES.get("file")
+        if upload is None:
+            return error_response("Attach a CSV file in the 'file' field.")
+
+        if upload.size > self.MAX_UPLOAD_BYTES:
+            return error_response(
+                f"File is larger than {self.MAX_UPLOAD_BYTES // (1024 * 1024)}MB."
+            )
+
+        # Trust the bytes over the client's content-type; spreadsheets often
+        # send a generic type, and decoding fails loudly below if it is not CSV.
+        try:
+            csv_text = upload.read().decode("utf-8-sig")
+        except UnicodeDecodeError:
+            return error_response("The file must be UTF-8 encoded CSV.")
+
+        dry_run = str(request.data.get("dry_run", "")).lower() in ("1", "true", "yes")
+
+        try:
+            summary, created = stop_import_service.bulk_import(
+                csv_text, dry_run=dry_run
+            )
+        except stop_import_service.RowError as exc:
+            return error_response(str(exc))
+
+        # Route path geometry is built from ordered stops; a CSV import leaves
+        # it empty, so the existing recalculate action refreshes it on demand.
+        logger.info(
+            "STOP IMPORT: dry_run=%s created=%s duplicate=%s invalid=%s by %s",
+            dry_run,
+            summary["created"],
+            summary["duplicate"],
+            summary["invalid"],
+            getattr(request.user, "email", "unknown"),
+        )
+
+        verb = "Would import" if dry_run else "Imported"
+        message = (
+            f"{verb} {summary['created']} of {summary['total']} stops"
+            f" ({summary['duplicate']} duplicate, {summary['invalid']} invalid)."
+        )
+
+        return success_response(
+            data={
+                "summary": summary,
+                "created": [
+                    {
+                        "id": str(stop.id),
+                        "name": stop.name,
+                        "is_global": stop.is_global,
+                        "location": [stop.location.x, stop.location.y],
+                    }
+                    for stop in created
+                ],
+                "dry_run": dry_run,
+            },
+            message=message,
+            status_code=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
 
 class AdminRouteImportAPIView(APIView):

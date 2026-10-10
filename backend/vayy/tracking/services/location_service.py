@@ -15,6 +15,7 @@ from tracking.models import HybridLog
 from tracking.services.geo_service import GeoService
 from tracking.services.redis_geo_service import RedisGeoService
 from tracking.services.redis_route_service import RedisRouteService
+from tracking.services.journey_cache_service import JourneyCacheService
 
 logger = logging.getLogger(__name__)
 
@@ -501,7 +502,12 @@ class LocationService:
                 # ── 3. Enqueue HybridLog to Redis (zero DB lock) ─
                 LocationService._enqueue_hybrid_log(vehicle, active_trip, point, speed, heading)
 
-                # ── 4. Route-based processing ────────────────────
+                # ── 4. Path-based processing ─────────────────────
+                # Route trips follow a registered line; journeys follow the path
+                # cached in Redis. Both snap the GPS fix to a polyline and track
+                # progress along it, so the branches share the snapping helpers
+                # and differ only in where the geometry and the stop list come
+                # from.
                 next_stop_eta_list = []
                 etas = {}
                 dist_along = None
@@ -512,61 +518,151 @@ class LocationService:
                 current_stop = None
                 segment_idx = None
                 route_stops = []
+                journey_stops: List[Dict[str, Any]] = []
+                is_journey = False
                 if active_trip:
-                    route_stops = LocationService._get_route_stops_cached(active_trip.route_id)
+                    is_journey = active_trip.is_journey
 
-                    if route_stops:
-                        route_coords = LocationService._get_route_coords(route_stops)
-
-                        # 4a. Snap GPS to route (±5 segment window)
-                        last_seg = getattr(state, "current_segment_index", None)
-                        snapped, seg_idx, dist_to_route, dist_along = _snap_to_route_windowed(
-                            gps_tuple, route_coords, last_seg, window=5
+                    if is_journey:
+                        # 4j. Journey: geometry and stops come from Redis.
+                        journey_doc = JourneyCacheService.get_journey(str(active_trip.id))
+                        journey_stops = JourneyCacheService.get_ordered_stops(
+                            str(active_trip.id)
                         )
-                        state.snapped_location = Point(snapped[0], snapped[1], srid=4326)
-                        state.distance_along_route_m = dist_along
+                        if journey_doc and len(journey_doc.get("path") or []) >= 2:
+                            # Stored as [lat, lng]; the snap helpers want
+                            # (lng, lat).
+                            journey_coords = [
+                                (c[1], c[0]) for c in journey_doc["path"]
+                            ]
+                            last_seg = getattr(state, "current_segment_index", None)
+                            snapped, segment_idx, dist_to_path, dist_along = (
+                                _snap_to_route_windowed(
+                                    gps_tuple, journey_coords, last_seg, window=5
+                                )
+                            )
+                            state.snapped_location = Point(
+                                snapped[0], snapped[1], srid=4326
+                            )
+                            state.distance_along_route_m = dist_along
 
-                        # 4b. Determine direction
-                        direction = _determine_direction(
-                            route_stops,
-                            _point_to_tuple(route_stops[0].location),
-                            _point_to_tuple(route_stops[-1].location),
-                            gps_tuple,
-                            dist_along,
-                            route_stops[-1].cumulative_distance_m,
-                        )
-                        active_trip.direction = direction
+                            # Journeys have no outbound/inbound sense: progress
+                            # along the declared path is the meaningful measure,
+                            # so direction is left untouched rather than
+                            # fabricated.
+                            current_stop = LocationService._current_journey_stop(
+                                journey_stops, dist_along
+                            )
+                            state.active_trip = active_trip
 
-                        # 4c. Determine current stop & segment
-                        stop_idx, segment_idx = LocationService._find_current_stop(
-                            route_stops, direction, dist_along
-                        )
-                        current_stop = route_stops[stop_idx] if stop_idx < len(route_stops) else route_stops[-1]
-                        state.current_stop_index = current_stop.order
-                        state.current_segment_index = segment_idx
-                        state.active_trip = active_trip
+                            active_trip.current_location = point
+                            active_trip.last_updated = timezone.now()
+                            if current_stop:
+                                # Journey stops are global Stops, so the FK is
+                                # valid; it records which stop the vehicle is
+                                # heading to. Included in update_fields, without
+                                # which the assignment would be discarded.
+                                active_trip.current_stop_id = current_stop["stop_id"]
+                                active_trip.save(update_fields=[
+                                    "current_location", "last_updated", "current_stop",
+                                ])
+                            else:
+                                active_trip.save(update_fields=[
+                                    "current_location", "last_updated",
+                                ])
 
-                        active_trip.current_stop = current_stop
-                        active_trip.current_segment_index = segment_idx
-                        active_trip.current_location = point
-                        active_trip.last_updated = timezone.now()
-                        active_trip.save(update_fields=[
-                            "current_location", "last_updated",
-                            "direction", "current_stop", "current_segment_index",
-                        ])
+                            remaining_m = max(
+                                0.0,
+                                float(journey_doc.get("distance_m") or 0)
+                                - float(dist_along or 0),
+                            )
+                            remaining_distance_km = round(remaining_m / 1000, 2)
+                            speed_for_eta = speed_mps or (30 * 1000 / 3600)
+                            remaining_duration_min = round(
+                                remaining_m / speed_for_eta / 60.0, 1
+                            )
+                            next_stop_eta_list = (
+                                LocationService._build_journey_eta_list(
+                                    journey_stops,
+                                    dist_along,
+                                    float(journey_doc.get("distance_m") or 0),
+                                    speed_for_eta,
+                                )
+                            )
+                        else:
+                            # Journey row without its cached path. Nothing can be
+                            # derived from it, so skip rather than pretend the
+                            # vehicle is at distance 0 of a path we do not have.
+                            logger.warning(
+                                "Journey %s has no cached path; skipping path processing",
+                                active_trip.id,
+                            )
+                    else:
+                        route_stops = LocationService._get_route_stops_cached(active_trip.route_id)
 
-                        # 4d. Compute downstream ETAs
-                        etas = _compute_downstream_etas(
-                            route_stops, current_stop.order, direction, dist_along, speed_mps
-                        )
-                        next_stop_eta_list = LocationService._build_eta_list(etas, route_stops, direction)
+                        if route_stops:
+                            route_coords = LocationService._get_route_coords(route_stops)
+
+                            # 4a. Snap GPS to route (±5 segment window)
+                            last_seg = getattr(state, "current_segment_index", None)
+                            snapped, seg_idx, dist_to_route, dist_along = _snap_to_route_windowed(
+                                gps_tuple, route_coords, last_seg, window=5
+                            )
+                            state.snapped_location = Point(snapped[0], snapped[1], srid=4326)
+                            state.distance_along_route_m = dist_along
+
+                            # 4b. Determine direction
+                            direction = _determine_direction(
+                                route_stops,
+                                _point_to_tuple(route_stops[0].location),
+                                _point_to_tuple(route_stops[-1].location),
+                                gps_tuple,
+                                dist_along,
+                                route_stops[-1].cumulative_distance_m,
+                            )
+                            active_trip.direction = direction
+
+                            # 4c. Determine current stop & segment
+                            stop_idx, segment_idx = LocationService._find_current_stop(
+                                route_stops, direction, dist_along
+                            )
+                            current_stop = route_stops[stop_idx] if stop_idx < len(route_stops) else route_stops[-1]
+                            state.current_stop_index = current_stop.order
+                            state.current_segment_index = segment_idx
+                            state.active_trip = active_trip
+
+                            active_trip.current_stop = current_stop
+                            active_trip.current_segment_index = segment_idx
+                            active_trip.current_location = point
+                            active_trip.last_updated = timezone.now()
+                            active_trip.save(update_fields=[
+                                "current_location", "last_updated",
+                                "direction", "current_stop", "current_segment_index",
+                            ])
+
+                            # 4d. Compute downstream ETAs
+                            etas = _compute_downstream_etas(
+                                route_stops, current_stop.order, direction, dist_along, speed_mps
+                            )
+                            next_stop_eta_list = LocationService._build_eta_list(etas, route_stops, direction)
 
                 state.save()
 
                 def _post_commit():
                     # ── 5. Cache route state (after commit) ──────
+                    # Only route trips: a journey has no route id and its own
+                    # path/ordered stops already live in Redis, written once at
+                    # journey start. Re-writing per-GPS-fix would be redundant
+                    # work on data that does not change.
                     try:
-                        if active_trip and route_stops and snapped is not None and direction:
+                        if (
+                            not is_journey
+                            and active_trip
+                            and route_stops
+                            and snapped is not None
+                            and direction
+                            and current_stop is not None
+                        ):
                             RedisRouteService.set_vehicle_route_state(
                                 vehicle_id=str(vehicle_id),
                                 route_id=str(active_trip.route_id),
@@ -613,17 +709,17 @@ class LocationService:
                 transaction.on_commit(_post_commit)
 
             # ── 7. Broadcast via WebSocket (after commit, sync) ─
-            total_route_m = 0
-            if route_stops:
+            # Remaining distance was already computed on the journey branch;
+            # for a route trip it is the rest of the route from here.
+            if route_stops and not is_journey:
                 total_route_m = max(
                     (s.cumulative_distance_m for s in route_stops if s.cumulative_distance_m),
                     default=0
                 )
-            remaining_m = max(0, total_route_m - (dist_along or 0))
-            remaining_distance_km = round(remaining_m / 1000, 2)
-            remaining_duration_min = None
-            if etas:
-                remaining_duration_min = round(max(etas.values()) / 60, 1)
+                remaining_m = max(0, total_route_m - (dist_along or 0))
+                remaining_distance_km = round(remaining_m / 1000, 2)
+                if etas:
+                    remaining_duration_min = round(max(etas.values()) / 60, 1)
 
             # Distance from the vehicle to the passenger's pickup stop
             pickup_distance_km = None
@@ -658,7 +754,15 @@ class LocationService:
                 "heading": heading,
                 "vehicle_id": str(vehicle_id),
                 "trip_id": str(active_trip.id) if active_trip else None,
-                "route_id": str(active_trip.route_id) if active_trip else None,
+                # A journey has no route id; sending one would make clients
+                # treat it as a route trip and look up a route that is not
+                # there.
+                "route_id": (
+                    str(active_trip.route_id)
+                    if active_trip and not is_journey
+                    else None
+                ),
+                "is_journey": is_journey,
                 "direction": active_trip.direction if active_trip else None,
                 "current_stop_index": state.current_stop_index,
                 "remaining_distance_km": remaining_distance_km,
@@ -675,22 +779,35 @@ class LocationService:
             if active_trip:
                 LocationService._notify_ws(f"trip_{active_trip.id}", "trip_update", ws_payload)
 
-                # route_{route_id} is deliberately open to any authenticated
-                # user, so it must not carry trip-scoped data: trip_id would
-                # let every route watcher enumerate live trips, and the pickup
-                # figures are measured against one trip's boarding stop.
-                # Keys are kept (nulled) rather than dropped so the message
-                # shape stays identical to the trip feed.
-                route_payload = dict(ws_payload)
-                route_payload["trip_id"] = None
-                route_payload["pickup_distance_km"] = None
-                route_payload["pickup_duration_min"] = None
+                if is_journey:
+                    # Journey fan-out: every stop on the journey. A passenger
+                    # watching one of these stops sees the vehicle approach,
+                    # which is the whole point of the journey flow.
+                    stop_payload = dict(ws_payload)
+                    stop_payload["trip_id"] = str(active_trip.id)
+                    for stop in journey_stops:
+                        LocationService._notify_ws(
+                            f"stop_{stop['stop_id']}",
+                            "stop_vehicle_update",
+                            stop_payload,
+                        )
+                else:
+                    # route_{route_id} is deliberately open to any authenticated
+                    # user, so it must not carry trip-scoped data: trip_id would
+                    # let every route watcher enumerate live trips, and the pickup
+                    # figures are measured against one trip's boarding stop.
+                    # Keys are kept (nulled) rather than dropped so the message
+                    # shape stays identical to the trip feed.
+                    route_payload = dict(ws_payload)
+                    route_payload["trip_id"] = None
+                    route_payload["pickup_distance_km"] = None
+                    route_payload["pickup_duration_min"] = None
 
-                LocationService._notify_ws(
-                    f"route_{active_trip.route_id}",
-                    "route_vehicle_update",
-                    route_payload,
-                )
+                    LocationService._notify_ws(
+                        f"route_{active_trip.route_id}",
+                        "route_vehicle_update",
+                        route_payload,
+                    )
 
             logger.info(
                 f"Updated vehicle {vehicle_id}: stop={state.current_stop_index} "
@@ -860,4 +977,60 @@ class LocationService:
                     "eta_seconds": round(eta_s, 1),
                     "order": stop.order,
                 })
+        return result
+
+    @staticmethod
+    def _current_journey_stop(
+        journey_stops: List[Dict[str, Any]],
+        dist_along: Optional[float],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        The next journey stop the vehicle has not reached yet.
+
+        Ordered stops carry their distance along the path, so "where am I" is a
+        scan for the first entry beyond the travelled distance rather than a
+        spatial search. Returns the last stop when the journey is past all of
+        them, so a driver who has driven the whole path still reports somewhere
+        meaningful.
+        """
+        if not journey_stops or dist_along is None:
+            return None
+
+        for entry in journey_stops:
+            if float(entry.get("dist_along_m") or 0) > float(dist_along):
+                return entry
+        return journey_stops[-1]
+
+    @staticmethod
+    def _build_journey_eta_list(
+        journey_stops: List[Dict[str, Any]],
+        dist_along: Optional[float],
+        total_distance_m: float,
+        speed_mps: float,
+        limit: int = 3,
+    ) -> List[Dict[str, Any]]:
+        """
+        Next stops ahead on a journey, with ETAs.
+
+        Derived from the ordered stop list and the distance remaining to each at
+        the vehicle's current speed, so the shape matches the route-trip
+        ``next_stop_eta`` payload the clients already parse.
+        """
+        if not journey_stops or dist_along is None or speed_mps <= 0:
+            return []
+
+        result = []
+        for entry in journey_stops:
+            stop_dist = float(entry.get("dist_along_m") or 0)
+            if stop_dist <= float(dist_along):
+                continue
+            remaining_m = max(0.0, total_distance_m - stop_dist)
+            result.append({
+                "stop_id": entry["stop_id"],
+                "stop_name": entry.get("name"),
+                "eta_seconds": round(remaining_m / speed_mps, 1),
+                "distance_m": round(stop_dist - float(dist_along), 1),
+            })
+            if len(result) >= limit:
+                break
         return result

@@ -20,6 +20,7 @@ import {
   DEFAULT_CENTER,
   MAPTILER_STYLE,
 } from "./mapUtils";
+import locationService from "../lib/locationService";
 
 function flattenStyles(style) {
   if (!style) return {};
@@ -115,25 +116,47 @@ function ViewAnnotation({ lngLat, anchor, onSelect, children, ...rest }) {
 function UserLocation({ visible = true, children, ...rest }) {
   const [position, setPosition] = useState(null);
   useEffect(() => {
-    if (!visible || typeof navigator === "undefined" || !navigator.geolocation) {
-      return undefined;
+    if (!visible) return undefined;
+
+    // Delegate to the shared service rather than opening a second watch here.
+    // This component previously called navigator.geolocation directly and did
+    // three things wrong at once: it fired getCurrentPosition *and*
+    // watchPosition (two competing requests), hard-coded
+    // enableHighAccuracy: true (which is what pushes macOS into
+    // POSITION_UNAVAILABLE), and swallowed every error with `() => {}`, so a
+    // transient failure could never recover. It also produced the duplicate
+    // CoreLocationProvider warnings alongside locationService's watch.
+    let cancelled = false;
+    let handle = null;
+
+    // Seed from any fix the app already has, so the dot appears immediately
+    // instead of after a fresh request.
+    if (locationService.currentLocation) {
+      const { latitude, longitude } = locationService.currentLocation;
+      setPosition({ lng: longitude, lat: latitude });
     }
-    let watchId = null;
-    const onPosition = (p) => {
-      setPosition({ lng: p.coords.longitude, lat: p.coords.latitude });
-    };
-    try {
-      navigator.geolocation.getCurrentPosition(onPosition, () => {}, {
-        enableHighAccuracy: true,
+
+    locationService
+      .startTracking((coords) => {
+        if (cancelled) return;
+        setPosition({ lng: coords.longitude, lat: coords.latitude });
+      }, { enableHighAccuracy: false })
+      .then((h) => {
+        if (cancelled) {
+          h?.remove?.();
+          return;
+        }
+        handle = h;
+      })
+      .catch(() => {
+        // No permission or geolocation unavailable. The blue dot simply stays
+        // where it was; the journey screens read position from the service
+        // directly, so a missing dot is cosmetic.
       });
-      watchId = navigator.geolocation.watchPosition(onPosition, () => {}, {
-        enableHighAccuracy: true,
-      });
-    } catch {}
+
     return () => {
-      if (watchId != null && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchId);
-      }
+      cancelled = true;
+      handle?.remove?.();
     };
   }, [visible]);
   if (!visible || !position) return null;

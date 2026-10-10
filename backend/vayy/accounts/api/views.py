@@ -1320,11 +1320,20 @@ class VerificationStatusAPIView(APIView):
         profile_verified = profile.is_verified if profile else False
 
         statuses = [d["status"] for d in doc_list]
-        if not doc_list:
+        # An already-verified driver is verified even with no documents on file,
+        # otherwise the "complete your profile" popup reappears over a working
+        # account and blocks every screen behind it.
+        #
+        # ``all(...)`` is only meaningful once there is at least one document:
+        # it is vacuously true over an empty list, which would report every
+        # never-verified account as verified.
+        if profile_verified or user.is_verified:
+            verification_status = "verified"
+        elif not doc_list:
             verification_status = "not_submitted"
         elif DOC_STATUS_REJECTED in statuses:
             verification_status = "rejected"
-        elif profile_verified or all(s == DOC_STATUS_VERIFIED for s in statuses):
+        elif all(s == DOC_STATUS_VERIFIED for s in statuses):
             verification_status = "verified"
         else:
             verification_status = "pending"

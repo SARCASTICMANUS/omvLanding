@@ -176,7 +176,13 @@ export default function DriverAutoHomeScreen({ navigation }) {
   const handleNext = () => {
     if (!canProceed) return;
     persistRecentSearch(pickup, destination);
-    navigation.navigate("DriverRouteSearch", { pickup, destination, mode: "auto" });
+    // Journeys, not routes: the driver declares where they are going and the
+    // server resolves the path plus the global stops along it.
+    navigation.navigate("DriverFindPassengers", {
+      origin: pickup,
+      destination,
+      mode: "auto",
+    });
   };
 
   const handleSwap = () => {
@@ -261,7 +267,7 @@ export default function DriverAutoHomeScreen({ navigation }) {
               onPress={handleNext}
             >
               <Ionicons name="map-outline" size={20} color="#fff" />
-              <Text style={styles.primaryBtnText}>Find Best Route</Text>
+              <Text style={styles.primaryBtnText}>Start Journey</Text>
             </TouchableOpacity>
 
             {recentSearches.length > 0 && (

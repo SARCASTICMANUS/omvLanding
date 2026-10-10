@@ -37,6 +37,8 @@ export const API_PATHS = {
     nearbyStops: "/api/transport/stops/nearby/",
     stopEta: (stopId) => `/api/transport/stops/${stopId}/eta/`,
     driverRoutes: "/api/transport/driver/routes/",
+    // Admin-created boarding points, matched against driver journeys.
+    globalStopsNearby: "/api/transport/global-stops/nearby/",
     schedules: "/api/transport/schedules/",
     scheduleDetail: (scheduleId) => `/api/transport/schedules/${scheduleId}/`,
     stopTimes: "/api/transport/stop-times/",
@@ -78,6 +80,12 @@ export const API_PATHS = {
     ingest: "/api/tracking/ingest/",
     vehicle: (vehicleId) => `/api/tracking/vehicle/${vehicleId}/`,
     trip: (tripId) => `/api/tracking/trip/${tripId}/`,
+    // Journeys — free-form driver trips (no fixed route).
+    journeyStart: "/api/tracking/journeys/start/",
+    journeyEnd: "/api/tracking/journeys/end/",
+    journey: (tripId) => `/api/tracking/journeys/${tripId}/`,
+    stopPassingVehicles: (stopId) => `/api/tracking/stops/${stopId}/passing-vehicles/`,
+    raiseHand: "/api/tracking/raise-hand/",
   },
   communication: {
     notifications: "/api/communication/notifications/",
@@ -108,5 +116,9 @@ export const API_PATHS = {
     trip: (tripId, token) => `/ws/tracking/trip/${tripId}/?token=${token}`,
     vehicle: (vehicleId, token) => `/ws/tracking/vehicle/${vehicleId}/?token=${token}`,
     passenger: (passengerId, token) => `/ws/notifications/${passengerId}/?token=${token}`,
+    // Journey flow: a passenger watching one stop for approaching vehicles.
+    stop: (stopId, token) => `/ws/tracking/stop/${stopId}/?token=${token}`,
+    broadcastDispatch: (requestId, token) =>
+      `/ws/dispatch/broadcast/${requestId}/?token=${token}`,
   },
 };
