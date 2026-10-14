@@ -44,7 +44,7 @@ const STATUS_CONFIG = {
     bgColor: "#E0F5E8",
     borderColor: "#BBF7D0",
     title: "Complete Your Profile",
-    message: "Please complete your vehicle details, documents, and bank information to start using the platform.",
+    message: "Please complete your vehicle details and documents to start using the platform.",
     dismissLabel: "Complete Profile",
     action: "completeRegistration",
     dismissable: false,

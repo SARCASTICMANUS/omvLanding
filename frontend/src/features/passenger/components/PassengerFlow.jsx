@@ -11,6 +11,10 @@ import PassengerRideComplete from "./PassengerRideComplete";
 import PassengerLiveTracking from "./PassengerLiveTracking";
 import api from "../../../lib/api";
 import { API_PATHS } from "../../../constants/apiPaths";
+import {
+  fetchDynamicRoutes,
+  isDynamicRouteCreationEnabled,
+} from "../../../services/routes/routeProvider";
 import { useSocketSubscription } from "../../../hooks/useSocketSubscription";
 import {
   setJourneyStep,
@@ -87,7 +91,12 @@ export default function PassengerFlow({ onBackToDashboard }) {
   const [cancelling, setCancelling] = useState(false);
   const [ending, setEnding] = useState(false);
   const [endError, setEndError] = useState("");
+  const [routeError, setRouteError] = useState("");
   const settledRef = useRef(false);
+
+  /* City and vehicle type come from the existing profile / URL mode — no second
+     location-selection or config state is introduced. */
+  const user = useSelector((state) => state.auth?.user);
 
   const hasValidCoords = (point) =>
     point &&
@@ -115,6 +124,39 @@ export default function PassengerFlow({ onBackToDashboard }) {
       return [];
     }
 
+    // ==========================================================================
+    // DYNAMIC ROUTE CREATION — ACTIVE (DYNAMIC_ROUTE_CREATION_ENABLED = true)
+    //
+    // The origin/destination chosen in the existing planner are posted to the
+    // backend Dynamic Route API. The generated response is mapped by
+    // normalizeDynamicRoute() into the same shape the existing Route Card and
+    // the existing pre-ride / searching steps already consume, so only the data
+    // source changed.
+    // ==========================================================================
+    if (isDynamicRouteCreationEnabled()) {
+      const { routes } = await fetchDynamicRoutes({
+        audience: "passenger",
+        origin: from,
+        destination: to,
+        cityId: user?.city ?? null,
+        vehicleType: mode,
+      });
+      return routes;
+    }
+
+    // ==========================================================================
+    // LEGACY FIXED-ROUTE FETCH — REPLACED BY DYNAMIC ROUTE CREATION
+    //
+    // Previous behaviour:
+    //   fetch an existing manually traced route and render it.
+    //
+    // Current behaviour (when DYNAMIC_ROUTE_CREATION_ENABLED = true):
+    //   request a route from the dynamic route API above.
+    //
+    // Retained temporarily for rollback/reference.
+    // Do not use when dynamic route creation is enabled.
+    // Set VITE_DYNAMIC_ROUTE_CREATION_ENABLED=false to restore this path.
+    // ==========================================================================
     try {
       const response = await api.get(API_PATHS.transport.routeSearchByLocation, {
         params: {
@@ -152,12 +194,19 @@ export default function PassengerFlow({ onBackToDashboard }) {
     });
 
     try {
+      setRouteError("");
       const trips = await fetchFilteredTrips(from, to);
       dispatch(setFilteredTrips(trips));
       dispatch(setJourneyStep(STEPS.ROUTE_LIST));
     } catch (error) {
       console.error("Failed to load trips", error);
       dispatch(setFilteredTrips([]));
+      // Sanitised copy only — never surface raw backend/OSRM messages.
+      setRouteError(
+        error?.isDynamicRouteError
+          ? error.message
+          : "We couldn't load routes for this journey.",
+      );
       dispatch(setJourneyStep(STEPS.ROUTE_LIST));
     } finally {
       dispatch(setJourneyLoading(false));
@@ -189,12 +238,18 @@ export default function PassengerFlow({ onBackToDashboard }) {
 
     try {
       dispatch(setJourneyLoading(true));
+      setRouteError("");
       const trips = await fetchFilteredTrips(pickup, destination);
       dispatch(setFilteredTrips(trips));
       dispatch(setJourneyStep(STEPS.ROUTE_LIST));
     } catch (error) {
       console.error("Failed to refresh trips", error);
       dispatch(setFilteredTrips([]));
+      setRouteError(
+        error?.isDynamicRouteError
+          ? error.message
+          : "We couldn't load routes for this journey.",
+      );
     } finally {
       dispatch(setJourneyLoading(false));
     }
@@ -390,7 +445,11 @@ export default function PassengerFlow({ onBackToDashboard }) {
         destination={destination}
         trips={filteredTrips}
         loading={loadingRoutes}
-        onBack={() => dispatch(setJourneyStep(STEPS.PLANNER))}
+        error={routeError}
+        onBack={() => {
+          setRouteError("");
+          dispatch(setJourneyStep(STEPS.PLANNER));
+        }}
         onChooseRoute={handleChooseRoute}
         onUpdatePickup={handleUpdatePickup}
         onUpdateDestination={handleUpdateDestination}

@@ -7,7 +7,7 @@ import MetricChip from "../../shared/components/common/MetricChip";
 import RouteLine from "../../shared/components/common/RouteLine";
 import VayyButton from "../../shared/components/common/VayyButton";
 import VayyCard from "../../shared/components/common/VayyCard";
-import Header from "../../shared/components/navigation/Header";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
 import SPACING from "../../shared/constants/spacing";
@@ -54,8 +54,8 @@ export default function DriverTripReview({ navigation, route: navRoute }) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Header
+    <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
+      <ScreenHeader
         onBack={onBack}
         right={<VayyButton label="Back to Routes" onPress={() => navigation.navigate("DriverRoutes")} size="sm" variant="outline" />}
         subtitle="Review your route, stops and trip details"

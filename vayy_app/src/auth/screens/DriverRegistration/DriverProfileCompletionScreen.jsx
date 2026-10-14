@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ArrowLeft, Bike, CheckCircle, User, CreditCard, Building2, Smartphone, Phone, Calendar, XCircle, Clock } from "lucide-react-native";
+import { ArrowLeft, Bike, CheckCircle, User, Phone, Calendar, XCircle, Clock } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useDispatch, useSelector } from "react-redux";
 import COLORS from "../../../shared/constants/colors";
@@ -23,9 +23,8 @@ import { completeRegistration } from "../../authSlice";
 import { fetchProfile, fetchVerificationStatus } from "../../../store/slices/profileSlice";
 import { clearFields } from "../../../store/slices/onboardingSlice";
 import { VALIDATORS, VALIDATION_MESSAGES } from "../../validators";
-import api, { postDriverDocument } from "../../../shared/lib/api";
+import api from "../../../shared/lib/api";
 import { AUTH, OPERATIONS } from "../../../constants";
-import { notifyAction, confirmAction } from "../../../shared/lib/confirmAction";
 
 const DOC_SECTIONS = [
   { key: "dl", label: "Driving Licence", type: "LICENSE", back: true },
@@ -50,6 +49,9 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const fields = useSelector((state) => state.onboarding.fields);
+  const serverVerification = useSelector((state) => state.verification?.state);
+  const isVerified =
+    serverVerification?.can_use_app === true || serverVerification?.stage === "fully_verified";
   const isManage = route?.params?.mode === "manage";
 
   // Profile (editable)
@@ -81,12 +83,6 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
     selfie: { uri: null, id: null, status: "idle", docStatus: null },
   });
 
-  // Bank
-  const [holderName, setHolderName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [ifsc, setIfsc] = useState("");
-  const [upi, setUpi] = useState("");
-
   // UI
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -95,7 +91,6 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
 
   // Manage-mode change tracking (snapshots from backend on mount)
   const initialVehicle = useRef({ type: "bike", number: "", rc: "" });
-  const initialBank = useRef({ holder: "", account: "", ifsc: "", upi: "" });
   const photoTouched = useRef(false);
 
   // ── Fetch existing data on mount ──
@@ -103,15 +98,13 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
     const loadExistingData = async () => {
       try {
         console.log("[Completion] Fetching existing data...");
-        const [profileRes, docsRes, bankRes] = await Promise.all([
+        const [profileRes, docsRes] = await Promise.all([
           api.get(AUTH.driverProfile).catch((e) => { console.warn("[Completion] Profile fetch failed:", e?.response?.status, e?.response?.data || e?.message); return null; }),
           api.get(AUTH.driverDocuments).catch((e) => { console.warn("[Completion] Documents fetch failed:", e?.response?.status, e?.response?.data || e?.message); return null; }),
-          api.get(AUTH.driverBankDetails).catch((e) => { console.warn("[Completion] Bank fetch failed:", e?.response?.status, e?.response?.data || e?.message); return null; }),
         ]);
 
         console.log("[Completion] Profile response:", JSON.stringify(profileRes?.data?.data || profileRes?.data, null, 2));
         console.log("[Completion] Documents response:", JSON.stringify(docsRes?.data, null, 2)?.substring(0, 500));
-        console.log("[Completion] Bank response:", JSON.stringify(bankRes?.data?.data || bankRes?.data, null, 2));
 
         // Profile
         const profile = profileRes?.data?.data || profileRes?.data;
@@ -229,21 +222,6 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
           console.log("[Completion] Docs state updated:", Object.keys(newDocs));
         }
 
-        // Bank details
-        const bank = bankRes?.data?.data || bankRes?.data;
-        if (bank) {
-          if (bank.holder_name) setHolderName(bank.holder_name);
-          if (bank.account_number) setAccountNumber(bank.account_number);
-          if (bank.ifsc) setIfsc(bank.ifsc);
-          if (bank.upi) setUpi(bank.upi);
-          initialBank.current = {
-            holder: bank.holder_name || "",
-            account: bank.account_number || "",
-            ifsc: bank.ifsc || "",
-            upi: bank.upi || "",
-          };
-        }
-
         console.log("[Completion] Data loading complete");
       } catch (e) {
         console.error("[Completion] Unexpected error loading data:", e);
@@ -259,7 +237,7 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
   const pickVehiclePhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      notifyAction({ title: "Permission Required", message: "Please grant gallery access." });
+      Alert.alert("Permission Required", "Please grant gallery access.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -283,21 +261,22 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
     const existingDoc = docs[field];
     const statusLabel = existingDoc?.docStatus || existingDoc?.status === "success" ? "uploaded" : null;
     if (existingDoc?.id) {
-      // A real yes/no choice, so confirmAction rather than notifyAction: on web
-      // this dialog previously rendered nothing and the promise never settled,
-      // leaving the document picker dead.
-      const replace = await confirmAction({
-        title: "Replace Document",
-        message: `This slot already has a ${statusLabel || "uploaded"} document. Replace it?`,
-        confirmLabel: "Replace",
-        cancelLabel: "Cancel",
+      const action = await new Promise((resolve) => {
+        Alert.alert(
+          "Replace Document",
+          `This slot already has a ${statusLabel || "uploaded"} document. Replace it?`,
+          [
+            { text: "Cancel", style: "cancel", onPress: () => resolve("cancel") },
+            { text: "Replace", onPress: () => resolve("replace") },
+          ]
+        );
       });
-      if (!replace) return;
+      if (action !== "replace") return;
     }
 
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      notifyAction({ title: "Permission Required", message: "Please grant gallery access." });
+      Alert.alert("Permission Required", "Please grant gallery access.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -305,10 +284,6 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.8,
-      // Requested so the web/blob path has something to send: a {uri,name,type}
-      // triple is not a file part outside native. Unused on native, where the
-      // multipart upload is smaller.
-      base64: true,
     });
     if (result.canceled || !result.assets?.[0]?.uri) return;
 
@@ -317,12 +292,18 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
     setDocs((p) => ({ ...p, [field]: { uri, id: p[field]?.id, status: "uploading", docStatus: null } }));
 
     try {
-      const docData = await postDriverDocument({
-        documentType,
-        docKey: field,
+      const formData = new FormData();
+      formData.append("document_type", documentType);
+      formData.append("doc_key", field);
+      formData.append("file", {
         uri,
-        base64: result.assets[0].base64,
+        name: uri.split("/").pop() || "upload.jpg",
+        type: "image/jpeg",
       });
+      const response = await api.post(AUTH.driverDocuments, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const docData = response.data?.data || response.data;
       const docId = docData?.id;
       const updatedStatus = docData?.status || "PENDING";
       console.log(`[Completion] Upload success: field=${field} docId=${docId} status=${updatedStatus}`);
@@ -341,7 +322,7 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
     } catch (e) {
       console.error(`[Completion] Upload failed: field=${field}`, e?.response?.status, e?.response?.data || e?.message);
       setDocs((p) => ({ ...p, [field]: { ...p[field], uri, status: "error" } }));
-      notifyAction({ title: "Upload Failed", message: "Could not upload document. Tap to retry." });
+      Alert.alert("Upload Failed", "Could not upload document. Tap to retry.");
     }
   };
 
@@ -389,18 +370,13 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
   const totalDocs = 9;
   const docCount = getDocCount();
 
-  // ── Manage-mode save (vehicle / bank / documents only) ──
+  // ── Manage-mode save (vehicle / documents only) ──
   const handleManageSave = async () => {
     const vehicleChanged =
       vehicleType !== initialVehicle.current.type ||
       vehicleNumber.toUpperCase() !== initialVehicle.current.number ||
       photoTouched.current;
     const rcChanged = rcNumber.toUpperCase() !== initialVehicle.current.rc;
-    const bankChanged =
-      holderName !== initialBank.current.holder ||
-      accountNumber !== initialBank.current.account ||
-      ifsc !== initialBank.current.ifsc ||
-      upi !== initialBank.current.upi;
 
     if (vehicleChanged) {
       await api.post(OPERATIONS.vehicleRegister, {
@@ -414,20 +390,12 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
       await api.put(AUTH.driverProfile, { rc_number: rcNumber });
     }
 
-    if (bankChanged) {
-      await api.post(AUTH.driverBankDetails, {
-        holder_name: holderName,
-        account_number: accountNumber,
-        ifsc,
-        upi,
-      });
-    }
   };
 
   // ── Submit ──
   const handleSubmit = async () => {
     if (!validate()) {
-      notifyAction({ title: "Missing Fields", message: "Please fill all required fields and upload all documents." });
+      Alert.alert("Missing Fields", "Please fill all required fields and upload all documents.");
       return;
     }
 
@@ -457,14 +425,6 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
         }
       }
 
-      const bankDetails = {};
-      if (holderName || accountNumber || ifsc) {
-        bankDetails.holder_name = holderName;
-        bankDetails.account_number = accountNumber;
-        bankDetails.ifsc = ifsc;
-        bankDetails.upi = upi;
-      }
-
       const dobFormatted = parseDobToISO(dob);
       const role = vehicleType === "auto" ? "autodriver" : "bikedriver";
 
@@ -478,7 +438,6 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
         vehicle_photo: vehiclePhotoBase64 || "",
         rc_number: rcNumber,
         document_ids: documentIds,
-        bank_details: bankDetails,
         role,
       };
       console.log("[Completion] Submit payload:", JSON.stringify(payload, null, 2));
@@ -495,7 +454,7 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
           result.payload?.message ||
           "Submission failed";
         console.error("[Completion] Submit error:", errorMsg, result.payload);
-        notifyAction({ title: isManage ? "Update Failed" : "Registration Failed", message: errorMsg });
+        Alert.alert(isManage ? "Update Failed" : "Registration Failed", errorMsg);
         return;
       }
 
@@ -510,7 +469,7 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
     } catch (err) {
       setSubmitting(false);
       const errMsg = err?.response?.data?.message || err?.message || "Something went wrong. Please try again.";
-      notifyAction({ title: isManage ? "Update Failed" : "Registration Failed", message: errMsg });
+      Alert.alert(isManage ? "Update Failed" : "Registration Failed", errMsg);
     }
   };
 
@@ -519,6 +478,24 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
   if (submitted) {
     return (
       <ApplicationSubmittedScreen onCta={() => navigation.navigate("DriverTabs")} />
+    );
+  }
+
+  // Verified drivers have nothing left to upload: don't offer an active upload form.
+  if (isManage && isVerified) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <TouchableOpacity style={styles.back} onPress={onBack} activeOpacity={0.7}>
+          <ArrowLeft size={22} color={COLORS.text} />
+        </TouchableOpacity>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
+          <CheckCircle size={56} color="#16a34a" />
+          <Text style={[styles.title, { marginTop: 16, textAlign: "center" }]}>{"You're verified"}</Text>
+          <Text style={[styles.sub, { textAlign: "center" }]}>
+            Your documents have been approved. There is nothing more to upload.
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -746,65 +723,6 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
                 </View>
               );
             })}
-          </View>
-
-          {/* ── BANK SECTION ── */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Bank Details</Text>
-            <Text style={styles.sectionSub}>Optional — add for payouts</Text>
-
-            <Text style={styles.label}>Account Holder Name</Text>
-            <View style={styles.inputWrap}>
-              <User size={16} color="#9ca3af" />
-              <TextInput
-                style={styles.input}
-                placeholder="As per bank records"
-                placeholderTextColor="#aaa"
-                value={holderName}
-                onChangeText={setHolderName}
-                autoCapitalize="words"
-              />
-            </View>
-
-            <Text style={styles.label}>Account Number</Text>
-            <View style={styles.inputWrap}>
-              <CreditCard size={16} color="#9ca3af" />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter account number"
-                placeholderTextColor="#aaa"
-                value={accountNumber}
-                onChangeText={(v) => setAccountNumber(v.replace(/[^0-9]/g, ""))}
-                keyboardType="number-pad"
-              />
-            </View>
-
-            <Text style={styles.label}>IFSC Code</Text>
-            <View style={styles.inputWrap}>
-              <Building2 size={16} color="#9ca3af" />
-              <TextInput
-                style={styles.input}
-                placeholder="SBIN0001234"
-                placeholderTextColor="#aaa"
-                value={ifsc}
-                onChangeText={(v) => setIfsc(v.toUpperCase())}
-                autoCapitalize="characters"
-                maxLength={11}
-              />
-            </View>
-
-            <Text style={styles.label}>UPI ID <Text style={{ fontWeight: "400", color: "#9ca3af" }}>(Optional)</Text></Text>
-            <View style={styles.inputWrap}>
-              <Smartphone size={16} color="#9ca3af" />
-              <TextInput
-                style={styles.input}
-                placeholder="name@upi"
-                placeholderTextColor="#aaa"
-                value={upi}
-                onChangeText={setUpi}
-                autoCapitalize="none"
-              />
-            </View>
           </View>
 
           <View style={{ height: 100 }} />

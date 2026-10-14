@@ -7,6 +7,100 @@ import PageToolbar from "../components/PageToolbar";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
+/* ---------------------------------------------------------------------------
+ * Document Verification cell.
+ *
+ * Two independent things, deliberately shown as two lines so they are never
+ * confused with each other:
+ *   1. EMAIL — is the address confirmed? (User.email_verified_at)
+ *   2. DOCS  — the document stage (derived per request by the backend's
+ *              verification_service; there is no stored stage column).
+ *
+ * `verification` arrives from GET /api/accounts/users/. When it is absent the
+ * cell says so instead of guessing — a missing block is not the same as
+ * "verified", and silently rendering a green tick for an unknown state would
+ * be the exact false-positive this whole screen already suffered from.
+ * ------------------------------------------------------------------------- */
+
+/* Document Verification cell - exactly THREE statuses.
+ *
+ * The backend has five internal stages; the UI deliberately collapses them:
+ *
+ *   email_pending      -> "Not started"   (NO documents exist yet, so there is
+ *                                           no document status to report)
+ *   docs_pending       -> "Pending"
+ *   docs_under_review  -> "Pending"       (submitted, awaiting an admin)
+ *   docs_rejected      -> "Rejected"
+ *   fully_verified     -> "Approved"
+ *
+ * email_pending is deliberately NOT "Pending": that user has not uploaded a
+ * single document, so labelling them Pending would drop them into the review
+ * queue alongside drivers who actually submitted something. A missing
+ * `verification` block renders "No status" rather than guessing.
+ */
+
+const DOC_STATUS = {
+  email_pending:     { cls: "glass-badge",         Icon: Mail,        label: "Not started" },
+  docs_pending:      { cls: "glass-badge-warning", Icon: FileText,    label: "Pending" },
+  docs_under_review: { cls: "glass-badge-warning", Icon: Settings,    label: "Pending" },
+  docs_rejected:     { cls: "glass-badge-danger",  Icon: X,           label: "Rejected" },
+  fully_verified:    { cls: "glass-badge-success", Icon: ShieldCheck, label: "Approved" },
+};
+
+function DocVerificationCell({ user }) {
+  const v = user.verification;
+
+  if (!v) {
+    return (
+      <span className="text-xs text-slate-400">No status</span>
+    );
+  }
+
+  const tone = DOC_STATUS[v.stage] || { cls: "glass-badge", Icon: FileText, label: v.stage || "Unknown" };
+  const { cls, Icon, label } = tone;
+
+  // Document stage only. Email confirmation already has its own "Verified"
+  // column, so repeating it here was pure noise.
+  return (
+    <div className="flex flex-col gap-1">
+      <span className={"glass-badge text-[10px] self-start flex items-center gap-1 " + cls}>
+        <Icon size={10} /> {label}
+      </span>
+      {Array.isArray(v.missing_docs) && v.missing_docs.length > 0 && (
+        <span className="text-[10px] text-slate-400">
+          Missing: {v.missing_docs.length}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* Open a KYC file with the admin bearer token.
+ *
+ * A plain <a href> cannot work here: the file endpoint is authenticated, and a
+ * top-level navigation sends no Authorization header — it came back 401 and the
+ * document simply never appeared. Fetching through axios and handing the blob
+ * to a new tab keeps the token in the request instead of in a URL, where it
+ * would leak into browser history and server access logs.
+ */
+async function openDocumentFile(docId) {
+  try {
+    const res = await api.get(`/operations/admin/documents/${docId}/file/`, {
+      responseType: "blob",
+    });
+    const url = URL.createObjectURL(res.data);
+    const w = window.open(url, "_blank", "noopener");
+    if (!w) {
+      // Popup blocked — fall back to a same-tab navigation.
+      window.location.href = url;
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (err) {
+    alert("Could not open document: " +
+      (err.response?.data?.message || err.message || "request failed"));
+  }
+}
+
 const mimeFor = (name) => {
   const ext = (name || "").split(".").pop().toLowerCase();
   if (ext === "png") return "image/png";
@@ -21,11 +115,9 @@ const imgSrc = (v) => {
   return `data:image/jpeg;base64,${v}`;
 };
 
-const docSrc = (doc) => {
-  if (!doc?.file_data) return null;
-  return `data:${mimeFor(doc.file_name)};base64,${doc.file_data}`;
-};
-
+// Was used to inline the document as a base64 data: URL. Dead since the
+// documents panel switched to openDocumentFile(), which fetches through axios so
+// the bearer token actually reaches the authenticated file endpoint.
 function InfoRow({ label, value, icon }) {
   return (
     <div className="space-y-1">
@@ -116,19 +208,31 @@ export default function Users() {
       setModal(false);
       fetchUsers();
     } catch (err) {
-      alert(err.response?.data?.detail || err.response?.data?.email?.[0] || "Failed to save user");
+      // The backend returns {success,message,data}; `detail` (DRF's default
+      // field) is never present, so every failure showed a generic message.
+      alert(err.response?.data?.message || err.response?.data?.email?.[0]
+            || err.message || "Failed to save user");
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this user? This action cannot be undone.")) return;
+    const target = [...passengers, ...drivers].find((u) => u.id === id);
+    if (!window.confirm(`Delete ${target?.email || "this user"}? This cannot be undone.`)) return;
     try {
       await api.delete(`/accounts/users/${id}/`);
+      // Drop the row locally too, so the table updates even before the refetch
+      // lands — otherwise the row lingers and the button looks broken.
+      setPassengers((prev) => prev.filter((u) => u.id !== id));
+      setDrivers((prev) => prev.filter((u) => u.id !== id));
+      if (selectedUser?.id === id) setModal(false);
       fetchUsers();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to delete user");
+      // The backend returns the {success,message,data} envelope, so `detail`
+      // (DRF's default field) was always undefined and every failure showed the
+      // useless generic "Failed to delete user".
+      alert(err.response?.data?.message || err.message || "Failed to delete user");
     }
   };
 
@@ -209,14 +313,32 @@ export default function Users() {
       {loading ? (
         <Loader />
       ) : (
-        <div className="glass-card overflow-x-auto">
+        /* max-h + internal scroll keeps the card a FIXED height, so switching
+           Passengers <-> Drivers (45 rows vs 23) no longer reflows the page and
+           yanks everything below it. The sticky thead keeps the column labels
+           pinned while the rows scroll inside the card.
+ *
+ * The header background MUST be `var(--glass-bg)` — the same token
+ * `.glass-card` uses. A plain `bg-white/90` reads as a solid white band
+ * pasted over a 66%-alpha body, which is exactly how it looked.
+ *
+ * `backdrop-blur` is what keeps it legible: the token is translucent, so
+ * without it rows scrolling underneath bleed through as sharp text behind the
+ * labels. Blurring turns that into the same frosted smear the card has
+ * everywhere else, and reading the var makes dark mode automatic.
+ */
+        <div className="glass-card overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)]">
           <table className="w-full">
-            <thead>
+            <thead
+              className="sticky top-0 z-10 backdrop-blur-[18px]"
+              style={{ background: "var(--glass-bg)" }}
+            >
               <tr className="border-b border-slate-200/60">
                 <th className="px-6 py-4 text-left glass-label">User</th>
                 <th className="px-6 py-4 text-left glass-label">Email</th>
                 <th className="px-6 py-4 text-left glass-label">Role</th>
                 <th className="px-6 py-4 text-left glass-label">Verified</th>
+                <th className="px-6 py-4 text-left glass-label">Document Verification</th>
                 <th className="px-6 py-4 text-left glass-label">Actions</th>
               </tr>
             </thead>
@@ -250,6 +372,9 @@ export default function Users() {
                     ) : (
                       <span className="text-xs font-semibold text-slate-500">Pending</span>
                     )}
+                  </td>
+                  <td className="px-6 py-4 cursor-pointer" onClick={() => openUserDetails(u.id)}>
+                    <DocVerificationCell user={u} />
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1">
@@ -463,20 +588,24 @@ export default function Users() {
                               </div>
                               {doc.file_data && (
                                 <div className="px-4 pb-3">
-                                  <a href={`${API_BASE}/operations/admin/documents/${doc.id}/file/`} target="_blank" rel="noopener noreferrer" className={`block ${mimeFor(doc.file_name) === "application/pdf" ? "" : "w-fit"}`}>
+                                  <button
+                                    type="button"
+                                    onClick={() => openDocumentFile(doc.id)}
+                                    className={`block ${mimeFor(doc.file_name) === "application/pdf" ? "" : "w-fit"}`}
+                                  >
                                     {mimeFor(doc.file_name) === "application/pdf" ? (
                                       <div className="flex items-center gap-2 glass-card-subtle rounded-xl px-4 py-2 text-xs hover:bg-white/50 transition-all duration-200">
                                         <FileText size={14} /><span className="font-semibold text-slate-800">{doc.file_name || "Document"}</span>
                                         <span className="flex items-center gap-1 ml-auto">Open file <ExternalLink size={10} /></span>
                                       </div>
                                     ) : (
-                                      <img
-                                        src={docSrc(doc)}
-                                        alt={doc.document_type}
-                                        className="max-h-40 rounded-xl border border-slate-200/60 object-contain hover:shadow-lg transition-all duration-200 cursor-pointer"
-                                      />
+                                      <div className="flex items-center gap-2 glass-card-subtle rounded-xl px-4 py-2 text-xs hover:bg-white/50 transition-all duration-200 w-fit">
+                                        <span className="font-semibold text-slate-800">{doc.document_type}</span>
+                                        <span className="text-slate-400">({doc.file_name || "image"})</span>
+                                        <span className="flex items-center gap-1">View image <ExternalLink size={10} /></span>
+                                      </div>
                                     )}
-                                  </a>
+                                  </button>
                                 </div>
                               )}
                             </div>

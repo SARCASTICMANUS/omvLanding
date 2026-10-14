@@ -5,14 +5,13 @@ import {
   FlatList,
   StyleSheet,
   StatusBar,
-  Platform,
   ActivityIndicator,
   TouchableOpacity,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 
 import VayyCard from "../../shared/components/common/VayyCard";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import COLORS from "../../shared/constants/colors";
 import SPACING from "../../shared/constants/spacing";
 import {
@@ -143,30 +142,34 @@ export default function PassengerAlertsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
-      <View style={styles.container}>
-        <Text style={styles.headerTitle}>Notifications</Text>
-        {loading && list.length === 0 ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
-          </View>
-        ) : data.length === 0 ? (
-          <View style={styles.center}>
-            <Text style={styles.emptyText}>No new alerts</Text>
-            <Text style={styles.emptySubtext}>Your notifications will appear here</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={data}
-            keyExtractor={(item) => item.id?.toString()}
-            renderItem={renderAlertItem}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-      </View>
-    </SafeAreaView>
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor="#009849" />
+      {/* Tab root — no back button. ScreenHeader renders a transparent spacer
+          instead, so the title stays optically centred. */}
+      <ScreenHeader
+        title="Notifications"
+        subtitle="Stay updated with your alerts"
+      />
+
+      {loading && list.length === 0 ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      ) : data.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyText}>No new alerts</Text>
+          <Text style={styles.emptySubtext}>Your notifications will appear here</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={data}
+          keyExtractor={(item) => item.id?.toString()}
+          renderItem={renderAlertItem}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+    </View>
   );
 }
 
@@ -174,17 +177,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  container: {
-    flex: 1,
-    padding: SPACING.base,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: COLORS.text,
-    marginBottom: SPACING.lg,
-    marginTop: Platform.OS === "android" ? StatusBar.currentHeight + SPACING.base : SPACING.md,
   },
   center: {
     flex: 1,

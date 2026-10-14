@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import api, { postDriverDocument } from "../../shared/lib/api";
+import api from "../../shared/lib/api";
 import { DRIVER_ROLES, AUTH } from "../../constants";
 
 export const fetchProfile = createAsyncThunk(
@@ -56,18 +56,21 @@ export const fetchVerificationStatus = createAsyncThunk(
 
 export const uploadDocument = createAsyncThunk(
   "profile/uploadDocument",
-  async ({ documentType, fileUri, fileName, base64 }, { rejectWithValue }) => {
+  async ({ documentType, fileUri, fileName }, { rejectWithValue }) => {
     try {
-      // Shared with the registration flow so both build the payload the same
-      // way; see postDriverDocument for why the encoding is platform-dependent.
-      return await postDriverDocument({
-        documentType,
+      const formData = new FormData();
+      formData.append("document_type", documentType);
+      formData.append("file", {
         uri: fileUri,
-        base64,
-        fileName,
+        name: fileName || fileUri.split("/").pop(),
+        type: "image/jpeg",
       });
+      const response = await api.post(AUTH.driverDocuments, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return response.data?.data || response.data;
     } catch (error) {
-      return rejectWithValue(error.response?.data || error.message || "Failed to upload document");
+      return rejectWithValue(error.response?.data || "Failed to upload document");
     }
   }
 );

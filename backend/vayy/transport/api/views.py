@@ -1,4 +1,5 @@
 import logging
+from uuid import UUID
 import json
 from typing import Dict, Any, List
 from math import radians, sin, cos, sqrt, atan2
@@ -10,6 +11,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import serializers, status
 from collections import defaultdict
 from django.db.models import Q
+from django.db import transaction
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point, LineString
 from django.contrib.gis.measure import D
@@ -25,6 +27,7 @@ from common.responses import error_response, success_response
 from transport.services import stop_import_service
 from transport.api.serializers import (
     CitySerializer,
+    AdminCitySerializer,
     NearbyStopSerializer,
     RouteListSerializer,
     RouteDetailSerializer,
@@ -932,15 +935,8 @@ class AdminRouteViewSet(viewsets.ModelViewSet):
 
 
 class AdminStopViewSet(viewsets.ModelViewSet):
-    """
-    Admin CRUD for stops, route-owned and global.
-
-    ``?scope=global`` lists only the global stops and ``?scope=route`` only the
-    route-owned ones; no filter returns everything, which is how this behaved
-    before global stops existed.
-    """
-
-    queryset = Stop.objects.all().select_related("route", "city")
+    """Admin stop CRUD plus the filtered, paginated table contract used by Dynamic Routing."""
+    queryset = Stop.objects.all().select_related("route", "city", "route__city")
     serializer_class = StopSerializer
     permission_classes = [IsAdmin]
 
@@ -948,14 +944,73 @@ class AdminStopViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         scope = self.request.query_params.get("scope")
         if scope == "global":
-            return queryset.filter(is_global=True)
-        if scope == "route":
-            return queryset.filter(is_global=False)
+            queryset = queryset.filter(is_global=True)
+        elif scope == "route":
+            queryset = queryset.filter(is_global=False)
         return queryset
 
+    @staticmethod
+    def _city_filter(queryset, city_value):
+        if not city_value:
+            return queryset
+        city_query = (
+            Q(city__slug__iexact=city_value) | Q(city__name__iexact=city_value) |
+            Q(route__city__slug__iexact=city_value) | Q(route__city__name__iexact=city_value)
+        )
+        try:
+            city_id = UUID(str(city_value))
+        except (TypeError, ValueError):
+            pass
+        else:
+            city_query |= Q(city_id=city_id) | Q(route__city_id=city_id)
+        return queryset.filter(city_query)
+
+    @staticmethod
+    def _coordinate_filter(queryset, status_value):
+        if status_value in {"verified", "provisional", "conflict", "unresolved", "legacy_synthetic"}:
+            queryset = queryset.filter(coordinate_status=status_value)
+            if status_value == "verified":
+                queryset = queryset.filter(location__isnull=False)
+        return queryset
+
+    @staticmethod
+    def _table_row(stop):
+        location = stop.location
+        city = stop.city or (stop.route.city if stop.route_id else None)
+        return {
+            "id": str(stop.id), "name": stop.name,
+            "city_slug": city.slug if city else "", "city_name": city.name if city else "",
+            "lat": location.y if location else None, "lng": location.x if location else None,
+            "coordinate_status": stop.coordinate_status,
+            "serviceable": bool(location) and stop.coordinate_status == "verified",
+            "serviceability_reason": stop.serviceability_reason or ("Coordinates available" if location and stop.coordinate_status == "verified" else "Needs coordinate review"),
+            "is_routable": bool(stop.route_id and stop.route and stop.route.path),
+            "aliases": stop.aliases or ([stop.name] if stop.name else []),
+            "route": str(stop.route_id) if stop.route_id else None,
+            "order": stop.order,
+        }
+
     def list(self, request, *args, **kwargs):
-        resp = super().list(request, *args, **kwargs)
-        return Response({"success": True, "data": resp.data})
+        qs = self.filter_queryset(self.get_queryset())
+        qs = self._city_filter(qs, request.query_params.get("city"))
+        search = (request.query_params.get("q") or request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(name__icontains=search)
+        qs = self._coordinate_filter(qs, request.query_params.get("coordinate_status") or request.query_params.get("status"))
+        serviceable = request.query_params.get("serviceable")
+        if serviceable == "1":
+            qs = qs.filter(location__isnull=False, coordinate_status="verified")
+        elif serviceable == "0":
+            qs = qs.exclude(location__isnull=False, coordinate_status="verified")
+        try:
+            limit = min(max(int(request.query_params.get("limit", 25)), 1), 100)
+            offset = max(int(request.query_params.get("offset", 0)), 0)
+        except (TypeError, ValueError):
+            return Response({"success": False, "message": "limit and offset must be valid non-negative integers."}, status=400)
+        count = qs.count()
+        rows = [self._table_row(stop) for stop in qs.order_by("name", "id")[offset:offset + limit]]
+        return Response({"success": True, "count": count, "total": count, "limit": limit,
+                         "offset": offset, "results": rows, "data": rows}, status=200)
 
     def create(self, request, *args, **kwargs):
         resp = super().create(request, *args, **kwargs)
@@ -1036,32 +1091,62 @@ class AdminStopTimeViewSet(viewsets.ModelViewSet):
 
 
 class AdminCityViewSet(viewsets.ModelViewSet):
-    """
-    Guarded replacement for CityViewSet's writes.
-    """
-    queryset = City.objects.all()
-    serializer_class = CitySerializer
+    """Admin city CRUD. Supports both slug URLs (Dynamic Routing) and UUID URLs (legacy Cities screen)."""
+    queryset = City.objects.all().select_related("admin_configuration").prefetch_related("stops", "routes")
+    serializer_class = AdminCitySerializer
     permission_classes = [IsAdmin]
+    lookup_field = "slug"
+
+    def get_object(self):
+        lookup = self.kwargs.get(self.lookup_url_kwarg or self.lookup_field)
+        qs = self.filter_queryset(self.get_queryset())
+        obj = qs.filter(slug=lookup).first()
+        if obj is None:
+            try:
+                lookup_id = UUID(str(lookup))
+            except (TypeError, ValueError):
+                lookup_id = None
+            if lookup_id is not None:
+                obj = qs.filter(pk=lookup_id).first()
+        if obj is None:
+            from django.http import Http404
+            raise Http404("City not found")
+        self.check_object_permissions(self.request, obj)
+        return obj
 
     def list(self, request, *args, **kwargs):
-        resp = super().list(request, *args, **kwargs)
-        return Response({"success": True, "data": resp.data})
+        cities = [AdminCitySerializer(city, context={"request": request}).data
+                  for city in self.filter_queryset(self.get_queryset()).order_by("name")]
+        # results supports DynamicRouting.rowsOf(); data supports existing admin consumers.
+        return Response({"success": True, "count": len(cities), "results": cities, "data": cities})
 
     def create(self, request, *args, **kwargs):
-        resp = super().create(request, *args, **kwargs)
-        return Response({"success": True, "data": resp.data}, status=status.HTTP_201_CREATED)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        city = serializer.save()
+        data = self.get_serializer(city).data
+        return Response({"success": True, "data": data}, status=status.HTTP_201_CREATED)
 
     def retrieve(self, request, *args, **kwargs):
-        resp = super().retrieve(request, *args, **kwargs)
-        return Response({"success": True, "data": resp.data})
+        return Response({"success": True, "data": self.get_serializer(self.get_object()).data})
 
     def update(self, request, *args, **kwargs):
-        resp = super().update(request, *args, **kwargs)
-        return Response({"success": True, "data": resp.data})
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        city = serializer.save()
+        return Response({"success": True, "data": self.get_serializer(city).data})
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        super().destroy(request, *args, **kwargs)
-        return Response({"success": True, "message": "City deleted"}, status=status.HTTP_200_OK)
+        city = self.get_object()
+        city_name = city.name
+        city.delete()
+        return Response({"success": True, "message": f"City {city_name} deleted"}, status=status.HTTP_200_OK)
 
 
 class AdminStopBulkUploadAPIView(APIView):
@@ -1155,6 +1240,13 @@ class AdminRouteImportAPIView(APIView):
                 {"success": False, "message": "City is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        try:
+            city_uuid = UUID(str(city_id))
+        except (TypeError, ValueError):
+            return Response({"success": False, "message": "City must be a valid city ID."}, status=400)
+        city = City.objects.filter(pk=city_uuid).first()
+        if city is None:
+            return Response({"success": False, "message": "City not found."}, status=404)
 
         if not stops_input or len(stops_input) < 2:
             return Response(
@@ -1174,8 +1266,10 @@ class AdminRouteImportAPIView(APIView):
             stops_data.append({
                 "lat": lat,
                 "lon": lon,
-                "name": s.get("name", f"Stop {i + 1}"),
+                "name": str(s.get("name") or f"Stop {i + 1}").strip()[:255],
                 "order": int(s.get("order", i)),
+                "plus_code": str(s.get("plus_code") or "")[:100],
+                "nearby_landmark": str(s.get("nearby_landmark") or "")[:255],
             })
 
         if len(stops_data) < 2:
@@ -1229,28 +1323,31 @@ class AdminRouteImportAPIView(APIView):
 
         path = LineString(road_coords, srid=4326)
 
-        route = Route.objects.create(
-            city_id=city_id,
-            name=route_name,
-            route_code=route_code,
-            path=path,
-            start_name=stops_data[0]["name"],
-            end_name=stops_data[-1]["name"],
-            total_distance_meters=round(total_distance, 2),
-        )
-
-        stop_objs = [
-            Stop(
-                route=route,
-                name=s["name"],
-                location=Point(s["lon"], s["lat"], srid=4326),
-                order=s["order"],
-                plus_code=s.get("plus_code", ""),
-                nearby_landmark=s.get("nearby_landmark", ""),
+        with transaction.atomic():
+            route = Route.objects.create(
+                city=city,
+                name=route_name,
+                route_code=route_code,
+                path=path,
+                start_name=stops_data[0]["name"],
+                end_name=stops_data[-1]["name"],
+                total_distance_meters=round(total_distance, 2),
             )
-            for s in stops_data
-        ]
-        Stop.objects.bulk_create(stop_objs)
+            stop_objs = [
+                Stop(
+                    route=route,
+                    city=city,
+                    name=s["name"],
+                    location=Point(s["lon"], s["lat"], srid=4326),
+                    order=s["order"],
+                    coordinate_status="verified",
+                    aliases=[s["name"]] if s.get("name") else [],
+                    plus_code=s.get("plus_code", ""),
+                    nearby_landmark=s.get("nearby_landmark", ""),
+                )
+                for s in stops_data
+            ]
+            Stop.objects.bulk_create(stop_objs)
 
         return Response({
             "success": True,

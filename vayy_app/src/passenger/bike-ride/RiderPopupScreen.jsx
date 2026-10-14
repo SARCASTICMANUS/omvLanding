@@ -9,6 +9,7 @@ import {
   Image,
 } from "react-native";
 import VayyMap, { UserLocation, Marker, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
@@ -268,25 +269,24 @@ export function RiderPopupScreen({ navigation, route }) {
         </VayyMap>
         )}
 
-        <View style={[styles.header, { paddingTop: insets.top + 10, overflow: "hidden" }]}>
-          <View style={styles.headerGradient}>
-            <View style={styles.gradBase} />
-            <View style={styles.gradRay1} />
-            <View style={styles.gradRay2} />
-          </View>
-          <View style={styles.headerLeft}>
-            {Platform.OS === 'ios' && (
-              <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-                <Ionicons name="chevron-back" size={24} color="#111827" />
-              </TouchableOpacity>
-            )}
-            <Text style={styles.headerTitle}>Ride Accepted!</Text>
-          </View>
-          <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowCancelConfirm(true)}>
-            <Text style={styles.cancelText}>Cancel</Text>
-            <Ionicons name="close-circle-outline" size={24} color="#EF4444" />
-          </TouchableOpacity>
-        </View>
+        <ScreenHeader
+          absolute
+          zIndex={20}
+          title="Ride Accepted!"
+          subtitle="Your Marshal is on the way to the pickup stop"
+          onBack={() => navigation.goBack()}
+          right={
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setShowCancelConfirm(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel ride request"
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+              <Ionicons name="close-circle-outline" size={18} color="#EF4444" />
+            </TouchableOpacity>
+          }
+        />
 
         <TouchableOpacity style={[styles.recenterBtn, { bottom: 140 }]} onPress={zoomIn}>
           <Ionicons name="add" size={22} color="#111827" />
@@ -384,50 +384,6 @@ export function RiderPopupScreen({ navigation, route }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, position: "relative", backgroundColor: "#F8FAF9" },
-  header: {
-    position: "absolute", top: 0, left: 0, right: 0, zIndex: 10,
-    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    paddingHorizontal: 24, paddingBottom: 12, overflow: "hidden",
-  },
-  headerGradient: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  gradBase: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "#009849",
-  },
-  gradRay1: {
-    position: "absolute",
-    top: -60,
-    right: -40,
-    width: "70%",
-    height: "90%",
-    backgroundColor: "#00B857",
-    opacity: 0.25,
-    borderRadius: 120,
-    transform: [{ rotate: "25deg" }],
-  },
-  gradRay2: {
-    position: "absolute",
-    top: -80,
-    right: -20,
-    width: "50%",
-    height: "70%",
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 100,
-    transform: [{ rotate: "35deg" }],
-  },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 16 },
-  headerTitle: { fontSize: 22, fontWeight: "800", color: "#FFFFFF", letterSpacing: -0.5 },
-  iconBtn: {
-    width: 52, height: 52, borderRadius: 26, backgroundColor: "#FFFFFF",
-    justifyContent: "center", alignItems: "center",
-    shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 3,
-  },
   cancelBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
     backgroundColor: "#FEF2F2", paddingHorizontal: 12, paddingVertical: 8,

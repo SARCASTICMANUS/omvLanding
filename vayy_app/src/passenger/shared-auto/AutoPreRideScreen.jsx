@@ -786,6 +786,7 @@ import {
 } from "react-native";
 import * as Location from "expo-location";
 import VayyMap, { ViewAnnotation, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Ionicons,
@@ -793,6 +794,7 @@ import {
   Feather,
 } from "@expo/vector-icons";
 import { fetchRouteGeometry } from "../../routes/services/routeService";
+import { toRouteGeoJSON } from "../../routes/services/dynamicRouteNormalizer";
 import { walkingDistanceText } from "../../shared/utils/walkingDistance";
 import { TRACKING } from "../../constants";
 import api from "../../shared/lib/api";
@@ -836,19 +838,33 @@ export function AutoPreRideScreen({ navigation, route }) {
 
   useEffect(() => {
     const loadRoute = async () => {
+      // The dynamic-preview response already carries the OSRM geometry on the
+      // route we were handed (route_geometry / previewPath / path_coords), so use
+      // it directly. Re-fetching GET routes/<id>/geometry/ does NOT work for a
+      // generated journey: it answers {"type":"LineString","coordinates":[]} with
+      // no `path` key, which is why the line below never appeared.
+      const inline = toRouteGeoJSON(trip);
+      if (inline) {
+        setRoutePath(inline);
+        return;
+      }
       const routeId = trip?.route_id;
       if (!routeId) return;
       try {
         const data = await fetchRouteGeometry(routeId);
-        if (data?.path) {
-          setRoutePath(data.path);
+        const geo = toRouteGeoJSON(data);
+        if (geo) {
+          setRoutePath(geo);
         }
       } catch (e) {
         console.warn("Failed to load route geometry", e);
       }
     };
     loadRoute();
-  }, [trip?.route_id]);
+    // `trip` is `route.params.trip || {}`, so the `{}` fallback is a NEW object
+    // on every render - depending on it would re-fetch forever. These two are
+    // stable references off the (immutable) navigation params.
+  }, [trip?.route_id, trip?.route_geometry]);
 
   useEffect(() => {
     if (didFitRef.current) return;
@@ -1042,21 +1058,13 @@ export function AutoPreRideScreen({ navigation, route }) {
       </View>
 
       {/* FIXED LAYER 2: Overlay Controls & Context Elements */}
-      <View style={[styles.header, { paddingTop: insets.top + 10, overflow: "hidden" }]}>
-        <View style={styles.headerGradient}>
-          <View style={styles.gradBase} />
-          <View style={styles.gradRay1} />
-          <View style={styles.gradRay2} />
-        </View>
-        <View style={styles.headerLeft}>
-          {Platform.OS === 'ios' && (
-            <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-              <Ionicons name="chevron-back" size={24} color="#111827" />
-            </TouchableOpacity>
-          )}
-          <Text style={styles.headerTitle}>Pre-Ride</Text>
-        </View>
-      </View>
+      <ScreenHeader
+        absolute
+        zIndex={20}
+        title="Pre-Ride"
+        subtitle="Reach the pickup stop to raise your hand"
+        onBack={() => navigation.goBack()}
+      />
 
       <View style={[styles.distanceCard, { top: insets.top + 70 }]}>
         <View style={styles.flagWrapper}>
@@ -1199,64 +1207,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8FAF9",
-  },
-  header: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingBottom: 12,
-  },
-  headerGradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  gradBase: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#009849",
-  },
-  gradRay1: {
-    position: "absolute",
-    top: -60,
-    right: -20,
-    width: 260,
-    height: 200,
-    backgroundColor: "#00B857",
-    opacity: 0.25,
-    transform: [{ rotate: "25deg" }],
-  },
-  gradRay2: {
-    position: "absolute",
-    bottom: -90,
-    right: 40,
-    width: 240,
-    height: 180,
-    backgroundColor: "#FFFFFF",
-    opacity: 0.1,
-    transform: [{ rotate: "35deg" }],
-  },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: -0.5,
   },
   distanceCard: {
     position: "absolute",

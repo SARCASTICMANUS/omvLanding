@@ -9,10 +9,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import COLORS from "../../shared/constants/colors";
 import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import VayyMap from "../../shared/components/VayyMap";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import AutoCancelRideModal from "./AutoCancelRideModal";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
@@ -134,18 +134,13 @@ export default function AutoRideToDestinationScreen({ navigation, route }) {
           ))}
         </View>
 
-        <LinearGradient
-          colors={["rgba(10, 22, 60, 0.94)", "rgba(10, 22, 62, 0.0010)"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}
-        >
-          <TouchableOpacity style={styles.backBtn} onPress={() => setShowCancel(true)}>
-            <Ionicons name="chevron-back" size={22} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>On Ride</Text>
-          <View style={{ width: 40 }} />
-        </LinearGradient>
+        <ScreenHeader
+          absolute
+          zIndex={20}
+          title="On Ride"
+          subtitle="Drive the passenger to the destination"
+          onBack={() => setShowCancel(true)}
+        />
       </View>
 
       <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16 }]}>
@@ -333,32 +328,6 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: COLORS.primary,
-  },
-  mapHeader: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    zIndex: 10,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#fff",
-    letterSpacing: -0.3,
   },
   bottomSheet: {
     position: "absolute",

@@ -17,6 +17,7 @@ import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
 import VayyMap from "../../shared/components/VayyMap";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import AutoCancelRideModal from "./AutoCancelRideModal";
 
 const { width } = Dimensions.get("window");
@@ -111,13 +112,13 @@ export default function AutoOTPEntryScreen({ navigation, route }) {
           <Text style={styles.checkOnMapText}>Verify Safety Code</Text>
         </View>
 
-        <View style={[styles.mapHeader]}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => setShowCancel(true)}>
-            <Ionicons name="chevron-back" size={22} color="#111827" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Verify Passenger</Text>
-          <View style={{ width: 40 }} />
-        </View>
+        <ScreenHeader
+          absolute
+          zIndex={20}
+          title="Verify Passenger"
+          subtitle="Ask the passenger for their 4-digit code"
+          onBack={() => setShowCancel(true)}
+        />
       </View>
 
       <Animated.View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 24, transform: [{ translateX: shakeAnim }] }]}>
@@ -215,37 +216,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 1,
     backgroundColor: "#E5E7EB",
-  },
-  mapHeader: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    zIndex: 10,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827",
-    letterSpacing: -0.3,
   },
   checkOnMap: {
     position: "absolute",

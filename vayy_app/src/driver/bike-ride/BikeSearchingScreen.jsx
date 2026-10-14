@@ -128,10 +128,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 24,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
+    boxShadow: "0 0 20 rgba(0, 0, 0, 0.15)",
   },
   pulseDot: {
     width: 16,

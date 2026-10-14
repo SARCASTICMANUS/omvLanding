@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { StyleSheet, Text, View, FlatList, ActivityIndicator, Platform, StatusBar } from "react-native";
+import { StyleSheet, Text, View, FlatList, ActivityIndicator, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,6 +7,7 @@ import COLORS from "../../shared/constants/colors";
 import SPACING from "../../shared/constants/spacing";
 import RADIUS from "../../shared/constants/radius";
 import VayyCard from "../../shared/components/common/VayyCard";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import { fetchRideHistory } from "../../store/slices/rideSlice";
 
 export default function JourneyHistoryScreen({ navigation }) {
@@ -58,14 +59,13 @@ export default function JourneyHistoryScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
-      <View style={styles.header}>
-        <Text style={styles.title}>Journey History</Text>
-        {historyCount > 0 && (
-          <Text style={styles.count}>{historyCount} trip{historyCount !== 1 ? "s" : ""}</Text>
-        )}
-      </View>
+    <SafeAreaView style={styles.root} edges={["left", "right", "bottom"]}>
+      <StatusBar barStyle="light-content" backgroundColor="#009849" />
+      <ScreenHeader
+        title="Journey History"
+        subtitle={historyCount > 0 ? `${historyCount} trip${historyCount !== 1 ? "s" : ""}` : "Your completed trips"}
+        onBack={() => navigation.goBack()}
+      />
       {historyLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -93,22 +93,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  header: {
-    paddingHorizontal: SPACING.base,
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight + SPACING.base : SPACING.lg,
-    paddingBottom: SPACING.md,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: COLORS.text,
-  },
-  count: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    fontWeight: "500",
-    marginTop: 2,
   },
   center: {
     flex: 1,

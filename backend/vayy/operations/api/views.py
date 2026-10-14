@@ -1,4 +1,6 @@
 import base64
+from uuid import UUID
+from decimal import Decimal, InvalidOperation
 import logging
 from django.http import HttpResponse
 from rest_framework import status
@@ -57,6 +59,7 @@ from transport.api.serializers import (
 )
 from transport.models import StopTime
 from operations.models import ActiveTrip, DispatchRequest, VehicleState, FareConfiguration
+from transport.models import City, CityAdminConfiguration
 from operations.permissions import (
     HasBoardingRequestAccess,
     HasTripAccess,
@@ -1374,14 +1377,8 @@ class AdminDriverVerifyAPIView(APIView):
             )
 
         if action == "approve":
-            # Mark driver profile as verified
-            try:
-                profile = driver.driver_profile
-                profile.is_verified = True
-                profile.save(update_fields=["is_verified"])
-            except Exception:
-                pass
-
+            # KYC is recalculated from approved required documents below; approving
+            # the vehicle must not independently force the profile to verified.
             # Approve vehicle too
             Vehicle.objects.filter(driver=driver).update(
                 status=VEHICLE_STATUS_APPROVED,
@@ -1393,7 +1390,10 @@ class AdminDriverVerifyAPIView(APIView):
                 status=DOC_STATUS_VERIFIED,
                 verified_by=request.user,
                 verified_at=timezone.now(),
+                rejection_reason="",
             )
+            from accounts.services.verification_service import VerificationService
+            VerificationService.check_and_verify_profile(driver)
 
             # Send notification
             try:
@@ -1459,14 +1459,9 @@ class AdminDocumentVerifyAPIView(APIView):
             doc.verified_at = timezone.now()
             doc.save(update_fields=["status", "rejection_reason", "verified_by", "verified_at"])
 
-            # Unverify profile if it was verified
-            try:
-                profile = doc.driver.driver_profile
-                if profile.is_verified:
-                    profile.is_verified = False
-                    profile.save(update_fields=["is_verified"])
-            except Exception:
-                pass
+            # Keep the profile flag synchronized with required document state.
+            from accounts.services.verification_service import VerificationService
+            VerificationService.check_and_verify_profile(doc.driver)
 
         return Response(
             {
@@ -1517,43 +1512,181 @@ class AdminDocumentFileAPIView(APIView):
         return response
 
 
-class FareConfigurationListCreateAPIView(APIView):
-    """
-    GET /api/operations/fare-configurations/
-    List all fare configurations (admin only).
+def _resolve_admin_city(value):
+    value = str(value or "").strip()
+    if not value:
+        return None
+    city = City.objects.filter(slug__iexact=value).first() or City.objects.filter(name__iexact=value).first()
+    if city is not None:
+        return city
+    try:
+        city_id = UUID(value)
+    except (TypeError, ValueError):
+        return None
+    return City.objects.filter(pk=city_id).first()
 
-    POST /api/operations/fare-configurations/
-    Create a new fare configuration (admin only).
-    """
+
+class FareConfigurationListCreateAPIView(APIView):
+    """Support both the legacy per-vehicle fare screen and Dynamic Routing's per-city pricing contract."""
     permission_classes = [IsAuthenticated]
 
+    @staticmethod
+    def _is_admin(user):
+        return user.is_authenticated and (getattr(user, "role", None) == "admin" or user.is_staff)
+
+    @staticmethod
+    def _city_row(city):
+        try:
+            config = city.admin_configuration
+        except CityAdminConfiguration.DoesNotExist:
+            config = None
+        return {
+            "city": city.slug,
+            "city_name": city.name,
+            "city_id": str(city.id),
+            "fare_per_km": float(config.fare_per_km) if config else 8.0,
+            "platform_fee": float(config.platform_fee) if config else 0.0,
+            "rounding_rule": config.rounding_rule if config else "none",
+            "currency": config.currency if config else "INR",
+            "corridor_m": config.corridor_m if config else 100,
+            "max_walk_to_stop_m": config.max_walk_to_stop_m if config else 1200,
+            "is_active": config.is_active if config else True,
+        }
+
     def get(self, request):
-        if request.user.role != "admin":
-            return Response(
-                {"success": False, "message": "Admin access required"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        configs = FareConfiguration.objects.all().order_by("-effective_from")
-        serializer = FareConfigurationSerializer(configs, many=True)
-        return Response(
-            {"success": True, "data": serializer.data},
-            status=status.HTTP_200_OK,
-        )
+        if not self._is_admin(request.user):
+            return Response({"success": False, "message": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
+        global_configs = FareConfiguration.objects.all().order_by("-effective_from")
+        legacy_data = FareConfigurationSerializer(global_configs, many=True).data
+        city_rows = [self._city_row(city) for city in City.objects.select_related("admin_configuration").order_by("name")]
+        # Legacy FareConfigurations.jsx reads data; DynamicRouting.rowsOf reads results.
+        return Response({"success": True, "data": legacy_data, "results": city_rows,
+                         "count": len(city_rows)}, status=status.HTTP_200_OK)
 
     def post(self, request):
-        if request.user.role != "admin":
-            return Response(
-                {"success": False, "message": "Admin access required"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        if not self._is_admin(request.user):
+            return Response({"success": False, "message": "Admin access required"}, status=status.HTTP_403_FORBIDDEN)
+
+        # Dynamic Routing sends a city slug and rupee-denominated fields.
+        if "city" in request.data:
+            city_value = str(request.data.get("city") or "").strip()
+            city = _resolve_admin_city(city_value)
+            if city is None:
+                return Response({"success": False, "message": "City not found. Refresh the city list and try again."}, status=404)
+
+            allowed = {"fare_per_km", "platform_fee", "rounding_rule", "currency", "corridor_m", "max_walk_to_stop_m", "is_active"}
+            supplied = {key: request.data[key] for key in allowed if key in request.data}
+            defaults = {}
+            try:
+                for key in ("fare_per_km", "platform_fee"):
+                    if key in supplied:
+                        value = Decimal(str(supplied[key]))
+                        if not value.is_finite() or value < 0:
+                            raise ValueError(f"{key} must be a non-negative number.")
+                        defaults[key] = value
+                for key in ("corridor_m", "max_walk_to_stop_m"):
+                    if key in supplied:
+                        value = int(supplied[key])
+                        if value < 0:
+                            raise ValueError(f"{key} must be non-negative.")
+                        defaults[key] = value
+                if "rounding_rule" in supplied:
+                    valid_rules = {"none", "nearest_unit", "ceil_unit", "floor_unit"}
+                    if supplied["rounding_rule"] not in valid_rules:
+                        raise ValueError("rounding_rule is invalid.")
+                    defaults["rounding_rule"] = supplied["rounding_rule"]
+                if "currency" in supplied:
+                    currency = str(supplied["currency"]).strip().upper()
+                    if len(currency) != 3:
+                        raise ValueError("currency must be a 3-letter currency code.")
+                    defaults["currency"] = currency
+                if "is_active" in supplied:
+                    raw_active = supplied["is_active"]
+                    if isinstance(raw_active, str):
+                        raw_active = raw_active.lower() in ("true", "1", "yes")
+                    defaults["is_active"] = bool(raw_active)
+            except (InvalidOperation, TypeError, ValueError) as exc:
+                return Response({"success": False, "message": str(exc) or "Invalid city fare configuration."}, status=400)
+
+            config, _ = CityAdminConfiguration.objects.get_or_create(city=city)
+            for key, value in defaults.items():
+                setattr(config, key, value)
+            if defaults:
+                config.save()
+            return Response({"success": True, "data": self._city_row(city)}, status=status.HTTP_200_OK)
+
+        # Preserve the older vehicle-type form. Its values are already in paise.
         serializer = FareConfigurationSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(
-                {"success": True, "data": serializer.data},
-                status=status.HTTP_201_CREATED,
-            )
-        return Response(
-            {"success": False, "message": serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        serializer.validators = []  # the model's historical unique_together blocked creating a new active version
+        if not serializer.is_valid():
+            return Response({"success": False, "message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        if serializer.validated_data["base_fare"] < 0 or serializer.validated_data["per_km_rate"] < 0:
+            return Response({"success": False, "message": "Fare values must be non-negative."}, status=400)
+        from django.db import transaction
+        with transaction.atomic():
+            FareConfiguration.objects.filter(
+                vehicle_type=serializer.validated_data["vehicle_type"], is_active=True
+            ).update(is_active=False)
+            config = serializer.save(is_active=True)
+        return Response({"success": True, "data": FareConfigurationSerializer(config).data}, status=status.HTTP_201_CREATED)
+
+
+class FareConfigurationQuoteAPIView(APIView):
+    """Preview fare using the same city-specific pricing rules as Dynamic Routing."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP
+        user = request.user
+        if not (user.is_authenticated and (getattr(user, "role", None) == "admin" or user.is_staff)):
+            return Response({"success": False, "message": "Admin access required"}, status=403)
+        city_value = str(request.data.get("city") or "").strip()
+        if not city_value:
+            return Response({"success": False, "message": "city is required."}, status=400)
+        city = _resolve_admin_city(city_value)
+        if city is None:
+            return Response({"success": False, "message": "City not found."}, status=404)
+        try:
+            distance_m = Decimal(str(request.data.get("route_distance_m")))
+        except (InvalidOperation, TypeError):
+            return Response({"success": False, "message": "route_distance_m must be a number."}, status=400)
+        if not distance_m.is_finite() or distance_m < 0 or distance_m > Decimal("2000000"):
+            return Response({"success": False, "message": "route_distance_m must be between 0 and 2,000,000 metres."}, status=400)
+
+        city_config = CityAdminConfiguration.objects.filter(city=city).first()
+        if city_config and not city_config.is_active:
+            return Response({"success": False, "message": "This city is inactive for routing."}, status=400)
+        distance_km = distance_m / Decimal("1000")
+        if city_config:
+            base = Decimal("0")
+            rate = Decimal(city_config.fare_per_km)
+            platform_fee = Decimal(city_config.platform_fee)
+            rounding_rule = city_config.rounding_rule
+            currency = city_config.currency
+        else:
+            # Match the Dynamic Routing city editor's default until a city-specific
+            # configuration is explicitly saved. Global vehicle fares serve legacy flows.
+            base = Decimal("0")
+            rate = Decimal("8.00")
+            platform_fee = Decimal("0")
+            rounding_rule = "none"
+            currency = "INR"
+        base_fare = base.quantize(Decimal("0.01"))
+        distance_fare = (distance_km * rate).quantize(Decimal("0.01"))
+        subtotal = base_fare + distance_fare
+        if rounding_rule == "nearest_unit":
+            subtotal = subtotal.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+        elif rounding_rule == "ceil_unit":
+            subtotal = subtotal.quantize(Decimal("1"), rounding=ROUND_CEILING)
+        elif rounding_rule == "floor_unit":
+            subtotal = subtotal.quantize(Decimal("1"), rounding=ROUND_FLOOR)
+        total = (subtotal + platform_fee).quantize(Decimal("0.01"))
+        data = {
+            "city": city.slug, "city_name": city.name, "distance_km": round(float(distance_km), 2),
+            "rate_per_km": float(rate), "base_fare": float(base_fare),
+            "platform_fee": float(platform_fee), "distance_fare": float(distance_fare),
+            "buddy_fare": float(total), "marshal_earning": float(subtotal),
+            "total_fare": float(total), "currency": currency, "rounding_rule": rounding_rule,
+            "formula": "base fare + distance × city rate + platform fee, with configured rounding",
+        }
+        return Response({"success": True, "data": data}, status=200)

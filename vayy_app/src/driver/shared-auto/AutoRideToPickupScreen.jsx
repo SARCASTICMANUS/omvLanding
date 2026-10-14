@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
 import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import VayyMap from "../../shared/components/VayyMap";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import AutoCancelRideModal from "./AutoCancelRideModal";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
@@ -122,13 +123,13 @@ export default function AutoRideToPickupScreen({ navigation, route }) {
           ))}
         </View>
 
-        <View style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => setShowCancel(true)}>
-            <Ionicons name="chevron-back" size={22} color="#111827" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Ride to Pickup</Text>
-          <View style={{ width: 40 }} />
-        </View>
+        <ScreenHeader
+          absolute
+          zIndex={20}
+          title="Ride to Pickup"
+          subtitle="Head to the passenger's boarding stop"
+          onBack={() => setShowCancel(true)}
+        />
       </View>
 
       <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16 }]}>
@@ -346,37 +347,6 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 2,
     backgroundColor: COLORS.primary,
-  },
-  mapHeader: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    zIndex: 10,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827",
-    letterSpacing: -0.3,
   },
   bottomSheet: {
     position: "absolute",

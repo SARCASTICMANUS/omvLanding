@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import COLORS from "../../shared/constants/colors";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import { fetchRideHistory } from "../../store/slices/rideSlice";
 
 const BAR_PATTERN = [8, 3, 12, 5, 6, 10, 4, 14, 7, 3, 9, 6, 11, 4, 5, 8, 13, 3, 7, 10, 6, 4, 12, 5, 9, 8, 3, 11, 6, 7, 14, 4, 10, 5, 8, 12, 3, 9, 6, 11, 7, 4, 13, 5, 8, 6, 10, 3, 12, 7];
@@ -14,9 +15,9 @@ function TripHistoryCard({ item, accent }) {
       <View style={styles.historyTop}>
         <View style={styles.historyVehicleWrap}>
           <Ionicons name={item.vehicle === "Bike" ? "bicycle" : "car"} size={14} color={accent} />
-          <Text style={[styles.historyVehicleText, { color: accent }]}>{item.vehicle}</Text>
+          <Text style={[styles.historyVehicleText, { color: accent }]} numberOfLines={1}>{item.vehicle}</Text>
         </View>
-        <Text style={styles.historyDate}>{item.date}</Text>
+        <Text style={styles.historyDate} numberOfLines={1}>{item.date}</Text>
       </View>
 
       <View style={styles.historyRouteRow}>
@@ -103,19 +104,12 @@ export default function DriverTripHistoryScreen({ navigation, route }) {
     return (
       <View style={styles.root}>
         <StatusBar barStyle="light-content" backgroundColor="#009849" />
-        <View style={[styles.listHeader, { paddingTop: insets.top + 6, overflow: "hidden" }]}>
-          <View style={styles.headerGradient}>
-            <View style={styles.gradBase} />
-            <View style={styles.gradRay1} />
-            <View style={styles.gradRay2} />
-          </View>
-          <View style={styles.headerRow}>
-            <View style={styles.headerMid}>
-              <Text style={styles.headerTitle}>Ride History</Text>
-              <Text style={styles.headerSub}>Your completed trips</Text>
-            </View>
-          </View>
-        </View>
+        {/* Tab root — no back button. ScreenHeader renders a transparent
+            spacer instead, so the title stays optically centred. */}
+        <ScreenHeader
+          title="Ride History"
+          subtitle="Your completed trips"
+        />
 
         <FlatList
           data={tripItems}
@@ -289,48 +283,6 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { color: COLORS.white, fontSize: 16, fontWeight: "800" },
 
-  /* List mode styles */
-  listHeader: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-  },
-  headerGradient: {
-    position: "absolute",
-    top: 0, left: 0, right: 0, bottom: 0,
-  },
-  gradBase: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "#009849",
-  },
-  gradRay1: {
-    position: "absolute",
-    top: -60, right: -40,
-    width: "70%", height: "90%",
-    backgroundColor: "#00B857",
-    opacity: 0.25,
-    borderRadius: 120,
-    transform: [{ rotate: "25deg" }],
-  },
-  gradRay2: {
-    position: "absolute",
-    top: -80, right: -20,
-    width: "50%", height: "70%",
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 100,
-    transform: [{ rotate: "35deg" }],
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    position: "relative",
-    zIndex: 2,
-  },
-  headerMid: { flex: 1 },
-  headerTitle: { color: "#FFFFFF", fontSize: 22, fontWeight: "900" },
-  headerSub: { color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: "700", marginTop: 1 },
   listContent: {
     padding: 16,
     paddingBottom: 32,
@@ -371,26 +323,32 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 8,
     marginBottom: 12,
   },
   historyVehicleWrap: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    flexShrink: 1,
+    minWidth: 0,
   },
   historyVehicleText: {
     fontSize: 12,
     fontWeight: "700",
+    flexShrink: 1,
   },
   historyDate: {
     fontSize: 12,
     color: COLORS.textMuted,
     fontWeight: "600",
+    flexShrink: 0,
   },
   historyRouteRow: {
     flexDirection: "row",
     gap: 10,
     marginBottom: 14,
+    minWidth: 0,
   },
   historyDots: {
     alignItems: "center",
@@ -414,17 +372,20 @@ const styles = StyleSheet.create({
   },
   historyLocCol: {
     flex: 1,
+    minWidth: 0,
     gap: 6,
   },
   historyLocText: {
     fontSize: 14,
     fontWeight: "600",
     color: COLORS.text,
+    ellipsizeMode: "tail",
   },
   historyLocDest: {
     fontSize: 14,
     fontWeight: "700",
     color: COLORS.text,
+    ellipsizeMode: "tail",
   },
   historyMeta: {
     flexDirection: "row",
@@ -434,6 +395,7 @@ const styles = StyleSheet.create({
   },
   historyMetaItem: {
     flex: 1,
+    minWidth: 0,
     alignItems: "center",
     gap: 2,
   },

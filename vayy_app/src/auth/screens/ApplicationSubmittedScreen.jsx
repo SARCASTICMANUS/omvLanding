@@ -32,7 +32,7 @@ export default function ApplicationSubmittedScreen({ onCta }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.primary },
   body: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 24 },
-  card: { backgroundColor: "#fff", borderRadius: 24, padding: 32, alignItems: "center", width: "100%", maxWidth: 340, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 10, marginBottom: 32 },
+  card: { backgroundColor: "#fff", borderRadius: 24, padding: 32, alignItems: "center", width: "100%", maxWidth: 340, boxShadow: "0 8 24 rgba(0, 0, 0, 0.15)", marginBottom: 32 },
   emoji: { fontSize: 48, marginBottom: 16 },
   title: { fontSize: 22, fontWeight: "800", color: COLORS.text, textAlign: "center", marginBottom: 12 },
   message: { fontSize: 14, color: COLORS.textMuted, textAlign: "center", lineHeight: 20, marginBottom: 20 },

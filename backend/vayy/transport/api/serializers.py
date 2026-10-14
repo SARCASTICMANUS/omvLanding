@@ -1,8 +1,11 @@
 from rest_framework import serializers
 from django.contrib.gis.geos import LineString, Point
+from django.db.models import Q
+from django.utils.text import slugify
 
 from transport.models import (
     City,
+    CityAdminConfiguration,
     Route,
     Stop,
     TripSchedule,
@@ -20,6 +23,80 @@ class CitySerializer(serializers.ModelSerializer):
             "country",
             "location",
         )
+
+
+class AdminCitySerializer(serializers.ModelSerializer):
+    state_name = serializers.CharField(source="state", required=False, allow_blank=True)
+    fare_per_km = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, min_value=0)
+    platform_fee = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, min_value=0)
+    rounding_rule = serializers.ChoiceField(choices=CityAdminConfiguration.ROUNDING_CHOICES, required=False)
+    currency = serializers.CharField(max_length=3, required=False)
+    corridor_m = serializers.IntegerField(required=False, min_value=0)
+    max_walk_to_stop_m = serializers.IntegerField(required=False, min_value=0)
+    is_active = serializers.BooleanField(required=False)
+    stop_count = serializers.SerializerMethodField()
+    route_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = City
+        fields = ("id", "name", "slug", "state", "state_name", "country", "location",
+                  "currency", "fare_per_km", "platform_fee", "rounding_rule", "corridor_m",
+                  "max_walk_to_stop_m", "is_active", "stop_count", "route_count")
+        read_only_fields = ("id", "stop_count", "route_count")
+
+    def validate_slug(self, value):
+        value = slugify(value)
+        if not value:
+            # The model derives a stable slug from the city name on creation.
+            return ""
+        qs = City.objects.filter(slug=value)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("This city slug is already in use.")
+        return value
+
+    def get_stop_count(self, obj):
+        return Stop.objects.filter(Q(city=obj) | Q(route__city=obj)).distinct().count()
+
+    def get_route_count(self, obj):
+        return obj.routes.count()
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        try:
+            config = instance.admin_configuration
+        except CityAdminConfiguration.DoesNotExist:
+            config = None
+        defaults = {
+            "currency": "INR", "fare_per_km": 8, "platform_fee": 0,
+            "rounding_rule": "none", "corridor_m": 100,
+            "max_walk_to_stop_m": 1200, "is_active": True,
+        }
+        for field, default in defaults.items():
+            value = getattr(config, field, default) if config else default
+            data[field] = float(value) if field in ("fare_per_km", "platform_fee") else value
+        data["state_name"] = instance.state
+        return data
+
+    def create(self, validated_data):
+        config_fields = {key: validated_data.pop(key) for key in (
+            "currency", "fare_per_km", "platform_fee", "rounding_rule", "corridor_m",
+            "max_walk_to_stop_m", "is_active") if key in validated_data}
+        city = City.objects.create(**validated_data)
+        CityAdminConfiguration.objects.update_or_create(city=city, defaults=config_fields)
+        return city
+
+    def update(self, instance, validated_data):
+        config_fields = {key: validated_data.pop(key) for key in (
+            "currency", "fare_per_km", "platform_fee", "rounding_rule", "corridor_m",
+            "max_walk_to_stop_m", "is_active") if key in validated_data}
+        for key, value in validated_data.items():
+            setattr(instance, key, value)
+        instance.save()
+        if config_fields:
+            CityAdminConfiguration.objects.update_or_create(city=instance, defaults=config_fields)
+        return instance
 
 
 class StopSerializer(serializers.ModelSerializer):
@@ -43,6 +120,9 @@ class StopSerializer(serializers.ModelSerializer):
             "name",
             "location",
             "order",
+            "coordinate_status",
+            "aliases",
+            "serviceability_reason",
             "is_global",
             "short_name",
             "plus_code",
@@ -52,6 +132,15 @@ class StopSerializer(serializers.ModelSerializer):
 
     def get_short_name(self, obj):
         return obj.name.split(",")[0] if obj.name else obj.name
+
+    def validate(self, attrs):
+        route = attrs.get("route", getattr(self.instance, "route", None))
+        city = attrs.get("city", getattr(self.instance, "city", None))
+        if route and city and route.city_id != city.id:
+            raise serializers.ValidationError({"city": "A stop must belong to the same city as its route."})
+        if route and city is None:
+            attrs["city"] = route.city
+        return attrs
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

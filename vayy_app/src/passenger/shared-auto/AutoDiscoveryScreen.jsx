@@ -10,6 +10,7 @@ import {
   Image,
 } from "react-native";
 import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { getNearbyVehicles } from "../../passenger/services/passengerService";
@@ -157,23 +158,17 @@ export function AutoDiscoveryScreen({ navigation }) {
           })}
         </VayyMap>
 
-        <View style={[styles.header, { paddingTop: insets.top + 10, overflow: "hidden" }]}>
-          <View style={styles.headerGradient}>
-            <View style={styles.gradBase} />
-            <View style={styles.gradRay1} />
-            <View style={styles.gradRay2} />
-          </View>
-          <View style={styles.headerRow}>
-            {Platform.OS === "ios" && (
-              <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-                <Ionicons name="chevron-back" size={24} color="#111827" />
-              </TouchableOpacity>
-            )}
-            <Text style={styles.headerTitle}>
-              {searchStatus === "auto_assigned" ? "Auto Arrived!" : "Auto Found"}
-            </Text>
-          </View>
-        </View>
+        <ScreenHeader
+          absolute
+          zIndex={20}
+          title={searchStatus === "auto_assigned" ? "Auto Arrived!" : "Auto Found"}
+          subtitle={
+            searchStatus === "auto_assigned"
+              ? "Board the Auto to start your ride"
+              : "Your Auto is heading to the pickup stop"
+          }
+          onBack={() => navigation.goBack()}
+        />
 
         <View style={styles.statusChip}>
           <View style={styles.statusDot} />
@@ -332,77 +327,6 @@ export function AutoDiscoveryScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, position: "relative", backgroundColor: "#F8FAF9" },
-  header: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    overflow: "hidden",
-  },
-  headerGradient: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  gradBase: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: VAYY_PRIMARY,
-    opacity: 0.95,
-  },
-  gradRay1: {
-    position: "absolute",
-    top: -60,
-    right: -40,
-    width: "70%",
-    height: "90%",
-    backgroundColor: "#00B857",
-    opacity: 0.25,
-    borderRadius: 120,
-    transform: [{ rotate: "25deg" }],
-  },
-  gradRay2: {
-    position: "absolute",
-    top: -80,
-    right: -20,
-    width: "50%",
-    height: "70%",
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 100,
-    transform: [{ rotate: "35deg" }],
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: -0.3,
-    textAlign: "center",
-    marginRight: 0,
-  },
-  iconBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
-  },
   mapArea: { ...StyleSheet.absoluteFillObject, backgroundColor: "#F9FAFB" },
   mapBg: { ...StyleSheet.absoluteFillObject },
   statusChip: {

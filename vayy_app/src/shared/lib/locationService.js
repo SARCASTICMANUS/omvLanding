@@ -105,7 +105,37 @@ class LocationService {
 
     // Direct Browser HTML5 Geolocation API for Web
     if (Platform.OS === "web" && typeof navigator !== "undefined" && "geolocation" in navigator) {
-      return this._startWebWatch(callback, options);
+      try {
+        const watchId = navigator.geolocation.watchPosition(
+          (position) => {
+            const coords = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              altitude: position.coords.altitude,
+              accuracy: position.coords.accuracy,
+              heading: position.coords.heading,
+              speed: position.coords.speed,
+            };
+            this.currentLocation = coords;
+            callback(coords);
+          },
+          (error) => {
+            console.error("[LocationService] Web Geolocation watch error:", error.message);
+          },
+          {
+            enableHighAccuracy: options.enableHighAccuracy ?? true,
+            timeout: options.timeout ?? 15000,
+            maximumAge: options.maximumAge ?? 3000,
+          }
+        );
+
+        return this._registerSubscription(() =>
+          navigator.geolocation.clearWatch(watchId)
+        );
+      } catch (webErr) {
+        console.error("[LocationService] Web watchPosition failed:", webErr);
+        return null;
+      }
     }
 
     // Mobile fallback via Expo Location API
@@ -133,134 +163,6 @@ class LocationService {
       console.error("[LocationService] watchPositionAsync failed:", err);
       return null;
     }
-  }
-
-  /**
-   * Web location watching, with recovery.
-   *
-   * `navigator.geolocation.watchPosition` fails with POSITION_UNAVAILABLE (code
-   * 2) — "Position update is unavailable" — on macOS quite routinely: CoreLocation
-   * has no fix yet, there is no Wi-Fi/cell triangulation, or the browser has not
-   * finished initialising. It is transient in that case, but a bare watch dies
-   * permanently on the first error and never recovers, leaving the driver with no
-   * position for the rest of the journey.
-   *
-   * So: retry with backoff, and on the first failure also retry once with
-   * enableHighAccuracy off. GPS-grade accuracy is not required to place a vehicle
-   * on a map, and asking for it is what tips macOS into POSITION_UNAVAILABLE.
-   * PERMISSION_DENIED is not retried — the user has to decide that.
-   */
-  _startWebWatch(callback, options = {}) {
-    const MAX_RETRIES = 6;
-    const BASE_DELAY_MS = 1500;
-    // Escalating backoff: 1.5s, 3s, 6s, 12s, 24s, 24s.
-    const delayFor = (attempt) => BASE_DELAY_MS * 2 ** attempt;
-
-    let watchId = null;
-    let attempt = 0;
-    // High accuracy first; dropped to false after the first transient failure.
-    let highAccuracy = options.enableHighAccuracy ?? true;
-    let retryTimer = null;
-    let stopped = false;
-
-    const clearWatch = () => {
-      if (watchId != null) {
-        try {
-          navigator.geolocation.clearWatch(watchId);
-        } catch {
-          // Already gone; nothing to do.
-        }
-        watchId = null;
-      }
-    };
-
-    const start = () => {
-      if (stopped) return;
-
-      try {
-        watchId = navigator.geolocation.watchPosition(
-          (position) => {
-            if (stopped) return;
-            const coords = {
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              altitude: position.coords.altitude,
-              accuracy: position.coords.accuracy,
-              heading: position.coords.heading,
-              speed: position.coords.speed,
-            };
-            this.currentLocation = coords;
-            // A successful fix means the source is live again, so reset the
-            // backoff: a later outage should not inherit a 24s wait.
-            attempt = 0;
-            callback(coords);
-          },
-          (error) => {
-            if (stopped) return;
-
-            // code 1 is PERMISSION_DENIED — retrying cannot help.
-            if (error?.code === 1) {
-              console.error(
-                "[LocationService] Web Geolocation permission denied:",
-                error.message
-              );
-              // Not retryable — the user has to change the browser setting — so
-              // drop the watch instead of leaving a dead registration open that
-              // will only ever fire this error again.
-              clearWatch();
-              this._handlePermissionDenied(
-                "Location permission was denied. Allow it in your browser to share your position."
-              );
-              return;
-            }
-
-            if (attempt === 0) {
-              // First failure: drop the high-accuracy demand and let the watch
-              // re-register. This alone resolves the macOS case most of the time.
-              highAccuracy = false;
-            }
-
-            attempt += 1;
-            if (attempt > MAX_RETRIES) {
-              console.error(
-                `[LocationService] Web Geolocation unavailable after ${MAX_RETRIES} retries:`,
-                error.message
-              );
-              clearWatch();
-              return;
-            }
-
-            const delay = delayFor(attempt - 1);
-            console.warn(
-              `[LocationService] Web Geolocation unavailable (${error?.code}: ${error?.message}); retrying in ${delay}ms (${attempt}/${MAX_RETRIES})`
-            );
-
-            clearWatch();
-            retryTimer = setTimeout(start, delay);
-          },
-          {
-            enableHighAccuracy: highAccuracy,
-            // A short timeout so a silent provider surfaces as an error we can
-            // retry, rather than a watch that hangs forever with no callback.
-            timeout: options.timeout ?? 10000,
-            maximumAge: options.maximumAge ?? 3000,
-          }
-        );
-      } catch (webErr) {
-        console.error("[LocationService] Web watchPosition threw:", webErr);
-      }
-    };
-
-    start();
-
-    return this._registerSubscription(() => {
-      stopped = true;
-      if (retryTimer) {
-        clearTimeout(retryTimer);
-        retryTimer = null;
-      }
-      clearWatch();
-    });
   }
 
   stopTracking(handle) {
@@ -295,38 +197,25 @@ class LocationService {
       }
 
       return new Promise((resolve) => {
-        // Same transient POSITION_UNAVAILABLE as the watcher, and the same
-        // remedy: one retry without enableHighAccuracy, which is what tips
-        // macOS over. Without it a single hiccup makes a one-shot read fail
-        // permanently, which is what breaks "use my location".
-        let usedFallback = false;
-        const attempt = (highAccuracy) => {
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              const coords = {
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                altitude: position.coords.altitude,
-                accuracy: position.coords.accuracy,
-                heading: position.coords.heading,
-                speed: position.coords.speed,
-              };
-              this.currentLocation = coords;
-              resolve(coords);
-            },
-            (error) => {
-              if (error?.code === 2 && !usedFallback) {
-                usedFallback = true;
-                attempt(false);
-                return;
-              }
-              console.error("[LocationService] Web getCurrentPosition error:", error.message);
-              resolve(null);
-            },
-            { enableHighAccuracy: highAccuracy, timeout: 15000, maximumAge: 10000 }
-          );
-        };
-        attempt(true);
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const coords = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              altitude: position.coords.altitude,
+              accuracy: position.coords.accuracy,
+              heading: position.coords.heading,
+              speed: position.coords.speed,
+            };
+            this.currentLocation = coords;
+            resolve(coords);
+          },
+          (error) => {
+            console.error("[LocationService] Web getCurrentPosition error:", error.message);
+            resolve(null);
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+        );
       });
     }
 

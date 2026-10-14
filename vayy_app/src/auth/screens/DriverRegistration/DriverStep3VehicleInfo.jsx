@@ -10,7 +10,6 @@ import BottomStickyButton from "../../components/BottomStickyButton";
 import { useSelector, useDispatch } from "react-redux";
 import { setField } from "../../../store/slices/onboardingSlice";
 import { VALIDATORS, VALIDATION_MESSAGES } from "../../validators";
-import { notifyAction } from "../../../shared/lib/confirmAction";
 
 export default function DriverStep3VehicleInfo({ onNext, onBack, vehicleType }) {
   const dispatch = useDispatch();
@@ -50,7 +49,7 @@ export default function DriverStep3VehicleInfo({ onNext, onBack, vehicleType }) 
   const handleUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      notifyAction({ title: "Permission Required", message: "Please grant gallery access to upload a photo." });
+      Alert.alert("Permission Required", "Please grant gallery access to upload a photo.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -70,7 +69,7 @@ export default function DriverStep3VehicleInfo({ onNext, onBack, vehicleType }) 
         setPhotoBase64(base64);
         setErrors((prev) => ({ ...prev, photo: undefined }));
       } else {
-        notifyAction({ title: "Conversion Failed", message: "Could not process the image. Please try selecting it again." });
+        Alert.alert("Conversion Failed", "Could not process the image. Please try selecting it again.");
         setPhotoUri(null);
       }
     }

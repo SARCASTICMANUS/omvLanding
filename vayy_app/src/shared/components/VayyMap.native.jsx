@@ -1,10 +1,11 @@
 import React, { forwardRef, useImperativeHandle, useRef, useCallback, useEffect, useState } from "react";
-import { StyleSheet } from "react-native";
+import { StyleSheet, View } from "react-native";
 import {
-  transformStyleToGrayscale,
+  loadSanitizedMapStyle,
   convertInitialRegion,
   DEFAULT_CENTER,
   MAPTILER_STYLE,
+  FALLBACK_STYLE_URL,
 } from "./mapUtils";
 import {
   Map,
@@ -43,17 +44,19 @@ const VayyMap = forwardRef(function VayyMap(
   const activeCameraRef = cameraRef || internalCameraRef;
   const [grayscaleStyle, setGrayscaleStyle] = useState(null);
 
+  // Fetch the style once per context and sanitise it before MapLibre ever parses
+  // it, so MapTiler's tile-less `maptiler_attribution` source no longer triggers
+  // "[ParseStyle]: source must have tiles". Until it resolves we pass `null`
+  // rather than the raw URL, which would be parsed unfiltered.
   useEffect(() => {
-    if (!grayscale) return;
     let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(MAPTILER_STYLE);
-        const style = await res.json();
-        if (cancelled) return;
-        setGrayscaleStyle(transformStyleToGrayscale(style));
-      } catch {}
-    })();
+    loadSanitizedMapStyle(grayscale)
+      .then((safe) => {
+        if (!cancelled) setGrayscaleStyle(safe || FALLBACK_STYLE_URL);
+      })
+      .catch(() => {
+        if (!cancelled) setGrayscaleStyle(FALLBACK_STYLE_URL);
+      });
     return () => { cancelled = true; };
   }, [grayscale]);
 
@@ -190,11 +193,18 @@ const VayyMap = forwardRef(function VayyMap(
     [onPress]
   );
 
+  // Never hand MapLibre a null style: it logs "Unable to parse resourceUrl null",
+  // draws a blank blue map and no GeoJSON layers (so no route polyline).
+  // Hold a neutral placeholder until a style is available.
+  if (!grayscaleStyle) {
+    return <View style={[styles.map, style]} />;
+  }
+
   return (
     <Map
       ref={activeMapRef}
       style={[styles.map, style]}
-      mapStyle={grayscaleStyle || MAPTILER_STYLE}
+      mapStyle={grayscaleStyle}
       dragPan={scrollEnabled}
       touchZoom={zoomEnabled}
       touchPitch={pitchEnabled}

@@ -9,16 +9,15 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
 import { startDispatchTrip } from "../../store/slices/dispatchSlice";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 
 export default function BikeOTPEntryScreen({ navigation, route }) {
-  const insets = useSafeAreaInsets();
   const dispatchRedux = useDispatch();
   const buddy = route.params?.buddy;
   const dispatchId = route.params?.dispatchId || buddy?.dispatchId;
@@ -99,14 +98,12 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={22} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Verify Safety Code</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <View style={styles.root}>
+      <ScreenHeader
+        title="Verify Safety Code"
+        subtitle="Ask the passenger for their 4-digit code"
+        onBack={() => navigation.goBack()}
+      />
 
       <View style={styles.body}>
         <View style={styles.buddyCard}>
@@ -193,32 +190,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F8FAF9",
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827",
-    letterSpacing: -0.3,
-  },
   body: {
     flex: 1,
     paddingHorizontal: 28,
@@ -234,11 +205,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     width: "100%",
     marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
+    boxShadow: "0 0 10 rgba(0, 0, 0, 0.06)",
   },
   buddyRow: {
     flexDirection: "row",
@@ -345,11 +312,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     height: 56,
     width: "100%",
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
+    boxShadow: "0 0 10 rgba(0, 0, 0, 0.3)",
   },
   verifyBtnDisabled: {
     opacity: 0.4,
@@ -386,11 +349,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 14,
-    elevation: 8,
+    boxShadow: "0 0 14 rgba(0, 0, 0, 0.3)",
   },
   successText: {
     fontSize: 22,

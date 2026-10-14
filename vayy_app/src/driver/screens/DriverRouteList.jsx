@@ -2,16 +2,17 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Platform,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
+import RoutePolylinePreview from "../../routes/components/RoutePolylinePreview";
 import { searchDriverRoutes, getDriverRoutes } from "../services/driverService";
 import { buildRouteSummary, estimateStopTimeline } from "../utils/driverFlowUtils";
-import { LinearGradient } from "expo-linear-gradient";
 
 const CARD_SHADOW = Platform.select({
   ios: {
@@ -148,10 +149,11 @@ function RouteCard({ item, index, pickup, destination, onSelect, expanded, onTog
         )}
       </View>
 
-      {/* Expandable stops panel */}
-      {isExpanded && (
+      {/* Route polyline preview — always visible below the batch match */}
+      <RoutePolylinePreview route={item} height={120} />
+      {isExpanded && stops.length > 0 && (
         <View style={s.stopsPanel}>
-          {timeline.map((stop, i) => {
+      {timeline.map((stop, i) => {
             const isBoarding = pickupOrder != null && Number(stop.order) === Number(pickupOrder);
             const isAlighting = dropoffOrder != null && Number(stop.order) === Number(dropoffOrder);
             const dotColor = isBoarding ? "#009849" : isAlighting ? "#f59e0b" : "#D1D5DB";
@@ -198,7 +200,6 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedRouteId, setExpandedRouteId] = useState(null);
-  const insets = useSafeAreaInsets();
   const mode = routeProp?.params?.mode || "bike";
   const pickup = routeProp?.params?.pickup;
   const destination = routeProp?.params?.destination;
@@ -208,7 +209,7 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
       setLoading(true);
 
       if (pickup?.lat && pickup?.lon && destination?.lat && destination?.lon) {
-        const data = await searchDriverRoutes(pickup.lat, pickup.lon, destination.lat, destination.lon);
+        const data = await searchDriverRoutes(pickup.lat, pickup.lon, destination.lat, destination.lon, undefined, { vehicleType: mode });
         const routes = data?.data ?? (Array.isArray(data) ? data : []);
         setRoutes(routes);
         return;
@@ -270,24 +271,12 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
 
   return (
     <View style={s.safe}>
-      <View style={[s.header, { paddingTop: insets.top + 10 }]}>
-        <LinearGradient
-          colors={["rgba(10, 22, 60, 0.94)", "rgba(10, 22, 62, 0.0010)"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={s.headerGradient}
-          pointerEvents="none"
-        />
-        <View style={s.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={s.iconBtn}>
-            <Ionicons name="chevron-back" size={22} color="#111827" />
-          </TouchableOpacity>
-          <View style={s.headerMid}>
-            <Text style={s.headerTitle}>Choose Route</Text>
-            <Text style={s.headerSub}>Select the route you want to drive</Text>
-          </View>
-        </View>
-      </View>
+      <StatusBar barStyle="light-content" backgroundColor="#009849" />
+      <ScreenHeader
+        title="Choose Route"
+        subtitle="Select the route you want to drive"
+        onBack={() => navigation.goBack()}
+      />
 
       <FlatList
         contentContainerStyle={s.listContent}
@@ -324,38 +313,6 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
 const s = StyleSheet.create({
   safe: { backgroundColor: "#F4F6F4", flex: 1 },
   listContent: { paddingBottom: 110, paddingHorizontal: 16, paddingTop: 4 },
-
-  /* header */
-  header: {
-    position: "relative",
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    overflow: "hidden",
-  },
-  headerGradient: {
-    position: "absolute",
-    top: 0, left: 0, right: 0, bottom: 0,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    position: "relative",
-    zIndex: 2,
-  },
-  iconBtn: {
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 999,
-    height: 40,
-    justifyContent: "center",
-    width: 40,
-    ...CARD_SHADOW,
-  },
-  headerMid: { flex: 1, marginLeft: 12 },
-  headerTitle: { color: "#FFFFFF", fontSize: 22, fontWeight: "900" },
-  headerSub: { color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: "700", marginTop: 1 },
 
   /* count */
   countText: {

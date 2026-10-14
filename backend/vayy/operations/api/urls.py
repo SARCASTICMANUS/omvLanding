@@ -33,6 +33,7 @@ from operations.api.views import (
     AdminDocumentVerifyAPIView,
     AdminDocumentFileAPIView,
     FareConfigurationListCreateAPIView,
+    FareConfigurationQuoteAPIView,
 )
 
 urlpatterns = [
@@ -203,6 +204,7 @@ urlpatterns = [
         AdminDocumentFileAPIView.as_view(),
         name="admin-document-file",
     ),
+    path("fare-configurations/quote/", FareConfigurationQuoteAPIView.as_view(), name="fare-configuration-quote"),
     path(
         "fare-configurations/",
         FareConfigurationListCreateAPIView.as_view(),

@@ -15,9 +15,20 @@ import VayyMap, { GeoJSONSource, Layer, UserLocation, Marker, ViewAnnotation } f
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { fetchRouteGeometry, getWalkingPath } from "../../routes/services/routeService";
-import { haversine, formatDistance, walkingTimeText } from "../../shared/utils/walkingDistance";
+import { toRouteGeoJSON } from "../../routes/services/dynamicRouteNormalizer";
+import { haversine, formatDistance, walkingTimeText, walkingTimeValue } from "../../shared/utils/walkingDistance";
+import { formatWaitDuration } from "../../utils/formatters";
+import { getNearbyVehicles } from "../services/passengerService";
 
 const ARRIVAL_THRESHOLD = 500;
+const BIKES_RADIUS_M = 2000;
+const BIKES_REFRESH_MS = 15000;
+
+// A GeoJSONSource whose `data` is not an object is treated by MapLibre Native as a
+// URL to download. While the route / walking path are still loading they are `null`,
+// which logged "[Mbgl-HttpRequest] Unable to parse resourceUrl null" for each source.
+// An empty collection draws nothing and keeps the source valid until data arrives.
+const EMPTY_FEATURE_COLLECTION = { type: "FeatureCollection", features: [] };
 
 const USER_TOP_IMAGE = require("../../../assets/VayyUserTop.webp");
 
@@ -31,6 +42,10 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   const [followMode, setFollowMode] = useState(true);
   const [userLocation, setUserLocation] = useState(null);
   const [walkingPath, setWalkingPath] = useState(null);
+  // Live count of bike Marshals around the pickup point, backing the
+  // "bikes nearby" chip. This used to read a `bikesOnRoute` route param that
+  // no caller ever supplied, so the chip was permanently stuck on "0".
+  const [bikesOnRoute, setBikesOnRoute] = useState(null);
 
   // Dedicated refs for Map and Camera instances
   const mapRef = useRef(null);
@@ -49,7 +64,8 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   const dropoff = route?.params?.destination;
   const dropoffName = dropoff?.name || dropoff?.display_name || trip?.dropoff_stop?.name || "Dropoff";
   const stopDistance = route?.params?.trip?.total_distance_meters || "-";
-  const eta_sec = route?.params?.trip?.eta_seconds || "-";
+  const etaSeconds = Number(route?.params?.trip?.eta_seconds) || 0;
+  const etaText = formatWaitDuration(etaSeconds);
 
   const routeId = route?.params?.route_id || trip?.id;
   const pickupStop = trip?.pickup_stop || {};
@@ -77,15 +93,38 @@ export function BikeMapPreRideScreen({ navigation, route }) {
     : null;
   const distNum = liveWalkDistance != null ? liveWalkDistance : (hasDistance ? Number(stopDistance) : null);
   const isNearby = distNum == null ? true : distNum <= ARRIVAL_THRESHOLD;
+  // When the passenger still has to walk to the stop, the wait badge shows
+  // walk time instead of the vehicle wait estimate.
+  const isWalking = distNum != null && distNum > ARRIVAL_THRESHOLD;
+
+  // An explicit `bikesOnRoute` param still wins, otherwise fall back to the
+  // live nearby count and render an em dash while the first fetch is in flight.
+  const bikesCount = route?.params?.bikesOnRoute ?? bikesOnRoute;
 
   // Fetch route geometry on mount
   useEffect(() => {
     const loadRoute = async () => {
-      if (!routeId) return;
+      // Prefer the geometry the dynamic-preview response already put on `trip`
+      // (route_geometry / previewPath / path_coords). GET routes/<id>/geometry/
+      // returns an EMPTY LineString for a generated journey and has no `path`
+      // key, so the old `data.path` check left routePath null and the line layer
+      // had no data to draw.
+      const inline = toRouteGeoJSON(trip);
+      if (inline) {
+        setRoutePath(inline);
+      }
+      if (Array.isArray(trip?.stops) && trip.stops.length) {
+        setRouteStops(trip.stops);
+      }
+
+      if (!routeId || inline) return;
       try {
         const data = await fetchRouteGeometry(routeId);
         if (data?.path) {
-          setRoutePath(data.path);
+          // Functional update: never clobber the inline geometry, and keeps
+          // `routePath` out of this effect's dependency list.
+          const geo = toRouteGeoJSON({ path: data.path }) ?? data.path;
+          setRoutePath((cur) => cur ?? geo);
         }
         if (data?.stops) {
           setRouteStops(data.stops);
@@ -95,7 +134,36 @@ export function BikeMapPreRideScreen({ navigation, route }) {
       }
     };
     loadRoute();
-  }, [routeId]);
+    // `trip` is `route.params.trip || {}` - the `{}` fallback is a new object each
+    // render, so depend on the stable geometry/id references instead.
+  }, [routeId, trip?.route_geometry]);
+
+  // Keep the "bikes nearby" chip live. Polls GET /api/tracking/nearby/ for bike
+  // vehicles around the rider (falling back to the pickup stop when GPS is not
+  // available yet), so the hand-raise screen reflects real Marshal positions
+  // instead of a hardcoded zero.
+  useEffect(() => {
+    const lat = userLocation?.latitude ?? pickupLat;
+    const lon = userLocation?.longitude ?? pickupLon;
+    if (lat == null || lon == null) return undefined;
+
+    let cancelled = false;
+    const loadBikes = async () => {
+      try {
+        const vehicles = await getNearbyVehicles(lat, lon, "bike", BIKES_RADIUS_M);
+        if (!cancelled) setBikesOnRoute(vehicles.length);
+      } catch {
+        if (!cancelled) setBikesOnRoute(0);
+      }
+    };
+
+    loadBikes();
+    const interval = setInterval(loadBikes, BIKES_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [userLocation?.latitude, userLocation?.longitude, pickupLat, pickupLon]);
 
   // Fetch the rider's actual location to compute walking distance + walking line
   useEffect(() => {
@@ -335,22 +403,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           scrollEnabled={true}
           zoomEnabled={true}
         >
-          <GeoJSONSource id="walkSource" data={walkingPath} />
-          <Layer
-            id="walkLayer"
-            type="line"
-            source="walkSource"
-            layout={{
-              "line-join": "round",
-              "line-cap": "round",
-            }}
-            paint={{
-              "line-color": "#009849",
-              "line-width": 2.5,
-              "line-dasharray": [2, 1],
-            }}
-          />
-          <GeoJSONSource id="routeSource" data={routePath} />
+          <GeoJSONSource id="routeSource" data={routePath || EMPTY_FEATURE_COLLECTION} />
           <Layer
             id="routeLayer"
             type="line"
@@ -362,6 +415,40 @@ export function BikeMapPreRideScreen({ navigation, route }) {
             paint={{
               "line-color": "#009849",
               "line-width": 5,
+            }}
+          />
+          {/* Walking path to the pickup stop. Declared after the route so it
+              renders on top, and `line-dasharray` belongs to layout (not paint)
+              in the MapLibre style spec. */}
+          <GeoJSONSource id="walkSource" data={walkingPath || EMPTY_FEATURE_COLLECTION} />
+          <Layer
+            id="walkCasingLayer"
+            type="line"
+            source="walkSource"
+            layout={{
+              "line-join": "round",
+              "line-cap": "round",
+              "line-dasharray": [0.6, 1.8],
+            }}
+            paint={{
+              "line-color": "#FFFFFF",
+              "line-width": 7,
+              "line-opacity": 0.9,
+            }}
+          />
+          <Layer
+            id="walkLayer"
+            type="line"
+            source="walkSource"
+            layout={{
+              "line-join": "round",
+              "line-cap": "round",
+              "line-dasharray": [0.6, 1.8],
+            }}
+            paint={{
+              "line-color": "#4F46E5",
+              "line-width": 3.5,
+              "line-opacity": 0.95,
             }}
           />
           {routeStops.map((stop) => {
@@ -465,59 +552,63 @@ export function BikeMapPreRideScreen({ navigation, route }) {
         <View style={styles.headerRow}>
           {Platform.OS === "ios" && (
             <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-              <Ionicons name="chevron-back" size={24} color="#111827" />
+              <Ionicons name="chevron-back" size={22} color="#111827" />
             </TouchableOpacity>
           )}
-          <Text style={styles.headerTitle}>Hand Raise</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            Hand Raise
+          </Text>
+          <View style={styles.headerControls}>
+            <TouchableOpacity style={styles.headerCtrlBtn} onPress={() => { handleZoom(false); setFollowMode(false); }}>
+              <Ionicons name="remove" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerCtrlBtn} onPress={() => { handleZoom(true); setFollowMode(false); }}>
+              <Ionicons name="add" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+            <View style={styles.headerCtrlDivider} />
+            <TouchableOpacity
+              style={[styles.headerCtrlBtn, followMode && styles.headerCtrlBtnActive]}
+              onPress={() => { handleGetCurrentLocation(); setFollowMode(true); }}
+              accessibilityLabel="My location"
+            >
+              <MaterialIcons
+                name="my-location"
+                size={16}
+                color={followMode ? "#009849" : "#FFFFFF"}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
       {/* Layer 3: Dynamic Context Cards */}
-      <View style={[styles.topOverlaysContainer, { top: insets.top + 75 }]}>
+      <View style={[styles.topOverlaysContainer, { top: insets.top + 66 }]}>
         <View style={styles.distanceCard}>
           <View style={styles.flagWrapper}>
-            <Ionicons name="flag" size={24} color="#009849" />
+            <Ionicons name="flag" size={19} color="#009849" />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.cardLabel}>Nearest stop</Text>
-            <Text style={styles.cardDistance}>
+            <Text style={styles.cardDistance} numberOfLines={1}>
               <Text style={styles.greenText}>{formatDistance(distNum)}</Text> away · {walkingTimeText(distNum)}
             </Text>
           </View>
           <View style={styles.etaBadge}>
-            <Text style={styles.etaBadgeValue}>~{eta_sec} min</Text>
-            <Text style={styles.etaBadgeLabel}>wait</Text>
+            <Text style={styles.etaBadgeValue}>{isWalking ? walkingTimeValue(distNum) : `~${etaText}`}</Text>
+            <Text style={styles.etaBadgeLabel}>{isWalking ? "walk" : "wait"}</Text>
           </View>
         </View>
 
         <View style={styles.liveBikesChip}>
           <View style={styles.liveDot} />
           <Ionicons name="bicycle" size={16} color="#009849" />
-          <Text style={styles.liveBikesText}>{route?.params?.bikesOnRoute || "0"} bikes on route</Text>
+          <Text style={styles.liveBikesText}>
+            {bikesCount == null ? "—" : bikesCount} {bikesCount === 1 ? "bike" : "bikes"} nearby
+          </Text>
         </View>
       </View>
 
-      {/* Layer 4: Floating Action Interface Controls */}
-      <View style={[styles.floatingContainer, { bottom: sheetHeight + 20 }]}>
-        <TouchableOpacity style={styles.floatBtn} onPress={() => { handleZoom(true); setFollowMode(false); }}>
-          <Ionicons name="add" size={22} color="#111827" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.floatBtn} onPress={() => { handleZoom(false); setFollowMode(false); }}>
-          <Ionicons name="remove" size={22} color="#111827" />
-        </TouchableOpacity>
-        <View style={styles.floatDivider} />
-        <TouchableOpacity
-          style={[styles.floatBtn, followMode && styles.floatBtnActive]}
-          onPress={() => { handleGetCurrentLocation(); setFollowMode(true); }}
-        >
-          <MaterialIcons name="my-location" size={22} color={followMode ? "#FFFFFF" : "#111827"} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.floatBtn} onPress={() => { handleRecenterRouteBounds(); setFollowMode(false); }}>
-          <Ionicons name="scan-outline" size={20} color="#111827" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Layer 5: Reactive Bottom Data Sheet */}
+      {/* Layer 4: Reactive Bottom Data Sheet */}
       <View
         style={[styles.bottomSheet, { paddingBottom: insets.bottom + 24 }]}
         onLayout={(e) => {
@@ -525,46 +616,40 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           if (height > 0) setSheetHeight(height);
         }}
       >
-        <View style={styles.handle} />
+          <View style={styles.handle} />
 
-        <View style={styles.sheetSection}>
-          <Text style={styles.sheetLabel}>Selected Route</Text>
-          <View style={styles.sheetRouteRow}>
-            <View style={styles.sheetRouteDot} />
-            <Text style={styles.sheetRouteText} numberOfLines={1}>
-              {/* {pickupName} → {dropoffName} */}
-              {route?.params?.name}
-            </Text>
+          <View style={styles.sheetSection}>
+            <Text style={styles.sheetLabel}>Selected Route</Text>
+            <View style={styles.sheetRouteRow}>
+              <View style={styles.sheetRouteDot} />
+              <Text style={styles.sheetRouteText} numberOfLines={1}>
+                {trip?.route_name || trip?.name || route?.params?.name || `${pickupName} → ${dropoffName}`}
+              </Text>
+            </View>
           </View>
-        </View>
 
-        <View style={styles.sheetSection}>
-          <Text style={styles.sheetLabel}>Nearest Pickup Stop</Text>
-          <Text style={styles.sheetStopName}>{pickupName}</Text>
-        </View>
+          <View style={styles.sheetSection}>
+            <Text style={styles.sheetLabel}>Nearest Pickup Stop</Text>
+            <Text style={styles.sheetStopName}>{pickupName}</Text>
+          </View>
 
-        <View style={[styles.sheetStatusCard, isNearby ? styles.sheetStatusReady : styles.sheetStatusAway]}>
-          <View style={[styles.sheetStatusDot, isNearby ? styles.sheetStatusDotReady : styles.sheetStatusDotAway]} />
-          <View style={styles.sheetStatusCol}>
+          <View style={[styles.sheetStatusCard, isNearby ? styles.sheetStatusReady : styles.sheetStatusAway]}>
+            <View style={[styles.sheetStatusDot, isNearby ? styles.sheetStatusDotReady : styles.sheetStatusDotAway]} />
             <Text style={[styles.sheetStatusText, isNearby ? styles.sheetStatusTextReady : styles.sheetStatusTextAway]}>
               {isNearby
-                ? "You're at the pickup stop. Nearby Marshals are ready to be notified."
-                : "You're not at the pickup stop. Get closer to get notified."}
-            </Text>
-            <Text style={[styles.sheetStatusDist, isNearby ? styles.sheetStatusDistReady : styles.sheetStatusDistAway]}>
-              {formatDistance(distNum)} away · {walkingTimeText(distNum)}
+                ? "You're at the pickup stop. Raise your hand to notify nearby Marshals."
+                : `Get within ${ARRIVAL_THRESHOLD} m of ${pickupName} to raise your hand and notify nearby Marshals.`}
             </Text>
           </View>
-        </View>
 
-        <TouchableOpacity
-          activeOpacity={0.9}
-          style={[styles.raiseBtn, !isNearby && styles.raiseBtnDisabled]}
-          onPress={() => { if (isNearby) setShowConfirm(true); }}
-          disabled={!isNearby}
-        >
-          <Text style={[styles.raiseText, !isNearby && styles.raiseTextDisabled]}>✋ Raise Hand</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={[styles.raiseBtn, !isNearby && styles.raiseBtnDisabled]}
+            onPress={() => { if (isNearby) setShowConfirm(true); }}
+            disabled={!isNearby}
+          >
+            <Text style={[styles.raiseText, !isNearby && styles.raiseTextDisabled]}>✋ Raise Hand</Text>
+          </TouchableOpacity>
       </View>
 
       {/* Raise Hand Confirmation Modal */}
@@ -670,19 +755,45 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 8,
+  },
+  headerControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 999,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
+  },
+  headerCtrlBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerCtrlBtnActive: {
+    backgroundColor: "#FFFFFF",
+  },
+  headerCtrlDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: "rgba(255,255,255,0.35)",
+    marginHorizontal: 2,
   },
   iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, elevation: 3,
   },
   headerTitle: {
-    fontSize: 22,
+    flex: 1,
+    fontSize: 20,
     fontWeight: "800",
     color: "#FFFFFF",
     letterSpacing: -0.3,
@@ -696,32 +807,32 @@ const styles = StyleSheet.create({
   },
   distanceCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 16,
+    borderRadius: 18,
+    padding: 12,
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
     shadowColor: "#000",
     shadowOpacity: 0.04,
     shadowRadius: 15,
     elevation: 4,
   },
   flagWrapper: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: "#ECFAF1",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 16,
   },
   cardLabel: {
-    fontSize: 14,
+    fontSize: 11,
     color: "#888888",
     fontWeight: "500",
-    marginBottom: 2,
+    marginBottom: 1,
   },
   cardDistance: {
-    fontSize: 22,
+    fontSize: 15,
     fontWeight: "800",
     color: "#111827",
   },
@@ -730,18 +841,18 @@ const styles = StyleSheet.create({
   },
   etaBadge: {
     backgroundColor: "#ECFAF1",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     alignItems: "center",
   },
   etaBadgeValue: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: "800",
     color: "#009849",
   },
   etaBadgeLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "600",
     color: "#6B7280",
   },
@@ -928,33 +1039,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
   },
-  floatingContainer: {
-    position: "absolute",
-    right: 16,
-    gap: 2,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    paddingVertical: 6,
-    shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-    zIndex: 20,
-  },
-  floatBtn: {
-    width: 48,
-    height: 44,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  floatBtnActive: {
-    backgroundColor: "#009849",
-    borderRadius: 12,
-    marginHorizontal: 4,
-  },
-  floatDivider: {
-    height: 1,
-    backgroundColor: "#F0F0F0",
-    marginHorizontal: 12,
-  },
   bottomSheet: {
     position: "absolute",
     bottom: 0,
@@ -1039,11 +1123,8 @@ const styles = StyleSheet.create({
   sheetStatusDotReady: {
     backgroundColor: "#009849",
   },
-  sheetStatusCol: {
-    flex: 1,
-    gap: 4,
-  },
   sheetStatusText: {
+    flex: 1,
     fontSize: 13,
     fontWeight: "600",
     lineHeight: 18,
@@ -1053,16 +1134,6 @@ const styles = StyleSheet.create({
   },
   sheetStatusTextReady: {
     color: "#065F46",
-  },
-  sheetStatusDist: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  sheetStatusDistAway: {
-    color: "#DC2626",
-  },
-  sheetStatusDistReady: {
-    color: "#009849",
   },
   raiseBtn: {
     height: 56,

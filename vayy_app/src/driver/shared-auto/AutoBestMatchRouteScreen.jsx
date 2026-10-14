@@ -146,7 +146,7 @@ export function BestMatchRouteScreen({ navigation, route: routeProp }) {
       setLoading(true);
 
       if (pickup?.lat && pickup?.lon && destination?.lat && destination?.lon) {
-        const data = await searchDriverRoutes(pickup.lat, pickup.lon, destination.lat, destination.lon);
+        const data = await searchDriverRoutes(pickup.lat, pickup.lon, destination.lat, destination.lon, undefined, { vehicleType: "auto" });
         const routes = data?.data ?? (Array.isArray(data) ? data : []);
         setRoutes(routes);
         return;
@@ -458,7 +458,8 @@ const s = StyleSheet.create({
   },
   stopSeqText: { color: "#fff", fontSize: 11, fontWeight: "900" },
   stopDetail: { flex: 1 },
-  stopName: { color: "#111827", fontSize: 13, fontWeight: "800" },
+  // `stopName` is already declared above (identical value); duplicate key
+  // removed so eslint no-dupe-keys stays green.
   stopStatus: { color: "#9CA3AF", fontSize: 11 },
   stopArrival: { color: "#6B7280", fontSize: 12, fontWeight: "800" },
 

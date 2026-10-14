@@ -5,7 +5,6 @@ import DriverStep1Personal from "./DriverStep1Personal";
 import DriverStep6OTP from "./DriverStep6OTP";
 import { sendRegistrationOtp, verifyAndRegister, loginUser } from "../../authSlice";
 import { setField } from "../../../store/slices/onboardingSlice";
-import { notifyAction } from "../../../shared/lib/confirmAction";
 
 export default function DriverRegistrationScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -49,14 +48,12 @@ export default function DriverRegistrationScreen({ navigation }) {
         result.payload?.error ||
         "Failed to send Safety Code";
       if (msg.toLowerCase().includes("already exists")) {
-        notifyAction({
-          title: "Account Exists",
-          message: "An account with this email already exists. Please login.",
-        });
-        navigation.navigate("LoginPage");
+        Alert.alert("Account Exists", "An account with this email already exists. Please login.", [
+          { text: "Go to Login", onPress: () => navigation.navigate("LoginPage") },
+        ]);
         return false;
       }
-      notifyAction({ title: "Error", message: msg });
+      Alert.alert("Error", msg);
       return false;
     }
     return true;
@@ -74,7 +71,7 @@ export default function DriverRegistrationScreen({ navigation }) {
         result.payload?.message ||
         result.payload?.error ||
         "Verification failed";
-      notifyAction({ title: "Verification Failed", message: msg });
+      Alert.alert("Verification Failed", msg);
       return;
     }
 
@@ -93,11 +90,11 @@ export default function DriverRegistrationScreen({ navigation }) {
 
     if (loginUser.rejected.match(loginResult)) {
       console.error("[Reg] Login failed:", loginResult.payload);
-      notifyAction({
-        title: "Login Failed",
-        message: "Account created but login failed. Please go to Login page and sign in.",
-      });
-      navigation.navigate("LoginPage");
+      Alert.alert(
+        "Login Failed",
+        "Account created but login failed. Please go to Login page and sign in.",
+        [{ text: "Go to Login", onPress: () => navigation.navigate("LoginPage") }],
+      );
       return;
     }
 

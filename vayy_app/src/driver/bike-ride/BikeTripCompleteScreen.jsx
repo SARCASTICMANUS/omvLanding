@@ -27,35 +27,6 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
   const distanceNum = Number(buddy.distance) || Number(tripData.distance) || 0;
   const riderRating = Number(buddy.rating) || Number(tripData.rating) || 0;
 
-  /* A journey settles one segment per rider, so the driver is shown a row per
-     passenger rather than the single `buddy` the fixed-route flow passes. Falls
-     back to that shape whenever `passengers` is absent, so the older route flow
-     renders exactly as before. */
-  const journeyPassengers = Array.isArray(tripData.passengers)
-    ? tripData.passengers
-    : [];
-  const isJourneySummary = journeyPassengers.length > 0;
-  const riders = isJourneySummary
-    ? journeyPassengers.map((p, i) => ({
-        key: p.boarding_request_id || p.reference || String(i),
-        name: p.passenger_name || "Passenger",
-        pickup: p.pickup_stop_name || "—",
-        drop: p.drop_stop_name || "—",
-        distance:
-          p.segment_distance_m != null
-            ? Number((p.segment_distance_m / 1000).toFixed(1))
-            : null,
-        fare: Number(p.fare || 0),
-      }))
-    : [];
-  const journeyTotal = riders.reduce((sum, r) => sum + r.fare, 0);
-
-  // Trip details describe the whole run, so lead with the first rider's stops
-  // and fall back to the single-rider fields when there is no list.
-  const lead = riders[0] || null;
-  const summaryPickup = lead ? lead.pickup : buddy?.pickup;
-  const summaryDrop = lead ? lead.drop : buddy?.drop;
-
   const [fareData, setFareData] = useState(null);
 
   useEffect(() => {
@@ -66,11 +37,7 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
     }).catch(() => {});
   }, [dispatchId]);
 
-  const fare =
-    fareData?.total_fare ||
-    Number(buddy.fare) ||
-    Number(tripData.fare) ||
-    (isJourneySummary ? journeyTotal : 0);
+  const fare = fareData?.total_fare || Number(buddy.fare) || Number(tripData.fare) || 0;
   const breakdown = buildFareBreakdown({ distanceKm: distanceNum, vehicleType: "bike", fareData, totalFare: fare || null });
   const baseFare = breakdown.baseFare;
   const distanceFare = breakdown.distanceFare;
@@ -109,8 +76,8 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
               <View style={styles.onlineDot} />
             </View>
             <View style={styles.buddyInfo}>
-              <Text style={styles.buddyName}>{lead?.name || buddy?.name || "Passenger"}</Text>
-              <Text style={styles.buddyRoute}>{summaryPickup || "Pickup"} → {summaryDrop || "Destination"}</Text>
+              <Text style={styles.buddyName}>{buddy?.name || "Passenger"}</Text>
+              <Text style={styles.buddyRoute}>{buddy?.pickup || "Pickup"} → {buddy?.drop || "Destination"}</Text>
             </View>
             <View style={styles.ratingBadge}>
               <Ionicons name="star" size={14} color="#FFB800" />
@@ -128,7 +95,7 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
             </View>
             <View style={styles.tripInfo}>
               <Text style={styles.tripLabel}>Pickup</Text>
-              <Text style={styles.tripValue}>{summaryPickup || "—"}</Text>
+              <Text style={styles.tripValue}>{buddy?.pickup || "—"}</Text>
             </View>
           </View>
 
@@ -140,14 +107,14 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
             </View>
             <View style={styles.tripInfo}>
               <Text style={styles.tripLabel}>Dropoff</Text>
-              <Text style={styles.tripValue}>{summaryDrop || "—"}</Text>
+              <Text style={styles.tripValue}>{buddy?.drop || "—"}</Text>
             </View>
           </View>
 
           <View style={styles.tripMeta}>
             <View style={styles.metaItem}>
               <Ionicons name="navigate" size={16} color="#6B7280" />
-              <Text style={styles.metaText}>{distanceNum ? `${distanceNum} km` : "—"}</Text>
+              <Text style={styles.metaText}>{buddy.distance != null ? `${buddy.distance} km` : "—"}</Text>
             </View>
             <View style={styles.metaDot} />
             <View style={styles.metaItem}>
@@ -165,33 +132,14 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Earnings</Text>
 
-          {isJourneySummary ? (
-            <>
-              {riders.map((r) => (
-                <View style={styles.fareRow} key={r.key}>
-                  <View style={styles.riderCell}>
-                    <Text style={styles.fareLabel}>{r.name}</Text>
-                    <Text style={styles.riderRoute}>
-                      {r.pickup} → {r.drop}
-                      {r.distance != null ? `  ·  ${r.distance} km` : ""}
-                    </Text>
-                  </View>
-                  <Text style={styles.fareValue}>₹{r.fare ? r.fare.toFixed(2) : "—"}</Text>
-                </View>
-              ))}
-            </>
-          ) : (
-            <>
-              <View style={styles.fareRow}>
-                <Text style={styles.fareLabel}>Base Fuel Share</Text>
-                <Text style={styles.fareValue}>₹{baseFare || "—"}</Text>
-              </View>
-              <View style={styles.fareRow}>
-                <Text style={styles.fareLabel}>Distance ({distanceNum ? `${distanceNum} km × ₹${perKmRate}/km` : "—"})</Text>
-                <Text style={styles.fareValue}>₹{distanceFare || "—"}</Text>
-              </View>
-            </>
-          )}
+          <View style={styles.fareRow}>
+            <Text style={styles.fareLabel}>Base Fuel Share</Text>
+            <Text style={styles.fareValue}>₹{baseFare || "—"}</Text>
+          </View>
+          <View style={styles.fareRow}>
+            <Text style={styles.fareLabel}>Distance ({distanceNum ? `${distanceNum} km × ₹${perKmRate}/km` : "—"})</Text>
+            <Text style={styles.fareValue}>₹{distanceFare || "—"}</Text>
+          </View>
           <View style={styles.fareDivider} />
           <View style={styles.fareRow}>
             <Text style={styles.totalLabel}>Total Earned</Text>
@@ -211,10 +159,10 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
               />
             ))}
           </View>
-          <Text style={styles.feedbackText}>&quot;{buddy.feedback || "Thanks for riding!"}&quot;</Text>
+          <Text style={styles.feedbackText}>"{buddy.feedback || "Thanks for riding!"}"</Text>
           <View style={styles.feedbackAuthor}>
             <Ionicons name="chatbubble-ellipses" size={14} color={COLORS.primary} />
-            <Text style={styles.feedbackAuthorText}>— {lead?.name || buddy?.name || "Passenger"}</Text>
+            <Text style={styles.feedbackAuthorText}>— {buddy?.name || "Passenger"}</Text>
           </View>
         </View>
 
@@ -260,10 +208,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
+    boxShadow: "0 0 8 rgba(0, 0, 0, 0.05)",
     marginBottom: 16,
   },
   successSection: {
@@ -278,10 +223,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 14,
-    elevation: 8,
+    boxShadow: "0 0 14 rgba(0, 0, 0, 0.3)",
   },
   title: {
     fontSize: 24,
@@ -299,10 +241,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 3,
+    boxShadow: "0 0 12 rgba(0, 0, 0, 0.04)",
   },
   buddyRow: {
     flexDirection: "row",
@@ -436,16 +375,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "#D1D5DB",
   },
-  riderCell: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  riderRoute: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#6B7280",
-    marginTop: 2,
-  },
   fareRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -514,10 +443,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
+    boxShadow: "0 0 10 rgba(0, 0, 0, 0.3)",
   },
   primaryBtnText: {
     color: "#fff",

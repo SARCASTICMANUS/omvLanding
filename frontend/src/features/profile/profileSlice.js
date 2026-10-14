@@ -1,6 +1,8 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../lib/api";
 import { API_PATHS } from "../../constants/apiPaths";
+// authSlice does not import this slice, so this direction is not a cycle.
+import { logout } from "../auth/authSlice";
 
 export const fetchProfile = createAsyncThunk(
   "profile/fetchProfile",
@@ -72,24 +74,38 @@ export const updateUser = createAsyncThunk(
   }
 );
 
+// Hoisted out of createSlice so both `resetProfile` and the logout case
+// can restore exactly these values without repeating the list.
+const initialProfileState = {
+  data: null,
+  loading: false,
+  error: null,
+  updateLoading: false,
+  updateError: null,
+  verification: null,
+};
+
 const profileSlice = createSlice({
   name: "profile",
-  initialState: {
-    data: null,
-    loading: false,
-    error: null,
-    updateLoading: false,
-    updateError: null,
-    verification: null,
-  },
+  initialState: initialProfileState,
   reducers: {
     clearProfileError: (state) => {
       state.error = null;
       state.updateError = null;
     },
+    // `data` is one account's whole /me/ envelope. Wipe all of it: a
+    // leftover name, phone or role is another person's data on screen.
+    resetProfile: () => ({ ...initialProfileState }),
   },
   extraReducers: (builder) => {
     builder
+      // Auth can change without this slice ever being asked to refetch.
+      // Logging out cleared state.auth but left the cached envelope in
+      // place, so the next account to sign in in this tab read the
+      // previous account's role and rendered the wrong screen.
+      .addCase(logout, (state) => {
+        Object.assign(state, initialProfileState);
+      })
       .addCase(fetchProfile.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -163,5 +179,5 @@ const profileSlice = createSlice({
   },
 });
 
-export const { clearProfileError } = profileSlice.actions;
+export const { clearProfileError, resetProfile } = profileSlice.actions;
 export default profileSlice.reducer;

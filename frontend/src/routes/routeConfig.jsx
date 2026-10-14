@@ -22,6 +22,8 @@ import TermsPage from "../pages/TermsPage";
 import RoutesPage from "../pages/RoutesPage";
 import HomeOrLanding from "../pages/HomeOrLanding";
 import TripsPage from "../pages/TripsPage";
+import OtpVerifyScreen from "../features/verification/OtpVerifyScreen";
+import KycScreen from "../features/verification/KycScreen";
 
 import TrackingPage from "../pages/TrackingPage";
 import { ProtectedAdmin, ProtectedRoute, PublicRoute } from "./guards";
@@ -49,6 +51,26 @@ export const appRouteConfig = [
       <PublicRoute>
         <PasswordResetPage />
       </PublicRoute>
+    ),
+  },
+  // ---- two-part verification --------------------------------------------
+  // Inside ProtectedRoute so only a signed-in user can reach them, but with
+  // no role redirect: a blocked driver must be able to reach the screen that
+  // unblocks them. The gate overlay steps aside on these two routes.
+  {
+    path: APP_ROUTES.verifyEmail,
+    element: (
+      <ProtectedRoute>
+        <OtpVerifyScreen />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: APP_ROUTES.kyc,
+    element: (
+      <ProtectedRoute>
+        <KycScreen />
+      </ProtectedRoute>
     ),
   },
   {

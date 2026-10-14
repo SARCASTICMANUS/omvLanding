@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -274,21 +275,13 @@ export function AutoSearchingScreen({ navigation, route }) {
           )}
         </VayyMap>
 
-        <View style={[styles.header, { paddingTop: insets.top + 10, overflow: "hidden" }]}>
-          <View style={styles.headerGradient}>
-            <View style={styles.gradBase} />
-            <View style={styles.gradRay1} />
-            <View style={styles.gradRay2} />
-          </View>
-          <View style={styles.headerLeft}>
-            {Platform.OS === 'ios' && (
-              <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-                <Ionicons name="chevron-back" size={24} color="#111827" />
-              </TouchableOpacity>
-            )}
-            <Text style={styles.headerTitle}>Finding Auto...</Text>
-          </View>
-        </View>
+        <ScreenHeader
+          absolute
+          zIndex={20}
+          title="Finding Auto..."
+          subtitle="Matching you with the nearest Auto"
+          onBack={() => navigation.goBack()}
+        />
 
         <View style={styles.pulseContainer}>
           <Animated.View
@@ -464,68 +457,6 @@ const styles = StyleSheet.create({
     flex: 1,
     position: "relative",
     backgroundColor: "#F8FAF9",
-  },
-  header: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingBottom: 12,
-  },
-  headerGradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  gradBase: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#009849",
-  },
-  gradRay1: {
-    position: "absolute",
-    top: -60,
-    right: -20,
-    width: 260,
-    height: 200,
-    backgroundColor: "#00B857",
-    opacity: 0.25,
-    transform: [{ rotate: "25deg" }],
-  },
-  gradRay2: {
-    position: "absolute",
-    bottom: -90,
-    right: 40,
-    width: 240,
-    height: 180,
-    backgroundColor: "#FFFFFF",
-    opacity: 0.1,
-    transform: [{ rotate: "35deg" }],
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: -0.5,
-  },
-  iconBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
   },
   mapArea: {
     ...StyleSheet.absoluteFillObject,

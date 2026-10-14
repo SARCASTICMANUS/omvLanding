@@ -10,7 +10,7 @@ import AuthNavigator from "./AuthNavigator";
 import DriverNavigator from "./DriverNavigator";
 import PassengerNavigator from "./PassengerNavigator";
 import AdminScreen from "../admin/screens/AdminScreen";
-import SplashCarouselScreen from "../passenger/splash/SplashCarouselScreen";
+import SplashCarouselScreen, { onboardingSession } from "../shared/screens/SplashCarouselScreen";
 import { DRIVER_ROLES, STORAGE_KEYS } from "../constants";
 import NotificationRoot from "../shared/components/common/NotificationRoot";
 
@@ -19,16 +19,24 @@ const Stack = createStackNavigator();
 export default function AppNavigator() {
   const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state) => state.auth);
-  const [booting, setBooting] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [booting, setBooting] = useState(!onboardingSession.decided);
 
   useEffect(() => {
     let cancelled = false;
 
     // Onboarding carousel is first-launch only. STORAGE_KEYS.onboardingDone is
-    // written by SplashCarouselScreen (Skip / Get Started), so once it is set
-    // the splash is never mounted again for this install.
+    // written by SplashCarouselScreen, and the session flag it also updates
+    // survives the NavigationContainer remounts that login/logout trigger. If
+    // this JS session already resolved onboarding (or the carousel completed),
+    // skip straight past — re-reading storage here is what made the splash
+    // reappear on every auth state change.
     (async () => {
+      if (onboardingSession.decided) {
+        if (cancelled) return;
+        setBooting(false);
+        return;
+      }
+
       let onboardingDone = null;
       try {
         onboardingDone = await AsyncStorage.getItem(STORAGE_KEYS.onboardingDone);
@@ -39,7 +47,7 @@ export default function AppNavigator() {
       await dispatch(restoreAuthFromStorage());
 
       if (cancelled) return;
-      setShowOnboarding(onboardingDone !== "true");
+      onboardingSession.decide(onboardingDone !== "true");
       setBooting(false);
     })();
 
@@ -59,6 +67,10 @@ export default function AppNavigator() {
         ? "DriverNavigator"
         : "PassengerNavigator"
     : "AuthNavigator";
+
+  // Never route an already-signed-in user through onboarding, and never
+  // re-show the carousel after it has been completed in this session.
+  const showOnboarding = onboardingSession.pending && !isAuthenticated;
 
   const initialRoute = showOnboarding ? "SplashCarousel" : appRoute;
 

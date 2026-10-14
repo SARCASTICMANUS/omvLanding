@@ -1,4 +1,5 @@
 import axios from "axios";
+import { ADMIN_CONSOLE_URL } from "../constants/paths";
 
 export const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -39,11 +40,15 @@ api.interceptors.response.use(
         } catch {
           localStorage.removeItem("admin_token");
           localStorage.removeItem("admin_refresh");
-          window.location.href = "/zxcv";
+          // ADMIN_CONSOLE_URL, not a hardcoded "/zxcv". With this app mounted
+          // at /zxcv/, a bare "/zxcv" resolves inside the router to "/" — which
+          // is the LANDING page, so a token expiry dumped the user on the
+          // marketing hero instead of the login screen.
+          window.location.href = ADMIN_CONSOLE_URL;
         }
       } else {
         localStorage.removeItem("admin_token");
-        window.location.href = "/zxcv";
+        window.location.href = ADMIN_CONSOLE_URL;
       }
     }
 

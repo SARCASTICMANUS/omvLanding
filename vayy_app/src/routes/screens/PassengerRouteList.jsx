@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Platform,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -10,18 +10,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useDispatch } from "react-redux";
-import useWebSocket from "../../shared/hooks/useWebSocket";
-import { WS } from "../../constants";
-import { raiseHandAtStop } from "../../passenger/services/passengerService";
-import {
-  setSelectedStop,
-  clearPassengerStopState,
-} from "../../store/slices/journeySlice";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
+import RoutePolylinePreview from "../components/RoutePolylinePreview";
 
 /* ─────────────────────────────────────────────
    HELPERS
-───────────────────────────────────────────── */
+   ───────────────────────────────────────────── */
 export function formatEtaMinutes(etaSeconds) {
   return Math.max(1, Math.ceil(Number(etaSeconds || 300) / 60));
 }
@@ -35,192 +29,243 @@ export function formatWalkText(meters) {
 export function shortPlace(point, fallback) {
   return (
     point?.name ||
-    point?.display_name?.split(",")?.[0] ||
-    point?.address ||
-    fallback
+    point?.display_name ||
+    fallback ||
+    "Unknown"
   );
 }
 
+/* Walk distance without the trailing "walk" (used inside a longer sentence). */
+function formatWalkDistance(meters) {
+  const m = Number(meters) || 0;
+  if (m <= 0) return "0 m";
+  if (m < 1000) return `${Math.round(m)} m`;
+  return `${(m / 1000).toFixed(1)} km`;
+}
+
+/* Total walking distance for a trip; always a finite number (a missing
+   first/last-mile field used to turn the sum into NaN and break sorting). */
+function totalWalkMeters(trip) {
+  const explicit = Number(trip?.walk_distance_meters);
+  if (Number.isFinite(explicit)) return explicit;
+  return (Number(trip?.first_mile_walk_meters) || 0) + (Number(trip?.last_mile_walk_meters) || 0);
+}
+
+/* Stable key for a trip: its id, or its position when it has none (a generated
+   route has no persisted id yet). Used for expand state and the single map. */
+function tripKey(trip, index) {
+  return String(trip?.id || index);
+}
+
 /* ─────────────────────────────────────────────
-   STOP CONNECTOR COMPONENT
-───────────────────────────────────────────── */
-function StopDotLine({ pickupLabel, dropLabel, firstMileWalk, lastMileWalk }) {
+   EXPANDED STOPS PANEL — same design as the driver stops panel
+   ───────────────────────────────────────────── */
+function StopsPanel({ stops, boardingStop, alightingStop }) {
+  const ordered = useMemo(
+    () => [...stops].sort((a, b) => (Number(a?.order) || 0) - (Number(b?.order) || 0)),
+    [stops]
+  );
+
   return (
-    <View style={s.dotWrap}>
-      {/* Pickup Row */}
-      <View style={s.dotRow}>
-        <View style={s.dotGreen} />
-        <View style={{ flex: 1 }}>
-          <Text style={s.stopName} numberOfLines={1}>{pickupLabel}</Text>
-          <Text style={s.stopSub}>
-            Pickup{firstMileWalk ? `  •  ${formatWalkText(firstMileWalk)}` : ""}
-          </Text>
-        </View>
-      </View>
+    <View style={s.stopsPanel}>
+      {ordered.map((stop, i) => {
+        const isBoarding = boardingStop?.id != null
+          ? String(stop?.id) === String(boardingStop.id)
+          : boardingStop?.order != null
+            ? Number(stop?.order) === Number(boardingStop.order)
+            : i === 0;
+        const isAlighting = alightingStop?.id != null
+          ? String(stop?.id) === String(alightingStop.id)
+          : alightingStop?.order != null
+            ? Number(stop?.order) === Number(alightingStop.order)
+            : i === ordered.length - 1;
+        const dotColor = isBoarding ? "#009849" : isAlighting ? "#f59e0b" : "#D1D5DB";
 
-      {/* Dashed Connector */}
-      <View style={s.connectorWrap}>
-        <View style={s.connectorLine} />
-      </View>
-
-      {/* Dropoff Row */}
-      <View style={s.dotRow}>
-        <View style={s.dotOrange} />
-        <View style={{ flex: 1 }}>
-          <Text style={s.stopName} numberOfLines={1}>{dropLabel}</Text>
-          <Text style={s.stopSub}>
-            Drop-off{lastMileWalk ? `  •  ${formatWalkText(lastMileWalk)}` : ""}
-          </Text>
-        </View>
-      </View>
+        return (
+          <View key={String(stop?.id ?? i)} style={s.stopTimelineRow}>
+            <View style={s.stopTimelineCol}>
+              <View style={[s.stopTimelineDot, { backgroundColor: dotColor }]} />
+              {i < ordered.length - 1 && <View style={s.stopTimelineLine} />}
+            </View>
+            <View style={s.stopTimelineContent}>
+              <Text style={s.stopTimelineName} numberOfLines={1}>{stop?.name || "Stop"}</Text>
+              <Text style={s.stopTimelineEta}>Stop {stop?.order ?? i + 1}</Text>
+            </View>
+            {isBoarding && (
+              <View style={s.boardingBadge}>
+                <Text style={s.boardingBadgeText}>Boarding</Text>
+              </View>
+            )}
+            {isAlighting && (
+              <View style={s.alightBadge}>
+                <Text style={s.alightBadgeText}>Alight</Text>
+              </View>
+            )}
+          </View>
+        );
+      })}
     </View>
   );
 }
 
 /* ─────────────────────────────────────────────
-   PASSENGER ROUTE CARD
-───────────────────────────────────────────── */
-function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggleExpand, expanded }) {
-  const routeCode   = trip?.route_code || `R-${index + 1}`;
-  const routeName   = trip?.name || "Transit Route";
-  
+   ROUTE CARD COMPONENT — same design as the driver RouteCard.
+   Passenger data is unchanged: the fare is what the rider pays, walking
+   distances are shown, and the CTA still selects the route.
+
+   `showMap` is true for exactly ONE card at a time (see the screen below).
+   RoutePolylinePreview is documented as "mount only while its card is shown":
+   every instance is a native GL surface, and mounting one per FlatList row is
+   what broke map rendering on this screen.
+   ───────────────────────────────────────────── */
+function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggleExpand, expanded, showMap }) {
+  const routeCode = trip?.route_code;
+  const routeName = trip?.name || "Transit Route";
+
   const boardingStop  = trip?.pickup_stop;
   const alightingStop = trip?.dropoff_stop;
-  
-  const boardLabel  = boardingStop?.name || shortPlace(pickup, "Pickup Point");
-  const alightLabel = alightingStop?.name || shortPlace(destination, "Drop-off Point");
+
+  const startLabel = boardingStop?.name || shortPlace(pickup, "Pickup Point");
+  const endLabel   = alightingStop?.name || shortPlace(destination, "Drop-off Point");
 
   const firstMileWalk = trip?.first_mile_walk_meters || boardingStop?.distance_meters || 0;
   const lastMileWalk  = trip?.last_mile_walk_meters || alightingStop?.distance_to_destination_meters || 0;
-  
-  const fare     = trip?.fare ?? "—";
-  const distKm   = trip?.distance_km ? `${trip.distance_km} km` : "—";
-  const etaMin   = formatEtaMinutes(trip?.eta_seconds);
+  const walkMicrocopy =
+    (Number(firstMileWalk) || 0) > 0 || (Number(lastMileWalk) || 0) > 0
+      ? `Walk to pickup ${formatWalkDistance(firstMileWalk)} · Walk from drop-off ${formatWalkDistance(lastMileWalk)}`
+      : null;
+
+  const fareText = trip?.fare != null ? `₹${trip.fare}` : "--";
+  const distText = trip?.distance_km ? `${trip.distance_km} km` : "--";
+  const etaText  = `${formatEtaMinutes(trip?.eta_seconds)} min`;
   const stops    = trip?.stops || [];
+  const key      = tripKey(trip, index);
 
   return (
     <View style={[s.card, isBest && s.cardBest]}>
-      {/* BEST MATCH BADGE */}
-      {isBest && (
-        <View style={s.bestBadge}>
-          <Ionicons name="sparkles" size={12} color="#fff" style={{ marginRight: 4 }} />
-          <Text style={s.bestBadgeText}>BEST MATCH</Text>
-        </View>
-      )}
+      {/* BEST MATCH + route code + route name */}
+      <View style={s.bestRow}>
+        {isBest && (
+          <View style={s.bestBadge}>
+            <Text style={s.bestBadgeText}>BEST MATCH</Text>
+          </View>
+        )}
+        {routeCode ? (
+          <View style={s.routeCodeBadge}>
+            <Text style={s.routeCodeText}>{routeCode}</Text>
+          </View>
+        ) : null}
+        <Text numberOfLines={1} style={s.routeNameText}>{routeName}</Text>
+      </View>
 
-      <TouchableOpacity activeOpacity={0.92} onPress={() => onPress?.(trip)}>
-        <View style={s.mainRow}>
-          {/* ROUTE CODE BADGE */}
-          <View style={s.routeNumWrap}>
-            <View style={[s.routeNumBadge, isBest && s.routeNumBadgeBest]}>
-              <Text style={s.routeNumText}>{routeCode}</Text>
+      {/* Route visualization — start & end (tap to select) */}
+      <TouchableOpacity activeOpacity={0.93} onPress={() => onPress?.(trip)}>
+        <View style={s.routeRow}>
+          <View style={s.routeNumCol}>
+            <View style={s.routeNumBadge}>
+              <Text style={s.routeNumText}>{index + 1}</Text>
             </View>
+            <View style={s.routeNumLine} />
           </View>
 
-          {/* MAIN STOP TIMELINE */}
-          <View style={{ flex: 1 }}>
-            <Text style={s.routeTitle} numberOfLines={1}>{routeName}</Text>
-            <StopDotLine
-              dropLabel={alightLabel}
-              firstMileWalk={firstMileWalk}
-              lastMileWalk={lastMileWalk}
-              pickupLabel={boardLabel}
-            />
-          </View>
-
-          {/* FARE & PRICE COL */}
-          <View style={s.rightCol}>
-            <View style={[s.statsBox, isBest && s.statsBoxBest]}>
-              <Text style={[s.statsNum, isBest && s.statsNumBest]}>₹{fare}</Text>
-              <Text style={s.statsLabel}>Est. Fare</Text>
+          <View style={s.routeDetail}>
+            <View style={s.stopRowItem}>
+              <View style={s.dotGreen} />
+              <Text numberOfLines={1} style={[s.stopNameText, s.stopNameBold, s.stopNameFlex]}>
+                {startLabel}
+              </Text>
+            </View>
+            <View style={s.connectorDashed} />
+            <View style={s.stopRowItem}>
+              <View style={s.dotOrange} />
+              <Text numberOfLines={1} style={[s.stopNameText, s.stopNameBold, s.stopNameFlex]}>
+                {endLabel}
+              </Text>
             </View>
           </View>
         </View>
       </TouchableOpacity>
 
-      {/* METRICS & ACTIONS */}
-      <View style={s.cardBottom}>
-        <View style={s.metricsRow}>
-          <View style={s.metric}>
-            <Ionicons name="walk-outline" size={14} color="#009849" />
-            <Text style={s.metricText}>{formatWalkText(firstMileWalk + lastMileWalk)}</Text>
-          </View>
-          <Text style={s.metricSep}>•</Text>
-          <View style={s.metric}>
-            <Ionicons name="navigate-outline" size={14} color="#6B7280" />
-            <Text style={s.metricText}>{distKm}</Text>
-          </View>
-          <Text style={s.metricSep}>•</Text>
-          <View style={s.metric}>
-            <Ionicons name="time-outline" size={14} color="#6B7280" />
-            <Text style={s.metricText}>{etaMin} min total</Text>
+      {/* Stats bar — ETA | Ride | Fare */}
+      <View style={s.statsBar}>
+        <View style={s.statItem}>
+          <Ionicons name="time-outline" size={15} color="#6B7280" />
+          <View style={s.statTextCol}>
+            <Text style={s.statValue}>{etaText}</Text>
+            <Text style={s.statLabel}>ETA</Text>
           </View>
         </View>
-
-        <View style={s.actionRow}>
-          <TouchableOpacity
-            style={s.viewStopsBtn}
-            onPress={() => onToggleExpand(trip?.id || index)}
-          >
-            <Text style={s.viewStopsText}>
-              {expanded ? "Hide Stops" : `Stops (${stops.length}) ›`}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[s.selectBtn, isBest && s.selectBtnBest]}
-            onPress={() => onPress?.(trip)}
-          >
-            <Text style={s.selectBtnText}>Select Route</Text>
-            <Ionicons name="arrow-forward" size={14} color="#fff" style={{ marginLeft: 4 }} />
-          </TouchableOpacity>
+        <View style={s.statDivider} />
+        <View style={s.statItem}>
+          <Ionicons name="speedometer" size={14} color="#6B7280" />
+          <View style={s.statTextCol}>
+            <Text style={s.statValue}>{distText}</Text>
+            <Text style={s.statLabel}>Ride</Text>
+          </View>
+        </View>
+        <View style={s.statDivider} />
+        <View style={s.statItem}>
+          <View style={s.statTextCol}>
+            <Text style={s.fareValue}>{fareText}</Text>
+            <Text style={s.statLabel}>Est. Fare</Text>
+          </View>
         </View>
       </View>
 
-      {/* EXPANDABLE STOPS LIST */}
-      {expanded && stops.length > 0 && (
-        <View style={s.stopsPanel}>
-          {stops.map((stop, si) => {
-            const isBoarding  = boardingStop?.id ? String(stop.id) === String(boardingStop.id) : si === 0;
-            const isAlighting = alightingStop?.id ? String(stop.id) === String(alightingStop.id) : si === stops.length - 1;
-
-            let badgeBg = "#E5E7EB";
-            let textColor = "#374151";
-            let statusText = "On Route";
-
-            if (isBoarding) {
-              badgeBg = "#009849";
-              textColor = "#009849";
-              statusText = "Board Here";
-            } else if (isAlighting) {
-              badgeBg = "#F59E0B";
-              textColor = "#F59E0B";
-              statusText = "Alight Here";
-            }
-
-            return (
-              <View key={stop.id || si} style={s.stopRow}>
-                <View style={[s.stopSeq, { backgroundColor: badgeBg }]}>
-                  <Text style={[s.stopSeqText, (isBoarding || isAlighting) && { color: "#fff" }]}>
-                    {stop.order || si + 1}
-                  </Text>
-                </View>
-                <View style={s.stopDetail}>
-                  <Text style={s.stopListStopName}>{stop.name}</Text>
-                  <Text style={[s.stopStatus, { color: textColor }]}>{statusText}</Text>
-                </View>
-              </View>
-            );
-          })}
+      {/* Walk microcopy */}
+      {walkMicrocopy ? (
+        <View style={s.walkRow}>
+          <Ionicons name="walk-outline" size={13} color="#9CA3AF" />
+          <Text style={s.walkText}>{walkMicrocopy}</Text>
         </View>
+      ) : null}
+
+      {/* Stops count + View Stops toggle */}
+      <View style={s.stopsRow}>
+        <View style={s.stopsCountBadge}>
+          <Ionicons name="location-outline" size={13} color="#009849" />
+          <Text style={s.stopsCountText}>{stops.length} stops</Text>
+        </View>
+        {stops.length > 0 && (
+          <TouchableOpacity style={s.viewStopsBtn} onPress={() => onToggleExpand(key)}>
+            <Text style={s.viewStopsText}>{expanded ? "Hide Stops" : "View Stops"}</Text>
+            <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={14} color="#009849" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Route polyline preview — the existing component, mounted on one card
+          at a time. It renders nothing when the route carries no geometry. */}
+      {showMap ? (
+        <View style={s.mapWrap}>
+          <RoutePolylinePreview key={`preview-${key}`} route={trip} height={120} />
+        </View>
+      ) : null}
+
+      {expanded && stops.length > 0 && (
+        <StopsPanel
+          stops={stops}
+          boardingStop={boardingStop}
+          alightingStop={alightingStop}
+        />
       )}
+
+      {/* CTA */}
+      <TouchableOpacity
+        style={s.continueBtn}
+        onPress={() => onPress?.(trip)}
+        activeOpacity={0.85}
+      >
+        <Text style={s.continueBtnText}>Select Route</Text>
+        <Ionicons name="arrow-forward" size={16} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
 
 /* ─────────────────────────────────────────────
-   MAIN SCREEN EXPORT
-───────────────────────────────────────────── */
+   SCREEN COMPONENT
+   ───────────────────────────────────────────── */
 export default function PassengerRouteList({ navigation, route }) {
   const {
     trips = [],
@@ -228,409 +273,110 @@ export default function PassengerRouteList({ navigation, route }) {
     pickup: initialPickup,
     destination: initialDestination,
     mode = "auto",
-    // Live vehicles running this corridor, from the trip planner's existing
-    // search. Rendered in the same header card as the routes rather than on a
-    // screen of its own.
-    corridor = null,
   } = route?.params || {};
 
-  const liveVehicles = corridor?.vehicles || [];
-  const corridorDistance = corridor?.distance_m ?? null;
-  // Stops walkable from where the passenger searched. The corridor itself can
-  // run for kilometres, so this is the slice they could actually reach on foot.
-  const nearbyStops = corridor?.nearby_stops || [];
-  // Only the vehicle the passenger would board first. The corridor endpoint
-  // already ranks these by earliest boardable stop then ETA, so the head of the
-  // list is the one worth acting on; showing every vehicle as an equal option
-  // pushed the actionable one into a list.
-  const activeVehicle = liveVehicles[0] || null;
-  // The stops along that corridor, ordered nearest-first from the origin. These
-  // are where a hand can actually be raised: a driver only serves a stop its
-  // journey passes.
-  const corridorStops = corridor?.stops || [];
-
-  /* ── Boarding ─────────────────────────────────────────────
-     Choosing a vehicle here raises the passenger's hand at the stop that
-     vehicle would be boarded at, and waits for a driver to accept on the
-     broadcast channel. Previously this lived on a separate screen.
-  */
-  const dispatch = useDispatch();
-  const [requestId, setRequestId] = useState(null);
-  const [raising, setRaising] = useState(false);
-  const [message, setMessage] = useState(null);
-
-  useEffect(() => () => dispatch(clearPassengerStopState()), [dispatch]);
-
-  const handleRaiseHand = useCallback(
-    async (stop) => {
-      if (!stop || raising) return;
-      setRaising(true);
-      setMessage(null);
-      try {
-        const response = await raiseHandAtStop({
-          pickupStopId: stop.id,
-          // The passenger may not have granted location yet; the stop is where
-          // they are going to walk to, and the server still applies its own
-          // 1 km proximity check.
-          lat: stop.lat,
-          lon: stop.lng,
-        });
-        const data = response?.data || response || {};
-        if (data.request_id) {
-          setRequestId(data.request_id);
-          dispatch(setSelectedStop(stop));
-          setMessage(
-            data.drivers_notified
-              ? `${data.drivers_notified} Marshal(s) on their way notified`
-              : "Request raised — looking for a Marshal"
-          );
-        } else {
-          setMessage(data.message || "Could not raise your hand.");
-        }
-      } catch (err) {
-        setMessage(err.message || "Could not raise your hand.");
-      } finally {
-        setRaising(false);
-      }
-    },
-    [dispatch, raising]
-  );
-
-  const broadcastWsPath = requestId ? WS.dispatchBroadcast(requestId) : null;
-  const handleBroadcast = useCallback(
-    (msg) => {
-      if (!msg?.type) return;
-      if (msg.type === "request_accepted") {
-        // The accept payload carries the driver, their vehicle, a first ETA and
-        // the pickup coordinates; the live-tracking screen follows the vehicle
-        // from there.
-        navigation.navigate("PassengerLiveTracking", {
-          tripId: msg.trip_id,
-          driverName: msg.driver_name,
-          vehicleNumber: msg.vehicle_number,
-          otp: msg.otp,
-          eta: msg.eta,
-          distance: msg.distance_km,
-          pickupLat: msg.pickup_lat,
-          pickupLng: msg.pickup_lng,
-          destination: msg.drop_name,
-        });
-        return;
-      }
-      if (msg.type === "no_drivers_available" || msg.type === "request_expired") {
-        setMessage("No Marshals are passing this stop right now.");
-        setRequestId(null);
-      }
-    },
-    [navigation]
-  );
-  useWebSocket(broadcastWsPath, {
-    enabled: Boolean(broadcastWsPath),
-    onMessage: handleBroadcast,
-  });
-
   const isBike = mode === "bike";
-  const accent = "#009849";
   const pickup = initialPickup;
   const destination = initialDestination;
   const [expandedRouteId, setExpandedRouteId] = useState(null);
 
-  /* UPDATED BEST MATCH SORTING LOGIC:
-     Prioritize lowest total walk distance first, followed by lower ETA and fare. */
+  /* BEST MATCH: lowest total walk first, then shorter ETA, then lower fare. */
   const sortedTrips = useMemo(() => {
     if (!Array.isArray(trips)) return [];
     return [...trips].sort((a, b) => {
-      const walkA = a.walk_distance_meters ?? (a.first_mile_walk_meters + a.last_mile_walk_meters) ?? 0;
-      const walkB = b.walk_distance_meters ?? (b.first_mile_walk_meters + b.last_mile_walk_meters) ?? 0;
-      
+      const walkA = totalWalkMeters(a);
+      const walkB = totalWalkMeters(b);
       if (walkA !== walkB) return walkA - walkB;
-      if (a.eta_seconds !== b.eta_seconds) return (a.eta_seconds || 0) - (b.eta_seconds || 0);
-      return (a.fare || 0) - (b.fare || 0);
+      const etaA = Number(a?.eta_seconds) || 0;
+      const etaB = Number(b?.eta_seconds) || 0;
+      if (etaA !== etaB) return etaA - etaB;
+      return (Number(a?.fare) || 0) - (Number(b?.fare) || 0);
     });
   }, [trips]);
 
+  const handleToggleExpand = (routeId) => {
+    setExpandedRouteId((cur) =>
+      String(cur) === String(routeId) ? null : routeId
+    );
+  };
+
+  /* Flow:
+       bike -> BikeMapPreRide (Hand Raise) -> BikeSearching -> OTP
+       auto -> "Coming Soon" (PassengerTripPlanner renders it for mode !== "bike")
+     `mode` MUST be passed explicitly: PassengerTripPlanner defaults a missing
+     mode to "auto", which is how bike riders used to land on Coming Soon. */
   const handleContinue = (selectedTrip) => {
     if (!selectedTrip) return;
-    const targetScreen = mode === "bike" ? "BikeMapPreRide" : "AutoPreRide";
-    navigation.navigate(targetScreen, { trip: selectedTrip, pickup, destination, mode });
+    if (isBike) {
+      navigation.navigate("BikeMapPreRide", {
+        trip: selectedTrip,
+        pickup,
+        destination,
+        mode,
+        route_id: selectedTrip?.id,
+        fare: selectedTrip?.fare,
+      });
+      return;
+    }
+    navigation.navigate("PassengerTripPlanner", { mode: "auto" });
   };
 
   const routeCount = sortedTrips.length;
 
-  const renderItem = ({ item, index }) => (
-    <RouteCard
-      destination={destination}
-      expanded={String(expandedRouteId) === String(item?.id || index)}
-      index={index}
-      isBest={index === 0}
-      onPress={handleContinue}
-      onToggleExpand={(id) => setExpandedRouteId((cur) => (String(cur) === String(id) ? null : id))}
-      pickup={pickup}
-      trip={item}
-    />
+  /* Exactly one native map at a time: the expanded card if there is one,
+     otherwise the best (first) card. */
+  const expandedStillExists = sortedTrips.some(
+    (trip, i) => tripKey(trip, i) === String(expandedRouteId)
   );
+  const mapRouteKey = expandedStillExists
+    ? String(expandedRouteId)
+    : routeCount > 0
+      ? tripKey(sortedTrips[0], 0)
+      : null;
 
   return (
-    <SafeAreaView edges={["top"]} style={s.safe}>
-      {/* HEADER */}
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={s.iconBtn}>
-          <Ionicons name="arrow-back" size={20} color="#111827" />
-        </TouchableOpacity>
+    <SafeAreaView style={s.safe} edges={["left", "right", "bottom"]}>
+      <StatusBar backgroundColor="#009849" barStyle="light-content" />
 
-        <View style={s.headerMid}>
-          <Text style={s.headerTitle}>Available Routes</Text>
-          <Text style={[s.headerSub, { color: accent }]}>{isBike ? "Bike" : "Auto"} Transit</Text>
-        </View>
+      <ScreenHeader
+        title="Available Routes"
+        subtitle={isBike ? "Bike transit near you" : "Auto transit near you"}
+        onBack={() => navigation.goBack()}
+      />
 
-        <TouchableOpacity style={s.iconBtn}>
-          <Ionicons name="options-outline" size={18} color="#009849" />
-        </TouchableOpacity>
-      </View>
-
-      {/* ROUTE LIST */}
       <FlatList
         contentContainerStyle={s.listContent}
         data={loading ? [] : sortedTrips}
-        keyExtractor={(item, i) => String(item?.id || i)}
-        ListHeaderComponent={() => (
-          <>
-            {activeVehicle && (
-              <View style={s.liveCard}>
-                <View style={s.liveCardHead}>
-                  <Ionicons
-                    name={activeVehicle.vehicle_type === "auto" ? "car" : "bicycle"}
-                    size={15}
-                    color={accent}
-                  />
-                  <Text style={s.liveCardTitle}>
-                    {activeVehicle.vehicle_number}
-                    {liveVehicles.length > 1
-                      ? `  (+${liveVehicles.length - 1} more on this route)`
-                      : ""}
-                  </Text>
-                  {activeVehicle.driver_rating != null && (
-                    <Text style={s.liveCardDist}>★ {activeVehicle.driver_rating}</Text>
-                  )}
-                </View>
-
-                {/* The one vehicle, with who is driving it and where they are
-                    going - enough to decide whether to wait for it. */}
-                <View style={s.vehDetailRow}>
-                  <Text style={s.vehDetail} numberOfLines={1}>
-                    {activeVehicle.driver_name || "Marshal"}
-                    {activeVehicle.vehicle_type ? ` · ${activeVehicle.vehicle_type}` : ""}
-                  </Text>
-                </View>
-                {activeVehicle.destination?.name && (
-                  <View style={s.vehDetailRow}>
-                    <Ionicons name="flag-outline" size={12} color="#6B7280" />
-                    <Text style={s.vehDest} numberOfLines={1}>
-                      Heading to {activeVehicle.destination.name}
-                    </Text>
-                  </View>
-                )}
-                <View style={s.vehStatRow}>
-                  <View style={s.vehStat}>
-                    <Text style={s.vehStatValue}>
-                      {activeVehicle.distance_km != null
-                        ? `${activeVehicle.distance_km} km`
-                        : "—"}
-                    </Text>
-                    <Text style={s.vehStatLabel}>Away</Text>
-                  </View>
-                  <View style={s.vehStat}>
-                    <Text style={s.vehStatValue}>
-                      {activeVehicle.eta_minutes != null
-                        ? `${activeVehicle.eta_minutes} min`
-                        : "—"}
-                    </Text>
-                    <Text style={s.vehStatLabel}>Arriving</Text>
-                  </View>
-                  {corridorDistance != null && (
-                    <View style={s.vehStat}>
-                      <Text style={s.vehStatValue}>
-                        {(corridorDistance / 1000).toFixed(1)} km
-                      </Text>
-                      <Text style={s.vehStatLabel}>Your route</Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Upcoming stops on the driver's journey: what lies between
-                    boarding and where they are going. */}
-                {(activeVehicle.upcoming_stops || []).length > 0 && (
-                  <View style={s.upcomingBlock}>
-                    <Text style={s.blockLabel}>Upcoming stops</Text>
-                    {activeVehicle.upcoming_stops.map((s, i) => (
-                      <View key={s.id || i} style={s.upcomingRow}>
-                        <Text style={s.upcomingIndex}>{i + 1}</Text>
-                        <Text style={s.upcomingName} numberOfLines={1}>
-                          {s.name}
-                        </Text>
-                        <Text style={s.upcomingDist}>
-                          {s.dist_along_m != null
-                            ? `${(s.dist_along_m / 1000).toFixed(1)} km`
-                            : "—"}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {/* Stops walkable from where the passenger searched, so they can
-                    choose somewhere to stand rather than only the vehicle's
-                    own boarding point. */}
-                {nearbyStops.length > 0 && (
-                  <View style={s.upcomingBlock}>
-                    <Text style={s.blockLabel}>Nearby stops you can walk to</Text>
-                    {nearbyStops.map((st, i) => (
-                      <TouchableOpacity
-                        key={st.id || i}
-                        activeOpacity={0.85}
-                        style={[s.upcomingRow, requestId && { opacity: 0.55 }]}
-                        disabled={raising || Boolean(requestId)}
-                        onPress={() => handleRaiseHand(st)}
-                      >
-                        <Ionicons name="location" size={13} color={accent} />
-                        <Text style={s.upcomingName} numberOfLines={1}>
-                          {st.name}
-                        </Text>
-                        <Text style={s.upcomingDist}>
-                          {st.distance_m != null
-                            ? st.distance_m >= 1000
-                              ? `${(st.distance_m / 1000).toFixed(1)} km`
-                              : `${Math.round(st.distance_m)} m`
-                            : "—"}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-
-                {/* Boarding state: once a hand is raised, the card reflects it
-                    instead of offering every vehicle again. */}
-                {message && (
-                  <View style={s.boardMsg}>
-                    <Ionicons
-                      name={requestId ? "information-circle" : "alert-circle"}
-                      size={14}
-                      color={requestId ? "#1D4ED8" : "#B91C1C"}
-                    />
-                    <Text style={s.boardMsgText}>{message}</Text>
-                  </View>
-                )}
-
-                {activeVehicle &&
-                  [activeVehicle].map((v) => (
-                  <TouchableOpacity
-                    key={v.trip_id}
-                    activeOpacity={0.85}
-                    style={[s.liveRow, requestId && s.liveRowMuted]}
-                    // Raising the hand here boards at the stop this vehicle
-                    // serves, which is what the driver will accept against.
-                    onPress={() => handleRaiseHand(v.board_stop)}
-                    disabled={raising || Boolean(requestId)}
-                  >
-                    <View style={s.liveIcon}>
-                      <Ionicons name="car" size={13} color={accent} />
-                    </View>
-                    <View style={s.liveInfo}>
-                      <Text style={s.liveName} numberOfLines={1}>
-                        {v.vehicle_number}
-                        {v.driver_name ? ` · ${v.driver_name}` : ""}
-                      </Text>
-                      <Text style={s.liveMeta} numberOfLines={1}>
-                        Boards at {v.board_stop?.name || "nearby stop"}
-                        {v.distance_km != null ? ` · ${v.distance_km} km away` : ""}
-                        {v.eta_minutes != null ? ` · ~${v.eta_minutes} min` : ""}
-                      </Text>
-                    </View>
-                    {raising ? (
-                      <ActivityIndicator size="small" color={accent} />
-                    ) : (
-                      <Text style={s.liveRaise}>
-                        {requestId ? "Raised" : "Raise hand"}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                  ))}
-              </View>
-            )}
-
-            {/* Nothing running on the route: still offer the corridor's stops,
-                which is where a hand would be raised once a driver arrives. */}
-            {liveVehicles.length === 0 && corridorStops.length > 0 && (
-              <View style={s.liveCard}>
-                <View style={s.liveCardHead}>
-                  <Ionicons name="location" size={15} color={accent} />
-                  <Text style={s.liveCardTitle}>
-                    No vehicles on this route yet
-                  </Text>
-                </View>
-                <Text style={s.liveHint}>
-                  {nearbyStops.length > 0
-                    ? "No Marshal is running this route yet. Raise your hand at a nearby stop and one heading your way will be notified."
-                    : "These are the stops along your route. A Marshal running it can pick you up."}
-                </Text>
-                {(nearbyStops.length > 0 ? nearbyStops : corridorStops).map((stop) => (
-                  <TouchableOpacity
-                    key={stop.stop_id}
-                    activeOpacity={0.85}
-                    style={[s.liveRow, requestId && s.liveRowMuted]}
-                    onPress={() =>
-                      handleRaiseHand({
-                        id: stop.stop_id,
-                        name: stop.name,
-                        lat: stop.lat,
-                        lng: stop.lng,
-                      })
-                    }
-                    disabled={raising || Boolean(requestId)}
-                  >
-                    <View style={s.liveIcon}>
-                      <Ionicons name="location" size={13} color={accent} />
-                    </View>
-                    <View style={s.liveInfo}>
-                      <Text style={s.liveName} numberOfLines={1}>
-                        {stop.name}
-                      </Text>
-                      <Text style={s.liveMeta} numberOfLines={1}>
-                        {stop.distance_m != null
-                          ? stop.distance_m >= 1000
-                            ? `${(stop.distance_m / 1000).toFixed(1)} km away`
-                            : `${Math.round(stop.distance_m)} m away`
-                          : `${(stop.dist_along_m / 1000).toFixed(1)} km along your route`}
-                      </Text>
-                    </View>
-                    {raising ? (
-                      <ActivityIndicator size="small" color={accent} />
-                    ) : (
-                      <Text style={s.liveRaise}>
-                        {requestId ? "Raised" : "Raise hand"}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            {!loading && routeCount > 0 && (
-              <Text style={s.countText}>{routeCount} routes found for your journey</Text>
-            )}
-            {loading && (
-              <View style={s.stateCard}>
-                <Text style={s.stateText}>Finding best options...</Text>
-              </View>
-            )}
-            {!loading && routeCount === 0 && (
-              <View style={s.stateCard}>
-                <Text style={s.stateText}>No transit routes found for this location.</Text>
-              </View>
-            )}
-          </>
+        extraData={`${expandedRouteId}|${mapRouteKey}`}
+        keyExtractor={(item, index) => tripKey(item, index)}
+        ListHeaderComponent={() =>
+          !loading && routeCount > 0 ? (
+            <Text style={s.countText}>
+              {routeCount === 1 ? "1 route found for your journey" : `${routeCount} routes found for your journey`}
+            </Text>
+          ) : null
+        }
+        ListEmptyComponent={() => (
+          <View style={s.stateCard}>
+            <Text style={s.stateText}>{loading ? "Loading routes..." : "No routes found"}</Text>
+          </View>
         )}
-        renderItem={renderItem}
+        renderItem={({ item, index }) => {
+          const key = tripKey(item, index);
+          return (
+            <RouteCard
+              destination={destination}
+              expanded={String(expandedRouteId) === key}
+              index={index}
+              isBest={routeCount > 1 && index === 0}
+              onPress={handleContinue}
+              onToggleExpand={handleToggleExpand}
+              pickup={pickup}
+              showMap={mapRouteKey === key}
+              trip={item}
+            />
+          );
+        }}
         showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
@@ -638,129 +384,23 @@ export default function PassengerRouteList({ navigation, route }) {
 }
 
 /* ─────────────────────────────────────────────
-   STYLES
-───────────────────────────────────────────── */
+   STYLES — same values as the driver route card
+   (React Native has no CSS shorthand: padding "4 8" is invalid, so every
+   value below is a number or an explicit paddingVertical/paddingHorizontal.)
+   ───────────────────────────────────────────── */
 const CARD_SHADOW = Platform.select({
   ios: {
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.07,
     shadowRadius: 8,
   },
   android: { elevation: 2 },
 });
 
 const s = StyleSheet.create({
-  safe: { backgroundColor: "#F4F6F4", flex: 1 },
-  listContent: { paddingBottom: 24, paddingHorizontal: 16, paddingTop: 4 },
-
-  liveCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    padding: 12,
-    marginBottom: 12,
-  },
-  liveCardHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
-  liveCardTitle: { fontSize: 13, fontWeight: "800", color: "#111827", flex: 1 },
-  liveCardDist: { fontSize: 11, fontWeight: "700", color: "#6B7280" },
-  liveRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 6,
-  },
-  liveIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  liveInfo: { flex: 1 },
-  liveName: { fontSize: 13, fontWeight: "800", color: "#111827" },
-  liveMeta: { fontSize: 11, fontWeight: "600", color: "#6B7280", marginTop: 1 },
-  liveHint: { fontSize: 11, fontWeight: "500", color: "#6B7280", marginBottom: 8 },
-
-  vehDetailRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 },
-  vehDetail: { flex: 1, fontSize: 13, fontWeight: "800", color: "#111827" },
-  vehDest: { flex: 1, fontSize: 11, fontWeight: "600", color: "#6B7280" },
-  vehStatRow: { flexDirection: "row", gap: 10, marginTop: 10 },
-  vehStat: {
-    flex: 1,
-    backgroundColor: "#F8FAF9",
-    borderRadius: 10,
-    paddingVertical: 6,
-    alignItems: "center",
-  },
-  vehStatValue: { fontSize: 13, fontWeight: "900", color: "#009849" },
-  vehStatLabel: { fontSize: 10, fontWeight: "700", color: "#6B7280", marginTop: 1 },
-  upcomingBlock: {
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    paddingTop: 10,
-  },
-  blockLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#6B7280",
-    textTransform: "uppercase",
-    marginBottom: 6,
-  },
-  upcomingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 5,
-  },
-  upcomingIndex: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: "#F59E0B",
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "800",
-    textAlign: "center",
-    lineHeight: 18,
-  },
-  upcomingName: { flex: 1, fontSize: 12, fontWeight: "700", color: "#111827" },
-  upcomingDist: { fontSize: 11, fontWeight: "700", color: "#6B7280" },
-  liveRowMuted: { opacity: 0.55 },
-  liveRaise: { fontSize: 11, fontWeight: "800", color: "#009849" },
-  boardMsg: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#EFF6FF",
-    borderRadius: 10,
-    padding: 8,
-    marginBottom: 8,
-  },
-  boardMsgText: { flex: 1, fontSize: 11, fontWeight: "600", color: "#1E40AF" },
-
-  header: {
-    alignItems: "center",
-    flexDirection: "row",
-    paddingBottom: 12,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  iconBtn: {
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 999,
-    height: 40,
-    justifyContent: "center",
-    width: 40,
-    ...CARD_SHADOW,
-  },
-  headerMid: { flex: 1, marginLeft: 12 },
-  headerTitle: { color: "#111827", fontSize: 22, fontWeight: "800" },
-  headerSub: { fontSize: 13, fontWeight: "700", marginTop: 1 },
+  safe: { flex: 1, backgroundColor: "#F4F6F4" },
+  listContent: { paddingBottom: 110, paddingHorizontal: 16, paddingTop: 8 },
 
   countText: {
     color: "#6B7280",
@@ -770,203 +410,180 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
 
-  /* Card Styles */
+  /* card */
   card: {
     backgroundColor: "#fff",
-    borderColor: "#E5E7EB",
-    borderRadius: 16,
+    borderColor: "#e5e7eb",
+    borderRadius: 18,
     borderWidth: 1,
     marginBottom: 12,
     padding: 16,
     ...CARD_SHADOW,
   },
-  cardBest: {
-    borderColor: "#009849",
-    borderWidth: 1.5,
-  },
+  cardBest: { borderColor: "#009849", borderWidth: 1.5 },
 
+  /* header row — badge + route code + name */
+  bestRow: { alignItems: "center", flexDirection: "row", marginBottom: 12 },
   bestBadge: {
-    alignSelf: "flex-start",
+    alignSelf: "center",
     backgroundColor: "#009849",
     borderRadius: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    marginRight: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  bestBadgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.6,
+  bestBadgeText: { color: "#fff", fontSize: 10, fontWeight: "900", letterSpacing: 0.8 },
+  routeCodeBadge: {
+    alignSelf: "center",
+    backgroundColor: "#ECFAF1",
+    borderRadius: 6,
+    marginRight: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
+  routeCodeText: { color: "#009849", fontSize: 10, fontWeight: "800", letterSpacing: 0.4 },
+  routeNameText: { color: "#6B7280", flex: 1, fontSize: 12, fontWeight: "600", marginLeft: 4 },
 
-  mainRow: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: 12,
-  },
-  routeNumWrap: {
-    alignItems: "center",
-    paddingTop: 2,
-  },
+  /* route row — number + pickup/drop */
+  routeRow: { alignItems: "center", flexDirection: "row", gap: 12 },
+  routeNumCol: { alignItems: "center", gap: 6, width: 32 },
   routeNumBadge: {
     alignItems: "center",
-    backgroundColor: "#374151",
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    minWidth: 42,
-  },
-  routeNumBadgeBest: {
     backgroundColor: "#009849",
-  },
-  routeNumText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "900",
-  },
-  routeTitle: {
-    color: "#111827",
-    fontSize: 15,
-    fontWeight: "800",
-    marginBottom: 6,
-  },
-
-  rightCol: {
-    alignItems: "flex-end",
-  },
-  statsBox: {
-    alignItems: "center",
-    backgroundColor: "#F3F4F6",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minWidth: 64,
-  },
-  statsBoxBest: {
-    backgroundColor: "#F0FDF4",
-    borderColor: "#BBF7D0",
-    borderWidth: 1,
-  },
-  statsNum: { color: "#111827", fontSize: 16, fontWeight: "900" },
-  statsNumBest: { color: "#009849" },
-  statsLabel: { color: "#9CA3AF", fontSize: 9, fontWeight: "600", marginTop: 1 },
-
-  /* Stop Timeline */
-  dotWrap: { gap: 0, marginTop: 2 },
-  dotRow: { alignItems: "center", flexDirection: "row", gap: 8 },
-  dotGreen: {
-    borderColor: "#009849",
     borderRadius: 999,
-    borderWidth: 2.5,
-    height: 12,
-    width: 12,
+    height: 30,
+    justifyContent: "center",
+    width: 30,
   },
-  dotOrange: {
-    borderColor: "#F59E0B",
-    borderRadius: 999,
-    borderWidth: 2.5,
-    height: 12,
-    width: 12,
-  },
-  stopName: { color: "#111827", fontSize: 13, fontWeight: "700" },
-  stopSub: { color: "#6B7280", fontSize: 11, fontWeight: "500", marginTop: 1 },
-  connectorWrap: { alignItems: "center", height: 16, justifyContent: "center", paddingLeft: 5 },
-  connectorLine: {
-    borderColor: "#D1D5DB",
+  routeNumText: { color: "#fff", fontSize: 14, fontWeight: "900" },
+  routeNumLine: { backgroundColor: "#d1d5db", flex: 1, width: 2 },
+
+  /* route detail — pickup / dashed connector / drop */
+  routeDetail: { flex: 1, gap: 4, paddingVertical: 6 },
+  stopRowItem: { alignItems: "center", flexDirection: "row", gap: 10 },
+  dotGreen: { backgroundColor: "#009849", borderRadius: 999, height: 12, width: 12 },
+  dotOrange: { backgroundColor: "#f59e0b", borderRadius: 999, height: 12, width: 12 },
+  stopNameText: { color: "#111827", fontSize: 14, fontWeight: "600", lineHeight: 18 },
+  stopNameFlex: { flex: 1 },
+  stopNameBold: { fontWeight: "800" },
+  connectorDashed: {
+    borderColor: "#d1d5db",
     borderLeftWidth: 1.5,
     borderStyle: "dashed",
-    height: 16,
+    height: 14,
+    marginLeft: 4.25,
   },
 
-  /* Card Bottom */
-  cardBottom: {
-    borderColor: "#F3F4F6",
-    borderTopWidth: 1,
+  /* stats bar — ETA | Ride | Fare */
+  statsBar: {
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    flexDirection: "row",
+    justifyContent: "space-evenly",
     marginTop: 12,
-    paddingTop: 12,
+    paddingVertical: 10,
   },
-  metricsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 12,
-  },
-  metric: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-  },
-  metricText: {
-    color: "#4B5563",
-    fontSize: 12,
+  statItem: { alignItems: "center", flexDirection: "row", gap: 4 },
+  statDivider: { backgroundColor: "#E5E7EB", height: 16, width: 1 },
+  statTextCol: { alignItems: "flex-start" },
+  statLabel: {
+    color: "#9CA3AF",
+    fontSize: 9,
     fontWeight: "600",
+    letterSpacing: 0.4,
+    marginTop: 1,
+    textTransform: "uppercase",
   },
-  metricSep: {
-    color: "#D1D5DB",
-    fontSize: 10,
-  },
-  actionRow: {
-    flexDirection: "row",
+  statValue: { color: "#374151", fontSize: 13, fontWeight: "700" },
+  fareValue: { color: "#009849", fontSize: 16, fontWeight: "900" },
+
+  /* walk microcopy */
+  walkRow: { alignItems: "center", flexDirection: "row", gap: 4, marginTop: 8 },
+  walkText: { color: "#9CA3AF", flex: 1, fontSize: 11, fontWeight: "600" },
+
+  /* stops row — count badge + view stops toggle */
+  stopsRow: {
     alignItems: "center",
-    gap: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
   },
-  viewStopsBtn: {
-    borderColor: "#E5E7EB",
+  stopsCountBadge: {
+    alignItems: "center",
+    backgroundColor: "#ECFAF1",
     borderRadius: 10,
-    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  stopsCountText: { color: "#009849", fontSize: 12, fontWeight: "700" },
+  viewStopsBtn: { alignItems: "center", flexDirection: "row", gap: 4 },
+  viewStopsText: { color: "#009849", fontSize: 13, fontWeight: "700" },
+
+  /* polyline preview — the component brings its own marginBottom: 12, which the
+     negative margin cancels so spacing matches a card without a map */
+  mapWrap: { marginBottom: -12, marginTop: 12 },
+
+  /* expandable stops panel */
+  stopsPanel: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    marginTop: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  viewStopsText: { color: "#374151", fontSize: 12, fontWeight: "700" },
-  selectBtn: {
-    flex: 1,
-    backgroundColor: "#374151",
-    borderRadius: 10,
-    paddingVertical: 9,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+  stopTimelineRow: { alignItems: "flex-start", flexDirection: "row", minHeight: 36 },
+  stopTimelineCol: { alignItems: "center", width: 20 },
+  stopTimelineDot: { borderRadius: 999, height: 10, marginTop: 4, width: 10 },
+  stopTimelineLine: { backgroundColor: "#D1D5DB", flex: 1, minHeight: 16, width: 2 },
+  stopTimelineContent: { flex: 1, marginLeft: 8, paddingVertical: 2 },
+  stopTimelineName: { color: "#111827", fontSize: 13, fontWeight: "600" },
+  stopTimelineEta: { color: "#9CA3AF", fontSize: 11, fontWeight: "500", marginTop: 1 },
+  boardingBadge: {
+    alignSelf: "center",
+    backgroundColor: "#DCFCE7",
+    borderRadius: 6,
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
-  selectBtnBest: {
+  boardingBadgeText: { color: "#009849", fontSize: 10, fontWeight: "700" },
+  alightBadge: {
+    alignSelf: "center",
+    backgroundColor: "#FEF3C7",
+    borderRadius: 6,
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  alightBadgeText: { color: "#f59e0b", fontSize: 10, fontWeight: "700" },
+
+  /* select CTA */
+  continueBtn: {
+    alignItems: "center",
     backgroundColor: "#009849",
-  },
-  selectBtnText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "800",
-  },
-
-  /* Stops Panel */
-  stopsPanel: {
-    backgroundColor: "#F9FAFB",
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 8,
-    marginTop: 12,
-    padding: 10,
-  },
-  stopRow: { alignItems: "center", flexDirection: "row", gap: 10 },
-  stopSeq: {
-    alignItems: "center",
-    borderRadius: 999,
-    height: 20,
+    borderRadius: 14,
+    flexDirection: "row",
+    gap: 6,
     justifyContent: "center",
-    width: 20,
+    marginTop: 12,
+    paddingVertical: 12,
+    ...Platform.select({
+      ios: { shadowColor: "#009849", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 8 },
+      android: { elevation: 4 },
+    }),
   },
-  stopSeqText: { color: "#374151", fontSize: 10, fontWeight: "800" },
-  stopDetail: { flex: 1, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  stopListStopName: { color: "#111827", fontSize: 12, fontWeight: "600" },
-  stopStatus: { fontSize: 11, fontWeight: "700" },
+  continueBtnText: { color: "#fff", fontSize: 15, fontWeight: "800" },
 
+  /* empty / loading */
   stateCard: {
     alignItems: "center",
     backgroundColor: "#fff",
-    borderRadius: 16,
+    borderRadius: 18,
+    marginBottom: 12,
     paddingVertical: 40,
   },
-  stateText: { color: "#9CA3AF", fontSize: 14, fontWeight: "600" },
+  stateText: { color: "#9CA3AF", fontSize: 15, fontWeight: "600" },
 });

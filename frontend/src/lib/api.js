@@ -3,6 +3,7 @@
 import axios from "axios";
 import { store } from "../app/store";
 import { logout, refreshTokenSuccess } from "../features/auth/authSlice";
+import { emitVerificationInvalidated } from "../features/verification/verificationEvents";
 import { API_PATHS } from "../constants/apiPaths";
 
 const api = axios.create({
@@ -26,7 +27,25 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    
+
+    // ---- COMPAT/feature: verification gate ----
+    // A 403 with code "verification_required" means the token is fine but the
+    // account cannot use the app yet. Tell the gate to re-read the server; it
+    // deliberately does NOT cache anything itself. Additive branch — the 401
+    // refresh path below is untouched.
+    if (
+      error.response &&
+      error.response.status === 403 &&
+      error.response.data?.code === "verification_required"
+    ) {
+      try {
+        emitVerificationInvalidated("http-403-verification-required");
+      } catch {
+        /* the bus is best-effort */
+      }
+      return Promise.reject(error);
+    }
+
     // If 401 and we haven't already retried this request
     if (error.response && error.response.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;

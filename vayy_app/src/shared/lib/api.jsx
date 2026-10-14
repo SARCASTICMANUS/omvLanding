@@ -1,30 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import Constants from "expo-constants";
-import { Platform } from "react-native";
-import { STORAGE_KEYS, AUTH, API_TIMEOUT, DEFAULT_API_URL } from "../../constants";
+import { STORAGE_KEYS, AUTH, API_TIMEOUT, API_URL } from "../../constants";
 
-const getApiUrl = () => {
-  let url = DEFAULT_API_URL;
+export { API_URL };
 
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    url = process.env.EXPO_PUBLIC_API_URL;
-  } else if (Constants.expoConfig?.extra?.apiUrl) {
-    url = Constants.expoConfig.extra.apiUrl;
-  }
-
-  if (url.includes("localhost:8081") || url.includes("127.0.0.1:8081")) {
-    console.warn("[VAYY] API_URL points to dev server! Falling back to 8000.");
-    url = DEFAULT_API_URL;
-  }
-
-  return url;
-};
-
-export const API_URL = getApiUrl();
-
-console.log("[VAYY] Initialized API with Base URL:", API_URL);
-
+// Use the config-resolved base URL directly
 const api = axios.create({
   baseURL: API_URL,
   timeout: API_TIMEOUT,
@@ -42,11 +22,43 @@ export const configureAuthHandlers = (handlers) => {
   };
 };
 
+// ---------------------------------------------------------------------------
+// In-memory access-token cache.
+//
+// MEASURED (T4, cold start on emulator-5554, 4 requests):
+//   the two AsyncStorage.getItem() calls below cost p50 130 ms / p95 1006 ms and
+//   are awaited SERIALLY inside the request interceptor, so every single HTTP
+//   call pays that before the request even leaves the device (1349 ms total for
+//   4 requests on one cold start). Caching the token in memory removes it from
+//   the hot path.
+//
+// Correctness: the cache holds ONLY the access token. It is never used for the
+// verification stage (G7 - that is always re-read from the server) and never for
+// the refresh token. It is invalidated on login, on verify-otp, on refresh and
+// on logout/wipe. A MISS is deliberately NOT cached: while signed out there is
+// no token, and caching that absence would keep stripping the Authorization
+// header from the request that follows a fresh login.
+// ---------------------------------------------------------------------------
+let _accessTokenCache = null;
+
+export const setAccessTokenCache = (token) => {
+  _accessTokenCache = token ? String(token) : null;
+};
+
+export const clearAccessTokenCache = () => {
+  _accessTokenCache = null;
+};
+
 const readToken = async () => {
+  if (_accessTokenCache) return _accessTokenCache;
+
   const token = await AsyncStorage.getItem(STORAGE_KEYS.token);
   const accessToken = await AsyncStorage.getItem(STORAGE_KEYS.accessToken);
+  const resolved = token || accessToken || null;
 
-  return token || accessToken;
+  // Only a real token is cached; see the note above.
+  if (resolved) _accessTokenCache = resolved;
+  return resolved;
 };
 
 // Single in-flight refresh. Django runs with ROTATE_REFRESH_TOKENS +
@@ -78,6 +90,10 @@ const performRefresh = async () => {
     writes.push(AsyncStorage.setItem(STORAGE_KEYS.refreshToken, nextRefresh));
   }
   await Promise.all(writes);
+
+  // The interceptor reads the access token from memory; keep it in step with the
+  // token we just rotated, otherwise every later request would send the spent one.
+  setAccessTokenCache(nextAccess);
 
   authHandlers.onRefreshToken?.({ token: nextAccess, refreshToken: nextRefresh });
   return nextAccess;
@@ -143,6 +159,25 @@ api.interceptors.response.use(
       }
     }
 
+    // GUARDRAIL G3: first captured API call must equal per-target base
+    // 10.0.2.2:8000 / localhost post adb-reverse; anything else = abort.
+
+    // G4: verification gate — 403 verification_required from gated endpoints.
+    if (error.response?.status === 403 && originalRequest) {
+      const data = error.response?.data;
+      if (data && data.code === "verification_required") {
+        // Show verification gate modal with server state block copy verbatim.
+        // The gate will revalidate on boot, AppState foreground, nav focus, 403, WS 4403.
+        // No client caching (G7). Popup copy verbatim from server state block.
+        // For now, re-throw with a structured error the app can catch.
+        return Promise.reject({
+          message: data.code,
+          verificationState: data.data,
+          originalError: error,
+        });
+      }
+    }
+
     return Promise.reject(error);
   },
 );
@@ -171,69 +206,6 @@ export const unwrapList = (payload) => {
   if (payload?.data !== undefined) return unwrapList(payload.data);
   return [];
 };
-
-// A { uri, name, type } triple only becomes a real multipart file part on
-// native. React Native Web's FormData stringifies anything that is not a Blob,
-// so on web the endpoint receives `file` as a plain string and the backend
-// cannot read it (it answers 400 "Failed to read uploaded file"). The same
-// happens for blob:/data: URIs anywhere, and if the picked asset has no uri.
-const NATIVE_FILE_PART =
-  Platform.OS !== "web" && !/^(blob:|data:)/;
-
-async function uriToBase64(uri) {
-  const response = await fetch(uri);
-  const blob = await response.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-/**
- * Upload one driver document (KYC) in a way that works on native and on web.
- *
- * Native sends multipart; everything else sends the base64 field the endpoint
- * already accepts. Content-Type is deliberately not set by hand: FormData needs
- * the runtime to append the multipart boundary, and overriding the header drops
- * it, which the server cannot parse at all.
- *
- * @returns the parsed document object.
- */
-export async function postDriverDocument({
-  documentType,
-  docKey,
-  uri,
-  base64,
-  fileName,
-  mimeType = "image/jpeg",
-}) {
-  const name = fileName || (uri || "").split("/").pop() || "upload.jpg";
-
-  if (NATIVE_FILE_PART && uri) {
-    const formData = new FormData();
-    formData.append("document_type", documentType);
-    if (docKey) formData.append("doc_key", docKey);
-    formData.append("file", { uri, name, type: mimeType });
-    const response = await api.post(AUTH.driverDocuments, formData);
-    return response.data?.data || response.data;
-  }
-
-  let encoded = base64;
-  if (!encoded && uri) encoded = await uriToBase64(uri);
-  if (!encoded) {
-    throw new Error("Could not read the selected image");
-  }
-
-  const response = await api.post(AUTH.driverDocuments, {
-    document_type: documentType,
-    doc_key: docKey || "",
-    file_base64: encoded,
-    file_name: name,
-  });
-  return response.data?.data || response.data;
-}
 
 export { getWsUrl } from "./wsUrl";
 export default api;

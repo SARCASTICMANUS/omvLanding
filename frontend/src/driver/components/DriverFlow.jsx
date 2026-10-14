@@ -25,6 +25,10 @@ import {
   mergeRoutePreview,
   normalizeDriverRoutes,
 } from "./driverFlowUtils";
+import {
+  fetchDynamicRoutes,
+  isDynamicRouteCreationEnabled,
+} from "../../services/routes/routeProvider";
 import DriverBuddyRadar from "./DriverBuddyRadar";
 import DriverLiveTracking from "./DriverLiveTracking";
 import DriverOtpEntry from "./DriverOtpEntry";
@@ -61,6 +65,7 @@ export default function DriverFlow() {
   const [rideResult, setRideResult] = useState(null);
   const [endingRide, setEndingRide] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [routeError, setRouteError] = useState("");
 
   const {
     currentStep,
@@ -71,6 +76,12 @@ export default function DriverFlow() {
     destination,
     loading,
   } = useSelector((state) => state.driver);
+
+  /* Vehicle type + city are read from the authenticated profile — the planner
+     never captured them, so this is the existing source, not a new state. */
+  const user = useSelector((state) => state.auth?.user);
+  const driverVehicleType = user?.role === "autodriver" ? "auto" : "bike";
+  const driverCityId = user?.city ?? null;
 
   // Synchronization effect on mount/refresh
   useEffect(() => {
@@ -104,6 +115,40 @@ export default function DriverFlow() {
   }, [currentStep, activeRide?.tripId, dispatch]);
 
   const fetchDriverRoutes = async (from = null, to = null) => {
+    // ==========================================================================
+    // DYNAMIC ROUTE CREATION — ACTIVE (DYNAMIC_ROUTE_CREATION_ENABLED = true)
+    //
+    // The origin/destination chosen in the existing planner are posted to the
+    // backend Dynamic Route API. Django resolves both points, calls OSRM once
+    // for the real road route, discovers OMV stops along the corridor and
+    // returns the generated route. The response is mapped by
+    // normalizeDynamicRoute() into the exact shape the existing Route Card
+    // already renders, so only the data source changed.
+    // ==========================================================================
+    if (isDynamicRouteCreationEnabled()) {
+      const { routes } = await fetchDynamicRoutes({
+        audience: "driver",
+        origin: from,
+        destination: to,
+        cityId: driverCityId,
+        vehicleType: driverVehicleType,
+      });
+      return routes.map(buildRouteSummary);
+    }
+
+    // ==========================================================================
+    // LEGACY FIXED-ROUTE FETCH — REPLACED BY DYNAMIC ROUTE CREATION
+    //
+    // Previous behaviour:
+    //   fetch an existing manually traced route and render it.
+    //
+    // Current behaviour (when DYNAMIC_ROUTE_CREATION_ENABLED = true):
+    //   request a route from the dynamic route API above.
+    //
+    // Retained temporarily for rollback/reference.
+    // Do not use when dynamic route creation is enabled.
+    // Set VITE_DYNAMIC_ROUTE_CREATION_ENABLED=false to restore this path.
+    // ==========================================================================
     const searchingByLocation = Boolean(from && to);
     const params = searchingByLocation
       ? {
@@ -128,6 +173,20 @@ export default function DriverFlow() {
 
     if (!start || !end) return route;
 
+    // ==========================================================================
+    // LEGACY FIXED-ROUTE FETCH — REPLACED BY DYNAMIC ROUTE CREATION
+    //
+    // Previous behaviour:
+    //   ask the backend to re-route the selected fixed route just to hydrate
+    //   a preview polyline on the card.
+    //
+    // Current behaviour:
+    //   skipped for generated routes — the OSRM geometry already travelled with
+    //   the dynamic route response, and the browser must never issue a second
+    //   routing request.
+    //
+    // Retained for rollback/reference (fixed routes, flag off).
+    // ==========================================================================
     try {
       const response = await api.post(API_PATHS.admin.routePreview, {
         start: { lat: start[1], lon: start[0] },
@@ -167,10 +226,19 @@ export default function DriverFlow() {
     })
       .catch(err => console.error("Failed to save recent search", err));
 
+    const dynamicMode = isDynamicRouteCreationEnabled();
+
     try {
       setLoadingRoutes(true);
+      setRouteError("");
+      dispatch(setDriverError(null));
       const routes = await fetchDriverRoutes(from, to);
-      const filteredRoutes = filterRoutesForDriver(routes, from, to);
+      // Dynamic routes arrive already matched to the requested origin and
+      // destination, and the backend owns their ordering — the legacy geo/text
+      // relevance filter is only meaningful for the fixed-route catalogue.
+      const filteredRoutes = dynamicMode
+        ? routes
+        : filterRoutesForDriver(routes, from, to);
 
       setAllRoutes(routes);
       setMatchingRoutes(filteredRoutes.length ? filteredRoutes : routes);
@@ -180,7 +248,12 @@ export default function DriverFlow() {
       console.error("Failed to fetch driver routes", error);
       setAllRoutes([]);
       setMatchingRoutes([]);
-      dispatch(setDriverError("Failed to load driver routes"));
+      // Only the pre-approved, user-safe copy reaches the Route Card.
+      const message = error?.isDynamicRouteError
+        ? error.message
+        : "Failed to load driver routes";
+      setRouteError(message);
+      dispatch(setDriverError(message));
       dispatch(setStep(STEPS.ROUTES));
     } finally {
       setLoadingRoutes(false);
@@ -189,7 +262,11 @@ export default function DriverFlow() {
 
   const handleSelectRoute = async (route) => {
     dispatch(setDriverLoading(true));
-    const hydratedRoute = await fetchPreviewForRoute(route);
+    // A generated route already carries the backend's OSRM geometry, ordered
+    // stops and authoritative fare, so Continue forwards it untouched. Only the
+    // legacy fixed-route path still needs the preview round-trip.
+    const hydratedRoute =
+      route?.source === "dynamic" ? route : await fetchPreviewForRoute(route);
     dispatch(setSelectedRoute(hydratedRoute));
     dispatch(setStep(STEPS.PREFLIGHT));
     dispatch(setDriverLoading(false));
@@ -527,7 +604,12 @@ export default function DriverFlow() {
         routes={matchingRoutes}
         allRoutesCount={allRoutes.length}
         loading={loadingRoutes}
-        onBack={() => dispatch(setStep(STEPS.PLANNER))}
+        error={routeError}
+        onBack={() => {
+          setRouteError("");
+          dispatch(setDriverError(null));
+          dispatch(setStep(STEPS.PLANNER));
+        }}
         onSelectRoute={handleSelectRoute}
       />
     );

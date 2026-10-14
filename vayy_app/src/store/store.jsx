@@ -11,8 +11,8 @@ import walletReducer from "./slices/walletSlice";
 import trackingReducer from "./slices/trackingSlice";
 import notificationReducer from "./slices/notificationSlice";
 import profileReducer from "./slices/profileSlice";
+import verificationReducer from "./slices/verificationSlice";
 import dispatchReducer from "./slices/dispatchSlice";
-import journeyReducer from "./slices/journeySlice";
 import rideReducer from "./slices/rideSlice";
 import autoRideReducer from "./slices/autoRideSlice";
 import bikeRideReducer from "./slices/bikeRideSlice";
@@ -30,8 +30,8 @@ export const store = configureStore({
     tracking: trackingReducer,
     notifications: notificationReducer,
     profile: profileReducer,
+    verification: verificationReducer,
     dispatch: dispatchReducer,
-    journey: journeyReducer,
     ride: rideReducer,
     autoRide: autoRideReducer,
     bikeRide: bikeRideReducer,

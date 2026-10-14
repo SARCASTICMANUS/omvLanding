@@ -1,0 +1,14 @@
+name: vayy-frontend
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_PATH: ${FRONTEND_BASE_PATH:-/}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_DYNAMIC_ROUTE_CREATION_ENABLED: ${VITE_DYNAMIC_ROUTE_CREATION_ENABLED:-true}
+    ports:
+      - "${FRONTEND_PORT:-8082}:80"
+    restart: unless-stopped

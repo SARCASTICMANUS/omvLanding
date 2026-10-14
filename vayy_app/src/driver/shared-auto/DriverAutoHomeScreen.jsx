@@ -83,10 +83,12 @@ export default function DriverAutoHomeScreen({ navigation }) {
     locateUser();
   }, [locateUser]);
 
-  const canProceed = useMemo(
-    () => Boolean(pickup?.lat && pickup?.lon && destination?.lat && destination?.lon),
-    [destination, pickup],
-  );
+  const canProceed = useMemo(() => {
+    const hasCoordinates = (point) =>
+      point?.lat != null && point?.lon != null &&
+      Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon));
+    return hasCoordinates(pickup) && hasCoordinates(destination);
+  }, [destination, pickup]);
 
   useEffect(() => {
     const fullGreeting = "Namaste,";
@@ -176,13 +178,7 @@ export default function DriverAutoHomeScreen({ navigation }) {
   const handleNext = () => {
     if (!canProceed) return;
     persistRecentSearch(pickup, destination);
-    // Journeys, not routes: the driver declares where they are going and the
-    // server resolves the path plus the global stops along it.
-    navigation.navigate("DriverFindPassengers", {
-      origin: pickup,
-      destination,
-      mode: "auto",
-    });
+    navigation.navigate("DriverRouteSearch", { pickup, destination, mode: "auto" });
   };
 
   const handleSwap = () => {
@@ -267,7 +263,7 @@ export default function DriverAutoHomeScreen({ navigation }) {
               onPress={handleNext}
             >
               <Ionicons name="map-outline" size={20} color="#fff" />
-              <Text style={styles.primaryBtnText}>Start Journey</Text>
+              <Text style={styles.primaryBtnText}>Find Best Route</Text>
             </TouchableOpacity>
 
             {recentSearches.length > 0 && (

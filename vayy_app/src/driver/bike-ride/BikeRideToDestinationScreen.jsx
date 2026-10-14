@@ -12,7 +12,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
 import * as Location from "expo-location";
-import { LinearGradient } from "expo-linear-gradient";
 import { completeDispatch } from "../../store/slices/dispatchSlice";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import useDriverLocationPush from "../hooks/useDriverLocationPush";
@@ -20,6 +19,7 @@ import { WS, OPERATIONS } from "../../constants";
 import api from "../../shared/lib/api";
 import COLORS from "../../shared/constants/colors";
 import VayyMap, { UserLocation, Marker, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 import { fetchRouteGeometry, getRoadDistance } from "../../routes/services/routeService";
 
@@ -377,18 +377,13 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
         </VayyMap>
         )}
 
-        <LinearGradient
-          colors={["rgba(10, 22, 60, 0.94)", "rgba(10, 22, 62, 0.0010)"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}
-        >
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back" size={22} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>On Ride</Text>
-          <View style={{ width: 40 }} />
-        </LinearGradient>
+        <ScreenHeader
+          absolute
+          zIndex={20}
+          title="On Ride"
+          subtitle="Drive the passenger to the destination"
+          onBack={() => navigation.goBack()}
+        />
       </View>
 
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
@@ -528,32 +523,6 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: "#FFFFFF",
   },
-  mapHeader: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    zIndex: 10,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#fff",
-    letterSpacing: -0.3,
-  },
   bottomSheet: {
     position: "absolute",
     left: 0,
@@ -565,11 +534,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 32,
     paddingHorizontal: 20,
     paddingTop: 0,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: 15,
+    boxShadow: "0 -4 20 rgba(0, 0, 0, 0.08)",
   },
   rideCheckSpacer: {
     height: 8,
@@ -693,11 +658,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 3,
+    boxShadow: "0 1 4 rgba(0, 0, 0, 0.12)",
     marginLeft: -8,
   },
   progressCore: {
@@ -724,11 +685,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EF4444",
     borderRadius: 18,
     height: 56,
-    shadowColor: "#EF4444",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
+    boxShadow: "0 4 10 rgba(239, 68, 68, 0.3)",
   },
   endRideText: {
     fontSize: 17,

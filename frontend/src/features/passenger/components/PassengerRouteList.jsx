@@ -4,14 +4,17 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import {
   ArrowLeft,
   ArrowRight,
+  ChevronDown,
+  ChevronUp,
   Clock3,
   Crosshair,
   Footprints,
-  Navigation,
+  Gauge,
+  MapPin,
   RefreshCw,
   SlidersHorizontal,
-  Sparkles,
 } from "lucide-react";
+import { normalizeCoordinate } from "../../../components/map/utils/routeGeometry";
 
 
 /* ─────────────────────────────────────────────
@@ -32,8 +35,8 @@ function formatDurationText(trip) {
 }
 function formatWalkText(meters) {
   if (!meters || meters <= 0) return "0 m";
-  if (meters < 1000) return `${Math.round(meters)} m walk`;
-  return `${(meters / 1000).toFixed(1)} km walk`;
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
 }
 function shortPlace(point, fallback) {
   return (
@@ -80,13 +83,13 @@ function createStopMarker(label) {
   el.textContent = label;
   return el;
 }
+/* The backend emits GeoJSON / OSRM geometry as [lng, lat] (see
+   RouteGeometryAPIView and RoutePreviewAPIView). The previous local heuristic
+   swapped whenever |first| <= 90, which is true for Indian longitudes (~81) and
+   therefore mirrored every OMV polyline. Reuse the shared, already-correct
+   normaliser used by the driver flow instead of duplicating the logic. */
 function toLngLat(coord) {
-  if (!Array.isArray(coord) || coord.length < 2) return null;
-  const first = Number(coord[0]);
-  const second = Number(coord[1]);
-  if (!Number.isFinite(first) || !Number.isFinite(second)) return null;
-  if (Math.abs(first) <= 90 && Math.abs(second) <= 180) return [second, first];
-  return [first, second];
+  return normalizeCoordinate(coord, "auto");
 }
 function getRouteCoordinates(trip, pickup, destination) {
   const rawPath =
@@ -137,7 +140,17 @@ function getRouteStops(trip, routeCoordinates) {
 }
 
 /* ─────────────────────────────────────────────
-   MAP COMPONENT — all maplibre logic untouched
+   MAP COMPONENT — same maplibre map, same markers, same route line.
+
+   Render fix:
+   - The map is created ONCE. Parent callbacks (onUpdatePickup / onUpdateDestination)
+     are new function instances on every PassengerFlow render; they used to be
+     effect dependencies, so the whole map was torn down and rebuilt on every
+     parent re-render (loading toggle, refresh, marker drag).
+     They are now read through a ref, so every callback below is stable.
+   - The map sits inside a `hidden sm:block` wrapper. It is resized whenever its
+     container changes size, and re-fitted when it goes from 0×0 to visible.
+   - fitBounds padding adapts to the container so a small canvas never throws.
 ───────────────────────────────────────────── */
 function RouteMapPreview({ trip, pickup, destination, onUpdatePickup, onUpdateDestination }) {
   const mapContainer = useRef(null);
@@ -145,10 +158,12 @@ function RouteMapPreview({ trip, pickup, destination, onUpdatePickup, onUpdateDe
   const markersRef = useRef({ pickup: null, destination: null, stops: [] });
   const isMapReadyRef = useRef(false);
   const latestDataRef = useRef({ pickup, destination, trip });
+  const callbacksRef = useRef({ onUpdatePickup, onUpdateDestination });
   const routeSourceId = "route-preview-source";
   const routeLayerId = "route-preview-layer";
 
   useEffect(() => { latestDataRef.current = { pickup, destination, trip }; }, [pickup, destination, trip]);
+  useEffect(() => { callbacksRef.current = { onUpdatePickup, onUpdateDestination }; }, [onUpdatePickup, onUpdateDestination]);
 
   const updateRouteLine = useCallback(() => {
     const map = mapRef.current;
@@ -163,6 +178,11 @@ function RouteMapPreview({ trip, pickup, destination, onUpdatePickup, onUpdateDe
   const fitMapToPoints = useCallback(() => {
     const map = mapRef.current;
     if (!map || !isMapReadyRef.current) return;
+    const container = map.getContainer();
+    const width = container?.clientWidth || 0;
+    const height = container?.clientHeight || 0;
+    // Hidden / not laid out yet — fitting now would compute against a 0×0 canvas.
+    if (!width || !height) return;
     const { pickup: p, destination: d, trip: t } = latestDataRef.current;
     const routeCoords = getRouteCoordinates(t, p, d);
     const points = [...routeCoords];
@@ -171,7 +191,8 @@ function RouteMapPreview({ trip, pickup, destination, onUpdatePickup, onUpdateDe
     if (points.length === 0) { map.easeTo({ center: [78.9629, 20.5937], zoom: 4.6, duration: 700 }); return; }
     if (points.length === 1) { map.easeTo({ center: points[0], zoom: 13, duration: 700 }); return; }
     const bounds = points.reduce((acc, coord) => acc.extend(coord), new maplibregl.LngLatBounds(points[0], points[0]));
-    map.fitBounds(bounds, { padding: { top: 90, bottom: 90, left: 90, right: 90 }, duration: 800, maxZoom: 13 });
+    const pad = Math.max(24, Math.min(90, Math.floor(Math.min(width, height) / 4)));
+    map.fitBounds(bounds, { padding: { top: pad, bottom: pad, left: pad, right: pad }, duration: 800, maxZoom: 13 });
   }, []);
 
   const syncMarkers = useCallback(() => {
@@ -197,7 +218,7 @@ function RouteMapPreview({ trip, pickup, destination, onUpdatePickup, onUpdateDe
           const up = { ...latestDataRef.current.pickup, lon: ll.lng, lat: ll.lat };
           latestDataRef.current = { ...latestDataRef.current, pickup: up };
           m.getElement().style.cursor = "grab";
-          onUpdatePickup?.(up); updateRouteLine(); fitMapToPoints();
+          callbacksRef.current.onUpdatePickup?.(up); updateRouteLine(); fitMapToPoints();
         });
         markersRef.current.pickup = m;
       } else { markersRef.current.pickup.setLngLat([p.lon, p.lat]); }
@@ -213,25 +234,29 @@ function RouteMapPreview({ trip, pickup, destination, onUpdatePickup, onUpdateDe
           const ud = { ...latestDataRef.current.destination, lon: ll.lng, lat: ll.lat };
           latestDataRef.current = { ...latestDataRef.current, destination: ud };
           m.getElement().style.cursor = "grab";
-          onUpdateDestination?.(ud); updateRouteLine(); fitMapToPoints();
+          callbacksRef.current.onUpdateDestination?.(ud); updateRouteLine(); fitMapToPoints();
         });
         markersRef.current.destination = m;
       } else { markersRef.current.destination.setLngLat([d.lon, d.lat]); }
     } else if (markersRef.current.destination) { markersRef.current.destination.remove(); markersRef.current.destination = null; }
-  }, [fitMapToPoints, onUpdateDestination, onUpdatePickup, updateRouteLine]);
+  }, [fitMapToPoints, updateRouteLine]);
 
+  /* Create the map exactly once (all deps above are stable). */
   useEffect(() => {
-    if (mapRef.current || !mapContainer.current) return;
+    const container = mapContainer.current;
+    if (mapRef.current || !container) return;
     const markers = markersRef.current;
     const map = new maplibregl.Map({
-      container: mapContainer.current,
+      container,
       style: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
       center: [80.9462, 26.8467],
       zoom: 10,
       attributionControl: false,
     });
     mapRef.current = map;
+
     map.on("load", () => {
+      map.resize();
       isMapReadyRef.current = true;
       if (!map.getSource(routeSourceId)) {
         map.addSource(routeSourceId, { type: "geojson", data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }, properties: {} } });
@@ -245,7 +270,27 @@ function RouteMapPreview({ trip, pickup, destination, onUpdatePickup, onUpdateDe
       }
       syncMarkers(); updateRouteLine(); fitMapToPoints();
     });
+
+    /* Keep the canvas in sync with its container (hidden → visible, breakpoint
+       changes, window resize). Re-fit only when it first gets a real size. */
+    let lastW = container.clientWidth;
+    let lastH = container.clientHeight;
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            if (!mapRef.current) return;
+            mapRef.current.resize();
+            if ((!lastW || !lastH) && w && h && isMapReadyRef.current) fitMapToPoints();
+            lastW = w;
+            lastH = h;
+          })
+        : null;
+    resizeObserver?.observe(container);
+
     return () => {
+      resizeObserver?.disconnect();
       isMapReadyRef.current = false;
       if (markers.pickup) markers.pickup.remove();
       if (markers.destination) markers.destination.remove();
@@ -262,12 +307,16 @@ function RouteMapPreview({ trip, pickup, destination, onUpdatePickup, onUpdateDe
 
   return (
     <div className="relative h-full min-h-[340px] w-full overflow-hidden rounded-[18px] border border-[#E5E7EB] shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
-      <div ref={mapContainer} className="h-full w-full" />
+      {/* maplibre forces `position: relative` on its container, so the sizing
+          is done by this absolutely-positioned wrapper instead. */}
+      <div className="absolute inset-0">
+        <div ref={mapContainer} className="h-full w-full" />
+      </div>
       {/* re-center button */}
       <button
         type="button"
         onClick={fitMapToPoints}
-        className="absolute bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.12)] transition hover:bg-[#F9FAFB] active:scale-95"
+        className="absolute bottom-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-[#E5E7EB] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.12)] transition hover:bg-[#F9FAFB] active:scale-95"
         aria-label="Re-center map"
       >
         <Crosshair size={18} className="text-[#374151]" />
@@ -277,208 +326,244 @@ function RouteMapPreview({ trip, pickup, destination, onUpdatePickup, onUpdateDe
 }
 
 /* ─────────────────────────────────────────────
-   STOP CONNECTOR — replica of mobile StopDotLine
+   EXPANDED STOPS PANEL — same design as the driver StopsPanel
 ───────────────────────────────────────────── */
-function StopDotLine({ pickupLabel, dropLabel, firstMileWalk, lastMileWalk }) {
+function StopsPanel({ stops, boardingStop, alightingStop }) {
+  const ordered = useMemo(
+    () =>
+      [...stops].sort(
+        (a, b) => (Number(a.order) || 0) - (Number(b.order) || 0),
+      ),
+    [stops],
+  );
+
   return (
-    <div className="mt-0.5 flex flex-col">
-      {/* Pickup */}
-      <div className="flex items-center gap-2">
-        <span className="h-3 w-3 shrink-0 rounded-full border-[2.5px] border-[#009849]" />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-bold text-[#111827]">{pickupLabel}</span>
-          <span className="block text-[11px] font-medium text-[#6B7280]">
-            Pickup{firstMileWalk ? `  •  ${formatWalkText(firstMileWalk)}` : ""}
-          </span>
-        </span>
-      </div>
+    <div className="mt-3 rounded-[12px] bg-[#F9FAFB] px-3 py-2">
+      {ordered.length === 0 ? (
+        <p className="py-4 text-center text-[13px] font-medium text-[#6B7280]">
+          Stop details are not available for this route yet.
+        </p>
+      ) : (
+        ordered.map((stop, i) => {
+          const isBoarding = boardingStop?.id
+            ? String(stop.id) === String(boardingStop.id)
+            : i === 0;
+          const isAlighting = alightingStop?.id
+            ? String(stop.id) === String(alightingStop.id)
+            : i === ordered.length - 1;
+          const dotColor = isBoarding
+            ? "#009849"
+            : isAlighting
+              ? "#f59e0b"
+              : "#D1D5DB";
 
-      {/* Dashed connector */}
-      <div className="flex h-4 items-center pl-[5px]">
-        <span className="h-4 border-l-[1.5px] border-dashed border-[#D1D5DB]" />
-      </div>
+          return (
+            <div key={stop.id || i} className="flex min-h-9 items-start">
+              <span className="flex w-5 flex-col items-center pt-1">
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: dotColor }}
+                />
+                {i < ordered.length - 1 && (
+                  <span className="min-h-4 w-0.5 flex-1 bg-[#D1D5DB]" />
+                )}
+              </span>
 
-      {/* Drop-off */}
-      <div className="flex items-center gap-2">
-        <span className="h-3 w-3 shrink-0 rounded-full border-[2.5px] border-[#F59E0B]" />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-bold text-[#111827]">{dropLabel}</span>
-          <span className="block text-[11px] font-medium text-[#6B7280]">
-            Drop-off{lastMileWalk ? `  •  ${formatWalkText(lastMileWalk)}` : ""}
-          </span>
-        </span>
-      </div>
+              <span className="ml-2 min-w-0 flex-1 py-1">
+                <span className="block truncate text-[13px] font-semibold text-[#111827]">
+                  {stop.name}
+                </span>
+                <span className="mt-0.5 block text-[11px] font-medium text-[#9CA3AF]">
+                  Stop {stop.order ?? i + 1}
+                </span>
+              </span>
+
+              {isBoarding && (
+                <span className="ml-2 self-center rounded-[6px] bg-[#DCFCE7] px-2 py-0.5 text-[10px] font-bold text-[#009849]">
+                  Boarding
+                </span>
+              )}
+              {isAlighting && (
+                <span className="ml-2 self-center rounded-[6px] bg-[#FEF3C7] px-2 py-0.5 text-[10px] font-bold text-[#f59e0b]">
+                  Alight
+                </span>
+              )}
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }
 
 /* ─────────────────────────────────────────────
-   ROUTE CARD — replica of mobile PassengerRouteList RouteCard
+   ROUTE CARD — same design as the driver RouteCard.
+   Passenger data is unchanged: fare is what the rider pays, walking
+   distances are shown, and the CTA still selects the route.
 ───────────────────────────────────────────── */
 function RouteCard({ trip, pickup, destination, isBest, index, onPress, onToggleExpand, expanded }) {
-  const routeCode = trip?.route_code || `R-${index + 1}`;
+  const routeCode = trip?.route_code;
   const routeName = trip?.name || "Shared ride";
 
   const boardingStop = trip?.pickup_stop;
   const alightingStop = trip?.dropoff_stop;
 
-  const boardLabel = boardingStop?.name || shortPlace(pickup, "Pickup Point");
-  const alightLabel = alightingStop?.name || shortPlace(destination, "Drop-off Point");
+  const fromLabel = boardingStop?.name || shortPlace(pickup, "Pickup Point");
+  const toLabel = alightingStop?.name || shortPlace(destination, "Drop-off Point");
 
   const firstMileWalk = trip?.first_mile_walk_meters || boardingStop?.distance_meters || 0;
   const lastMileWalk = trip?.last_mile_walk_meters || alightingStop?.distance_to_destination_meters || 0;
+  const walkMicrocopy =
+    firstMileWalk > 0 || lastMileWalk > 0
+      ? `Walk to pickup ${formatWalkText(firstMileWalk)} · Walk from drop-off ${formatWalkText(lastMileWalk)}`
+      : null;
 
-  const fare = trip?.fare ?? "—";
+  // Backend-authoritative fare. This card shows the price the rider pays, which
+  // the dynamic route response supplies as fare.buddy_fare.
+  const fareText = trip?.fare != null ? `₹${trip.fare}` : "--";
   const stops = trip?.stops || [];
+  const stopsCount = stops.length;
+  const routeKey = trip?.id || index;
 
   return (
-    <div
-      className={`rounded-[16px] bg-white p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] ${
-        isBest ? "border-[1.5px] border-[#009849]" : "border border-[#E5E7EB]"
+    <article
+      className={`rounded-[18px] border bg-white p-4 shadow-v-sm transition hover:shadow-v-md ${
+        isBest ? "border-[1.5px] border-[#009849]" : "border-[#E5E7EB]"
       }`}
     >
-      {/* BEST MATCH BADGE */}
-      {isBest && (
-        <span className="mb-3 inline-flex items-center gap-1 rounded-[6px] bg-[#009849] px-2 py-[3px] text-[10px] font-black tracking-[0.6px] text-white">
-          <Sparkles size={12} strokeWidth={2} />
-          BEST MATCH
+      {/* Badge + route code + name */}
+      <div className="mb-3 flex items-center gap-2">
+        {isBest && (
+          <span className="shrink-0 rounded-[6px] bg-[#009849] px-2.5 py-1 text-[10px] font-black tracking-[0.8px] text-white">
+            BEST MATCH
+          </span>
+        )}
+        {routeCode ? (
+          <span className="shrink-0 rounded-[6px] bg-[#ECFAF1] px-1.5 py-0.5 text-[10px] font-extrabold tracking-[0.4px] text-[#009849]">
+            {routeCode}
+          </span>
+        ) : null}
+        <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#6B7280]">
+          {routeName}
         </span>
-      )}
+      </div>
 
+      {/* Endpoints — tap to select */}
       <button
         type="button"
         onClick={() => onPress?.(trip)}
-        className="flex w-full items-start gap-3 text-left transition active:opacity-90"
+        className="flex w-full items-center gap-3 rounded-[12px] text-left transition hover:bg-[#F9FBFA]"
       >
-        {/* ROUTE CODE BADGE */}
-        <span className="flex shrink-0 items-center pt-0.5">
-          <span
-            className={`flex min-w-[42px] items-center justify-center rounded-[8px] px-1.5 py-1 text-[11px] font-black text-white ${
-              isBest ? "bg-[#009849]" : "bg-[#374151]"
-            }`}
-          >
-            {routeCode}
+        <span className="flex w-8 flex-col items-center gap-1.5 self-stretch">
+          <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-[#009849] text-[14px] font-black text-white">
+            {index + 1}
           </span>
+          <span className="w-0.5 flex-1 rounded bg-[#d1d5db]" />
         </span>
 
-        {/* MAIN STOP TIMELINE */}
-        <span className="min-w-0 flex-1">
-          <span className="mb-1.5 block truncate text-[15px] font-extrabold text-[#111827]">
-            {routeName}
+        <span className="min-w-0 flex-1 py-1">
+          <span className="flex items-center gap-2.5">
+            <span className="h-3 w-3 shrink-0 rounded-full bg-[#009849]" />
+            <span className="min-w-0 flex-1 truncate text-[14px] font-extrabold text-[#111827]">
+              {fromLabel}
+            </span>
           </span>
-          <StopDotLine
-            pickupLabel={boardLabel}
-            dropLabel={alightLabel}
-            firstMileWalk={firstMileWalk}
-            lastMileWalk={lastMileWalk}
-          />
-        </span>
-
-        {/* FARE COLUMN */}
-        <span
-          className={`flex min-w-[64px] shrink-0 flex-col items-center rounded-[10px] px-2.5 py-1.5 ${
-            isBest ? "border border-[#BBF7D0] bg-[#F0FDF4]" : "bg-[#F3F4F6]"
-          }`}
-        >
-          <span
-            className={`text-[16px] font-black leading-none ${
-              isBest ? "text-[#009849]" : "text-[#111827]"
-            }`}
-          >
-            ₹{fare}
+          <span className="my-1 ml-[4px] block h-3.5 border-l-[1.5px] border-dashed border-[#d1d5db]" />
+          <span className="flex items-center gap-2.5">
+            <span className="h-3 w-3 shrink-0 rounded-full bg-[#f59e0b]" />
+            <span className="min-w-0 flex-1 truncate text-[14px] font-extrabold text-[#111827]">
+              {toLabel}
+            </span>
           </span>
-          <span className="mt-1 text-[9px] font-semibold leading-none text-[#9CA3AF]">Est. Fare</span>
         </span>
       </button>
 
-      {/* METRICS & ACTIONS */}
-      <div className="mt-3 border-t border-[#F3F4F6] pt-3">
-        <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          <span className="flex items-center gap-[3px]">
-            <Footprints size={14} className="text-[#009849]" />
-            <span className="text-[12px] font-semibold text-[#4B5563]">
-              {formatWalkText(firstMileWalk + lastMileWalk)}
+      {/* Stats bar — ETA | Ride | Fare */}
+      <div className="mt-3 flex items-center justify-evenly rounded-[12px] bg-[#F9FAFB] py-2.5">
+        <span className="flex items-center gap-1.5">
+          <Clock3 size={15} className="text-[#6B7280]" />
+          <span className="flex flex-col items-start">
+            <span className="text-[13px] font-bold leading-tight text-[#374151]">
+              {formatDurationText(trip)}
+            </span>
+            <span className="text-[9px] font-semibold uppercase tracking-[0.4px] text-[#9CA3AF]">
+              ETA
             </span>
           </span>
-          <span className="text-[10px] text-[#D1D5DB]">•</span>
-          <span className="flex items-center gap-[3px]">
-            <Navigation size={14} className="text-[#6B7280]" />
-            <span className="text-[12px] font-semibold text-[#4B5563]">{formatDistanceText(trip)}</span>
-          </span>
-          <span className="text-[10px] text-[#D1D5DB]">•</span>
-          <span className="flex items-center gap-[3px]">
-            <Clock3 size={14} className="text-[#6B7280]" />
-            <span className="text-[12px] font-semibold text-[#4B5563]">
-              {formatDurationText(trip)} total
+        </span>
+
+        <span className="h-4 w-px bg-[#E5E7EB]" />
+
+        <span className="flex items-center gap-1.5">
+          <Gauge size={14} className="text-[#6B7280]" />
+          <span className="flex flex-col items-start">
+            <span className="text-[13px] font-bold leading-tight text-[#374151]">
+              {formatDistanceText(trip)}
+            </span>
+            <span className="text-[9px] font-semibold uppercase tracking-[0.4px] text-[#9CA3AF]">
+              Ride
             </span>
           </span>
-        </div>
+        </span>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onToggleExpand?.(trip?.id || index)}
-            className="shrink-0 rounded-[10px] border border-[#E5E7EB] px-3 py-2 text-[12px] font-bold text-[#374151] transition enabled:hover:border-[#009849] enabled:hover:text-[#009849]"
-          >
-            {expanded ? "Hide Stops" : `Stops (${stops.length}) ›`}
-          </button>
+        <span className="h-4 w-px bg-[#E5E7EB]" />
 
-          <button
-            type="button"
-            onClick={() => onPress?.(trip)}
-            className={`flex flex-1 items-center justify-center gap-1 rounded-[10px] py-[9px] text-[13px] font-extrabold text-white transition ${
-              isBest
-                ? "bg-[#009849] enabled:hover:bg-[#007A3B]"
-                : "bg-[#374151] enabled:hover:bg-[#1F2937]"
-            }`}
-          >
-            Select Route
-            <ArrowRight size={14} strokeWidth={2.5} />
-          </button>
-        </div>
+        <span className="flex flex-col items-start">
+          <span className="text-[16px] font-black leading-tight text-[#009849]">
+            {fareText}
+          </span>
+          <span className="text-[9px] font-semibold uppercase tracking-[0.4px] text-[#9CA3AF]">
+            Est. Fare
+          </span>
+        </span>
       </div>
 
-      {/* EXPANDABLE STOPS LIST */}
-      {expanded && stops.length > 0 && (
-        <div className="mt-3 flex flex-col gap-2 rounded-[12px] border border-[#E5E7EB] bg-[#F9FAFB] p-2.5">
-          {stops.map((stop, si) => {
-            const isBoarding = boardingStop?.id
-              ? String(stop.id) === String(boardingStop.id)
-              : si === 0;
-            const isAlighting = alightingStop?.id
-              ? String(stop.id) === String(alightingStop.id)
-              : si === stops.length - 1;
-
-            const seqBg = isBoarding
-              ? "bg-[#009849]"
-              : isAlighting
-                ? "bg-[#F59E0B]"
-                : "bg-[#E5E7EB]";
-            const seqText = isBoarding || isAlighting ? "text-white" : "text-[#374151]";
-            const statusText = isBoarding ? "Pickup Here" : isAlighting ? "Drop-off Here" : "On Route";
-            const statusTextClass = isBoarding
-              ? "text-[#009849]"
-              : isAlighting
-                ? "text-[#F59E0B]"
-                : "text-[#374151]";
-
-            return (
-              <div key={stop.id || si} className="flex items-center gap-2.5">
-                <span
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold ${seqBg} ${seqText}`}
-                >
-                  {stop.order || si + 1}
-                </span>
-                <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                  <span className="truncate text-[12px] font-semibold text-[#111827]">{stop.name}</span>
-                  <span className={`shrink-0 text-[11px] font-bold ${statusTextClass}`}>{statusText}</span>
-                </span>
-              </div>
-            );
-          })}
+      {/* Walk microcopy */}
+      {walkMicrocopy && (
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-[#9CA3AF]">
+          <Footprints size={13} />
+          {walkMicrocopy}
         </div>
       )}
-    </div>
+
+      {/* Stops count + View N stops toggle */}
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#ECFAF1] px-2.5 py-1.5 text-[12px] font-bold text-[#009849]">
+          <MapPin size={13} />
+          {stopsCount} stops
+        </span>
+
+        {stopsCount > 0 && (
+          <button
+            type="button"
+            onClick={() => onToggleExpand?.(routeKey)}
+            className="inline-flex items-center gap-1 text-[13px] font-bold text-[#009849] transition hover:text-[#007A3B]"
+            aria-expanded={expanded}
+          >
+            {expanded ? "Hide stops" : `View ${stopsCount} stops`}
+            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+        )}
+      </div>
+
+      {expanded && stopsCount > 0 && (
+        <StopsPanel
+          stops={stops}
+          boardingStop={boardingStop}
+          alightingStop={alightingStop}
+        />
+      )}
+
+      {/* Select CTA */}
+      <button
+        type="button"
+        onClick={() => onPress?.(trip)}
+        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-[#009849] text-[15px] font-extrabold text-white shadow-[0_3px_8px_rgba(0,152,73,0.25)] transition hover:bg-[#007A3B] active:scale-[0.99]"
+      >
+        Select Route
+        <ArrowRight size={16} strokeWidth={2.6} />
+      </button>
+    </article>
   );
 }
 
@@ -502,6 +587,7 @@ export default function PassengerRouteList({
   onChooseRoute,
   trips = [],
   loading = false,
+  error = "",
   pickup,
   destination,
   onUpdatePickup,
@@ -531,10 +617,10 @@ export default function PassengerRouteList({
   }, [trips]);
   const bestTrip = allTrips[0] || null;
   const routeCount = allTrips.length;
-  const modeLabel =
-    Array.isArray(trips) && trips.some((trip) => trip?.vehicle_type === "bike")
-      ? "Bike"
-      : "Auto";
+  // Count reflects exactly what the backend returned — a single generated
+  // route reads "1 route found", never a fabricated number of alternatives.
+  const routeCountLabel = `${routeCount} route${routeCount === 1 ? "" : "s"}`;
+  const modeLabel = Array.isArray(trips) && trips.some((trip) => trip?.vehicle_type === "bike") ? "Bike" : "Auto";
 
   const handleContinue = (trip) => { if (!trip) return; onChooseRoute?.(trip); };
   const handleToggleExpand = (id) =>
@@ -574,13 +660,17 @@ export default function PassengerRouteList({
       {/* ══ MAIN CONTENT ══ */}
       <main className="mx-auto w-full max-w-[1400px] px-4 pb-8 sm:px-5">
         {/* LIST STATES */}
-        {!loading && routeCount > 0 && (
+        {!loading && !error && routeCount > 0 && (
           <p className="mb-2.5 mt-1 text-[13px] font-semibold text-[#6B7280]">
-            {routeCount} routes found for your journey
+            {routeCountLabel} found for your journey
           </p>
         )}
         {loading && <StateCard>Finding best options...</StateCard>}
-        {!loading && routeCount === 0 && (
+        {/* Reuses the existing StateCard treatment. The message arrives already
+            sanitised from the route provider, so raw backend/OSRM text never
+            reaches the rider. */}
+        {!loading && error && <StateCard>{error}</StateCard>}
+        {!loading && !error && routeCount === 0 && (
           <StateCard>No matching rides found for this location.</StateCard>
         )}
 
@@ -607,7 +697,10 @@ export default function PassengerRouteList({
                   pickup={pickup}
                   destination={destination}
                   index={index}
-                  isBest={index === 0}
+                  /* "BEST MATCH" is kept verbatim but only awarded when the data
+                     source actually ranked the route first. A single
+                     backend-generated route is not a match against anything. */
+                  isBest={index === 0 && trip?.is_best_match !== false}
                   expanded={String(expandedRouteId) === String(trip?.id || index)}
                   onPress={handleContinue}
                   onToggleExpand={handleToggleExpand}

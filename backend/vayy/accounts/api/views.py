@@ -34,6 +34,8 @@ from common.constants import (
     DOC_STATUS_PENDING,
     DOC_STATUS_VERIFIED,
     DOC_STATUS_REJECTED,
+    DOC_TYPE_LICENSE,
+    DOC_TYPE_RC,
     ROLE_ADMIN,
     ROLE_PASSENGER,
     ROLE_BIKE_DRIVER,
@@ -451,6 +453,84 @@ class ChangePasswordAPIView(APIView):
         )
         return resp
 
+def _driver_verification_payload(user):
+    """Canonical KYC state; OTP/account verification is separate from document verification."""
+    is_driver = user.role in (ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER)
+    docs = DriverDocument.objects.filter(driver=user).order_by("created_at") if is_driver else DriverDocument.objects.none()
+    doc_list = DriverDocumentListSerializer(docs, many=True).data
+    if not is_driver:
+        verified = bool(user.is_verified)
+        return {"is_verified": verified, "status": "verified" if verified else "unverified",
+                "stage": "fully_verified" if verified else "docs_pending", "can_use_app": True,
+                "title": "Verified" if verified else "Account status", "message": "" if verified else "Your account is not yet verified.",
+                "required_docs": [], "uploaded_docs": [], "missing_docs": [], "rejection_reason": "", "submitted_at": None, "documents": []}
+    required = (
+        ("dlFront", DOC_TYPE_LICENSE, "Driving License (front)"),
+        ("dlBack", DOC_TYPE_LICENSE, "Driving License (back)"),
+        ("rcFront", DOC_TYPE_RC, "Registration Certificate (front)"),
+        ("rcBack", DOC_TYPE_RC, "Registration Certificate (back)"),
+        ("insuranceFront", "INSURANCE", "Vehicle Insurance (front)"),
+        ("insuranceBack", "INSURANCE", "Vehicle Insurance (back)"),
+        ("aadhaarFront", "IDENTITY", "Identity Proof (front)"),
+        ("aadhaarBack", "IDENTITY", "Identity Proof (back)"),
+        ("selfie", "IDENTITY", "Selfie Verification"),
+    )
+    slot_docs = {key: [] for key, _, _ in required}
+    legacy_slots = {
+        DOC_TYPE_LICENSE: ["dlFront", "dlBack"], DOC_TYPE_RC: ["rcFront", "rcBack"],
+        "INSURANCE": ["insuranceFront", "insuranceBack"],
+        "IDENTITY": ["aadhaarFront", "aadhaarBack", "selfie"],
+    }
+    relevant = [doc for doc in doc_list if doc.get("document_type") in legacy_slots]
+    unkeyed = []
+    slot_types = {key: kind for key, kind, _ in required}
+    for doc in relevant:
+        key = doc.get("doc_key")
+        if key in slot_docs and doc.get("document_type") == slot_types[key]:
+            slot_docs[key].append(doc)
+        else:
+            unkeyed.append(doc)
+    # Backward compatibility for documents uploaded before doc_key was introduced.
+    for doc in unkeyed:
+        for key in legacy_slots.get(doc.get("document_type"), []):
+            if not slot_docs[key]:
+                slot_docs[key].append(doc)
+                break
+    missing = [label for key, _, label in required if not slot_docs[key]]
+    rejected = [doc for docs_for_slot in slot_docs.values() for doc in docs_for_slot
+                if doc.get("status") == DOC_STATUS_REJECTED]
+    all_approved = all(
+        slot_docs[key] and all(doc.get("status") == DOC_STATUS_VERIFIED for doc in slot_docs[key])
+        for key, _, _ in required
+    )
+    profile = PublicDriverProfile.objects.filter(user=user).only("is_verified").first()
+    legacy_verified_without_docs = bool(profile and profile.is_verified and not relevant)
+    if legacy_verified_without_docs:
+        stage, status_value, message = "fully_verified", "verified", "Your driver profile is verified."
+    elif not user.otp_verified:
+        stage = "email_pending"
+        status_value = "not_submitted" if not relevant else "pending"
+        message = "Verify your email before completing driver verification."
+    elif rejected:
+        stage, status_value, message = "docs_rejected", "rejected", "One or more required documents were rejected. Please replace the rejected documents."
+    elif all_approved:
+        stage, status_value, message = "fully_verified", "verified", "All required driver documents have been verified."
+    elif missing:
+        stage, status_value = "docs_pending", "not_submitted" if not relevant else "pending"
+        message = "Upload all required documents to complete verification."
+    else:
+        stage, status_value, message = "docs_under_review", "pending", "Your documents are under review."
+    dates = [doc.get("created_at") for doc in relevant if doc.get("created_at")]
+    rejection_reason = next((doc.get("rejection_reason") or "" for doc in rejected if doc.get("rejection_reason")), "")
+    titles = {"email_pending": "Email verification required", "docs_pending": "Complete your verification",
+              "docs_under_review": "Documents under review", "docs_rejected": "Documents rejected", "fully_verified": "Driver verified"}
+    return {"is_verified": stage == "fully_verified", "status": status_value, "stage": stage,
+            "can_use_app": stage == "fully_verified", "title": titles[stage], "message": message,
+            "required_docs": [label for _, _, label in required],
+            "uploaded_docs": [label for key, _, label in required if slot_docs[key]], "missing_docs": missing,
+            "rejection_reason": rejection_reason, "submitted_at": min(dates) if dates else None, "documents": doc_list}
+
+
 # CURRENT USER
 class CurrentUserAPIView(APIView):
     permission_classes = [
@@ -458,12 +538,10 @@ class CurrentUserAPIView(APIView):
     ]
 
     def get(self, request):
-        resp = success_response(
-            data=UserSerializer(
-                request.user
-            ).data
-        )
-        return resp
+        user_data = UserSerializer(request.user).data
+        # Preserve flat user fields while exposing verification for VerificationGate.
+        return success_response(data={**user_data, "user": user_data,
+                                      "verification": _driver_verification_payload(request.user)})
 
     def patch(self, request):
         serializer = CurrentUserUpdateSerializer(
@@ -1216,7 +1294,11 @@ class DriverDocumentAPIView(APIView):
                 existing_doc.document_type = document_type
                 existing_doc.status = DOC_STATUS_PENDING
                 existing_doc.rejection_reason = ""
+                existing_doc.verified_by = None
+                existing_doc.verified_at = None
                 existing_doc.save()
+                from accounts.services.verification_service import VerificationService
+                VerificationService.check_and_verify_profile(request.user)
                 return Response(
                     DriverDocumentSerializer(existing_doc).data,
                     status=status.HTTP_200_OK,
@@ -1228,6 +1310,8 @@ class DriverDocumentAPIView(APIView):
                 file_data=file_base64,
                 file_name=file_name,
             )
+            from accounts.services.verification_service import VerificationService
+            VerificationService.check_and_verify_profile(request.user)
             return Response(
                 DriverDocumentSerializer(doc).data,
                 status=status.HTTP_201_CREATED,
@@ -1249,7 +1333,11 @@ class DriverDocumentAPIView(APIView):
                 existing_doc.document_type = document_type
                 existing_doc.status = DOC_STATUS_PENDING
                 existing_doc.rejection_reason = ""
+                existing_doc.verified_by = None
+                existing_doc.verified_at = None
                 existing_doc.save()
+                from accounts.services.verification_service import VerificationService
+                VerificationService.check_and_verify_profile(request.user)
                 return Response(
                     DriverDocumentSerializer(existing_doc).data,
                     status=status.HTTP_200_OK,
@@ -1261,6 +1349,8 @@ class DriverDocumentAPIView(APIView):
                 file_data=encoded,
                 file_name=actual_name,
             )
+            from accounts.services.verification_service import VerificationService
+            VerificationService.check_and_verify_profile(request.user)
             return Response(
                 DriverDocumentSerializer(doc).data,
                 status=status.HTTP_201_CREATED,
@@ -1303,46 +1393,7 @@ class VerificationStatusAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        is_driver = user.role in (ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER)
-
-        if not is_driver:
-            return success_response(data={
-                "is_verified": user.is_verified,
-                "status": "verified" if user.is_verified else "unverified",
-                "documents": [],
-            })
-
-        docs = DriverDocument.objects.filter(driver=user)
-        doc_list = DriverDocumentListSerializer(docs, many=True).data
-
-        profile = PublicDriverProfile.objects.filter(user=user).first()
-        profile_verified = profile.is_verified if profile else False
-
-        statuses = [d["status"] for d in doc_list]
-        # An already-verified driver is verified even with no documents on file,
-        # otherwise the "complete your profile" popup reappears over a working
-        # account and blocks every screen behind it.
-        #
-        # ``all(...)`` is only meaningful once there is at least one document:
-        # it is vacuously true over an empty list, which would report every
-        # never-verified account as verified.
-        if profile_verified or user.is_verified:
-            verification_status = "verified"
-        elif not doc_list:
-            verification_status = "not_submitted"
-        elif DOC_STATUS_REJECTED in statuses:
-            verification_status = "rejected"
-        elif all(s == DOC_STATUS_VERIFIED for s in statuses):
-            verification_status = "verified"
-        else:
-            verification_status = "pending"
-
-        return success_response(data={
-            "is_verified": profile_verified or user.is_verified,
-            "status": verification_status,
-            "documents": doc_list,
-        })
+        return success_response(data=_driver_verification_payload(request.user))
 
 # RECENT SEARCHES — Redis-first with 48h TTL, DB as durable backup
 _RECENT_SEARCH_TTL = 172800  # 48 hours in seconds
@@ -1576,12 +1627,36 @@ class UserViewSet(
             return UserCreateUpdateSerializer
         return UserSerializer
 
+    def _add_verification_payload(self, data):
+        """Attach canonical document/KYC status to admin user responses."""
+        if isinstance(data, dict) and isinstance(data.get("results"), list):
+            # DRF pagination wraps rows under `results`; preserve pagination metadata.
+            self._add_verification_payload(data["results"])
+            return data
+
+        if isinstance(data, list):
+            user_ids = [item.get("id") for item in data if item.get("id")]
+            users_by_id = {str(user.pk): user for user in User.objects.filter(pk__in=user_ids)}
+            for item in data:
+                user = users_by_id.get(str(item.get("id")))
+                if user:
+                    item["verification"] = _driver_verification_payload(user)
+            return data
+
+        if isinstance(data, dict) and data.get("id"):
+            user = User.objects.filter(pk=data["id"]).first()
+            if user:
+                data["verification"] = _driver_verification_payload(user)
+        return data
+
     def list(self, request, *args, **kwargs):
         resp = super().list(request, *args, **kwargs)
+        resp.data = self._add_verification_payload(resp.data)
         return resp
 
     def retrieve(self, request, *args, **kwargs):
         resp = super().retrieve(request, *args, **kwargs)
+        resp.data = self._add_verification_payload(resp.data)
         return resp
 
 

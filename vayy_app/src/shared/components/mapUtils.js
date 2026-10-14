@@ -6,16 +6,56 @@ export { DEFAULT_CENTER };
 // app, so a committed fallback would leak the key. See .env.example.
 export const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_API_KEY || "";
 
+// Public CARTO Voyager style: the same basemap the web app uses. It needs no key,
+// so a missing MapTiler key degrades to a working map instead of a blank one
+// ("Unable to parse resourceUrl null").
+export const FALLBACK_STYLE_URL =
+  "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+
 if (!MAPTILER_KEY) {
   console.warn(
-    "[VAYY] EXPO_PUBLIC_MAPTILER_API_KEY is unset — the map will not load. " +
-      "Copy .env.example to .env and fill in your MapTiler key."
+    "[VAYY] EXPO_PUBLIC_MAPTILER_API_KEY is unset - falling back to the public " +
+      "CARTO Voyager basemap. To use MapTiler, set the key in .env and restart " +
+      "Metro with a cleared cache (npx expo start -c): EXPO_PUBLIC_* values are " +
+      "inlined at bundle time."
   );
 }
 
 export const MAPTILER_STYLE = MAPTILER_KEY
   ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`
-  : null;
+  : FALLBACK_STYLE_URL;
+
+// Fetched + sanitised once per JS context and shared by every map instance.
+// MapLibre used to be handed the raw MAPTILER_STYLE URL, which it fetched and
+// parsed itself - including MapTiler's tile-less `maptiler_attribution` source,
+// hence "[ParseStyle]: source must have tiles" on the first paint. Handing it a
+// pre-sanitised object removes that parse entirely, and caching means only the
+// very first map in the process waits (the URL fetch took that long anyway).
+//
+// A FAILED fetch is NOT cached: it used to resolve to null for the rest of the
+// session, so one early network blip (an emulator whose network was not up yet)
+// left every map blank - MapLibre then logs "Unable to parse resourceUrl null" -
+// until the app was fully restarted. The next map mount now retries.
+let _stylePromise = null;
+
+export const loadSanitizedMapStyle = (grayscale = false) => {
+  if (!MAPTILER_STYLE) return Promise.resolve(null);
+
+  if (!_stylePromise) {
+    _stylePromise = (async () => {
+      const res = await fetch(MAPTILER_STYLE);
+      if (!res.ok) throw new Error(`map style request failed: HTTP ${res.status}`);
+      const style = await res.json();
+      return dropTileLessSources(style);
+    })().catch((err) => {
+      console.warn("[VAYY] map style failed to load:", err?.message || err);
+      _stylePromise = null;
+      return null;
+    });
+  }
+  const pending = _stylePromise;
+  return pending.then((safe) => (grayscale ? transformStyleToGrayscale(safe) : safe));
+};
 
 export function hexToGray(hex) {
   let h = hex.slice(1);
@@ -136,6 +176,64 @@ export function transformStyleToGrayscale(style) {
     layer.paint = grayscaleWalk(layer.paint);
   });
   return style;
+}
+
+/**
+ * Remove sources MapLibre cannot draw, without losing their attribution.
+ *
+ * MapTiler's streets-v2 style ships a source like:
+ *   "maptiler_attribution": { "type": "vector", "attribution": "<a ...>MapTiler</a> ..." }
+ * i.e. a VECTOR source with neither `tiles` nor `url`, referenced by zero layers.
+ * MapLibre logs `[ParseStyle]: source must have tiles` for it on every map mount
+ * (and in dev that warning raises a LogBox toast).
+ *
+ * It draws nothing, but its `attribution` string is the MapTiler/OSM copyright
+ * we are required to display, so it must not simply be dropped. MapLibre also
+ * honours a TOP-LEVEL `attribution` string, so hoist it there and remove the
+ * empty source. Net effect: identical map, identical attribution, no warning.
+ *
+ * @param {object} style a MapLibre style object
+ * @returns {object} a new style object; the input is not mutated
+ */
+export function dropTileLessSources(style) {
+  if (!style || typeof style !== "object") return style;
+  const sources = style.sources;
+  if (!sources || typeof sources !== "object") return style;
+
+  const dead = [];
+  const attributions = [];
+
+  for (const [name, source] of Object.entries(sources)) {
+    const hasTiles = Array.isArray(source?.tiles) && source.tiles.length > 0;
+    const hasUrl = typeof source?.url === "string" && source.url.length > 0;
+    if (hasTiles || hasUrl) continue;
+    if (typeof source?.attribution === "string" && source.attribution) {
+      attributions.push(source.attribution);
+    }
+    dead.push(name);
+  }
+
+  if (dead.length === 0) return style;
+
+  const nextSources = { ...sources };
+  for (const name of dead) delete nextSources[name];
+
+  const layers = Array.isArray(style.layers)
+    ? style.layers.filter((layer) => !dead.includes(layer?.source))
+    : style.layers;
+
+  const next = { ...style, sources: nextSources, layers };
+
+  if (attributions.length) {
+    const existing =
+      typeof style.attribution === "string" && style.attribution
+        ? style.attribution
+        : "";
+    const merged = [existing, ...attributions].filter(Boolean).join(" ");
+    next.attribution = merged;
+  }
+
+  return next;
 }
 
 export function convertInitialRegion(region) {

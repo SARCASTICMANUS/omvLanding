@@ -25,8 +25,7 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: COLORS.primary, borderRadius: 18, height: 56,
     alignItems: "center", justifyContent: "center", marginHorizontal: 24,
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
+    boxShadow: "0 4 8 rgba(0, 0, 0, 0.3)",
   },
   disabled: { opacity: 0.5 },
   label: { color: "#fff", fontSize: 16, fontWeight: "700", letterSpacing: 0.3 },

@@ -19,12 +19,14 @@ from common.constants import VEHICLE_BIKE, VEHICLE_AUTO
 from operations.models import FareConfiguration
 
 
-def _active_fare_config() -> Optional[FareConfiguration]:
+def _active_fare_config(vehicle_type: Optional[str] = None) -> Optional[FareConfiguration]:
+    """Return the active fare row for a vehicle type, or the first active row
+    for legacy callers that do not provide one.
     """
-    Return the currently active ``FareConfiguration`` row, or ``None`` if none
-    is marked ``is_active``.
-    """
-    return FareConfiguration.objects.filter(is_active=True).first()
+    configs = FareConfiguration.objects.filter(is_active=True)
+    if vehicle_type:
+        configs = configs.filter(vehicle_type=vehicle_type)
+    return configs.order_by("-effective_from").first()
 
 
 def _default_rate(vehicle_type: str) -> dict:
@@ -38,9 +40,11 @@ def _default_rate(vehicle_type: str) -> dict:
 
 def _rate_for(vehicle_type: str) -> dict:
     """Fetch the active configuration rate, falling back to defaults."""
-    config = _active_fare_config()
+    config = _active_fare_config(vehicle_type)
     if config is not None:
-        return {"base_fare": config.base_fare, "per_km_rate": config.per_km_rate}
+        # The admin form converts rupees to paise before storing these integers.
+        # Fare calculations and API responses use rupees, so convert once here.
+        return {"base_fare": config.base_fare / 100, "per_km_rate": config.per_km_rate / 100}
     return _default_rate(vehicle_type)
 
 
@@ -48,11 +52,11 @@ class FareService:
     """Fare calculation helpers backed by the ``FareConfiguration`` model."""
 
     @staticmethod
-    def get_base_fare(vehicle_type: str) -> int:
+    def get_base_fare(vehicle_type: str) -> float:
         return _rate_for(vehicle_type)["base_fare"]
 
     @staticmethod
-    def get_per_km_rate(vehicle_type: str) -> int:
+    def get_per_km_rate(vehicle_type: str) -> float:
         return _rate_for(vehicle_type)["per_km_rate"]
 
     @staticmethod

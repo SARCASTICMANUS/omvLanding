@@ -10,7 +10,6 @@ import {
   WS_RECONNECT_JITTER,
   WS_RECONNECT_MAX_MS,
   WS_IDLE_TTL_MS,
-  WS_SUBPROTOCOL,
 } from "../../constants";
 
 const LOG_TAG = "[SocketManager]";
@@ -338,7 +337,13 @@ class SocketManager {
       const token =
         (await AsyncStorage.getItem(STORAGE_KEYS.accessToken)) ||
         (await AsyncStorage.getItem(STORAGE_KEYS.token));
-      const url = getWsUrl(path);
+      const baseUrl = getWsUrl(path);
+      // omv-backend authenticates sockets from "?token=<access jwt>" only
+      // (common/websockets/auth.py). A Sec-WebSocket-Protocol token is ignored,
+      // the user stays anonymous and Daphne answers "403 Access denied".
+      const url = token
+        ? `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`
+        : baseUrl;
 
       // Re-check after async gap — state may have changed during await
       if (entry._connecting === false || entry.socket) {
@@ -348,22 +353,11 @@ class SocketManager {
 
       this._setState(path, "connecting");
 
-      // Auth rides in Sec-WebSocket-Protocol as ["vayy.jwt.v1", "<jwt>"], so
-      // the token never lands in the URL (and never in access logs). The
-      // backend echoes back only the stable label, never the JWT.
-      //
-      // With no token we deliberately offer NO subprotocol: once a client
-      // sends Sec-WebSocket-Protocol the server is obliged to select one or
-      // the client aborts the handshake. Offering the label alone would make
-      // the no-auth endpoints (ws/dispatch/<id>/, ws/notifications/<id>/)
-      // negotiate a protocol that proves nothing.
-      const ws = token
-        ? new WebSocket(url, [WS_SUBPROTOCOL, token])
-        : new WebSocket(url);
+      const ws = new WebSocket(url);
       entry.socket = ws;
       entry._connecting = false;
 
-      console.log(`${LOG_TAG} _connectInternal WS_CREATED path=${path} auth=${token ? "subprotocol" : "none"}`);
+      console.log(`${LOG_TAG} _connectInternal WS_CREATED path=${path} auth=${token ? "query-token" : "none"}`);
 
       ws.onopen = () => {
         if (entry.socket !== ws) return;
@@ -431,12 +425,12 @@ class SocketManager {
    * not come back on the same millisecond.
    */
   _reconnectDelay(attempt) {
-    const base = Math.min(
-      WS_RECONNECT_BASE_MS * Math.pow(2, attempt),
-      WS_RECONNECT_MAX_MS
-    );
-    const spread = base * WS_RECONNECT_JITTER;
-    return Math.round(base + (Math.random() * 2 - 1) * spread);
+    const baseMs = Number.isFinite(WS_RECONNECT_BASE_MS) ? WS_RECONNECT_BASE_MS : 1000;
+    const maxMs = Number.isFinite(WS_RECONNECT_MAX_MS) ? WS_RECONNECT_MAX_MS : 30000;
+    const jitter = Number.isFinite(WS_RECONNECT_JITTER) ? WS_RECONNECT_JITTER : 0.25;
+    const base = Math.min(baseMs * Math.pow(2, attempt), maxMs);
+    const spread = base * jitter;
+    return Math.max(250, Math.round(base + (Math.random() * 2 - 1) * spread));
   }
 
   _scheduleReconnect(path, entry) {

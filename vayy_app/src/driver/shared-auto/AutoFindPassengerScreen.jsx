@@ -21,6 +21,7 @@ import useDriverLocationPush from "../hooks/useDriverLocationPush";
 import { WS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
 import VayyMap from "../../shared/components/VayyMap";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 
 const { height } = Dimensions.get("window");
 
@@ -241,17 +242,23 @@ export default function AutoFindPassengerScreen({ navigation, route }) {
         )}
 
         {/* Header */}
-        <View style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back" size={22} color="#111827" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Live Radar</Text>
-          <View style={styles.menuWrap}>
-            <TouchableOpacity onPress={() => setShowMenu(true)} style={styles.menuBtn}>
-              <Ionicons name="ellipsis-vertical" size={22} color="#111827" />
+        <ScreenHeader
+          absolute
+          zIndex={20}
+          title="Live Radar"
+          subtitle="Scanning for waiting passengers"
+          onBack={() => navigation.goBack()}
+          right={
+            <TouchableOpacity
+              onPress={() => setShowMenu(true)}
+              style={styles.menuBtn}
+              accessibilityRole="button"
+              accessibilityLabel="More options"
+            >
+              <Ionicons name="ellipsis-vertical" size={20} color="#111827" />
             </TouchableOpacity>
-          </View>
-        </View>
+          }
+        />
 
         {/* Passenger notification banner */}
         {notification && (
@@ -514,38 +521,6 @@ const styles = StyleSheet.create({
   },
 
   /* header */
-  mapHeader: {
-    position: "absolute",
-    top: 0, left: 0, right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    zIndex: 10,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.9)",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  menuWrap: {
-    width: 40,
-    height: 40,
-  },
   menuBtn: {
     width: 40,
     height: 40,

@@ -1,0 +1,13 @@
+name: vayy-admin
+
+services:
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_PATH: ${ADMIN_BASE_PATH:-/}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "${ADMIN_PORT:-8081}:80"
+    restart: unless-stopped

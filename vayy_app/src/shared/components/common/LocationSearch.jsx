@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,14 +10,46 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import api from "../../lib/api";
 
-function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90, isPickup }) {
+// Use registered backend endpoints: database stops plus broader Nominatim places.
+const DB_SEARCH_PATH = "/api/transport/geocode/db/search/";
+const GEOCODE_SEARCH_PATH = "/api/transport/geocode/search/";
+const DROPDOWN_MAX_HEIGHT = 440;
+
+// Backend result -> the shape the existing rows already render, plus the
+// stop id so downstream route search can use a real Stop PK when there is one.
+const mapResult = (item) => {
+  const lat = Number(item?.lat);
+  const lng = Number(item?.lng ?? item?.lon);
+  const name = item?.name || item?.display_name?.split(",")?.[0];
+  const displayName = item?.display_name || item?.name;
+  return {
+    ...item,
+    name,
+    display_name: displayName,
+    lat: Number.isFinite(lat) ? lat : null,
+    lon: Number.isFinite(lng) ? lng : null,
+    kind: item?.kind || (item?.id ? "city_stop" : "osm_place"),
+    stop_id: item?.stop_id ?? (item?.id ? item.id : null),
+    key: String(item?.kind || (item?.id ? "city_stop" : "osm_place")) + ":" + String(item?.id ?? item?.osm_id ?? item?.place_id ?? name),
+  };
+};
+
+function LocationSearch({
+  label,
+  placeholder,
+  value,
+  onSelect,
+  dropdownLift = 90,
+  isPickup,
+  rightAction,
+}) {
   const [query, setQuery] = useState(value?.name || value?.display_name || "");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasSelection, setHasSelection] = useState(Boolean(value));
   const [searched, setSearched] = useState(false);
-  const [dropdownHeight, setDropdownHeight] = useState(0);
   const inputRef = useRef(null);
+  const editingRef = useRef(false);
 
   useEffect(() => {
     if (hasSelection) {
@@ -28,7 +59,6 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
     if (!query || query.length < 3) {
       setResults([]);
       setSearched(false);
-      setDropdownHeight(0);
       return undefined;
     }
 
@@ -37,12 +67,31 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
       setLoading(true);
 
       try {
-        const res = await api.get("/api/transport/geocode/search/", {
-          params: { q: query, limit: 5 },
-        });
+        const params = { q: query.trim(), limit: 5, countrycodes: "in" };
+        const [dbResponse, geoResponse] = await Promise.allSettled([
+          api.get(DB_SEARCH_PATH, { params }),
+          api.get(GEOCODE_SEARCH_PATH, { params }),
+        ]);
         if (!active) return;
-        const data = res.data?.data || res.data;
-        setResults(Array.isArray(data) ? data : []);
+
+        const unwrap = (response) => {
+          if (response.status !== "fulfilled") return [];
+          const body = response.value?.data?.data ?? response.value?.data;
+          return Array.isArray(body) ? body : Array.isArray(body?.results) ? body.results : [];
+        };
+        const dbResults = unwrap(dbResponse).map((item) => ({ ...item, kind: "city_stop" }));
+        const geoResults = unwrap(geoResponse).map((item) => ({ ...item, kind: "osm_place" }));
+        const seen = new Set();
+        const merged = [...dbResults, ...geoResults].filter((item) => {
+          const lat = Number(item?.lat);
+          const lon = Number(item?.lon ?? item?.lng);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon) || (!item?.name && !item?.display_name)) return false;
+          const key = item.id ? "stop:" + item.id : lat.toFixed(5) + ":" + lon.toFixed(5) + ":" + (item.name || item.display_name);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }).slice(0, 5);
+        setResults(merged.map(mapResult));
         setSearched(true);
       } catch {
         if (!active) return;
@@ -65,42 +114,50 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
       lon: Number(item.lon),
       name: item.name || item.display_name?.split(",")?.[0],
       display_name: item.display_name,
+      stop_id: item.stop_id ?? null,
+      kind: item.kind ?? null,
     };
     setQuery(next.display_name || next.name || "");
     setResults([]);
     setSearched(false);
-    setDropdownHeight(0);
     setLoading(false);
     setHasSelection(true);
     onSelect(next);
   };
 
   useEffect(() => {
-    setQuery(value?.name || value?.display_name || "");
-    setHasSelection(Boolean(value));
+    if (value) {
+      editingRef.current = false;
+      setQuery(value.name || value.display_name || "");
+      setHasSelection(true);
+    } else {
+      // Typing clears the parent's selected coordinates, but must not clear the
+      // text currently being edited. External resets (e.g. swapping endpoints)
+      // still clear the input.
+      if (!editingRef.current) setQuery("");
+      setHasSelection(false);
+    }
     setResults([]);
     setSearched(false);
-    setDropdownHeight(0);
     setLoading(false);
   }, [value]);
 
   const handleChangeText = (text) => {
+    editingRef.current = true;
     setQuery(text);
     setHasSelection(false);
     setSearched(false);
-
-    if (text.length < 3) {
-      setResults([]);
-      setDropdownHeight(0);
-    }
+    setResults([]);
+    onSelect(null);
   };
 
   const handleClear = () => {
+    editingRef.current = true;
     setQuery("");
     setHasSelection(false);
     setResults([]);
     setSearched(false);
-    setDropdownHeight(0);
+    onSelect(null);
     inputRef.current?.focus();
   };
 
@@ -113,7 +170,7 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
     <View
       style={[
         styles.locationField,
-        showDropdown && { marginBottom: dropdownHeight + 20, zIndex: 9999 },
+        showDropdown && { zIndex: 9999 },
       ]}
     >
       <View style={styles.searchInputWrap}>
@@ -142,17 +199,18 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
           </TouchableOpacity>
         )}
         {hasSelection && <Ionicons name="checkmark-circle" size={18} color="#009849" />}
+        {rightAction}
       </View>
 
       {showResults ? (
-        <ScrollView
-          onLayout={(e) => setDropdownHeight(e.nativeEvent.layout.height)}
-          style={[styles.dropdown, { top: dropdownLift }]}
-          nestedScrollEnabled
-          showsVerticalScrollIndicator
-        >
+        // A plain View, NOT a ScrollView. Nested inside the host screen's own
+        // ScrollView, a second ScrollView claims the touch before the rows'
+        // Pressable gets it - the rows rendered and were visible, but onPress
+        // never fired. The API caps results at 5, so the list is short enough
+        // not to need its own scroller.
+        <View style={styles.dropdown}>
           {results.map((item) => (
-            <Pressable key={String(item.place_id)} onPress={() => handleSelect(item)} style={styles.resultRow}>
+            <Pressable key={item.key} onPress={() => handleSelect(item)} style={styles.resultRow}>
               <View style={styles.resultIcon}>
                 <Ionicons name="location-outline" size={16} color="#009849" />
               </View>
@@ -166,12 +224,9 @@ function LocationSearch({ label, placeholder, value, onSelect, dropdownLift = 90
               </View>
             </Pressable>
           ))}
-        </ScrollView>
+        </View>
       ) : showEmpty ? (
-        <View
-          onLayout={(e) => setDropdownHeight(e.nativeEvent.layout.height)}
-          style={[styles.dropdown, { top: dropdownLift }]}
-        >
+        <View style={styles.dropdown}>
           <View style={styles.emptyRow}>
             <View style={styles.emptyIcon}>
               <Ionicons name="search-outline" size={16} color="#9CA3AF" />
@@ -260,10 +315,8 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     borderRadius: 14,
     borderWidth: 1,
-    left: 0,
-    maxHeight: 200,
-    position: "absolute",
-    right: 0,
+    maxHeight: DROPDOWN_MAX_HEIGHT,
+    marginTop: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

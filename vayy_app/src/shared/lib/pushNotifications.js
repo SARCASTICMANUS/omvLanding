@@ -272,9 +272,14 @@ export async function registerPushToken({ userId = null, force = false } = {}) {
       console.log(`${LOG_TAG} push token registered for user ${userId}`);
       return token;
     } catch (err) {
-      // getExpoPushTokenAsync throws in Expo Go on Android; the WebSocket
-      // channel still delivers live events, so this is not fatal.
-      console.warn(`${LOG_TAG} push token registration failed:`, err?.message);
+      // getExpoPushTokenAsync throws in Expo Go on Android, and a build without
+      // google-services.json has no FirebaseApp at all. Both are EXPECTED until
+      // the owner supplies the FCM credentials (ledger M-T6), so this path must
+      // fail quietly: no crash, no retry loop, and no console.warn - a warn on
+      // every cold start raises a LogBox toast that floats over the UI and
+      // swallows taps on the home screen.
+      // The WebSocket channel still delivers live events.
+      console.log(`${LOG_TAG} push token unavailable (expected without FCM config):`, err?.message);
       return null;
     } finally {
       _tokenRequest = null;

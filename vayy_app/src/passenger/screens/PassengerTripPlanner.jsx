@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Dimensions,
   Easing,
@@ -16,12 +17,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import * as Location from "expo-location";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import {
-  getRecentSearches,
-  saveRecentSearch,
-  searchCorridorVehicles,
-  searchRoutesByLocation,
-} from "../services/passengerService";
+import { getRecentSearches, saveRecentSearch, searchRoutesByLocation } from "../services/passengerService";
 import LocationSearch from "../../shared/components/common/LocationSearch";
 import { NOMINATIM_REVERSE } from "../../constants/geocoding";
 
@@ -187,7 +183,9 @@ export default function PassengerTripPlanner({ navigation, route }) {
     setSearching(true);
 
     try {
-      await saveRecentSearch({
+      // Fire-and-forget: saving a recent search must never delay the route
+      // search (it used to be awaited, doubling the wait). It swallows its own errors.
+      saveRecentSearch({
         pickup_name: pickup?.name || pickup?.display_name || "",
         pickup_lat: pickup.lat,
         pickup_lon: pickup.lon,
@@ -196,29 +194,16 @@ export default function PassengerTripPlanner({ navigation, route }) {
         destination_lon: destination.lon,
       });
 
-      // Live vehicles running the searched road. Kept alongside the existing
-      // route search so the results page can show both from one navigation,
-      // rather than adding a second button or a new screen.
-      const corridor = await searchCorridorVehicles(
-        { lat: pickup.lat, lng: pickup.lon },
-        { lat: destination.lat, lng: destination.lon },
-      ).catch(() => null);
-
       const trips = await searchRoutesByLocation(
         pickup.lat,
         pickup.lon,
         destination.lat,
         destination.lon,
+        undefined,
+        { vehicleType: isBike ? "bike" : "auto" },
       );
 
-      navigation.navigate("PassengerRouteList", {
-        pickup,
-        destination,
-        mode,
-        trips,
-        corridor,
-        loading: false,
-      });
+      navigation.navigate("PassengerRouteList", { pickup, destination, mode, trips, loading: false });
     } catch (error) {
       console.error("Search failed:", error);
     } finally {
@@ -231,12 +216,21 @@ export default function PassengerTripPlanner({ navigation, route }) {
     setDestination(pickup);
   };
 
+  // Fills the pickup box with the rider's live GPS position, reverse geocoded
+  // to a readable name. Only ever runs on an explicit tap of the locate button
+  // — a typed/picked pickup is never overwritten behind the user's back.
   const handleUseCurrentLocation = async () => {
     if (locating) return;
     setLocating(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
+      if (status !== "granted") {
+        Alert.alert(
+          "Location permission needed",
+          "Allow location access to use your current position as the pickup stop.",
+        );
+        return;
+      }
       let loc = null;
       try {
         loc = await Location.getCurrentPositionAsync({
@@ -246,7 +240,13 @@ export default function PassengerTripPlanner({ navigation, route }) {
       } catch {
         loc = await Location.getLastKnownPositionAsync();
       }
-      if (!loc?.coords) return;
+      if (!loc?.coords) {
+        Alert.alert(
+          "Couldn't get your location",
+          "Try again in a moment, or search for the pickup stop manually.",
+        );
+        return;
+      }
       const lat = loc.coords.latitude;
       const lon = loc.coords.longitude;
       let next = { lat, lon, name: "Current Location", display_name: "Current Location" };
@@ -285,6 +285,23 @@ export default function PassengerTripPlanner({ navigation, route }) {
         label="Pickup Stop"
         onSelect={setPickup}
         placeholder="Search pickup location"
+        rightAction={
+          <TouchableOpacity
+            accessibilityLabel="Use current location"
+            accessibilityRole="button"
+            activeOpacity={0.8}
+            disabled={locating}
+            hitSlop={6}
+            onPress={handleUseCurrentLocation}
+            style={[styles.useCurrentButton, locating && styles.useCurrentDisabled]}
+          >
+            {locating ? (
+              <ActivityIndicator size="small" color="#009849" />
+            ) : (
+              <Ionicons name="locate" size={18} color="#009849" />
+            )}
+          </TouchableOpacity>
+        }
         value={pickup}
       />
 
@@ -498,14 +515,6 @@ const styles = StyleSheet.create({
     width: 32,
     ...SHADOW.sm,
     zIndex: 5,
-  },
-  pickupRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 10,
-  },
-  pickupField: {
-    flex: 1,
   },
   useCurrentButton: {
     alignItems: "center",

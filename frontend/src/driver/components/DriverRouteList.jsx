@@ -96,12 +96,24 @@ function StopsPanel({ route }) {
    ROUTE CARD (mobile DriverRouteList RouteCard)
 ───────────────────────────────────────────── */
 function RouteCard({ route, index, expanded, onToggleExpand, onSelect }) {
+  /* Expand state is keyed on the route id, falling back to the card's position.
+     A backend-generated route legitimately has no persisted id yet, and a bare
+     `null` collided with the "nothing is expanded" sentinel — which left the
+     stops panel stuck open and the toggle unusable. */
+  const routeKey = route.id ?? `route-${index}`;
+
   const stopsCount = route.stopsCount || route.stops?.length || 0;
-  const isBest = index === 0;
+  // "BEST MATCH" stays exactly as it was, but it is only awarded when the data
+  // source actually ranked this route first. A single backend-generated route
+  // is not a match against anything, so the badge is suppressed there
+  // (is_best_match === false) instead of faking a ranking.
+  const isBest = index === 0 && route?.is_best_match !== false;
   const isExpanded = expanded;
 
   const fromLabel = route.startLabel || "Start";
   const toLabel = route.endLabel || "End";
+  // Backend-authoritative fare. This card shows the driver's earning, which the
+  // dynamic route response supplies as fare.marshal_earning.
   const fareText = route.fare != null ? `₹${route.fare}` : "--";
 
   const firstMileKm =
@@ -230,7 +242,7 @@ function RouteCard({ route, index, expanded, onToggleExpand, onSelect }) {
         {stopsCount > 0 && (
           <button
             type="button"
-            onClick={() => onToggleExpand?.(route.id)}
+            onClick={() => onToggleExpand?.(routeKey)}
             className="inline-flex items-center gap-1 text-[13px] font-bold text-[#009849] transition hover:text-[#007A3B]"
             aria-expanded={isExpanded}
           >
@@ -265,18 +277,27 @@ export default function DriverRouteList({
   routes = [],
   allRoutesCount = 0,
   loading = false,
+  error = "",
   onBack,
   onSelectRoute,
 }) {
   const normalizedRoutes = useMemo(() => routes.map(buildRouteSummary), [routes]);
-  const [expandedRouteId, setExpandedRouteId] = useState(null);
+  const [expandedRouteKey, setExpandedRouteKey] = useState(null);
+
+  /* Stable expand key per card: the route id when it exists (unchanged legacy
+     behaviour), otherwise the card position so an id-less generated route still
+     gets a unique, non-null key. */
+  const routeKeys = useMemo(
+    () => normalizedRoutes.map((route, index) => route.id ?? `route-${index}`),
+    [normalizedRoutes],
+  );
 
   /* Derived — expand state is dropped during render when the route disappeared
      (avoids a setState call inside an effect). */
-  const activeExpandedId = normalizedRoutes.some(
-    (r) => String(r.id) === String(expandedRouteId),
+  const activeExpandedKey = routeKeys.some(
+    (key) => String(key) === String(expandedRouteKey),
   )
-    ? expandedRouteId
+    ? expandedRouteKey
     : null;
 
   /* Derived */
@@ -350,6 +371,21 @@ export default function DriverRouteList({
                 Loading routes...
               </p>
             </div>
+          ) : error ? (
+            /* Same card treatment as the existing empty state — only the copy
+               differs. The message is already sanitised upstream, so raw
+               backend/OSRM text is never shown. */
+            <div className={STATE_CARD}>
+              <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#F3F4F6]">
+                <SearchX size={28} className="text-[#9CA3AF]" />
+              </span>
+              <h2 className="text-[20px] font-black text-[#111827]">
+                Route unavailable
+              </h2>
+              <p className="mt-2 max-w-[420px] text-[14px] font-medium leading-6 text-[#6B7280]">
+                {error}
+              </p>
+            </div>
           ) : normalizedRoutes.length === 0 ? (
             <div className={STATE_CARD}>
               <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#F3F4F6]">
@@ -366,13 +402,13 @@ export default function DriverRouteList({
           ) : (
             normalizedRoutes.map((route, i) => (
               <RouteCard
-                key={route.id ?? i}
+                key={routeKeys[i]}
                 route={route}
                 index={i}
-                expanded={String(activeExpandedId) === String(route.id)}
-                onToggleExpand={(id) =>
-                  setExpandedRouteId((cur) =>
-                    String(cur) === String(id) ? null : id,
+                expanded={String(activeExpandedKey) === String(routeKeys[i])}
+                onToggleExpand={(key) =>
+                  setExpandedRouteKey((cur) =>
+                    String(cur) === String(key) ? null : key,
                   )
                 }
                 onSelect={onSelectRoute}

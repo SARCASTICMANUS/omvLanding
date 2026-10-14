@@ -6,8 +6,9 @@ import App from "./App";
 import "./index.css";
 
 // Register Service Worker for background notifications
-// Base-aware: resolves to /sw.js in dev and /omv/sw.js in the production build,
-// which also scopes the worker to /omv/ instead of the domain root.
+// Base-aware: resolves to /sw.js in dev and in the production build alike (the
+// SPA is mounted at the origin root). nginx serves /sw.js with no-store so a
+// stale worker never pins the old shell.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).then(registration => {

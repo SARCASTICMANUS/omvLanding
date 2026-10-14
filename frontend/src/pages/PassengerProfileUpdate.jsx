@@ -39,6 +39,9 @@ const PassengerProfileUpdate = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { data: profile, loading, updateLoading, updateError } = useSelector((state) => state.profile);
+  // The auth user is the same source ProtectedRoute reads, so this page and
+  // the router can never disagree about who is signed in.
+  const authRole = useSelector((state) => state.auth?.user?.role);
 
   const [formData, setFormData] = useState({
     first_name: "",
@@ -51,20 +54,24 @@ const PassengerProfileUpdate = () => {
   const photoInputRef = useRef(null);
   const [photoError, setPhotoError] = useState("");
 
+  // Refetch on mount unconditionally. This used to be `if (!profile)`, so
+  // any cached profile - including one left behind by a previous session -
+  // was rendered as the current user's and no request was ever made.
   useEffect(() => {
-    if (!profile) {
-      dispatch(fetchProfile());
-    } else {
-      setFormData({
-        first_name: profile.first_name || "",
-        last_name: profile.last_name || "",
-        display_name: profile.profile?.display_name || "",
-        phone_number: profile.profile?.phone_number || profile.phone_number || "",
-        bio: profile.profile?.bio || "",
-        profile_photo: profile.profile?.profile_photo || "",
-      });
-    }
-  }, [profile, dispatch]);
+    dispatch(fetchProfile());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!profile) return;
+    setFormData({
+      first_name: profile.first_name || "",
+      last_name: profile.last_name || "",
+      display_name: profile.profile?.display_name || "",
+      phone_number: profile.profile?.phone_number || profile.phone_number || "",
+      bio: profile.profile?.bio || "",
+      profile_photo: profile.profile?.profile_photo || "",
+    });
+  }, [profile]);
 
   // Clear errors on unmount
   useEffect(() => {
@@ -138,7 +145,11 @@ const PassengerProfileUpdate = () => {
     );
   }
 
-  const isPassenger = profile?.role === "passenger" || profile?.role === "student" || profile?.role === "admin";
+  // Prefer the auth role and fall back to the profile only while auth is
+  // still rehydrating. Reading a different source than ProtectedRoute is
+  // what let this guard contradict the router in the first place.
+  const role = authRole || profile?.role;
+  const isPassenger = role === "passenger" || role === "student" || role === "admin";
 
   if (profile && !isPassenger) {
     return <div className="p-8 text-center">Unauthorized. Only passengers can access this page.</div>;

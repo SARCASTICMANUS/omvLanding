@@ -5,6 +5,10 @@ export const STORAGE_KEYS = {
   user: "user",
   pendingEmail: "pending_email",
   onboardingDone: "@vayy_onboarding_done",
+  // Storage version for one-time silent wipe on app launch.
+  // Bump this value when a versioned wipe is due; the app will clear all
+  // keys stored under a previous version automatically.
+  storageVersion: "@vayy_storage_version",
   // Last Expo push token successfully POSTed to /api/accounts/push-token/.
   // Kept so a cold start does not re-register on every launch, and so a token
   // rotation is detected without a round trip.

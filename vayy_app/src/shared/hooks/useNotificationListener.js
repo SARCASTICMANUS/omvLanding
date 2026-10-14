@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
@@ -22,16 +22,6 @@ function uniqueId() {
   _idCounter += 1;
   return `ntf_${Date.now()}_${_idCounter}`;
 }
-
-/**
- * Push is a native-only channel.
- *
- * expo-notifications' web emitter module implements only `addListener` and
- * `removeListeners`, so `getLastNotificationResponse` throws
- * UnavailabilityError there. Nothing is lost by skipping it: the WebSocket
- * subscription below delivers the same notifications in a browser.
- */
-const PUSH_SUPPORTED = Platform.OS !== "web";
 
 // The backend fans the same notification out over both the WebSocket and
 // push, so a driver with the app open would otherwise see every message twice.
@@ -97,38 +87,13 @@ export default function useNotificationListener(toastRef) {
 
   // A tap that launched the app from the killed state never reaches
   // addNotificationResponseReceivedListener, so it is picked up here instead.
-  //
-  // Notifications.useLastNotificationResponse() is deliberately NOT used here:
-  // it calls the native-only getLastNotificationResponse() from a layout
-  // effect, so it throws UnavailabilityError on web before anything renders.
-  // Being a hook it also cannot be skipped conditionally without breaking the
-  // rules of hooks, so the same behaviour is expressed as an effect that
-  // no-ops where the native module is absent.
-  const [lastResponse, setLastResponse] = useState(null);
-
-  useEffect(() => {
-    if (!PUSH_SUPPORTED) return undefined;
-
-    // Wrapped because the export exists on every platform while the underlying
-    // native method does not, so the call site is still the thing that throws.
-    try {
-      setLastResponse(Notifications.getLastNotificationResponse());
-    } catch (_err) {
-      // No native module (Expo Go, or a platform without push). Taps that
-      // arrive while the app is running are still covered by the listener
-      // registered below, so this is not worth surfacing.
-    }
-
-    const subscription = Notifications.addNotificationResponseReceivedListener(
-      (response) => setLastResponse(response)
-    );
-
-    return () => subscription?.remove?.();
-  }, []);
-
+  // useLastNotificationResponse is not available on web, so this is a no-op there.
   const handledResponseRef = useRef(null);
 
   useEffect(() => {
+    if (Platform.OS === "web") return;
+    const lastResponse = Notifications.getLastNotificationResponse();
+    if (!lastResponse) return;
     const response = lastResponse?.notification?.request?.identifier;
     if (!response || handledResponseRef.current === response) return;
     handledResponseRef.current = response;
@@ -138,7 +103,7 @@ export default function useNotificationListener(toastRef) {
     const notification = normalizeNotification({ ...payload.data, type: "push" });
     if (!notification) return;
     handleNotificationPress(notification, navigationRef.current, roleRef.current);
-  }, [lastResponse]);
+  }, []);
 
   useEffect(() => {
     if (!userId) return;

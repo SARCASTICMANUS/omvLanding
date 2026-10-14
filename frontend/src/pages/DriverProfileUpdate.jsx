@@ -54,6 +54,12 @@ function DriverRegistrationCompletion({ mode = "complete" }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user } = useSelector((state) => state.auth || {});
+  // Server-derived verification stage (profileSlice stores it from
+  // /api/accounts/verification-status/). Null until that request lands, and a
+  // null stage counts as NOT verified so nothing vanishes mid-onboarding.
+  const verification = useSelector((state) => state.profile?.verification);
+  const isFullyVerified = verification?.stage === "fully_verified"
+    || verification?.can_use_app === true;
   const isManage = mode === "manage";
   const [registrationDraft] = useState(() => {
     try {
@@ -181,9 +187,13 @@ function DriverRegistrationCompletion({ mode = "complete" }) {
     }
     if (!/^[A-Z0-9 -]{6,15}$/i.test(form.vehicleNumber.trim())) nextErrors.vehicleNumber = "Enter a valid vehicle number.";
     if (form.rcNumber.trim().length < 6) nextErrors.rcNumber = "Enter a valid RC number (at least 6 characters).";
-    REGISTRATION_DOCUMENTS.forEach(({ key }) => {
-      if (!documents[key]?.id) nextErrors[key] = "Upload this document to continue.";
-    });
+    // Skipped once verified: the uploader is hidden at that point, so these ids
+    // are never loaded and leaving the check in would make Save unsatisfiable.
+    if (!isFullyVerified) {
+      REGISTRATION_DOCUMENTS.forEach(({ key }) => {
+        if (!documents[key]?.id) nextErrors[key] = "Upload this document to continue.";
+      });
+    }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -287,6 +297,17 @@ function DriverRegistrationCompletion({ mode = "complete" }) {
             </div>
           </section>
 
+          {isFullyVerified ? (
+            <section className={SECTION_CARD_CLS}>
+              <div className="flex items-start gap-3">
+                <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-[#009849]" />
+                <div>
+                  <h2 className="text-[16px] font-extrabold text-[#111827]">Documents verified</h2>
+                  <p className="text-[13px] text-[#6B7280]">Your documents were approved, so they can no longer be replaced from here. Contact support if something needs to change.</p>
+                </div>
+              </div>
+            </section>
+          ) : (
           <section className={SECTION_CARD_CLS}>
             <div className="mb-4 flex items-center justify-between gap-2"><div><h2 className="text-[16px] font-extrabold text-[#111827]">Documents</h2><p className="text-[13px] text-[#6B7280]">Upload both sides of each required document.</p></div><span className="rounded-full bg-[#F0FAF2] px-3 py-1 text-xs font-bold text-[#009849]">{completedDocs}/9</span></div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -299,7 +320,9 @@ function DriverRegistrationCompletion({ mode = "complete" }) {
               ))}
             </div>
           </section>
+          )}
 
+          {isFullyVerified ? null : (
           <section className={SECTION_CARD_CLS}>
             <h2 className="text-[16px] font-extrabold text-[#111827]">Bank Details <span className="text-[12px] font-medium text-[#9CA3AF]">(Optional)</span></h2>
             <p className="mb-4 text-[13px] text-[#6B7280]">Add payout information when you are ready.</p>
@@ -310,6 +333,7 @@ function DriverRegistrationCompletion({ mode = "complete" }) {
               <label className="block"><span className={LABEL_CLS}>UPI ID (Optional)</span><input className={inputClass} value={form.upi} onChange={(event) => update("upi", event.target.value)} /></label>
             </div>
           </section>
+          )}
 
           <StickyCTA type="submit" disabled={submitting || uploading} className="bottom-[96px] lg:bottom-0">
             {(submitting || uploading) && <Loader2 size={16} className="animate-spin" />}

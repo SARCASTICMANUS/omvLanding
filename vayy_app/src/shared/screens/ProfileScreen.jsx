@@ -52,11 +52,35 @@ function getAvatarColor(name) {
   return INITIALS_COLORS[Math.abs(hash) % INITIALS_COLORS.length];
 }
 
+// The server owns verification (GET /api/accounts/me/ -> data.verification, also
+// served by /verification-status/). The block is {stage, can_use_app, ...} —
+// there is no "status" field, which is why the badge used to always read
+// "Not Verified". can_use_app is the same flag the backend gates on.
+function getVerificationBadge(v) {
+  if (!v) return null;
+  if (v.can_use_app === true || v.stage === "fully_verified") {
+    return { key: "verified", label: "Verified" };
+  }
+  switch (v.stage) {
+    case "docs_under_review":
+      return { key: "pending", label: "Pending" };
+    case "docs_rejected":
+      return { key: "rejected", label: "Rejected" };
+    case "email_pending":
+      return { key: "unverified", label: "Email Not Verified" };
+    default:
+      return { key: "unverified", label: "Not Verified" };
+  }
+}
+
 export default function ProfileScreen({ navigation }) {
   const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
   const { user } = useSelector((state) => state.auth);
   const { data: profile, verification } = useSelector((state) => state.profile);
+  const serverVerification = useSelector((state) => state.verification?.state);
+  const badge = getVerificationBadge(serverVerification || verification);
+  const isVerified = badge?.key === "verified";
 
   useEffect(() => {
     dispatch(fetchProfile());
@@ -123,14 +147,13 @@ export default function ProfileScreen({ navigation }) {
 
   const settings = [
     { icon: "create-outline", label: "Edit Profile", screen: "EditProfile" },
-    // ...(isDriver && verification?.status !== "verified"
-    //   ? [{ icon: "cloud-upload-outline", label: "Upload Documents", screen: "DriverProfileCompletion" }]
-    //   : []),
-    // ...(isDriver && verification?.status !== "verified"
-      // ? [
-    { icon: "cloud-upload-outline", label: "Upload Documents", screen: "DriverProfileCompletion", params: { mode: "manage" } },
-      // ]
-      // : []),
+    ...(isDriver
+      ? [
+          isVerified
+            ? { icon: "checkmark-circle", label: "Documents", value: "You're verified", verified: true }
+            : { icon: "cloud-upload-outline", label: "Upload Documents", screen: "DriverProfileCompletion", params: { mode: "manage" } },
+        ]
+      : []),
     { icon: "shield-checkmark-outline", label: "Privacy Policy", value: "View", screen: "PrivacyPolicy" },
     { icon: "help-circle-outline", label: "Help & Support", screen: "HelpSupport" },
     { icon: "information-circle-outline", label: "About", value: APP_VERSION },
@@ -166,15 +189,15 @@ export default function ProfileScreen({ navigation }) {
               <MaterialIcons name={isDriver ? "motorcycle" : "person"} size={12} color="#FFFFFF" />
               <Text style={styles.roleText}>{roleLabel}</Text>
             </View>
-            {isDriver && verification && (
-              <View style={[styles.verifyBadge, verification.status === "verified" && styles.verifyBadgeGreen]}>
+            {isDriver && badge && (
+              <View style={[styles.verifyBadge, badge.key === "verified" && styles.verifyBadgeGreen]}>
                 <Ionicons
-                  name={verification.status === "verified" ? "checkmark-circle" : verification.status === "pending" ? "time-outline" : "alert-circle"}
+                  name={badge.key === "verified" ? "checkmark-circle" : badge.key === "pending" ? "time-outline" : "alert-circle"}
                   size={12}
-                  color={verification.status === "verified" ? "#34d399" : verification.status === "pending" ? "#fbbf24" : "#f87171"}
+                  color={badge.key === "verified" ? "#34d399" : badge.key === "pending" ? "#fbbf24" : "#f87171"}
                 />
-                <Text style={[styles.verifyText, verification.status === "verified" && styles.verifyTextGreen]}>
-                  {verification.status === "verified" ? "Verified" : verification.status === "pending" ? "Pending" : "Not Verified"}
+                <Text style={[styles.verifyText, badge.key === "verified" && styles.verifyTextGreen]}>
+                  {badge.label}
                 </Text>
               </View>
             )}
@@ -233,17 +256,18 @@ export default function ProfileScreen({ navigation }) {
               <TouchableOpacity
                 key={i}
                 activeOpacity={0.6}
+                disabled={!item.screen}
                 onPress={item.screen ? () => navigation.navigate(item.screen, item.params) : undefined}
               >
                 {i > 0 && <View style={styles.divider} />}
                 <View style={styles.settingRow}>
                   <View style={styles.settingLeft}>
-                    <Ionicons name={item.icon} size={18} color={COLORS.textLight} />
+                    <Ionicons name={item.icon} size={18} color={item.verified ? "#16a34a" : COLORS.textLight} />
                     <Text style={styles.settingLabel}>{item.label}</Text>
                   </View>
                   <View style={styles.settingRight}>
-                    {item.value ? <Text style={styles.settingValue}>{item.value}</Text> : null}
-                    <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} />
+                    {item.value ? <Text style={[styles.settingValue, item.verified && { color: "#16a34a", fontWeight: "700" }]}>{item.value}</Text> : null}
+                    {item.screen ? <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} /> : null}
                   </View>
                 </View>
               </TouchableOpacity>

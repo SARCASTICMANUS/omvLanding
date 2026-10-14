@@ -577,7 +577,7 @@ export default function RouteExplorer() {
   }
 
   return (
-    <div className="pt-5 pb-8 px-6 md:px-8 h-full overflow-y-auto">
+    <div data-scroll className="pt-5 pb-8 px-6 md:px-8 h-full overflow-y-auto">
       <div className="flex items-center gap-4 mb-6">
         <div className="relative" ref={cityRef}>
           <button

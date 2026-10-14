@@ -104,14 +104,29 @@ export default function ProfilePage() {
   const avatarColor = getAvatarColor(displayName);
   const initials = getInitials(displayName);
   const roleLabel = isDriver ? "MARSHAL" : safeStr(rawRole).toUpperCase() || "PASSENGER";
-  const verifyStatus = verification?.status;
+  // BUG FIX: this read `verification?.status`, but the backend's
+  // verification_service.verification_state() returns a `stage` key - there
+  // is no `status` key at all. So this was always `undefined` and EVERY
+  // driver fell through to the "Not Verified" branch, even when fully
+  // verified. `status` is kept as a fallback so an older payload still maps.
+  const verifyStatus = verification?.stage ?? verification?.status;
   const cityShort = (cityName ? cityName.split(",")[0] : "") || "—";
 
-  const verifyMeta =
-    verifyStatus === "verified"
-      ? { label: "Verified", cls: "bg-emerald-400/20 text-emerald-300", Icon: CheckCircle2 }
-      : verifyStatus === "pending"
-        ? { label: "Pending", cls: "bg-amber-400/20 text-amber-300", Icon: Clock }
+  // Stage vocabulary: email_pending / docs_pending / docs_under_review /
+  // docs_rejected / fully_verified. The legacy "verified"/"pending" strings are
+  // still mapped so an older payload cannot render as "Not Verified".
+  const VERIFIED_STAGES = new Set(["fully_verified", "verified"]);
+  const PENDING_STAGES = new Set([
+    "email_pending", "docs_pending", "docs_under_review", "pending",
+  ]);
+  const REJECTED_STAGES = new Set(["docs_rejected", "rejected"]);
+
+  const verifyMeta = VERIFIED_STAGES.has(verifyStatus)
+    ? { label: "Verified", cls: "bg-emerald-400/20 text-emerald-300", Icon: CheckCircle2 }
+    : PENDING_STAGES.has(verifyStatus)
+      ? { label: "Pending", cls: "bg-amber-400/20 text-amber-300", Icon: Clock }
+      : REJECTED_STAGES.has(verifyStatus)
+        ? { label: "Rejected", cls: "bg-amber-400/20 text-amber-300", Icon: AlertCircle }
         : { label: "Not Verified", cls: "bg-red-400/20 text-red-300", Icon: AlertCircle };
 
   const headerStats = [

@@ -19,6 +19,10 @@ export const APP_ROUTES = {
   terms: "/terms",
   routes: "/routes",
   tracking: "/passenger/tracking/:tripId",
+  // Two-part verification. Both sit OUTSIDE ProtectedRoute's redirect so a
+  // blocked user can always reach the screen that unblocks them.
+  verifyEmail: "/verify-email",
+  kyc: "/kyc",
 };
 
 export const ROLE_ROUTES = {

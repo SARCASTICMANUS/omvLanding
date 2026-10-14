@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { Navbar, MobileBottomNavbar } from "../components/Layout";
 import { NotificationHandler } from "../components/Shared";
+import VerificationGate from "../features/verification/VerificationGate";
 
 // Mobile shell: guests clear the 56px top bar, authed users clear the
 // fixed 62px bottom tab bar (mobile parity). Desktop clears the top nav.
@@ -29,6 +30,10 @@ const AppLayout = ({ children, showNavbar = true, flush = false }) => {
       {showNavbar && <Navbar />}
       <main className="w-full">{children}</main>
       {showNavbar && <MobileBottomNavbar />}
+      {/* Mounted LAST and outside <main> so the overlay sits above the router
+          outlet: deep links, back/forward and reloads change the route
+          underneath but can never reveal an unreachable page. */}
+      <VerificationGate />
     </div>
   );
 };

@@ -20,8 +20,8 @@ import COLORS from "../constants/colors";
 import RADIUS from "../constants/radius";
 import SPACING from "../constants/spacing";
 import VayyButton from "../components/common/VayyButton";
+import ScreenHeader from "../components/navigation/ScreenHeader";
 import { DRIVER_ROLES } from "../../constants";
-import { notifyAction } from "../lib/confirmAction";
 
 export default function EditProfileScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -47,7 +47,7 @@ export default function EditProfileScreen({ navigation }) {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      notifyAction({ title: "Permission needed", message: "Please allow access to your photos to upload a profile picture." });
+      Alert.alert("Permission needed", "Please allow access to your photos to upload a profile picture.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -72,23 +72,21 @@ export default function EditProfileScreen({ navigation }) {
     if (updateProfile.fulfilled.match(result)) {
       navigation.goBack();
     } else {
-      notifyAction({ title: "Error", message: result.payload?.message || "Failed to update profile" });
+      Alert.alert("Error", result.payload?.message || "Failed to update profile");
     }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={styles.backText}>{"<"}</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Edit Profile</Text>
-          <View style={styles.backBtn} />
-        </View>
+        <ScreenHeader
+          title="Edit Profile"
+          subtitle={isDriver ? "Update your marshal details" : "Update your personal details"}
+          onBack={() => navigation.goBack()}
+        />
 
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <View style={styles.fieldGroup}>
@@ -209,32 +207,6 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.base,
-    paddingVertical: SPACING.md,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  backText: {
-    fontSize: 28,
-    color: COLORS.text,
-    fontWeight: "700",
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: COLORS.text,
   },
   container: {
     padding: SPACING.base,

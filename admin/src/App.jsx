@@ -5,22 +5,26 @@ import Sidebar from "./components/Sidebar";
 import { PageLoader } from "./components/Loader";
 import api from "./api/client";
 import usePageView from "./hooks/usePageView";
+import { ADMIN_BASE, ADMIN_PATH, ADMIN_WELCOME_PATH } from "./constants/paths";
 
 const LandingPageAnimated = lazy(() => import("./pages/LandingPageAnimated"));
 const SupportPage = lazy(() => import("./pages/SupportPage"));
 const Login = lazy(() => import("./pages/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Cities = lazy(() => import("./pages/Cities"));
-const RoutesPage = lazy(() => import("./pages/Routes"));
-const RouteExplorerPage = lazy(() => import("./pages/RouteExplorer"));
+const DynamicRouting = lazy(() => import("./pages/DynamicRouting"));
+// Cities / Route Explorer / Routes / Stops / Fare Configurations used to be five
+// top-level tabs. They are now sub-tabs of FixedRouting, which owns their lazy
+// imports - keeping them here as well would bundle the same page twice.
+const FixedRouting = lazy(() => import("./pages/FixedRouting"));
 const KPIPage = lazy(() => import("./pages/KPI"));
-const Stops = lazy(() => import("./pages/Stops"));
-// const TripSchedules = lazy(() => import("./pages/TripSchedules"));
 const Users = lazy(() => import("./pages/Users"));
+// const TripSchedules = lazy(() => import("./pages/TripSchedules"));
 // const Zones = lazy(() => import("./pages/Zones"));
-const FareConfigurations = lazy(() => import("./pages/FareConfigurations"));
 
-const ADMIN_PATH = "/zxcv";
+// ADMIN_PATH now lives in ./constants/paths — the console route ("/dashboard")
+// is deliberately NOT the mount prefix ("/zxcv"). They used to be the same
+// literal, which is what produced the doubled /zxcv/zxcv URL once the app was
+// mounted at /zxcv/.
 
 function AdminLayout({ onLogout }) {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -28,7 +32,7 @@ function AdminLayout({ onLogout }) {
 
   useEffect(() => {
     window.dispatchEvent(
-      new CustomEvent("kpitrack", { detail: { page: `/zxcv/${activeTab}` } })
+      new CustomEvent("kpitrack", { detail: { page: `${ADMIN_BASE}/${activeTab}` } })
     );
   }, [activeTab]);
 
@@ -41,12 +45,17 @@ function AdminLayout({ onLogout }) {
   const tabs = [
     { id: "dashboard", label: "Dashboard", description: "Platform overview at a glance" },
     { id: "kpi", label: "KPI & Analytics" },
-    { id: "cities", label: "Cities", description: "City networks and route hubs" },
-    { id: "route-explorer", label: "Route Explorer", description: "Routes visualized on the interactive map" },
-    { id: "routes", label: "Routes", description: "Route library, creation and imports" },
-    { id: "stops", label: "Stops", description: "Stops across every city" },
+    {
+      id: "dynamic-routing",
+      label: "Dynamic Routing",
+      description: "Cities, stop imports, stop directory and fare setup",
+    },
+    {
+      id: "fixed-routing",
+      label: "Fixed Routing",
+      description: "Fixed-route network: cities, map explorer, routes, stops and fares",
+    },
     // { id: "zones", label: "Zone", description: "Zone-based fares and scheduling" },
-    { id: "fare-configurations", label: "Fare Configurations", description: "Configure per-vehicle-type fares" },
     // { id: "schedules", label: "Schedules" },
     { id: "drivers", label: "Drivers", description: "Driver onboarding and verification" },
     { id: "users", label: "Users", description: "Passengers and drivers directory" },
@@ -88,7 +97,11 @@ function AdminLayout({ onLogout }) {
                   {activeTabInfo?.description || pageSubtitle.text}
                 </p>
               )}
-              <div id="page-toolbar" className="flex items-center gap-3 shrink-0" />
+              {/* min-h is load-bearing: this row sized itself to whatever the active page
+                portalled into it, so switching between a page with a toolbar
+                and one without shifted the whole content area by ~50px. 50px is
+                the tallest thing that lands here (a .glass-btn is py-3 + border). */}
+              <div id="page-toolbar" className="flex items-center gap-3 shrink-0 min-h-[50px]" />
             </div>
           </div>
         </div>
@@ -105,12 +118,9 @@ function AdminLayout({ onLogout }) {
             <Suspense fallback={<PageLoader />}>
               {activeTab === "dashboard" && <Dashboard />}
               {activeTab === "kpi" && <KPIPage />}
-              {activeTab === "cities" && <Cities />}
-              {activeTab === "route-explorer" && <RouteExplorerPage />}
-              {activeTab === "routes" && <RoutesPage />}
-              {activeTab === "stops" && <Stops />}
+              {activeTab === "dynamic-routing" && <DynamicRouting />}
+              {activeTab === "fixed-routing" && <FixedRouting />}
               {/* {activeTab === "zones" && <Zones />} */}
-              {activeTab === "fare-configurations" && <FareConfigurations />}
               {/* {activeTab === "schedules" && <TripSchedules />} */}
               {activeTab === "drivers" && <DriverVerification />}
               {activeTab === "users" && <Users />}
@@ -165,30 +175,36 @@ export default function App() {
     navigate("/");
   };
 
+  const consoleElement = user ? (
+    <AdminLayout onLogout={handleLogout} />
+  ) : (
+    <Login onLogin={handleLogin} />
+  );
+
   if (loading) return <PageLoader />;
 
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        <Route path="/" element={<LandingPageAnimated />} />
+        {/* The console owns "/". With basename "/zxcv" this is
+            http://localhost/zxcv/ — the control panel (or login), not a
+            marketing page. Previously "/" rendered LandingPageAnimated, so
+            /zxcv/ showed a hero screen and the console needed /zxcv/dashboard. */}
+        <Route path={ADMIN_PATH} element={consoleElement} />
+
+        {/* Landing page kept, just moved off the console's root. */}
+        <Route path={ADMIN_WELCOME_PATH} element={<LandingPageAnimated />} />
+
         <Route path="/support" element={
           <>
             <LandingPageAnimated />
             <SupportPage />
           </>
         } />
-        <Route
-          path={ADMIN_PATH}
-          element={
-            user ? (
-              <AdminLayout onLogout={handleLogout} />
-            ) : (
-              <Login onLogin={handleLogin} />
-            )
-          }
-        />
-        <Route path="/login" element={<Navigate to="/" replace />} />
-        <Route path="/admin" element={<Navigate to="/" replace />} />
+        {/* Legacy in-app aliases from when this app was mounted at "/". */}
+        <Route path="/dashboard" element={<Navigate to={ADMIN_PATH} replace />} />
+        <Route path="/login" element={<Navigate to={ADMIN_PATH} replace />} />
+        <Route path="/admin" element={<Navigate to={ADMIN_PATH} replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

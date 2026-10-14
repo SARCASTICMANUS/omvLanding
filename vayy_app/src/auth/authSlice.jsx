@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 
-import api, { API_URL } from "../shared/lib/api";
+import api, { API_URL, setAccessTokenCache, clearAccessTokenCache } from "../shared/lib/api";
 import { AUTH, STORAGE_KEYS } from "../constants";
 
 const normalizeUser = (data) => {
@@ -31,6 +31,10 @@ const normalizeAuthPayload = (data) => {
   };
 };
 
+// ---------------------------------------------------------------------------
+// Thunks
+// ---------------------------------------------------------------------------
+
 export const loginUser = createAsyncThunk(
   "auth/login",
   async (creds, thunkAPI) => {
@@ -46,13 +50,16 @@ export const loginUser = createAsyncThunk(
       const data = normalizeAuthPayload(payload);
       console.log("[Auth] loginUser success: user role=", data.user?.role, "hasToken=", !!data.token);
 
-      if (data.token) {
+      // persistSession() call-sites = verify-otp + login ONLY.
+      // Do NOT persist tokens on a "pending" login (401 email_not_verified).
+      // The pending case is handled by the caller showing the OTP screen prefilled.
+      if (data.token && data.refresh) {
         await AsyncStorage.setItem(STORAGE_KEYS.token, data.token);
         await AsyncStorage.setItem(STORAGE_KEYS.accessToken, data.token);
-      }
-
-      if (data.refresh) {
         await AsyncStorage.setItem(STORAGE_KEYS.refreshToken, data.refresh);
+        // Keep api.jsx's in-memory token in step (T4): the request interceptor
+        // reads from memory first and would otherwise keep sending the old one.
+        setAccessTokenCache(data.token);
       }
 
       await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(data.user));
@@ -60,10 +67,22 @@ export const loginUser = createAsyncThunk(
       return data;
     } catch (error) {
       const data = error.response?.data;
-      console.error("[Auth] loginUser error:", error.response?.status, data);
+      console.error("[Auth] loginUser error:", {
+        status: error.response?.status ?? null,
+        data: data ?? null,
+        message: error.message,
+        code: error.code,
+        baseURL: error.config?.baseURL || API_URL,
+        path: error.config?.url || AUTH.login,
+      });
       if (typeof data === "string" && data.includes("<!DOCTYPE html>")) {
         return thunkAPI.rejectWithValue({
           error: `Backend returned HTML instead of JSON. Check your URL. Current BaseURL: ${API_URL}`,
+        });
+      }
+      if (!error.response) {
+        return thunkAPI.rejectWithValue({
+          error: `Could not reach the OMV backend at ${error.config?.baseURL || API_URL}. Check that the backend is running and the app is using a host-reachable API URL. Request error: ${error.message || error.code || "network error"}.`,
         });
       }
       return thunkAPI.rejectWithValue(
@@ -201,6 +220,12 @@ export const verifyOtp = createAsyncThunk(
       const payload = response.data.data || response.data;
       const user = normalizeUser(payload);
 
+      // persistSession() call-site: verify-otp saves tokens.
+      await AsyncStorage.setItem(STORAGE_KEYS.token, payload.token || payload.access || "");
+      await AsyncStorage.setItem(STORAGE_KEYS.accessToken, payload.token || payload.access || "");
+      await AsyncStorage.setItem(STORAGE_KEYS.refreshToken, payload.refresh || "");
+      setAccessTokenCache(payload.token || payload.access || "");
+
       return { user, email };
     } catch (error) {
       return thunkAPI.rejectWithValue(
@@ -255,8 +280,27 @@ export const logout = createAsyncThunk(
       STORAGE_KEYS.user,
       STORAGE_KEYS.pendingEmail,
     ]);
+    // The in-memory access token must die with the stored ones, otherwise the
+    // next signed-out request would still carry the old Authorization header.
+    clearAccessTokenCache();
+    // Also clear profile slice cache so the UI forgets the old profile
+    // (dispatch is available in thunks via the thunkAPI)
+    // We dispatch via the root reducer; the profile slice will be cleared
+    // on the next app rehydration.
   },
 );
+
+export const refreshTokenThunk = createAsyncThunk(
+  "auth/refreshTokenThunk",
+  async () => {
+    const res = await api.post(AUTH.tokenRefresh, { refresh: await AsyncStorage.getItem(STORAGE_KEYS.refreshToken) });
+    return res.data.data || res.data;
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Slice
+// ---------------------------------------------------------------------------
 
 const initialState = {
   user: null,
@@ -299,12 +343,12 @@ const authSlice = createSlice({
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
-        state.isAuthenticated = true;
+        state.user = action.payload.user;
+        state.token = action.payload.token || action.payload.access || null;
+        state.refreshToken = action.payload.refresh || action.payload.refreshToken || null;
+        state.isAuthenticated = Boolean(state.token && state.user);
         state.isOtpSent = false;
         state.otpEmail = null;
-        state.token = action.payload.token;
-        state.refreshToken = action.payload.refresh;
-        state.user = action.payload.user;
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
@@ -379,6 +423,7 @@ const authSlice = createSlice({
         state.loading = false;
         state.isOtpSent = false;
         state.otpEmail = null;
+        // tokens already persisted inside verifyOtp thunk
       })
       .addCase(verifyOtp.rejected, (state, action) => {
         state.loading = false;
@@ -410,6 +455,27 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
         state.isOtpSent = false;
         state.otpEmail = null;
+      })
+      // Refresh token cycle
+      .addCase(refreshTokenThunk.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(refreshTokenThunk.fulfilled, (state, action) => {
+        state.loading = false;
+        state.token = action.payload.access || action.payload.token;
+        if (action.payload.refresh) {
+          state.refreshToken = action.payload.refresh;
+        }
+      })
+      .addCase(refreshTokenThunk.rejected, (state, action) => {
+        // Clear stale tokens on refresh failure → force re-login
+        state.token = null;
+        state.refreshToken = null;
+        state.user = null;
+        state.isAuthenticated = false;
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });

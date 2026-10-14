@@ -1,43 +1,44 @@
-# Root docker build context - keep it small.
-# Ignore unrelated / heavy directories and secrets.
+.git/
+.github/
+.DS_Store
+.vscode/
+.idea/
 
-# Unrelated apps - NOT part of this deployment
-vayy_app/
-frontend/
-
-# VCS
-.git
-.github
-.gitignore
-
-# Secrets
-*.env
-# .env
+# Environment files
+.env
 .env.*
 !.env.example
+**/.env
+**/.env.*
+!**/.env.example
 
 # Python
-venv/
-.venv/
-env/
 **/__pycache__/
 **/*.py[cod]
-.pytest_cache
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/venv/
+**/env/
 
-# Node
-node_modules/
-dist/
+# JavaScript dependencies and build output
+**/node_modules/
+**/dist/
+**/build/
+**/.vite/
 
-# Backend generated / data
-backend/osrm-data/
+# OSRM map data is mounted separately by the OSRM service.
+# Keep large extracts and generated routing files out of general build contexts.
 backend/vayy/osrm/
-backend/vayy/staticfiles/
-backend/vayy/media/
-*.pbf
-*.osrm*
+**/osrm/
+**/*.osm.pbf
+**/*.pbf
+**/*.osrm*
 
-# Local tooling / docs
-.DS_Store
-*.md
-*.xml
-vayy.zip
+# Generated/runtime data
+**/staticfiles/
+**/media/
+**/coverage/
+**/htmlcov/
+**/*.log

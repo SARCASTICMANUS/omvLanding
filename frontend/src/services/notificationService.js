@@ -1,6 +1,6 @@
 // VAYY | src/services/notificationService.js
 
-// Base-aware public asset path: "/" in dev, "/omv/" in the production build.
+// Base-aware public asset path: "/" in dev and in the production build.
 const ICON = `${import.meta.env.BASE_URL}vite.svg`;
 
 class NotificationService {

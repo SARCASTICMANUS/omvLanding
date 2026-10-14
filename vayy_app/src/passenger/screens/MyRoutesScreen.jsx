@@ -6,10 +6,10 @@ import {
   Text,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
 import SPACING from "../../shared/constants/spacing";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import { getRideHistory } from "../services/passengerService";
 
 function formatTrip(trip) {
@@ -46,7 +46,7 @@ function RouteCard({ item }) {
       <View style={styles.cardTop}>
         <View style={styles.cardHeader}>
           <View style={styles.routeBadge}>
-            <Text style={styles.routeBadgeText}>{item.routeName}</Text>
+            <Text style={styles.routeBadgeText} numberOfLines={1}>{item.routeName}</Text>
           </View>
           <View style={[styles.vehicleBadge, isAuto ? styles.autoBadge : styles.bikeBadge]}>
             <Text style={[styles.vehicleBadgeText, isAuto ? styles.autoBadgeText : styles.bikeBadgeText]}>
@@ -92,8 +92,7 @@ function RouteCard({ item }) {
   );
 }
 
-export default function MyRoutesScreen({ navigation }) {
-  const insets = useSafeAreaInsets();
+export default function MyRoutesScreen() {
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -114,15 +113,12 @@ export default function MyRoutesScreen({ navigation }) {
 
   return (
     <View style={styles.safeArea}>
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.headerGradient}>
-          <View style={styles.gradBase} />
-          <View style={styles.gradRay1} />
-          <View style={styles.gradRay2} />
-        </View>
-        <Text style={styles.title}>My Trips</Text>
-        <Text style={styles.subtitle}>Your completed journeys</Text>
-      </View>
+      {/* Tab root — no back button. ScreenHeader renders a transparent spacer
+          instead, so the title stays optically centred. */}
+      <ScreenHeader
+        title="My Trips"
+        subtitle="Your completed journeys"
+      />
 
       {loading ? (
         <View style={styles.emptyState}>
@@ -154,53 +150,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  header: {
-    position: "relative",
-    paddingHorizontal: 24,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    overflow: "hidden",
-  },
-  headerGradient: {
-    position: "absolute",
-    top: 0, left: 0, right: 0, bottom: 0,
-  },
-  gradBase: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "#009849",
-  },
-  gradRay1: {
-    position: "absolute",
-    top: -60, right: -40,
-    width: "70%", height: "90%",
-    backgroundColor: "#00B857",
-    opacity: 0.25,
-    borderRadius: 120,
-    transform: [{ rotate: "25deg" }],
-  },
-  gradRay2: {
-    position: "absolute",
-    top: -80, right: -20,
-    width: "50%", height: "70%",
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 100,
-    transform: [{ rotate: "35deg" }],
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    position: "relative",
-    zIndex: 2,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.7)",
-    marginTop: 4,
-    position: "relative",
-    zIndex: 2,
-  },
   listContent: {
     padding: SPACING.base,
     gap: SPACING.base,
@@ -221,27 +170,34 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: SPACING.sm,
   },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: SPACING.sm,
+    flexShrink: 1,
+    minWidth: 0,
   },
   routeBadge: {
     backgroundColor: COLORS.primary + "15",
     borderRadius: RADIUS.full,
     paddingHorizontal: 12,
     paddingVertical: 4,
+    flexShrink: 1,
+    minWidth: 0,
   },
   routeBadgeText: {
     fontSize: 12,
     fontWeight: "800",
     color: COLORS.primary,
+    flexShrink: 1,
   },
   vehicleBadge: {
     borderRadius: RADIUS.full,
     paddingHorizontal: 10,
     paddingVertical: 3,
+    flexShrink: 0,
   },
   autoBadge: {
     backgroundColor: "#FFF3E0",
@@ -267,6 +223,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.full,
     paddingHorizontal: 10,
     paddingVertical: 4,
+    flexShrink: 0,
   },
   completedDot: {
     width: 6,

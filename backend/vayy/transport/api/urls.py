@@ -30,6 +30,13 @@ from transport.api.views import (
     AdminRouteImportAPIView,
     AdminStopBulkUploadAPIView,
 )
+from transport.api.dynamic_admin_views import (
+    DynamicRoutePreviewAPIView,
+    DynamicRouteGenerateAPIView,
+    AdminOnboardingAPIView,
+    AdminStopSummaryAPIView,
+    RouteByBusNumberAPIView,
+)
 
 router = DefaultRouter()
 router.register(r"cities", CityViewSet, basename="city")
@@ -71,6 +78,9 @@ urlpatterns = [
         RouteSearchByLocationAPIView.as_view(),
         name="route-search-by-location",
     ),
+    path("routes/dynamic-preview/", DynamicRoutePreviewAPIView.as_view(), name="dynamic-route-preview"),
+    path("routes/dynamic-generate/", DynamicRouteGenerateAPIView.as_view(), name="dynamic-route-generate"),
+    path("routes/bus/<str:bus_number>/", RouteByBusNumberAPIView.as_view(), name="route-by-bus-number"),
     path(
         "routes/preview/",
         RoutePreviewAPIView.as_view(),
@@ -122,6 +132,8 @@ urlpatterns = [
         WalkingPathAPIView.as_view(),
         name="walking-path",
     ),
+    path("admin/onboarding/", AdminOnboardingAPIView.as_view(), name="admin-onboarding"),
+    path("admin/stops/summary/", AdminStopSummaryAPIView.as_view(), name="admin-stop-summary"),
     path("admin/", include(admin_router.urls)),
     path(
         "admin/stops-bulk/",

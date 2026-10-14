@@ -1,0 +1,23 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+**/__pycache__/
+**/*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+staticfiles/
+media/
+# OSRM map data is mounted separately by the OSRM service; do not copy it into Django images.
+vayy/osrm/
+osrm/
+*.pbf
+*.osrm*
+.DS_Store
+*.md
+*.xml

@@ -2,17 +2,16 @@ import React, { useMemo, useRef, useState, useCallback } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useDispatch } from "react-redux";
 import { startDispatchTrip, completeDispatch } from "../../store/slices/dispatchSlice";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import VayyMap from "../../shared/components/VayyMap";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import { DEFAULT_CENTER } from "../../constants/mapConfig";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 import COLORS from "../../shared/constants/colors";
 import { colors } from "../../theme/colors";
-import { notifyAction } from "../../shared/lib/confirmAction";
 
 export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto" }) {
   const insets = useSafeAreaInsets();
@@ -55,7 +54,7 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
 
   const handleEndTrip = useCallback(async () => {
     if (!dispatchId) {
-      notifyAction({ title: "Trip not found", message: "This ride has no dispatch id, so it cannot be ended." });
+      Alert.alert("Trip not found", "This ride has no dispatch id, so it cannot be ended.", [{ text: "OK" }]);
       return;
     }
     if (endingTrip) return;
@@ -67,7 +66,7 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
       await dispatchRedux(completeDispatch(dispatchId)).unwrap();
     } catch (error) {
       const message = error?.message || "Could not end the trip. Please try again.";
-      notifyAction({ title: "Could not end trip", message });
+      Alert.alert("Could not end trip", message, [{ text: "OK" }]);
       setEndingTrip(false);
       return;
     }
@@ -104,20 +103,15 @@ export default function AutoLiveTrackingScreen({ navigation, route, mode = "auto
       />
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
 
-      <LinearGradient
-        colors={["rgba(10, 22, 60, 0.94)", "rgba(10, 22, 62, 0.0010)"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={[styles.header, { paddingTop: insets.top + 10 }]}
-      >
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={22} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ride Active</Text>
-        <View style={{ width: 40 }} />
-      </LinearGradient>
+      <ScreenHeader
+        absolute
+        zIndex={20}
+        title="Ride Active"
+        subtitle="Passengers are on board"
+        onBack={() => navigation.goBack()}
+      />
 
-      <View style={[styles.progressBar, { top: insets.top + 70 }]}>
+      <View style={[styles.progressBar, { top: insets.top + 76 }]}>
         <View style={[styles.progressFill, { width: `${liveProgress * 100}%`, backgroundColor: accent }]} />
       </View>
 
@@ -166,32 +160,6 @@ const styles = StyleSheet.create({
     flex: 1,
     position: "relative",
     backgroundColor: "#F8FAF9",
-  },
-  header: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    zIndex: 10,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#fff",
-    letterSpacing: 0.3,
   },
   progressBar: {
     position: "absolute",

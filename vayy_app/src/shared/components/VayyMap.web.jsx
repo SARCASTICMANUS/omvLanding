@@ -15,12 +15,11 @@ import {
 } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
-  transformStyleToGrayscale,
+  loadSanitizedMapStyle,
   convertInitialRegion,
   DEFAULT_CENTER,
   MAPTILER_STYLE,
 } from "./mapUtils";
-import locationService from "../lib/locationService";
 
 function flattenStyles(style) {
   if (!style) return {};
@@ -116,47 +115,25 @@ function ViewAnnotation({ lngLat, anchor, onSelect, children, ...rest }) {
 function UserLocation({ visible = true, children, ...rest }) {
   const [position, setPosition] = useState(null);
   useEffect(() => {
-    if (!visible) return undefined;
-
-    // Delegate to the shared service rather than opening a second watch here.
-    // This component previously called navigator.geolocation directly and did
-    // three things wrong at once: it fired getCurrentPosition *and*
-    // watchPosition (two competing requests), hard-coded
-    // enableHighAccuracy: true (which is what pushes macOS into
-    // POSITION_UNAVAILABLE), and swallowed every error with `() => {}`, so a
-    // transient failure could never recover. It also produced the duplicate
-    // CoreLocationProvider warnings alongside locationService's watch.
-    let cancelled = false;
-    let handle = null;
-
-    // Seed from any fix the app already has, so the dot appears immediately
-    // instead of after a fresh request.
-    if (locationService.currentLocation) {
-      const { latitude, longitude } = locationService.currentLocation;
-      setPosition({ lng: longitude, lat: latitude });
+    if (!visible || typeof navigator === "undefined" || !navigator.geolocation) {
+      return undefined;
     }
-
-    locationService
-      .startTracking((coords) => {
-        if (cancelled) return;
-        setPosition({ lng: coords.longitude, lat: coords.latitude });
-      }, { enableHighAccuracy: false })
-      .then((h) => {
-        if (cancelled) {
-          h?.remove?.();
-          return;
-        }
-        handle = h;
-      })
-      .catch(() => {
-        // No permission or geolocation unavailable. The blue dot simply stays
-        // where it was; the journey screens read position from the service
-        // directly, so a missing dot is cosmetic.
+    let watchId = null;
+    const onPosition = (p) => {
+      setPosition({ lng: p.coords.longitude, lat: p.coords.latitude });
+    };
+    try {
+      navigator.geolocation.getCurrentPosition(onPosition, () => {}, {
+        enableHighAccuracy: true,
       });
-
+      watchId = navigator.geolocation.watchPosition(onPosition, () => {}, {
+        enableHighAccuracy: true,
+      });
+    } catch {}
     return () => {
-      cancelled = true;
-      handle?.remove?.();
+      if (watchId != null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchId);
+      }
     };
   }, [visible]);
   if (!visible || !position) return null;
@@ -204,16 +181,14 @@ const VayyMap = forwardRef(function VayyMap(
   const [grayscaleStyle, setGrayscaleStyle] = useState(null);
 
   useEffect(() => {
-    if (!grayscale) return;
+    // Fetch the style once per context and sanitise it before MapLibre parses it
+    // (see the native twin for the full note on the tile-less source).
     let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(MAPTILER_STYLE);
-        const style = await res.json();
-        if (cancelled) return;
-        setGrayscaleStyle(transformStyleToGrayscale(style));
-      } catch {}
-    })();
+    loadSanitizedMapStyle(grayscale)
+      .then((safe) => {
+        if (!cancelled && safe) setGrayscaleStyle(safe);
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [grayscale]);
 
@@ -449,7 +424,7 @@ const VayyMap = forwardRef(function VayyMap(
           bearing: viewState.bearing ?? 0,
         }}
         style={styles.fill}
-        mapStyle={grayscaleStyle || MAPTILER_STYLE}
+        mapStyle={grayscaleStyle}
         dragPan={scrollEnabled}
         scrollZoom={zoomEnabled}
         boxZoom={zoomEnabled}

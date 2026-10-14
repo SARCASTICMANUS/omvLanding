@@ -103,10 +103,12 @@ export default function DriverBikeHomeScreen({ navigation }) {
     }),
   ).current;
 
-  const canProceed = useMemo(
-    () => Boolean(pickup?.lat && pickup?.lon && destination?.lat && destination?.lon),
-    [destination, pickup],
-  );
+  const canProceed = useMemo(() => {
+    const hasCoordinates = (point) =>
+      point?.lat != null && point?.lon != null &&
+      Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon));
+    return hasCoordinates(pickup) && hasCoordinates(destination);
+  }, [destination, pickup]);
 
   const { user } = useSelector((state) => state.auth);
   const driverName = user?.full_name || user?.name || user?.first_name || "Driver";
@@ -235,14 +237,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
   const handleNext = () => {
     if (!canProceed) return;
     persistRecentSearch(pickup, destination);
-    // Journeys, not routes: the driver declares where they are going and the
-    // server resolves the path plus the global stops along it. The route picker
-    // stays registered for the fixed-route flow.
-    navigation.navigate("DriverFindPassengers", {
-      origin: pickup,
-      destination,
-      mode: "bike",
-    });
+    navigation.navigate("DriverRouteSearch", { pickup, destination, mode: "bike" });
   };
 
   const handleSwap = () => {
@@ -362,7 +357,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
                 onPress={handleNext}
               >
                 <Ionicons name="map-outline" size={18} color="#fff" />
-                <Text style={styles.primaryBtnText}>Start Journey</Text>
+                <Text style={styles.primaryBtnText}>Find Best Route</Text>
               </TouchableOpacity>
 
               {recentSearches.length > 0 && (
@@ -423,11 +418,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    boxShadow: "0 2 4 rgba(0, 0, 0, 0.2)",
   },
 
   /* Greeting */
@@ -495,12 +486,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     overflow: "hidden",
-    ...SHADOW.md,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 20,
+    boxShadow: "0 2 8 rgba(0, 0, 0, 0.06)",
   },
   cardBg: {
     flex: 1,
@@ -565,8 +551,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     maxHeight: 180,
     marginTop: 6,
-    ...SHADOW.sm,
-    elevation: 4,
+    boxShadow: "0 1 4 rgba(0, 0, 0, 0.04)",
   },
   resultRow: {
     flexDirection: "row",
@@ -618,12 +603,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: COLORS.primary,
     marginTop: 4,
-    ...SHADOW.sm,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    boxShadow: "0 1 4 rgba(0, 0, 0, 0.04)",
   },
   primaryBtnDisabled: { opacity: 0.45, shadowOpacity: 0, elevation: 0 },
   primaryBtnText: { fontSize: 15, fontWeight: "800", color: "#fff" },

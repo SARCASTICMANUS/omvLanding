@@ -11,10 +11,10 @@ import {
   Plus,
   RefreshCw,
   Route,
-  Scan,
   Wallet,
 } from "lucide-react";
 import { MetricChip, SheetHandle } from "../../../components/vayy";
+import { normalizeCoordinate } from "../../../components/map/utils/routeGeometry";
 import api from "../../../lib/api";
 import { API_PATHS } from "../../../constants/apiPaths";
 import handRaiseImg from "../../../assets/VayyHandRaise.webp";
@@ -48,11 +48,26 @@ function formatDistance(meters) {
   return `${(value / 1000).toFixed(1)} km`;
 }
 
+// Seconds -> human readable "45 sec" / "12 min" / "1 hr 20 min".
+function formatDuration(seconds) {
+  const total = Math.max(1, Math.round(Number(seconds) || 0));
+  if (total < 60) return `${total} sec`;
+  if (total < 3600) return `${Math.ceil(total / 60)} min`;
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.round((total % 3600) / 60);
+  return minutes > 0 ? `${hours} hr ${minutes} min` : `${hours} hr`;
+}
+
+function walkingTimeValue(meters) {
+  const value = Number(meters);
+  if (!Number.isFinite(value)) return "--";
+  return formatDuration(value / 1.4);
+}
+
 function walkingTimeText(meters) {
   const value = Number(meters);
   if (!Number.isFinite(value)) return "-- min walk";
-  const minutes = Math.max(1, Math.ceil(value / 1.4 / 60));
-  return `${minutes} min walk`;
+  return `${formatDuration(value / 1.4)} walk`;
 }
 
 function distanceBetweenMeters(first, second) {
@@ -67,13 +82,10 @@ function distanceBetweenMeters(first, second) {
   return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/* Same fix as PassengerRouteList: the backend emits [lng, lat], and the old
+   |first| <= 90 swap test also matched Indian longitudes, mirroring the map. */
 function toLngLat(coord) {
-  if (!Array.isArray(coord) || coord.length < 2) return null;
-  const first = Number(coord[0]);
-  const second = Number(coord[1]);
-  if (!Number.isFinite(first) || !Number.isFinite(second)) return null;
-  if (Math.abs(first) <= 90 && Math.abs(second) <= 180) return [second, first];
-  return [first, second];
+  return normalizeCoordinate(coord, "auto");
 }
 
 function getRouteCoordinates(trip, from, to) {
@@ -144,7 +156,6 @@ export default function PassengerPreRide({
   const [attempt, setAttempt] = useState(0);
   const [outcome, setOutcome] = useState({ key: null, data: null, error: null });
   const [followMode, setFollowMode] = useState(true);
-  const [sheetHeight, setSheetHeight] = useState(320);
   const onEstimateRef = useRef(onEstimate);
 
   useEffect(() => {
@@ -219,7 +230,12 @@ export default function PassengerPreRide({
     : null;
   const isNearby = pickupDistance == null || pickupDistance <= ARRIVAL_THRESHOLD_METERS;
   const ready = canRequest && !missingCoords && isNearby;
-  const waitMinutes = Math.max(1, Math.ceil((selectedTrip?.eta_seconds || 300) / 60));
+  // When the passenger still has to walk to the stop, the wait badge shows
+  // walk time instead of the vehicle wait estimate.
+  const isWalking = pickupDistance != null && pickupDistance > ARRIVAL_THRESHOLD_METERS;
+  const waitText = selectedTrip?.eta_seconds
+    ? formatDuration(selectedTrip.eta_seconds)
+    : formatDuration(300);
 
   const distText = formatDistance(pickupDistance);
   const walkText = walkingTimeText(pickupDistance);
@@ -234,7 +250,7 @@ export default function PassengerPreRide({
     estimate.data?.duration_minutes != null
       ? `${Math.ceil(estimate.data.duration_minutes)} min`
       : selectedTrip?.eta_seconds
-        ? `${Math.max(1, Math.ceil(selectedTrip.eta_seconds / 60))} min`
+        ? formatDuration(selectedTrip.eta_seconds)
         : "--";
 
   const routeCoords = getRouteCoordinates(selectedTrip, from, to);
@@ -330,41 +346,10 @@ export default function PassengerPreRide({
     };
   }, [mapKey]);
 
-  useEffect(() => {
-    const element = sheetRef.current;
-    if (!element || typeof ResizeObserver === "undefined") return undefined;
-    const observer = new ResizeObserver((entries) => {
-      const height = entries[0]?.contentRect?.height;
-      if (height && height > 0) setSheetHeight(height);
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
   const handleZoom = (zoomIn) => {
     setFollowMode(false);
     if (zoomIn) mapRef.current?.zoomIn();
     else mapRef.current?.zoomOut();
-  };
-
-  const handleRecenterRouteBounds = () => {
-    setFollowMode(false);
-    const map = mapRef.current;
-    if (!map) return;
-    const data = mapDataRef.current;
-    const points = [...(data.routeCoords || [])];
-    if (hasCoords(data.from)) points.push([data.from.lon, data.from.lat]);
-    if (hasCoords(data.to)) points.push([data.to.lon, data.to.lat]);
-    if (points.length < 2) return;
-    const bounds = points.reduce(
-      (acc, coord) => acc.extend(coord),
-      new maplibregl.LngLatBounds(points[0], points[0]),
-    );
-    map.fitBounds(bounds, {
-      padding: { top: 170, bottom: 320, left: 60, right: 60 },
-      duration: 800,
-      maxZoom: 14,
-    });
   };
 
   const handleGetCurrentLocation = () => {
@@ -389,130 +374,122 @@ export default function PassengerPreRide({
       <div ref={mapContainer} className="absolute inset-0 bg-[#E7ECEF]" />
 
       {/* Layer 2: Floating header */}
-      <header className="absolute inset-x-0 top-0 z-30 overflow-hidden rounded-b-[32px] bg-[#009849] px-5 pb-3 pt-4 shadow-[0_4px_18px_rgba(0,152,73,0.25)]">
+      <header className="absolute inset-x-0 top-0 z-30 overflow-hidden rounded-b-[32px] bg-[#009849] px-4 pb-3 pt-4 shadow-[0_4px_18px_rgba(0,152,73,0.25)]">
         <span className="pointer-events-none absolute -right-10 -top-16 h-[190%] w-[70%] rotate-[25deg] rounded-[120px] bg-[#00B857] opacity-25" />
         <span className="pointer-events-none absolute -right-6 -top-24 h-[170%] w-[50%] rotate-[35deg] rounded-[100px] bg-white/10" />
-        <div className="relative mx-auto flex w-full max-w-[720px] items-center gap-3">
+        <div className="relative mx-auto flex w-full max-w-[720px] items-center gap-2 sm:gap-3">
           <button
             type="button"
             onClick={onBack}
             aria-label="Go back"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#111827] shadow-[0_2px_8px_rgba(0,0,0,0.1)] transition active:scale-95"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#111827] shadow-[0_2px_8px_rgba(0,0,0,0.1)] transition active:scale-95"
           >
-            <ChevronLeft size={24} strokeWidth={2.6} />
+            <ChevronLeft size={22} strokeWidth={2.6} />
           </button>
-          <h1 className="text-[22px] font-extrabold tracking-[-0.3px] text-white">Hand Raise</h1>
+          <h1 className="min-w-0 flex-1 truncate text-[18px] font-extrabold tracking-[-0.3px] text-white sm:text-[22px]">
+            Hand Raise
+          </h1>
+          <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-white/15 p-1 backdrop-blur-sm">
+            <button
+              type="button"
+              aria-label="Zoom out"
+              onClick={() => handleZoom(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-white transition hover:bg-white/20 active:scale-95"
+            >
+              <Minus size={18} strokeWidth={2.6} />
+            </button>
+            <button
+              type="button"
+              aria-label="Zoom in"
+              onClick={() => handleZoom(true)}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-white transition hover:bg-white/20 active:scale-95"
+            >
+              <Plus size={18} strokeWidth={2.6} />
+            </button>
+            <span className="mx-0.5 h-4 w-px bg-white/30" />
+            <button
+              type="button"
+              aria-label="My location"
+              onClick={handleGetCurrentLocation}
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition active:scale-95 ${
+                followMode ? "bg-white text-[#009849]" : "text-white hover:bg-white/20"
+              }`}
+            >
+              <Crosshair size={17} strokeWidth={2.2} />
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Layer 3: Top context cards */}
-      <div className="pointer-events-none absolute inset-x-0 top-[86px] z-20 px-4">
+      <div className="pointer-events-none absolute inset-x-0 top-[76px] z-20 px-4">
         <div className="mx-auto flex w-full max-w-[720px] flex-col gap-2.5">
-          <div className="pointer-events-auto flex items-center gap-4 rounded-[24px] bg-white p-4 shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
-            <span className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[16px] bg-[#ECFAF1] text-[#009849]">
-              <Flag size={24} strokeWidth={2.4} />
+          <div className="pointer-events-auto flex items-center gap-3 rounded-[20px] bg-white p-3 shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
+            <span className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[13px] bg-[#ECFAF1] text-[#009849]">
+              <Flag size={20} strokeWidth={2.4} />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-medium text-[#888888]">Nearest stop</p>
-              <p className="text-[19px] font-extrabold leading-tight text-[#111827] sm:text-[22px]">
+              <p className="text-[12px] font-medium text-[#888888]">Nearest stop</p>
+              <p className="truncate text-[15px] font-extrabold leading-tight text-[#111827] sm:text-[17px]">
                 <span className="text-[#009849]">{distText}</span>
               {pickupDistance != null ? ` away \u00B7 ${walkText}` : ""}
               </p>
             </div>
-            <div className="shrink-0 rounded-[14px] bg-[#ECFAF1] px-3.5 py-2 text-center">
-              <p className="text-[16px] font-extrabold leading-none text-[#009849]">~{waitMinutes} min</p>
-              <p className="mt-1 text-[10px] font-semibold text-[#6B7280]">wait</p>
+            <div className="shrink-0 rounded-[12px] bg-[#ECFAF1] px-3 py-1.5 text-center">
+              <p className="text-[14px] font-extrabold leading-none text-[#009849]">
+                {isWalking ? walkingTimeValue(pickupDistance) : `~${waitText}`}
+              </p>
+              <p className="mt-0.5 text-[9px] font-semibold text-[#6B7280]">
+                {isWalking ? "walk" : "wait"}
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Layer 4: Floating map controls */}
-      <div
-        className="absolute right-4 z-20 flex flex-col gap-0.5 rounded-[18px] bg-white p-1.5 shadow-[0_6px_20px_rgba(0,0,0,0.14)]"
-        style={{ bottom: sheetHeight + 20 }}
-      >
-        <button
-          type="button"
-          aria-label="Zoom in"
-          onClick={() => handleZoom(true)}
-          className="flex h-11 w-12 items-center justify-center rounded-[12px] text-[#111827] transition hover:bg-slate-50 active:scale-95"
-        >
-          <Plus size={22} strokeWidth={2.4} />
-        </button>
-        <button
-          type="button"
-          aria-label="Zoom out"
-          onClick={() => handleZoom(false)}
-          className="flex h-11 w-12 items-center justify-center rounded-[12px] text-[#111827] transition hover:bg-slate-50 active:scale-95"
-        >
-          <Minus size={22} strokeWidth={2.4} />
-        </button>
-        <span className="mx-3 my-1 h-px bg-[#F0F0F0]" />
-        <button
-          type="button"
-          aria-label="My location"
-          onClick={handleGetCurrentLocation}
-          className={`flex h-11 w-12 items-center justify-center rounded-[12px] transition active:scale-95 ${
-            followMode ? "bg-[#009849] text-white" : "text-[#111827] hover:bg-slate-50"
-          }`}
-        >
-          <Crosshair size={20} strokeWidth={2.2} />
-        </button>
-        <button
-          type="button"
-          aria-label="Fit route"
-          onClick={handleRecenterRouteBounds}
-          className="flex h-11 w-12 items-center justify-center rounded-[12px] text-[#111827] transition hover:bg-slate-50 active:scale-95"
-        >
-          <Scan size={20} strokeWidth={2.3} />
-        </button>
-      </div>
-
-      {/* Layer 5: Bottom data sheet */}
+      {/* Layer 4: Bottom data sheet */}
       <div
         ref={sheetRef}
         className="absolute inset-x-0 bottom-0 z-30 mx-auto max-h-[76vh] w-full max-w-[560px] overflow-y-auto rounded-t-[32px] bg-white px-5 pb-6 pt-3 shadow-[0_-8px_30px_rgba(0,0,0,0.10)] sm:px-6 lg:max-w-[720px]"
       >
-        <SheetHandle />
+          <SheetHandle />
 
-        <div className="mb-3">
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.3px] text-[#9CA3AF]">
-            Selected Route
-          </p>
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-[#009849]" />
-            <p className="min-w-0 flex-1 truncate text-[15px] font-bold text-[#111827]">
-              {pickupName} &rarr; {dropName}
+          <div className="mb-3">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.3px] text-[#9CA3AF]">
+              Selected Route
             </p>
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-[#009849]" />
+              <p className="min-w-0 flex-1 truncate text-[15px] font-bold text-[#111827]">
+                {pickupName} &rarr; {dropName}
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="mb-3">
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.3px] text-[#9CA3AF]">
-            Nearest Pickup Stop
-          </p>
-          <p className="text-[15px] font-bold text-[#111827]">{pickupName}</p>
-          {walkMinutes ? (
-            <p className="mt-0.5 text-[12px] font-semibold text-[#6B7280]">
-              ~{walkMinutes} min walk to pickup
+          <div className="mb-3">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.3px] text-[#9CA3AF]">
+              Nearest Pickup Stop
             </p>
-          ) : null}
-        </div>
+            <p className="text-[15px] font-bold text-[#111827]">{pickupName}</p>
+            {walkMinutes ? (
+              <p className="mt-0.5 text-[12px] font-semibold text-[#6B7280]">
+                ~{walkMinutes} min walk to pickup
+              </p>
+            ) : null}
+          </div>
 
-        <div
-          className={`mb-4 flex items-start gap-2.5 rounded-[14px] p-3.5 ${
-            ready ? "bg-[#ECFAF1]" : "bg-[#FEF2F2]"
-          }`}
-        >
-          <span
-            className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-              ready ? "bg-[#009849]" : "bg-[#EF4444]"
+          <div
+            className={`mb-4 flex items-start gap-2.5 rounded-[14px] p-3.5 ${
+              ready ? "bg-[#ECFAF1]" : "bg-[#FEF2F2]"
             }`}
-          />
-          <div className="min-w-0 flex-1">
+          >
+            <span
+              className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+                ready ? "bg-[#009849]" : "bg-[#EF4444]"
+              }`}
+            />
             <p
-              className={`text-[13px] font-semibold leading-[18px] ${
+              className={`min-w-0 flex-1 text-[13px] font-semibold leading-[18px] ${
                 ready ? "text-[#065F46]" : "text-[#991B1B]"
               }`}
             >
@@ -521,88 +498,78 @@ export default function PassengerPreRide({
                 : pickupDistance == null
                   ? "Location unavailable. Raise your hand when you're at the pickup point."
                   : ready
-                    ? "You're near the pickup point. Nearby Marshals can be notified."
-                    : "Move closer to the pickup point to raise your hand."}
+                    ? "You're at the pickup stop. Raise your hand to notify nearby Marshals."
+                    : `Get within ${ARRIVAL_THRESHOLD_METERS} m of ${pickupName} to raise your hand and notify nearby Marshals.`}
             </p>
-            {pickupDistance != null ? (
-              <p
-                className={`mt-1 text-[13px] font-bold ${
-                  ready ? "text-[#009849]" : "text-[#DC2626]"
-                }`}
-              >
-                {distText} away &middot; {walkText}
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="hidden mb-4 rounded-[14px] border border-[#F0F0F0] bg-[#F9FAF9] p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.3px] text-[#9CA3AF]">
-              <Wallet size={14} /> Estimated fare
-            </span>
-            <span className="rounded-full bg-[#E0F5E8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.3px] text-[#009849]">
-              {rideMode.label}
-            </span>
           </div>
 
-          {estimate.loading ? (
-            <div className="flex items-center gap-3 text-sm font-bold text-[#9CA3AF]">
-              <RefreshCw size={16} className="animate-spin" />
-              Calculating fare...
+          <div className="hidden mb-4 rounded-[14px] border border-[#F0F0F0] bg-[#F9FAF9] p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.3px] text-[#9CA3AF]">
+                <Wallet size={14} /> Estimated fare
+              </span>
+              <span className="rounded-full bg-[#E0F5E8] px-3 py-1 text-[11px] font-black uppercase tracking-[0.3px] text-[#009849]">
+                {rideMode.label}
+              </span>
             </div>
-          ) : estimate.error ? (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-sm font-bold text-[#6B7280]">{estimate.error}</span>
-              {missingCoords ? null : (
-                <button
-                  type="button"
-                  onClick={handleRetry}
-                  className="flex h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-4 text-xs font-extrabold text-[#374151] transition hover:bg-slate-50"
-                >
-                  <RefreshCw size={13} /> Retry
-                </button>
-              )}
-            </div>
-          ) : (
-            <div>
-              <p className="text-[36px] font-black leading-none text-[#009849]">
-                {money(estimate.data?.estimated_fare)}
-              </p>
-              <p className="mt-1.5 text-xs font-semibold text-[#6B7280]">
-                {estimate.data?.surge_multiplier && Number(estimate.data.surge_multiplier) > 1
-                  ? `${estimate.data.surge_multiplier}x surge applied`
-                  : "Upfront estimate, final fare on completion"}
-              </p>
-            </div>
-          )}
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            <MetricChip icon={Route} label="Distance" value={distanceValue} />
-            <MetricChip icon={Clock3} label="Duration" value={durationValue} />
-            <MetricChip
-              icon={Footprints}
-              label="Walk to stop"
-              value={walkMinutes ? `~${walkMinutes} min` : "--"}
-              green
-            />
+            {estimate.loading ? (
+              <div className="flex items-center gap-3 text-sm font-bold text-[#9CA3AF]">
+                <RefreshCw size={16} className="animate-spin" />
+                Calculating fare...
+              </div>
+            ) : estimate.error ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-sm font-bold text-[#6B7280]">{estimate.error}</span>
+                {missingCoords ? null : (
+                  <button
+                    type="button"
+                    onClick={handleRetry}
+                    className="flex h-9 items-center gap-2 rounded-full border border-[#E5E7EB] bg-white px-4 text-xs font-extrabold text-[#374151] transition hover:bg-slate-50"
+                  >
+                    <RefreshCw size={13} /> Retry
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div>
+                <p className="text-[36px] font-black leading-none text-[#009849]">
+                  {money(estimate.data?.estimated_fare)}
+                </p>
+                <p className="mt-1.5 text-xs font-semibold text-[#6B7280]">
+                  {estimate.data?.surge_multiplier && Number(estimate.data.surge_multiplier) > 1
+                    ? `${estimate.data.surge_multiplier}x surge applied`
+                    : "Upfront estimate, final fare on completion"}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <MetricChip icon={Route} label="Distance" value={distanceValue} />
+              <MetricChip icon={Clock3} label="Duration" value={durationValue} />
+              <MetricChip
+                icon={Footprints}
+                label="Walk to stop"
+                value={walkMinutes ? `~${walkMinutes} min` : "--"}
+                green
+              />
+            </div>
           </div>
-        </div>
 
-        {!canRequest ? (
-          <p className="mb-4 rounded-[14px] border border-[#FDE68A] bg-[#FEF3C7] p-4 text-sm font-bold text-[#92400E]">
-            We couldn't identify the pickup stop for this route. Go back and pick your stops again.
-          </p>
-        ) : null}
+          {!canRequest ? (
+            <p className="mb-4 rounded-[14px] border border-[#FDE68A] bg-[#FEF3C7] p-4 text-sm font-bold text-[#92400E]">
+              We couldn't identify the pickup stop for this route. Go back and pick your stops again.
+            </p>
+          ) : null}
 
-        <button
-          type="button"
-          onClick={() => setShowConfirm(true)}
-          disabled={!ready}
-          className="flex h-14 w-full items-center justify-center rounded-[18px] bg-[#009849] text-[17px] font-extrabold text-white shadow-[0_4px_14px_rgba(0,152,73,0.3)] transition hover:bg-[#007A3B] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#009849]/30 disabled:shadow-none"
-        >
-          <span aria-hidden="true">&#9995;</span>&nbsp; Raise Hand
-        </button>
+          <button
+            type="button"
+            onClick={() => setShowConfirm(true)}
+            disabled={!ready}
+            className="flex h-14 w-full items-center justify-center rounded-[18px] bg-[#009849] text-[17px] font-extrabold text-white shadow-[0_4px_14px_rgba(0,152,73,0.3)] transition hover:bg-[#007A3B] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#009849]/30 disabled:shadow-none"
+          >
+            <span aria-hidden="true">&#9995;</span>&nbsp; Raise Hand
+          </button>
       </div>
 
       {showConfirm ? (

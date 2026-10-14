@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import {
   FlatList, Pressable, StyleSheet, Text, TextInput,
-  TouchableOpacity, View, Platform, StatusBar,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import COLORS from "../../shared/constants/colors";
 import SPACING from "../../shared/constants/spacing";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import { NOMINATIM_SEARCH } from "../../constants";
 
 export default function DestinationSearchScreen({ navigation }) {
@@ -42,13 +43,12 @@ export default function DestinationSearchScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.root}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>{"<"}</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Destination Search</Text>
-      </View>
+    <SafeAreaView style={styles.root} edges={["left", "right", "bottom"]}>
+      <ScreenHeader
+        title="Destination Search"
+        subtitle="Find a stop or landmark to travel to"
+        onBack={() => navigation.goBack()}
+      />
       <View style={styles.searchBar}>
         <TextInput
           autoCapitalize="none"
@@ -84,16 +84,6 @@ export default function DestinationSearchScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: SPACING.base,
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight + SPACING.base : SPACING.base,
-    gap: SPACING.md,
-  },
-  backBtn: { width: 38, height: 38, justifyContent: "center", alignItems: "center" },
-  backText: { fontSize: 34, color: COLORS.text, lineHeight: 36 },
-  title: { fontSize: 22, fontWeight: "900", color: COLORS.text },
   searchBar: {
     marginHorizontal: SPACING.base,
     backgroundColor: COLORS.white,

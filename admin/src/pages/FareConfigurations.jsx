@@ -45,7 +45,12 @@ export default function FareConfigurations() {
     setLoading(true);
     try {
       const res = await api.get("/operations/fare-configurations/");
-      setConfigs(Array.isArray(res.data?.data) ? res.data.data : []);
+      // The endpoint answers { results: [...], count: n }; the old
+      // `res.data?.data` read matched nothing, so this table rendered empty.
+      const body = res.data;
+      setConfigs(
+        Array.isArray(body) ? body : body?.results || body?.data || []
+      );
     } catch (err) {
       alert(errorMessage(err, "Failed to load fare configurations"));
     }
@@ -84,7 +89,7 @@ export default function FareConfigurations() {
   const totalVehiclesCovered = activeConfigs.length;
 
   return (
-    <div className="pt-4 pb-6 px-6 md:pt-5 md:pb-8 md:px-8 h-full overflow-y-auto">
+    <div data-scroll className="pt-4 pb-6 px-6 md:pt-5 md:pb-8 md:px-8 h-full overflow-y-auto">
       <PageToolbar>
         <button onClick={openCreate} className="glass-btn-primary flex items-center gap-2">
           <Plus size={18} /> Add Configuration
@@ -95,6 +100,17 @@ export default function FareConfigurations() {
         <Loader />
       ) : (
         <>
+          <div className="glass-card-subtle p-4 mb-5">
+            <p className="text-xs text-slate-500 leading-relaxed">
+              <strong className="text-slate-700">Superseded — use Dynamic Routing → Fares.</strong>{" "}
+              Pricing on this backend is a per-city block (<span className="glass-mono">fare_per_km
+              / platform_fee / rounding_rule</span>), which is what the fare engine actually reads
+              and what trips are charged from. This page&apos;s per-vehicle-type shape
+              (<span className="glass-mono">vehicle_type / base_fare / per_km_rate</span>) is not
+              implemented server-side, so saving here will not change any fare.
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
             <div className="glass-card-subtle p-5 relative overflow-hidden">
               <div className="gradient-blob blob-primary w-16 h-16 -top-4 -right-4" />

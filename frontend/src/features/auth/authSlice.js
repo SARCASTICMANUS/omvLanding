@@ -176,6 +176,14 @@ export const verifyOtp = createAsyncThunk(
 
       const payload = unwrapPayload(response.data) || {};
       const user = normalizeUser(payload);
+      // Sign the user in. verify-otp is the ONLY endpoint that mints a session
+      // for the passenger signup flow (register deliberately issues no token),
+      // and this thunk was throwing those tokens away - so after confirming the
+      // Safety Code the user still had no access_token and every later call
+      // (Edit Profile, trips, wallet) came back 401. `loginUser` above does
+      // exactly this; verifyOtp just never did.
+      const tokens = payload.tokens || payload;
+      persistSession(tokens, user);
 
       return { user, email };
     } catch (error) {

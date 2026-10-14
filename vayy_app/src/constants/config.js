@@ -1,5 +1,21 @@
+import { Platform } from "react-native";
+
 export const API_TIMEOUT = 10000;
 export const DEFAULT_API_URL = "http://localhost:8000";
+
+const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL;
+const normalizedApiUrl = configuredApiUrl.replace(/\/+$/, "");
+
+// Android emulators reach the development host through 10.0.2.2.
+// "localhost" inside the emulator points back to the emulator, not Windows/Docker.
+export const API_URL =
+  Platform.OS === "android"
+    ? normalizedApiUrl.replace(
+        /^(https?:\/\/)(localhost|127\.0\.0\.1)(?=[:/]|$)/i,
+        (_, protocol) => `${protocol}10.0.2.2`
+      )
+    : normalizedApiUrl;
+
 export const WS_MAX_RECONNECT = 5;
 
 // Backoff schedule for reconnect attempts: 1s, 2s, 4s, 8s, 16s, capped at 30s,

@@ -19,7 +19,7 @@ export function SharedAutoMapScreen({ navigation, route }) {
   const pillText = route?.params?.pillText || "";
 
   return (
-    <AppFrame navigation={navigation} title={title} accent={colors.primary}>
+    <AppFrame navigation={navigation} title={title} subtitle="Live map and ride status" accent={colors.primary}>
       <View style={styles.mapPage}>
         <VayyMap
           style={styles.mapBg}

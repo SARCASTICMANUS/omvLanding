@@ -22,6 +22,7 @@ import useDriverLocationPush from "../hooks/useDriverLocationPush";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import COLORS from "../../shared/constants/colors";
 import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
 const { height } = Dimensions.get("window");
@@ -453,22 +454,27 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
       )}
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={22} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Buddy Radar</Text>
-        <TouchableOpacity
-          style={[styles.headerBtn, online && styles.headerBtnActive]}
-          onPress={() => setOnline(!online)}
-        >
-          <Ionicons
-            name={online ? "radio" : "radio-button-off"}
-            size={20}
-            color={online ? "#fff" : "#111827"}
-          />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        absolute
+        zIndex={20}
+        title="Buddy Radar"
+        subtitle={online ? "Searching for buddies nearby" : "Go online to start scanning"}
+        onBack={() => navigation.goBack()}
+        right={
+          <TouchableOpacity
+            style={[styles.headerBtn, online && styles.headerBtnActive]}
+            onPress={() => setOnline(!online)}
+            accessibilityRole="button"
+            accessibilityLabel={online ? "Go offline" : "Go online"}
+          >
+            <Ionicons
+              name={online ? "radio" : "radio-button-off"}
+              size={20}
+              color={online ? "#fff" : "#111827"}
+            />
+          </TouchableOpacity>
+        }
+      />
 
       {/* Scan timer */}
       {online && phase === "scanning" && (
@@ -686,11 +692,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#00E676",
     borderWidth: 2,
     borderColor: "#fff",
-    shadowColor: "#00E676",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 4,
+    boxShadow: "0 0 8 rgba(0, 230, 118, 0.6)",
   },
   bikeMarker: {
     width: 40,
@@ -847,16 +849,6 @@ const styles = StyleSheet.create({
   },
 
   /* header */
-  header: {
-    position: "absolute",
-    top: 0, left: 0, right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    zIndex: 20,
-  },
   headerBtn: {
     width: 40,
     height: 40,
@@ -872,12 +864,6 @@ const styles = StyleSheet.create({
   },
   headerBtnActive: {
     backgroundColor: COLORS.primary,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#fff",
-    letterSpacing: -0.3,
   },
 
   /* notification banner */

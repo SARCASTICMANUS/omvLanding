@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import VayyMap, { UserLocation, Marker, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import SmoothMarker from "../../shared/components/common/SmoothMarker";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Ionicons,
@@ -232,28 +233,13 @@ export function RideStatsScreen({ navigation, route }) {
     });
   }
 
-  async function handleShareTrip() {
+  function handleShareTrip() {
     const shareText = [
       `📍 ${driverName} is riding me to ${destination} via VAYY!`,
       `⏱ ETA: ${eta} · 📏 ${distanceLeft}`,
       `🆔 Trip: ${tripData.trip_id || dispatchId}`,
     ].join("\n");
-    // Share.share is native-only; on web it throws and the catch swallowed it,
-    // leaving the share button looking broken. Use the browser's own share
-    // where available, and fall back to copying the text.
-    try {
-      if (Platform.OS === "web") {
-        if (typeof navigator !== "undefined" && navigator.share) {
-          await navigator.share({ title: "VAYY trip", text: shareText });
-        } else if (typeof window !== "undefined") {
-          await window.navigator.clipboard?.writeText(shareText);
-        }
-        return;
-      }
-      await Share.share({ message: shareText });
-    } catch {
-      // Dismissed or unsupported; nothing to recover.
-    }
+    Share.share({ message: shareText }).catch(() => {});
   }
 
   function handleEmergency() {
@@ -324,33 +310,33 @@ export function RideStatsScreen({ navigation, route }) {
         </VayyMap>
         )}
 
-        <View style={[styles.header, { paddingTop: insets.top + 10, overflow: "hidden" }]}>
-          <View style={styles.headerGradient}>
-            <View style={styles.gradBase} />
-            <View style={styles.gradRay1} />
-            <View style={styles.gradRay2} />
-          </View>
-          <View style={styles.headerLeft}>
-            {Platform.OS === "ios" && (
-              <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-                <Ionicons name="chevron-back" size={24} color="#111827" />
+        <ScreenHeader
+          absolute
+          zIndex={20}
+          title="Ride Active"
+          subtitle={destinationLabel ? `Heading to ${destinationLabel}` : "Your Marshal is on the way"}
+          onBack={() => navigation.goBack()}
+          right={
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={styles.headerActionBtn}
+                onPress={handleShareTrip}
+                accessibilityRole="button"
+                accessibilityLabel="Share trip"
+              >
+                <Feather name="share" size={18} color="#FFFFFF" />
               </TouchableOpacity>
-            )}
-            <View style={styles.statusContainer}>
-              <View style={styles.liveDot} />
-              <Text style={styles.statusText}>Ride Active</Text>
+              <TouchableOpacity
+                style={styles.headerActionBtn}
+                onPress={handleEmergency}
+                accessibilityRole="button"
+                accessibilityLabel="Emergency"
+              >
+                <MaterialIcons name="emergency" size={18} color="#FFFFFF" />
+              </TouchableOpacity>
             </View>
-          </View>
-
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.headerActionBtn} onPress={handleShareTrip}>
-              <Feather name="share" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerActionBtn} onPress={handleEmergency}>
-              <MaterialIcons name="emergency" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
+          }
+        />
 
         <View style={styles.distanceCallout}>
           <Text style={styles.distanceCalloutValue}>{destinationLabel}</Text>
@@ -437,7 +423,7 @@ export function RideStatsScreen({ navigation, route }) {
 
             {endRideCase === "arrived" ? (
               <>
-                <Text style={styles.endTitle}>Looks like you&apos;ve reached your destination.</Text>
+                <Text style={styles.endTitle}>Looks like you've reached your destination.</Text>
                 <Text style={styles.endMessage}>End Ride?</Text>
                 <View style={styles.endActions}>
                   <TouchableOpacity style={styles.endPrimaryBtn} onPress={handleConfirmEndRide}>
@@ -496,7 +482,7 @@ export function RideStatsScreen({ navigation, route }) {
               style={styles.emergencyCloseBtn}
               onPress={() => setShowEmergencyModal(false)}
             >
-              <Text style={styles.emergencyCloseText}>I&apos;m Safe</Text>
+              <Text style={styles.emergencyCloseText}>I'm Safe</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -513,93 +499,14 @@ const styles = StyleSheet.create({
   },
   gpsLoading: { flex: 1, alignItems: "center", justifyContent: "center" },
   gpsLoadingText: { fontSize: 15, fontWeight: "600", color: "#6B7280" },
-  header: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingBottom: 12,
-    overflow: "hidden",
-  },
-  headerGradient: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  gradBase: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "#009849",
-  },
-  gradRay1: {
-    position: "absolute",
-    top: -60,
-    right: -40,
-    width: "70%",
-    height: "90%",
-    backgroundColor: "#00B857",
-    opacity: 0.25,
-    borderRadius: 120,
-    transform: [{ rotate: "25deg" }],
-  },
-  gradRay2: {
-    position: "absolute",
-    top: -80,
-    right: -20,
-    width: "50%",
-    height: "70%",
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 100,
-    transform: [{ rotate: "35deg" }],
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  statusContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  liveDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#00E676",
-  },
-  statusText: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: -0.4,
-  },
-  iconBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
-  },
   headerActions: {
     flexDirection: "row",
-    gap: 12,
+    gap: 8,
   },
   headerActionBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: "rgba(255,255,255,0.2)",
     justifyContent: "center",
     alignItems: "center",

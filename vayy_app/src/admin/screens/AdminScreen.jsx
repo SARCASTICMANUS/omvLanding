@@ -13,7 +13,6 @@ import AdminMap from "../components/AdminMap";
 import AdminRouteForm from "../components/AdminRouteForm";
 import AdminStopsList from "../components/AdminStopsList";
 import { fetchRoutes, createRoute, fetchStops } from "../adminSlice";
-import { notifyAction } from "../../shared/lib/confirmAction";
 
 const DRIVER_ROLES_SET = new Set(DRIVER_ROLES);
 
@@ -93,11 +92,11 @@ export default function AdminScreen({ navigation }) {
   const handleDriverAction = async (driverId, action) => {
     try {
       await api.patch(ADMIN.driverVerify(driverId), { action });
-      notifyAction({ title: "Success", message: `Driver ${action === "approve" ? "approved" : "rejected"}` });
+      Alert.alert("Success", `Driver ${action === "approve" ? "approved" : "rejected"}`);
       setPendingDrivers((prev) => prev.filter((d) => d.id !== driverId));
       setExpandedDriver(null);
     } catch (err) {
-      notifyAction({ title: "Error", message: err?.response?.data?.message || "Action failed" });
+      Alert.alert("Error", err?.response?.data?.message || "Action failed");
     }
   };
 
@@ -144,7 +143,7 @@ export default function AdminScreen({ navigation }) {
       });
     } catch (err) {
       console.error("Failed to fetch profile:", err);
-      notifyAction({ title: "Error", message: "Failed to load profile" });
+      Alert.alert("Error", "Failed to load profile");
     } finally {
       setProfileLoading(false);
     }
@@ -158,11 +157,11 @@ export default function AdminScreen({ navigation }) {
       const url = isDriver ? ADMIN.driverProfile(selectedUser.id) : ADMIN.passengerProfile(selectedUser.id);
       const payload = { ...editForm };
       await api.put(url, payload);
-      notifyAction({ title: "Success", message: "Profile updated" });
+      Alert.alert("Success", "Profile updated");
       setEditMode(false);
       fetchUserProfile(selectedUser);
     } catch (err) {
-      notifyAction({ title: "Error", message: err?.response?.data?.message || "Failed to update profile" });
+      Alert.alert("Error", err?.response?.data?.message || "Failed to update profile");
     } finally {
       setSaving(false);
     }
@@ -185,12 +184,12 @@ export default function AdminScreen({ navigation }) {
 
   const handleSaveRoute = useCallback(async () => {
     if (!routeName.trim()) {
-      notifyAction({ title: "Error", message: "Route name is required" });
+      Alert.alert("Error", "Route name is required");
       return;
     }
     const { startPoint, endPoint, stops: waypoints } = routeData;
     if (!startPoint || !endPoint) {
-      notifyAction({ title: "Error", message: "Tap start and end points on the map" });
+      Alert.alert("Error", "Tap start and end points on the map");
       return;
     }
     try {
@@ -211,10 +210,10 @@ export default function AdminScreen({ navigation }) {
       setRouteName("");
       setRouteData({ startPoint: null, endPoint: null, stops: [] });
       setMapKey((k) => k + 1);
-      notifyAction({ title: "Success", message: "Route created" });
+      Alert.alert("Success", "Route created");
       dispatch(fetchRoutes());
     } catch (err) {
-      notifyAction({ title: "Error", message: err?.message || "Failed to create route" });
+      Alert.alert("Error", err?.message || "Failed to create route");
     }
   }, [routeName, routeData, dispatch, selectedCity]);
 
@@ -714,10 +713,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
+    boxShadow: "0 -4 8 rgba(0, 0, 0, 0.1)",
   },
   listPanel: { flex: 1, padding: 16 },
   loadingText: { textAlign: "center", color: "#9CA3AF", marginTop: 40 },
@@ -727,10 +723,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     marginBottom: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: "0 0 4 rgba(0, 0, 0, 0.05)",
   },
   itemTitle: { fontSize: 15, fontWeight: "600", color: "#111827" },
   itemSub: { fontSize: 12, color: "#6B7280", marginTop: 2 },
@@ -806,10 +799,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    boxShadow: "0 0 4 rgba(0, 0, 0, 0.04)",
     gap: 10,
   },
   userAvatar: {
@@ -831,10 +821,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: "0 0 4 rgba(0, 0, 0, 0.05)",
   },
   driverHeader: {
     flexDirection: "row",

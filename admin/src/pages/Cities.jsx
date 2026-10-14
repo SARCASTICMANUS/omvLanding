@@ -59,7 +59,7 @@ export default function Cities() {
   };
 
   return (
-    <div className="pt-4 pb-6 px-6 md:pt-5 md:pb-8 md:px-8 h-full overflow-y-auto">
+    <div data-scroll className="pt-4 pb-6 px-6 md:pt-5 md:pb-8 md:px-8 h-full overflow-y-auto">
       <PageToolbar>
         <button onClick={openCreate} className="glass-btn-primary flex items-center gap-2">
           <Plus size={18} /> Add City

@@ -4,6 +4,7 @@ from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVector
 from django.db import models
 from django.contrib.gis.db import models as gis_models
+from django.utils.text import slugify
 
 from common.constants import ROUTE_PUBLIC
 
@@ -17,6 +18,7 @@ class City(models.Model):
     name = models.CharField(
         max_length=255,
     )
+    slug = models.SlugField(max_length=255, unique=True, blank=True)
     state = models.CharField(
         max_length=255,
         blank=True,
@@ -37,9 +39,54 @@ class City(models.Model):
     class Meta:
         ordering = ["name"]
 
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.name) or "city"
+            candidate = base
+            suffix = 2
+            while City.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+            self.slug = candidate
+        else:
+            self.slug = slugify(self.slug) or slugify(self.name) or "city"
+            base = self.slug
+            candidate = base
+            suffix = 2
+            while City.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+            self.slug = candidate
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.name}, {self.state}"
-    
+
+
+class CityAdminConfiguration(models.Model):
+    """Admin-managed service and fare settings for one city."""
+
+    ROUNDING_CHOICES = (
+        ("none", "None"),
+        ("nearest_unit", "Nearest whole rupee"),
+        ("ceil_unit", "Round up to whole rupee"),
+        ("floor_unit", "Round down to whole rupee"),
+    )
+
+    city = models.OneToOneField(City, on_delete=models.CASCADE, related_name="admin_configuration")
+    currency = models.CharField(max_length=3, default="INR")
+    fare_per_km = models.DecimalField(max_digits=10, decimal_places=2, default=8)
+    platform_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    rounding_rule = models.CharField(max_length=20, choices=ROUNDING_CHOICES, default="none")
+    corridor_m = models.PositiveIntegerField(default=100)
+    max_walk_to_stop_m = models.PositiveIntegerField(default=1200)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.city.slug} admin configuration"
+
 
 class Route(models.Model):
     id = models.UUIDField(
@@ -143,6 +190,17 @@ class Stop(models.Model):
     name = models.CharField(
         max_length=255,
     )
+
+    COORDINATE_STATUS_CHOICES = (
+        ("verified", "Verified"),
+        ("provisional", "Provisional"),
+        ("conflict", "Conflict"),
+        ("unresolved", "Unresolved"),
+        ("legacy_synthetic", "Legacy synthetic"),
+    )
+    coordinate_status = models.CharField(max_length=24, choices=COORDINATE_STATUS_CHOICES, default="verified")
+    aliases = models.JSONField(default=list, blank=True)
+    serviceability_reason = models.CharField(max_length=255, blank=True, default="")
 
     location = gis_models.PointField(
         geography=True,

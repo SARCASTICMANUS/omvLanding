@@ -6,6 +6,16 @@ export default defineConfig(({ mode }) => {
   const apiUrl = (env.VITE_API_URL || "/api").trim();
   const proxyTarget = (env.VITE_API_PROXY_TARGET || "http://localhost:8000").trim();
 
+  // Public mount path for this SPA.
+  //
+  // MUST stay distinct from the passenger/driver SPA's base: both SPAs emit
+  // content-hashed bundles under `assets/` (see manualChunks below), and the
+  // omv-backend front door serves the frontend's /assets/ straight off disk.
+  // If both were built at "/", the admin at /zxcv/ would request
+  // /zxcv/assets/index-<hash>.js and receive the FRONTEND's bundle — a white
+  // screen with no error. With "/zxcv/" each SPA owns its own subtree.
+  const base = (process.env.BASE_PATH || env.BASE_PATH || "/zxcv/").trim();
+
   const proxy = apiUrl.startsWith("http")
     ? {}
     : {
@@ -16,6 +26,7 @@ export default defineConfig(({ mode }) => {
       };
 
   return {
+    base,
     plugins: [react()],
     server: {
       host: true,

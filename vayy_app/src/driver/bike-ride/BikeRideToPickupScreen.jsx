@@ -12,7 +12,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
 import * as Location from "expo-location";
-import { LinearGradient } from "expo-linear-gradient";
 import { arrivedDispatch } from "../../store/slices/dispatchSlice";
 import { getRoadDistance } from "../../routes/services/routeService";
 import useWebSocket from "../../shared/hooks/useWebSocket";
@@ -21,6 +20,7 @@ import api from "../../shared/lib/api";
 import { WS, OPERATIONS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
 import VayyMap, { UserLocation, Marker } from "../../shared/components/VayyMap";
+import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
 export default function BikeRideToPickupScreen({ navigation, route }) {
@@ -192,18 +192,13 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
         </VayyMap>
         )}
 
-        <LinearGradient
-          colors={["rgba(10, 22, 60, 0.94)", "rgba(10, 22, 62, 0.0010)"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={[styles.mapHeader, { paddingTop: insets.top + 10 }]}
-        >
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back" size={22} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Ride to Pickup</Text>
-          <View style={{ width: 40 }} />
-        </LinearGradient>
+        <ScreenHeader
+          absolute
+          zIndex={20}
+          title="Ride to Pickup"
+          subtitle="Head to the passenger's boarding stop"
+          onBack={() => navigation.goBack()}
+        />
       </View>
 
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
@@ -352,43 +347,11 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     backgroundColor: "#EF4444",
-    shadowColor: "#EF4444",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 4,
+    boxShadow: "0 0 8 rgba(239, 68, 68, 0.5)",
   },
   buddyMarkerActive: {
     backgroundColor: COLORS.primary,
     shadowColor: COLORS.primary,
-  },
-
-  /* map header */
-  mapHeader: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    zIndex: 10,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#fff",
-    letterSpacing: -0.3,
   },
 
   /* bottom sheet */
@@ -591,11 +554,7 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     alignItems: "center",
     gap: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 30,
-    elevation: 20,
+    boxShadow: "0 4 30 rgba(0, 0, 0, 0.15)",
   },
   modalIconWrap: {
     marginBottom: 4,

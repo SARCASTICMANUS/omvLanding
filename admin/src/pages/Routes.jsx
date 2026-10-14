@@ -753,7 +753,7 @@ export default function Routes() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div data-scroll className="flex-1 overflow-y-auto p-5 space-y-4">
           {tab === "library" && (
             <div className="space-y-3">
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{routes.length} routes</p>

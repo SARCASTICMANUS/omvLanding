@@ -1,22 +1,19 @@
 import { useState } from "react";
 import {
   LayoutDashboard,
-  MapPin,
-  Route,
-  Compass,
-  StopCircle,
   CalendarClock,
   Users,
   Layers,
   ShieldCheck,
   BarChart3,
-  IndianRupee,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
   Moon,
   Sun,
   Palette,
+  Waypoints,
+  Navigation,
 } from "lucide-react";
 import { applyTheme, getTheme } from "../utils/theme";
 import {
@@ -35,12 +32,16 @@ import {
 const iconMap = {
   dashboard: LayoutDashboard,
   kpi: BarChart3,
-  cities: MapPin,
-  "route-explorer": Compass,
-  routes: Route,
-  stops: StopCircle,
+  // A tab with no entry here renders with no icon at all, and because the label
+  // is laid out right after the (absent) icon it also sits 19px + gap out of
+  // line with every other row.
+  "dynamic-routing": Waypoints,
+  "fixed-routing": Navigation,
+  // `cities`, `route-explorer`, `routes`, `stops` and `fare-configurations` were
+  // removed when they became sub-tabs of FixedRouting. Their icons went with
+  // them; icons for the still-commented `schedules`/`zones` are kept so
+  // un-commenting those tabs restores their look.
   schedules: CalendarClock,
-  "fare-configurations": IndianRupee,
   drivers: ShieldCheck,
   users: Users,
   zones: Layers,

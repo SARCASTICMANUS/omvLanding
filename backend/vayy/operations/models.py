@@ -465,7 +465,13 @@ class FareConfiguration(models.Model):
         verbose_name = "Fare Configuration"
         verbose_name_plural = "Fare Configurations"
         ordering = ["vehicle_type", "-effective_from"]
-        unique_together = (("vehicle_type", "is_active"),)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("vehicle_type",),
+                condition=models.Q(is_active=True),
+                name="unique_active_fare_per_vehicle_type",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.get_vehicle_type_display()} fare (₪{self.base_fare / 100:.2f} + {self.per_km_rate / 100:.2f}/km)"
