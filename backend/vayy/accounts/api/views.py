@@ -16,6 +16,7 @@ from rest_framework.permissions import (
     AllowAny,
 )
 from rest_framework.response import Response
+from rest_framework.decorators import action
 
 from accounts.models import (
     User,
@@ -1202,12 +1203,16 @@ class DriverDocumentAPIView(APIView):
     permission_classes = [IsAuthenticated, IsDriverOrAdmin]
 
     def _target_driver(self, request):
-        user_id = request.query_params.get("user_id")
-        if user_id and (request.user.role == ROLE_ADMIN or request.user.is_staff):
+        user_id = request.query_params.get("user_id") or request.data.get("user_id")
+        is_admin = request.user.role == ROLE_ADMIN or request.user.is_staff
+        if user_id and is_admin:
             try:
-                return User.objects.get(id=user_id)
-            except User.DoesNotExist:
+                target = User.objects.get(id=user_id)
+            except (User.DoesNotExist, ValueError, TypeError):
                 return None
+            return target if target.role in (ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER) else None
+        if user_id and not is_admin:
+            return None
         return request.user
 
     def get(self, request, doc_id=None, **kwargs):
@@ -1260,6 +1265,21 @@ class DriverDocumentAPIView(APIView):
         import base64
         import uuid as uuid_mod
 
+        driver = self._target_driver(request)
+        if driver is None:
+            return Response(
+                {"success": False, "message": "A valid driver user_id is required for admin uploads."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        PublicDriverProfile.objects.get_or_create(
+            user=driver,
+            defaults={
+                "display_name": driver.get_full_name() or driver.email.split("@", 1)[0],
+                "vehicle_type": "bike" if driver.role == ROLE_BIKE_DRIVER else "auto",
+            },
+        )
+
         document_type = request.data.get("document_type", "")
         doc_key = request.data.get("doc_key", "")
         file_obj = request.data.get("file")
@@ -1275,7 +1295,7 @@ class DriverDocumentAPIView(APIView):
         existing_doc = None
         if doc_key:
             existing_doc = DriverDocument.objects.filter(
-                driver=request.user, doc_key=doc_key
+                driver=driver, doc_key=doc_key
             ).first()
 
         if file_base64:
@@ -1298,26 +1318,37 @@ class DriverDocumentAPIView(APIView):
                 existing_doc.verified_at = None
                 existing_doc.save()
                 from accounts.services.verification_service import VerificationService
-                VerificationService.check_and_verify_profile(request.user)
+                VerificationService.check_and_verify_profile(driver)
                 return Response(
                     DriverDocumentSerializer(existing_doc).data,
                     status=status.HTTP_200_OK,
                 )
             doc = DriverDocument.objects.create(
-                driver=request.user,
+                driver=driver,
                 document_type=document_type,
                 doc_key=doc_key or "",
                 file_data=file_base64,
                 file_name=file_name,
             )
             from accounts.services.verification_service import VerificationService
-            VerificationService.check_and_verify_profile(request.user)
+            VerificationService.check_and_verify_profile(driver)
             return Response(
                 DriverDocumentSerializer(doc).data,
                 status=status.HTTP_201_CREATED,
             )
 
         if file_obj:
+            allowed_types = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
+            if getattr(file_obj, "content_type", "") not in allowed_types:
+                return Response(
+                    {"success": False, "message": "Upload a PDF, JPG, PNG, or WEBP file."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if getattr(file_obj, "size", 0) > 10 * 1024 * 1024:
+                return Response(
+                    {"success": False, "message": "Documents must be 10 MB or smaller."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             try:
                 file_bytes = file_obj.read()
                 encoded = base64.b64encode(file_bytes).decode("utf-8")
@@ -1337,20 +1368,20 @@ class DriverDocumentAPIView(APIView):
                 existing_doc.verified_at = None
                 existing_doc.save()
                 from accounts.services.verification_service import VerificationService
-                VerificationService.check_and_verify_profile(request.user)
+                VerificationService.check_and_verify_profile(driver)
                 return Response(
                     DriverDocumentSerializer(existing_doc).data,
                     status=status.HTTP_200_OK,
                 )
             doc = DriverDocument.objects.create(
-                driver=request.user,
+                driver=driver,
                 document_type=document_type,
                 doc_key=doc_key or "",
                 file_data=encoded,
                 file_name=actual_name,
             )
             from accounts.services.verification_service import VerificationService
-            VerificationService.check_and_verify_profile(request.user)
+            VerificationService.check_and_verify_profile(driver)
             return Response(
                 DriverDocumentSerializer(doc).data,
                 status=status.HTTP_201_CREATED,
@@ -1658,6 +1689,24 @@ class UserViewSet(
         resp = super().retrieve(request, *args, **kwargs)
         resp.data = self._add_verification_payload(resp.data)
         return resp
+
+    @action(detail=True, methods=["post"], url_path="send-verification")
+    def send_verification(self, request, pk=None):
+        """Queue a fresh email verification OTP for an admin-selected user."""
+        user = self.get_object()
+        if user.is_verified:
+            return Response({"success": True, "message": "This user's email is already verified."})
+        otp = OTPService.create_otp(user)
+        try:
+            from communication.tasks import send_otp_task
+            send_otp_task.delay(user.id, otp)
+        except Exception:
+            logger.exception("Could not queue verification email for user %s", user.id)
+            return Response(
+                {"success": False, "message": "Could not queue the verification email. Please try again."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({"success": True, "message": f"Verification code queued for {user.email}.", "email": user.email})
 
 
 class PushTokenAPIView(APIView):

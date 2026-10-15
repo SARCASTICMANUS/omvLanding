@@ -1,5 +1,6 @@
 import logging
 import random
+import time
 from decimal import Decimal
 from typing import Dict, Any, List, Optional
 from geopy.distance import distance as geopy_distance
@@ -103,7 +104,7 @@ class DispatchService:
         )
 
     @staticmethod
-    def request_dispatch(passenger: User, route_id: str, pickup_stop_id: str, drop_stop_id: str = None, mode: str = DISPATCH_MODE_BROADCAST) -> Dict[str, Any]:
+    def request_dispatch(passenger: User, route_id: Optional[str], pickup_stop_id: str, drop_stop_id: str = None, mode: str = DISPATCH_MODE_BROADCAST, target_trip_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Initiates a ride request and triggers the matching engine.
         Supports 'direct' and 'broadcast' modes.
@@ -118,7 +119,17 @@ class DispatchService:
             # Find candidates
             candidates = DispatchService.find_best_candidates(route_id, pickup_stop_id)
         else:
-            candidates = DispatchService.find_candidates_for_stop(pickup_stop_id)
+            candidates = DispatchService.find_candidates_for_stop(
+                pickup_stop_id, limit=50 if target_trip_id else 5
+            )
+            if target_trip_id:
+                # A passenger who selected a specific live journey must not be
+                # silently redirected to a different driver. Candidate checks
+                # are still repeated by the accept transaction.
+                candidates = [
+                    candidate for candidate in candidates
+                    if str(getattr(candidate.get("trip"), "id", "")) == str(target_trip_id)
+                ]
 
         if not candidates:
             return {"status": "no_drivers_available", "message": "No drivers found nearby"}
@@ -1034,13 +1045,18 @@ class DispatchService:
                 continue
 
             state = trip.vehicle.state
+            snapshot = RedisGeoService.get_vehicle_snapshot(str(trip.vehicle_id)) or {}
+            try:
+                snapshot_ts = float(snapshot.get("ts"))
+                snapshot_age = time.time() - snapshot_ts
+                current_lat = float(snapshot.get("lat"))
+                current_lng = float(snapshot.get("lng"))
+            except (TypeError, ValueError):
+                continue
+            if snapshot_age > 60:
+                continue
             progress = CorridorService.progress_m(
-                str(trip.id),
-                location=(
-                    (state.current_location.x, state.current_location.y)
-                    if state and state.current_location
-                    else None
-                ),
+                str(trip.id), location=(current_lng, current_lat)
             )
             # Already past the stop: cannot serve a hand raised there.
             if not CorridorService.is_stop_ahead(str(trip.id), stop_id, progress):
@@ -1053,12 +1069,10 @@ class DispatchService:
 
             stop = Stop.objects.filter(id=stop_id).only("location").first()
             distance_km = None
-            if state and state.current_location and stop:
+            if stop:
                 distance_km = round(
-                    geopy_distance(
-                        (state.current_location.y, state.current_location.x),
-                        (stop.location.y, stop.location.x),
-                    ).km,
+                    geopy_distance((current_lat, current_lng),
+                                   (stop.location.y, stop.location.x)).km,
                     2,
                 )
 
@@ -1494,7 +1508,7 @@ class DispatchService:
         }
 
     @staticmethod
-    def settle_journey_passengers(trip: ActiveTrip) -> Dict[str, Any]:
+    def settle_journey_passengers(trip: ActiveTrip, boarding_request_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Settle every boarded passenger on a finished journey.
 
@@ -1516,9 +1530,11 @@ class DispatchService:
             trip.route.name if trip.route_id else None
         )
 
+        boarding_queryset = BoardingRequest.objects.filter(trip=trip, status=BOARDING_BOARDED)
+        if boarding_request_id:
+            boarding_queryset = boarding_queryset.filter(id=boarding_request_id)
         boarding_requests = list(
-            BoardingRequest.objects.filter(trip=trip, status=BOARDING_BOARDED)
-            .select_related("passenger", "pickup_stop", "drop_stop")
+            boarding_queryset.select_related("passenger", "pickup_stop", "drop_stop")
         )
 
         settled: List[Dict[str, Any]] = []
@@ -1654,21 +1670,93 @@ class DispatchService:
         return DispatchService.update_trip_status(trip_id, TRIP_STATUS_REJECTED, driver)
 
     @staticmethod
-    def arrived_at_pickup(trip_id: str, driver: User):
+    def arrived_at_pickup(trip_id: str, driver: User, boarding_request_id: Optional[str] = None):
+        trip = ActiveTrip.objects.get(id=trip_id)
+        if trip.driver_id != driver.id:
+            raise PermissionDenied("Not your trip")
+        if trip.is_journey:
+            boarding = BoardingRequest.objects.filter(
+                id=boarding_request_id, trip=trip, status=BOARDING_PENDING
+            ).first() if boarding_request_id else None
+            if not boarding:
+                raise PermissionDenied("A pending passenger boarding is required for arrival.")
+            DispatchService._notify_ws(f"dispatch_{trip.id}", "dispatch_update", {
+                "type": "passenger_arrived", "status": "arrived",
+                "trip_id": str(trip.id), "boarding_request_id": str(boarding.id),
+            })
+            return trip
         return DispatchService.update_trip_status(trip_id, TRIP_STATUS_ARRIVED, driver)
 
     @staticmethod
-    def start_trip(trip_id: str, driver: User, otp: str = None):
+    def start_trip(trip_id: str, driver: User, otp: str = None, boarding_request_id: Optional[str] = None):
         trip = ActiveTrip.objects.get(id=trip_id)
         if trip.driver != driver:
             raise ValueError("Not your trip")
+        if trip.is_journey:
+            if not boarding_request_id:
+                raise ValueError("A boarding request ID is required to verify this passenger.")
+            boarding = BoardingRequest.objects.filter(id=boarding_request_id, trip=trip, status=BOARDING_PENDING).first()
+            if not boarding:
+                raise ValueError("This passenger request is no longer awaiting pickup.")
+            if not otp or not boarding.otp or boarding.otp != str(otp):
+                raise ValueError("Invalid Safety Code")
+            from operations.services.boarding_service import BoardingService
+            BoardingService.mark_boarded(str(boarding.id))
+            DispatchService._notify_ws(f"dispatch_{trip.id}", "dispatch_update", {
+                "type": "passenger_boarded", "status": "active", "trip_id": str(trip.id),
+                "boarding_request_id": str(boarding.id),
+            })
+            return trip
         if trip.otp and otp and trip.otp != otp:
             raise ValueError("Invalid Safety Code")
         return DispatchService.update_trip_status(trip_id, TRIP_STATUS_ACTIVE, driver)
 
     @staticmethod
-    def complete_trip(trip_id: str, user: User):
+    def complete_trip(trip_id: str, user: User, boarding_request_id: Optional[str] = None):
         trip = ActiveTrip.objects.select_related("vehicle", "route").get(id=trip_id)
+        if trip.is_journey:
+            if user.id == trip.driver_id and not boarding_request_id:
+                raise PermissionDenied("boarding_request_id is required.")
+            q = BoardingRequest.objects.filter(trip=trip, status=BOARDING_BOARDED)
+            if user.id == trip.driver_id:
+                q = q.filter(id=boarding_request_id)
+            else:
+                q = q.filter(passenger=user)
+            boarding = q.first()
+            if not boarding:
+                done_q = BoardingRequest.objects.filter(trip=trip, status=BOARDING_COMPLETED)
+                done_q = done_q.filter(id=boarding_request_id) if user.id == trip.driver_id else done_q.filter(passenger=user)
+                done = done_q.first()
+                if done:
+                    return {
+                        "trip_id": str(trip.id),
+                        "boarding_request_id": str(done.id),
+                        "status": "completed",
+                        "fare": float(done.fare) if done.fare is not None else None,
+                        "segment_distance_m": done.segment_distance_m,
+                        "segment_duration_s": done.segment_duration_s,
+                        "already_completed": True,
+                    }
+                raise PermissionDenied("No active passenger boarding.")
+            result = DispatchService.settle_journey_passengers(trip, str(boarding.id))
+            item = next((x for x in result.get("settled", []) if str(x.get("boarding_request_id")) == str(boarding.id)), None)
+            if item:
+                DispatchService._notify_ws(f"dispatch_{trip.id}", "dispatch_update", {
+                    "type": "passenger_segment_completed", "status": "completed",
+                    "trip_id": str(trip.id), "boarding_request_id": str(boarding.id),
+                    "fare": item.get("fare"), "segment_distance_m": item.get("segment_distance_m"),
+                    "segment_duration_s": item.get("segment_duration_s"),
+                })
+            return {
+                "trip_id": str(trip.id),
+                "boarding_request_id": str(boarding.id),
+                "status": "completed" if item else "partially_settled",
+                "fare": item.get("fare") if item else None,
+                "segment_distance_m": item.get("segment_distance_m") if item else None,
+                "segment_duration_s": item.get("segment_duration_s") if item else None,
+                "settled": item,
+                "outstanding": result.get("outstanding", []),
+            }
         # Calculate fare from OSRM if not already set
         if trip.total_fare is None:
             from transport.services.osrm_service import OSRMService

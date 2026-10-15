@@ -1,6 +1,6 @@
 ================================================================================
 T-round 3 — Recent searches, route polyline, map warning, push noise
-Target: emulator-5554, com.onmyvayy.app, ccdeepak864@gmail.com (id 169)
+Target: Android emulator, application package com.onmyvayy.app (test-account identifiers intentionally omitted)
 Date: 2026-10-13
 ================================================================================
 

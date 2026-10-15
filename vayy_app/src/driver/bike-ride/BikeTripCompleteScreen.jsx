@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  Dimensions,
   Platform,
   ScrollView,
   StatusBar,
@@ -16,29 +15,33 @@ import { RIDE } from "../../constants";
 import COLORS from "../../shared/constants/colors";
 import { buildFareBreakdown } from "../../shared/services/fareEstimationService";
 
-const { width } = Dimensions.get("window");
 
 export default function BikeTripCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const buddy = route.params?.buddy || {};
   const tripData = route.params?.tripData || {};
   const dispatchId = route.params?.dispatchId || buddy?.dispatchId || tripData?.dispatch_id;
+  const boardingRequestId = route.params?.boardingRequestId || buddy?.boardingRequestId || null;
 
-  const distanceNum = Number(buddy.distance) || Number(tripData.distance) || 0;
+  const distanceNum = boardingRequestId
+    ? (Number(tripData.distance) || 0)
+    : (Number(buddy.distance) || Number(tripData.distance) || 0);
   const riderRating = Number(buddy.rating) || Number(tripData.rating) || 0;
 
   const [fareData, setFareData] = useState(null);
 
   useEffect(() => {
-    if (!dispatchId) return;
+    if (!dispatchId || boardingRequestId) return;
     api.get(RIDE.tripFare(dispatchId)).then((res) => {
       const d = res.data?.data || res.data;
       if (d) setFareData(d);
     }).catch(() => {});
-  }, [dispatchId]);
+  }, [dispatchId, boardingRequestId]);
 
-  const fare = fareData?.total_fare || Number(buddy.fare) || Number(tripData.fare) || 0;
-  const breakdown = buildFareBreakdown({ distanceKm: distanceNum, vehicleType: "bike", fareData, totalFare: fare || null });
+  const fare = boardingRequestId
+    ? (tripData.fare != null ? Number(tripData.fare) : null)
+    : (fareData?.total_fare ?? Number(buddy.fare) ?? Number(tripData.fare) ?? null);
+  const breakdown = buildFareBreakdown({ distanceKm: distanceNum, vehicleType: "bike", fareData: boardingRequestId ? null : fareData, totalFare: fare });
   const baseFare = breakdown.baseFare;
   const distanceFare = breakdown.distanceFare;
   const perKmRate = breakdown.perKmRate;
@@ -159,7 +162,7 @@ export default function BikeTripCompleteScreen({ navigation, route }) {
               />
             ))}
           </View>
-          <Text style={styles.feedbackText}>"{buddy.feedback || "Thanks for riding!"}"</Text>
+          <Text style={styles.feedbackText}>{buddy.feedback || "Thanks for riding!"}</Text>
           <View style={styles.feedbackAuthor}>
             <Ionicons name="chatbubble-ellipses" size={14} color={COLORS.primary} />
             <Text style={styles.feedbackAuthorText}>— {buddy?.name || "Passenger"}</Text>

@@ -134,24 +134,34 @@ services:
 
   osrm-download:
     image: alpine:3.20
-    container_name: vayy-osrm-download
     restart: "no"
+    environment:
+      OSRM_REGION: ${OSRM_REGION:-india}
     volumes:
       - ./backend/vayy/osrm:/data
-    command: >
-      sh -c "if [ ! -f /data/map.osm.pbf ]; then
-               echo 'Downloading central-zone map...';
-               wget -q -O /data/map.osm.pbf.tmp https://download.geofabrik.de/asia/india/central-zone-latest.osm.pbf &&
-               mv /data/map.osm.pbf.tmp /data/map.osm.pbf &&
-               echo 'Map downloaded to /data/map.osm.pbf';
-             else
-               echo 'map.osm.pbf already present, skipping download';
-             fi"
+    command:
+      - sh
+      - -c
+      - |
+        REGION="$${OSRM_REGION:-india}"
+        mkdir -p "/data/$$REGION"
+        if [ ! -f "/data/$$REGION/map.osm.pbf" ]; then
+          echo "Downloading OpenStreetMap region: $$REGION"
+          if [ "$$REGION" = "india" ]; then
+            URL="https://download.geofabrik.de/asia/india-latest.osm.pbf"
+          else
+            URL="https://download.geofabrik.de/asia/india/$$REGION-latest.osm.pbf"
+          fi
+          wget -q -O "/data/$$REGION/map.osm.pbf.tmp" "$$URL" &&
+            mv "/data/$$REGION/map.osm.pbf.tmp" "/data/$$REGION/map.osm.pbf"
+        else
+          echo "OSM extract $$REGION already exists"
+        fi
 
   osrm:
     image: osrm/osrm-backend:latest
-    container_name: vayy-osrm
-    restart: unless-stopped
+    environment:
+      OSRM_REGION: ${OSRM_REGION:-india}
     ports:
       - "5000:5000"
     volumes:
@@ -159,15 +169,21 @@ services:
     depends_on:
       osrm-download:
         condition: service_completed_successfully
-    command: >
-      sh -c "if [ ! -f /data/map.osrm ]; then
-               echo 'Extracting map (one-time, may take a while)...';
-               osrm-extract -p /opt/car.lua /data/map.osm.pbf &&
-               osrm-partition /data/map.osrm &&
-               osrm-customize /data/map.osrm &&
-               echo 'Map extracted.';
-             fi &&
-             exec osrm-routed --algorithm mld /data/map.osrm"
+    command:
+      - sh
+      - -c
+      - |
+        REGION="$${OSRM_REGION:-india}"
+        mkdir -p "/data/$$REGION"
+        if [ ! -f "/data/$$REGION/map.osrm.ready" ]; then
+          echo "Preparing map for $$REGION (one-time, may take a while)"
+          rm -f "/data/$$REGION"/map.osrm*
+          osrm-extract -p /opt/car.lua "/data/$$REGION/map.osm.pbf" &&
+            osrm-partition "/data/$$REGION/map.osrm" &&
+            osrm-customize "/data/$$REGION/map.osrm" &&
+            touch "/data/$$REGION/map.osrm.ready"
+        fi
+        exec osrm-routed --algorithm mld "/data/$$REGION/map.osrm"
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/5000' 2>/dev/null || exit 1"]
       interval: 30s

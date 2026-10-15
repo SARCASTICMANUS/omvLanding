@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 PATH_PREFIX = "vayy:journey:path"
 ORDERED_STOPS_PREFIX = "vayy:journey:ordered_stops"
 PASSING_TRIPS_PREFIX = "vayy:stop:passing_trips"
+ACTIVE_JOURNEYS_KEY = "vayy:journey:active"
 
 
 class JourneyCacheService:
@@ -96,6 +97,7 @@ class JourneyCacheService:
                 json.dumps(ordered_stops),
                 ex=ttl,
             )
+            pipe.sadd(ACTIVE_JOURNEYS_KEY, str(trip_id))
             for stop in ordered_stops:
                 key = cls.passing_trips_key(stop["stop_id"])
                 pipe.sadd(key, str(trip_id))
@@ -114,6 +116,28 @@ class JourneyCacheService:
             return False
 
     # ── read path ──────────────────────────────────────────────
+
+    @classmethod
+    def get_active_trip_ids(cls) -> List[str]:
+        """Redis index of currently discoverable free-form journeys."""
+        try:
+            client = cache.client.get_client()
+            active_ids = [cls._decode(value) for value in client.smembers(ACTIVE_JOURNEYS_KEY) or []]
+            if active_ids:
+                return active_ids
+            # One-time recovery for journeys that were already active before
+            # this Redis index was introduced (or after an index-only flush).
+            from operations.models import ActiveTrip
+            from common.constants import TRIP_STATUS_ACTIVE
+            active_ids = [str(value) for value in ActiveTrip.objects.filter(
+                status=TRIP_STATUS_ACTIVE, route__isnull=True
+            ).values_list("id", flat=True)]
+            if active_ids:
+                client.sadd(ACTIVE_JOURNEYS_KEY, *active_ids)
+            return active_ids
+        except Exception as exc:
+            logger.warning("Active journey index read failed: %s", exc)
+            return []
 
     @classmethod
     def get_journey(cls, trip_id: str) -> Optional[Dict[str, Any]]:
@@ -220,6 +244,7 @@ class JourneyCacheService:
             pipe = client.pipeline()
             for stop in cls.get_ordered_stops(trip_id):
                 pipe.srem(cls.passing_trips_key(stop["stop_id"]), str(trip_id))
+            pipe.srem(ACTIVE_JOURNEYS_KEY, str(trip_id))
             pipe.delete(cls.path_key(trip_id))
             pipe.delete(cls.ordered_stops_key(trip_id))
             pipe.execute()

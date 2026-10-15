@@ -1,6 +1,55 @@
 import api, { normalizeApiError } from "../../shared/lib/api";
 import { dynamicPreview } from "../../routes/services/routeService";
-import { OPERATIONS, TRANSPORT } from "../../constants";
+import { OPERATIONS, TRANSPORT, TRACKING } from "../../constants";
+
+
+export const previewJourney = async ({ origin, destination }) => {
+  try {
+    const response = await api.post(TRACKING.journeyPreview, { origin, destination });
+    return response.data?.data ?? response.data;
+  } catch (error) {
+    throw normalizeApiError(error, "Unable to preview this journey.");
+  }
+};
+
+export const startJourney = async ({ vehicleId, origin, destination, originName, destinationName }) => {
+  try {
+    const response = await api.post(TRACKING.journeyStart, {
+      vehicle_id: String(vehicleId), origin, destination,
+      origin_name: originName || "", destination_name: destinationName || "",
+    });
+    return response.data?.data ?? response.data;
+  } catch (error) {
+    throw normalizeApiError(error, "Unable to start this journey.");
+  }
+};
+
+export const getActiveJourney = async () => {
+  try {
+    const response = await api.get(TRACKING.journeyActive);
+    return response.data?.data ?? null;
+  } catch (error) {
+    throw normalizeApiError(error, "Unable to restore your active journey.");
+  }
+};
+
+export const getJourney = async (tripId) => {
+  try {
+    const response = await api.get(TRACKING.journeyDetail(tripId));
+    return response.data?.data ?? response.data;
+  } catch (error) {
+    throw normalizeApiError(error, "Unable to load this journey.");
+  }
+};
+
+export const endJourney = async (tripId, { cancel = false } = {}) => {
+  try {
+    const response = await api.post(TRACKING.journeyEnd, { trip_id: String(tripId), cancel });
+    return response.data?.data ?? response.data;
+  } catch (error) {
+    throw normalizeApiError(error, "Unable to end this journey.");
+  }
+};
 
 export const getDriverRoutes = async () => {
   try {
@@ -72,6 +121,11 @@ export const getNearbyPassengers = async (routeId) => {
 };
 
 export default {
+  previewJourney,
+  startJourney,
+  getActiveJourney,
+  getJourney,
+  endJourney,
   getDriverRoutes,
   startTrip,
   getNextStops,

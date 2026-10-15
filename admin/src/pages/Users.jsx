@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users as UsersIcon, UserCheck, Search, Mail, ShieldCheck, Eye, Phone, MapPin, Wallet, Truck, Star, Settings, Plus, Edit3, Trash2, Save, X, FileText, ExternalLink } from "lucide-react";
+import { Users as UsersIcon, UserCheck, Search, Mail, ShieldCheck, Eye, Phone, MapPin, Wallet, Truck, Star, Settings, Plus, Edit3, Trash2, Save, X, FileText, ExternalLink, Upload } from "lucide-react";
 import api from "../api/client";
 import Loader from "../components/Loader";
 import EmptyState from "../components/EmptyState";
@@ -149,6 +149,11 @@ export default function Users() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", password: "", role: "passenger", is_staff: false });
   const [saving, setSaving] = useState(false);
+  const [verificationNotice, setVerificationNotice] = useState(null);
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [documentSlot, setDocumentSlot] = useState("dlFront");
+  const [documentFile, setDocumentFile] = useState(null);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
 
   const fetchUsers = () => {
     setLoading(true);
@@ -203,7 +208,13 @@ export default function Users() {
       if (editing) {
         await api.patch(`/accounts/users/${editing.id}/`, payload);
       } else {
-        await api.post("/accounts/users/", payload);
+        const response = await api.post("/accounts/users/", payload);
+        const created = response.data?.data || response.data;
+        setVerificationNotice({
+          user: created,
+          message: `Account created for ${created.email}. A verification code was generated for email verification. If it does not arrive, you can resend it below.`,
+          sent: true,
+        });
       }
       setModal(false);
       fetchUsers();
@@ -276,6 +287,48 @@ export default function Users() {
   const closeUserDetails = () => {
     setSelectedUser(null);
     setUserDetails(null);
+  };
+
+  const resendVerification = async () => {
+    if (!verificationNotice?.user?.id) return;
+    setResendingVerification(true);
+    try {
+      const res = await api.post(`/accounts/users/${verificationNotice.user.id}/send-verification/`);
+      setVerificationNotice((current) => ({ ...current, sent: true, message: res.data?.message || `Verification email queued for ${current.user.email}.` }));
+    } catch (err) {
+      setVerificationNotice((current) => ({ ...current, sent: false, message: err.response?.data?.message || "Could not queue the verification email. Please try again." }));
+    } finally {
+      setResendingVerification(false);
+    }
+  };
+
+  const uploadDriverDocument = async (e) => {
+    e.preventDefault();
+    if (!selectedUser || !documentFile || !["bikedriver", "autodriver"].includes(userDetails?.role)) return;
+    const body = new FormData();
+    body.append("user_id", String(selectedUser));
+    const slotTypes = {
+      dlFront: "LICENSE", dlBack: "LICENSE",
+      rcFront: "RC", rcBack: "RC",
+      insuranceFront: "INSURANCE", insuranceBack: "INSURANCE",
+      aadhaarFront: "IDENTITY", aadhaarBack: "IDENTITY", selfie: "IDENTITY",
+    };
+    body.append("document_type", slotTypes[documentSlot]);
+    body.append("doc_key", documentSlot);
+    body.append("file", documentFile);
+    body.append("file_name", documentFile.name);
+    setUploadingDocument(true);
+    try {
+      await api.post(`/accounts/driver/documents/?user_id=${encodeURIComponent(selectedUser)}`, body);
+      setDocumentFile(null);
+      await fetchUserDetails(selectedUser);
+      fetchUsers();
+      alert("Document uploaded. It is now pending admin review.");
+    } catch (err) {
+      alert(err.response?.data?.message || err.response?.data?.detail || "Document upload failed.");
+    } finally {
+      setUploadingDocument(false);
+    }
   };
 
   return (
@@ -453,6 +506,27 @@ export default function Users() {
         </div>
       )}
 
+      {verificationNotice && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-md p-4" role="dialog" aria-modal="true" aria-labelledby="verification-modal-title">
+          <div className="glass-card-strong w-full max-w-md p-6" style={{ borderRadius: "24px" }}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: "rgb(var(--accent-blue-rgb) / 0.10)" }}>
+                <Mail size={22} style={{ color: "var(--accent-blue)" }} />
+              </div>
+              <div>
+                <h2 id="verification-modal-title" className="text-xl font-semibold text-slate-800">Email verification</h2>
+                <p className="text-xs text-slate-500">{verificationNotice.user?.email}</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 mb-5">{verificationNotice.message}</p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              {!verificationNotice.user?.is_verified && <button type="button" onClick={resendVerification} disabled={resendingVerification} className="glass-btn-primary flex-1 py-3 disabled:opacity-50">{resendingVerification ? "Sending..." : "Send verification email again"}</button>}
+              <button type="button" onClick={() => setVerificationNotice(null)} className="glass-btn-secondary flex-1 py-3">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
           <div className="glass-card-strong max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-glass-fade-in" style={{ borderRadius: "24px" }}>
@@ -557,12 +631,26 @@ export default function Users() {
                     </div>
                   )}
 
-                  {userDetails.documents?.length > 0 && (
+                  {(userDetails.role === "bikedriver" || userDetails.role === "autodriver") && (
                     <div className="glass-card-subtle rounded-2xl p-5">
                       <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
                         <ShieldCheck size={20} /> KYC Documents
                       </h3>
-                      <div className="space-y-3">
+                      <form onSubmit={uploadDriverDocument} className="mb-5 grid grid-cols-1 sm:grid-cols-[1fr_1.4fr_auto] gap-3 items-end">
+                        <label className="space-y-1.5"><span className="glass-label">Document type</span>
+                          <select value={documentSlot} onChange={(e) => setDocumentSlot(e.target.value)} className="glass-select w-full">
+                            <option value="dlFront">Driving License — Front</option><option value="dlBack">Driving License — Back</option>
+                            <option value="rcFront">Registration Certificate — Front</option><option value="rcBack">Registration Certificate — Back</option>
+                            <option value="insuranceFront">Vehicle Insurance — Front</option><option value="insuranceBack">Vehicle Insurance — Back</option>
+                            <option value="aadhaarFront">Identity Proof — Front</option><option value="aadhaarBack">Identity Proof — Back</option><option value="selfie">Selfie Verification</option>
+                          </select>
+                        </label>
+                        <label className="space-y-1.5"><span className="glass-label">Choose file (PDF/JPG/PNG/WEBP, max 10 MB)</span>
+                          <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setDocumentFile(e.target.files?.[0] || null)} required className="glass-input w-full text-xs" />
+                        </label>
+                        <button type="submit" disabled={!documentFile || uploadingDocument} className="glass-btn-primary py-3 flex items-center justify-center gap-2 disabled:opacity-50"><Upload size={15} /> {uploadingDocument ? "Uploading..." : "Upload"}</button>
+                      </form>
+                      {(!userDetails.documents || userDetails.documents.length === 0) ? <p className="text-sm text-slate-500">No documents uploaded yet.</p> : <div className="space-y-3">
                         {userDetails.documents.map((doc) => {
                           const st = String(doc.status || "").toLowerCase();
                           return (
@@ -611,7 +699,7 @@ export default function Users() {
                             </div>
                           );
                         })}
-                      </div>
+                      </div>}
                     </div>
                   )}
                 </div>

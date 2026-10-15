@@ -374,6 +374,11 @@ class TestPassingVehicles(JourneyTestBase):
         state = VehicleState.objects.get(vehicle=self.vehicle)
         state.current_location = Point(80.9, 26.88, srid=4326)
         state.save(update_fields=["current_location"])
+        from tracking.services.redis_geo_service import RedisGeoService
+        RedisGeoService.set_vehicle_snapshot(
+            str(self.vehicle.id), 26.88, 80.9,
+            trip_id=str(state.active_trip_id) if state.active_trip_id else None,
+        )
 
         self.assertEqual(DispatchService.find_candidates_for_stop(str(stop.id)), [])
 
@@ -385,6 +390,11 @@ class TestPassingVehicles(JourneyTestBase):
         state = VehicleState.objects.get(vehicle=self.vehicle)
         state.current_location = Point(80.9, 26.82, srid=4326)
         state.save(update_fields=["current_location"])
+        from tracking.services.redis_geo_service import RedisGeoService
+        RedisGeoService.set_vehicle_snapshot(
+            str(self.vehicle.id), 26.82, 80.9,
+            trip_id=str(state.active_trip_id) if state.active_trip_id else None,
+        )
 
         candidates = DispatchService.find_candidates_for_stop(str(stop.id))
         self.assertEqual(len(candidates), 1)
@@ -1103,10 +1113,11 @@ class TestCorridorVehicleSearch(JourneyTestBase):
             )
 
     def test_returns_the_live_vehicle_on_the_route(self):
-        stop = self.make_stop("Mid Stop", NEAR_STOP)
+        pickup_stop = self.make_stop("Pickup Stop", NEAR_STOP)
+        self.make_stop("Drop Stop", FAR_STOP)
         self.start_journey()
 
-        response = self.search()
+        response = self.search(origin=NEAR_STOP, destination=FAR_STOP)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.data["data"]
@@ -1120,8 +1131,8 @@ class TestCorridorVehicleSearch(JourneyTestBase):
         # is shown, so it is what the card must carry.
         self.assertEqual(vehicle["driver_name"], "Journey Driver")
         # The boarding stop is the one the passenger would actually walk to.
-        self.assertEqual(vehicle["board_stop"]["id"], str(stop.id))
-        self.assertEqual(vehicle["board_stop"]["name"], "Mid Stop")
+        self.assertEqual(vehicle["board_stop"]["id"], str(pickup_stop.id))
+        self.assertEqual(vehicle["board_stop"]["name"], "Pickup Stop")
 
     def test_returns_the_resolved_path_and_stops(self):
         """The app draws the corridor, so the geometry has to come back too."""
@@ -1145,18 +1156,22 @@ class TestCorridorVehicleSearch(JourneyTestBase):
         self.assertEqual(response.data["data"]["vehicles"], [])
 
     def test_vehicle_past_the_stop_is_excluded(self):
-        """A driver already beyond the boarding stop cannot pick the passenger
-        up, so offering them is a choice that cannot be taken."""
-        self.make_stop("Mid Stop", NEAR_STOP)
-        self.start_journey()
+        """A driver already beyond the pickup cannot be offered that ride."""
+        self.make_stop("Pickup Stop", NEAR_STOP)
+        self.make_stop("Drop Stop", FAR_STOP)
+        journey = self.start_journey()
 
-        trip = ActiveTrip.objects.get(id=ActiveTrip.objects.get(vehicle=self.vehicle).id)
-        # Push the driver to the end of the path, past the only stop.
+        # Both durable state and the live Redis snapshot are updated by the GPS
+        # pipeline; update both here to simulate a real vehicle that has moved.
         VehicleState.objects.filter(vehicle=self.vehicle).update(
-            current_location=Point(ORIGIN[1], ORIGIN[0], srid=4326)
+            current_location=Point(DESTINATION[1], DESTINATION[0], srid=4326)
+        )
+        from tracking.services.redis_geo_service import RedisGeoService
+        RedisGeoService.set_vehicle_snapshot(
+            str(self.vehicle.id), DESTINATION[0], DESTINATION[1], trip_id=journey["trip_id"]
         )
 
-        response = self.search()
+        response = self.search(origin=NEAR_STOP, destination=FAR_STOP)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Either excluded outright, or still offered because progress could not
@@ -1212,7 +1227,8 @@ class TestCorridorVehicleSearch(JourneyTestBase):
 
     def test_two_journeys_on_one_corridor_both_appear(self):
         """Two drivers running the same road are two real choices."""
-        self.make_stop("Mid Stop", NEAR_STOP)
+        self.make_stop("Pickup Stop", NEAR_STOP)
+        self.make_stop("Drop Stop", FAR_STOP)
         self.start_journey()
 
         second_driver = self.make_driver("corridor-driver-2")
@@ -1231,7 +1247,7 @@ class TestCorridorVehicleSearch(JourneyTestBase):
                 destination=DESTINATION,
             )
 
-        data = self.search().data["data"]
+        data = self.search(origin=NEAR_STOP, destination=FAR_STOP).data["data"]
 
         self.assertEqual(len(data["vehicles"]), 2)
         numbers = {v["vehicle_number"] for v in data["vehicles"]}
@@ -1248,7 +1264,8 @@ class TestCorridorEtaAndNamesAreHonest(JourneyTestBase):
     """
 
     def test_driver_name_uses_the_profile_not_get_full_name(self):
-        self.make_stop("Mid Stop", NEAR_STOP)
+        self.make_stop("Pickup Stop", NEAR_STOP)
+        self.make_stop("Drop Stop", FAR_STOP)
         self.start_journey()
 
         api = APIClient()
@@ -1260,8 +1277,8 @@ class TestCorridorEtaAndNamesAreHonest(JourneyTestBase):
             data = api.post(
                 reverse("corridor-vehicles"),
                 {
-                    "origin": {"lat": ORIGIN[0], "lng": ORIGIN[1]},
-                    "destination": {"lat": DESTINATION[0], "lng": DESTINATION[1]},
+                    "origin": {"lat": NEAR_STOP[0], "lng": NEAR_STOP[1]},
+                    "destination": {"lat": FAR_STOP[0], "lng": FAR_STOP[1]},
                 },
                 format="json",
             ).data["data"]
@@ -1271,7 +1288,8 @@ class TestCorridorEtaAndNamesAreHonest(JourneyTestBase):
 
     def test_eta_is_minutes_not_seconds(self):
         """eta_to_stop_s returns seconds; the field the app renders is minutes."""
-        self.make_stop("Mid Stop", NEAR_STOP)
+        self.make_stop("Pickup Stop", NEAR_STOP)
+        self.make_stop("Drop Stop", FAR_STOP)
         self.start_journey()
 
         api = APIClient()
@@ -1283,8 +1301,8 @@ class TestCorridorEtaAndNamesAreHonest(JourneyTestBase):
             data = api.post(
                 reverse("corridor-vehicles"),
                 {
-                    "origin": {"lat": ORIGIN[0], "lng": ORIGIN[1]},
-                    "destination": {"lat": DESTINATION[0], "lng": DESTINATION[1]},
+                    "origin": {"lat": NEAR_STOP[0], "lng": NEAR_STOP[1]},
+                    "destination": {"lat": FAR_STOP[0], "lng": FAR_STOP[1]},
                 },
                 format="json",
             ).data["data"]
@@ -1295,3 +1313,228 @@ class TestCorridorEtaAndNamesAreHonest(JourneyTestBase):
         # the same estimate would be in the hundreds.
         self.assertGreater(eta, 0)
         self.assertLess(eta, 180, f"ETA looks like seconds, not minutes: {eta}")
+
+
+class TestPassengerSegmentCompletion(JourneyTestBase):
+    """A rider completes their segment without ending the shared journey."""
+
+    def _wallet(self, user, amount="500.00"):
+        Wallet.objects.create(user=user, balance=Decimal(amount), currency="INR")
+
+    def _request_and_accept(self, passenger, pickup, drop):
+        request_id = self.raise_hand(passenger, pickup, drop=drop).data["data"]["request_id"]
+        response = self.accept_as_driver(request_id)
+        self.assertEqual(response.data["status"], "accepted", response.data)
+        return response.data
+
+    def test_wrong_otp_does_not_board_the_passenger(self):
+        pickup = self.make_stop("OTP Pickup", NEAR_STOP)
+        drop = self.make_stop("OTP Drop", FAR_STOP)
+        journey = self.start_journey()
+        accepted = self._request_and_accept(self.passenger, pickup, drop)
+        boarding = BoardingRequest.objects.get(id=accepted["boarding_request_id"])
+
+        with self.assertRaisesRegex(ValueError, "Invalid Safety Code"):
+            DispatchService.start_trip(
+                journey["trip_id"], self.driver, otp="0000",
+                boarding_request_id=str(boarding.id),
+            )
+
+        boarding.refresh_from_db()
+        self.assertEqual(boarding.status, BOARDING_PENDING)
+
+    def test_each_passenger_segment_settles_independently_and_retry_is_idempotent(self):
+        pickup = self.make_stop("Segment Pickup", NEAR_STOP)
+        middle = self.make_stop("Segment Middle", (26.8600, 80.9000))
+        drop = self.make_stop("Segment Drop", FAR_STOP)
+        journey = self.start_journey()
+
+        second_passenger = User.objects.create_user(
+            email="segment-passenger-2", password="password", role="passenger"
+        )
+        self._wallet(self.passenger)
+        self._wallet(second_passenger)
+        self._wallet(self.driver, "0.00")
+
+        first = self._request_and_accept(self.passenger, pickup, middle)
+        second = self._request_and_accept(second_passenger, middle, drop)
+        first_id = str(first["boarding_request_id"])
+        second_id = str(second["boarding_request_id"])
+
+        DispatchService.start_trip(
+            journey["trip_id"], self.driver, otp=first["otp"],
+            boarding_request_id=first_id,
+        )
+        DispatchService.start_trip(
+            journey["trip_id"], self.driver, otp=second["otp"],
+            boarding_request_id=second_id,
+        )
+
+        with patch.object(DispatchService, "_notify_ws") as notify:
+            first_result = DispatchService.complete_trip(
+                journey["trip_id"], self.driver, boarding_request_id=first_id
+            )
+
+        self.assertEqual(first_result["status"], "completed")
+        self.assertGreater(first_result["fare"], 0)
+        self.assertGreater(first_result["segment_distance_m"], 0)
+        self.assertGreater(first_result["segment_duration_s"], 0)
+        self.assertEqual(notify.call_count, 1)
+        self.assertEqual(notify.call_args.args[2]["boarding_request_id"], first_id)
+
+        first_boarding = BoardingRequest.objects.get(id=first_id)
+        second_boarding = BoardingRequest.objects.get(id=second_id)
+        self.assertEqual(first_boarding.status, BOARDING_COMPLETED)
+        self.assertEqual(second_boarding.status, BOARDING_BOARDED)
+
+        transaction_count = Transaction.objects.count()
+        retry = DispatchService.complete_trip(
+            journey["trip_id"], self.driver, boarding_request_id=first_id
+        )
+        self.assertTrue(retry["already_completed"])
+        self.assertEqual(retry["fare"], first_result["fare"])
+        self.assertEqual(Transaction.objects.count(), transaction_count)
+        self.assertEqual(second_boarding.status, BOARDING_BOARDED)
+
+        second_result = DispatchService.complete_trip(
+            journey["trip_id"], self.driver, boarding_request_id=second_id
+        )
+        self.assertEqual(second_result["status"], "completed")
+        self.assertGreater(second_result["fare"], 0)
+        self.assertEqual(
+            BoardingRequest.objects.get(id=second_id).status, BOARDING_COMPLETED
+        )
+        # The shared trip is still active; only ending the driver's journey ends it.
+        self.assertEqual(ActiveTrip.objects.get(id=journey["trip_id"]).status, TRIP_STATUS_ACTIVE)
+
+
+class TestCompleteBikeJourneyAPIFlow(JourneyTestBase):
+    """Exercise the driver/passenger bike journey from HTTP start to settlement."""
+
+    def test_full_driver_passenger_api_flow(self):
+        import hashlib
+        import json
+        from django.core.cache import cache
+
+        # Delete only this deterministic corridor cache entry after the test;
+        # never flush the shared Redis DB, which may also serve the running app.
+        cache_material = json.dumps([
+            round(float(NEAR_STOP[0]), 5), round(float(NEAR_STOP[1]), 5),
+            round(float(FAR_STOP[0]), 5), round(float(FAR_STOP[1]), 5), 5000,
+        ], separators=(",", ":"))
+        corridor_cache_key = "vayy:corridor-search:" + hashlib.sha1(
+            cache_material.encode()
+        ).hexdigest()
+        self.addCleanup(cache.delete, corridor_cache_key)
+
+        pickup = self.make_stop("E2E Pickup", NEAR_STOP)
+        drop = self.make_stop("E2E Drop", FAR_STOP)
+        Wallet.objects.create(
+            user=self.passenger, balance=Decimal("500.00"), currency="INR"
+        )
+        Wallet.objects.create(
+            user=self.driver, balance=Decimal("0.00"), currency="INR"
+        )
+
+        driver_api = APIClient()
+        driver_api.force_authenticate(user=self.driver)
+        passenger_api = APIClient()
+        passenger_api.force_authenticate(user=self.passenger)
+
+        # The journey and passenger's requested corridor both resolve to the
+        # same deterministic road geometry; the rest of the workflow is real.
+        with patch(
+            "transport.services.osrm_service.OSRMService.get_road_path",
+            return_value=_fake_osrm_path(),
+        ):
+            start = driver_api.post(
+                reverse("journey-start"),
+                {
+                    "vehicle_id": str(self.vehicle.id),
+                    "origin": {"lat": ORIGIN[0], "lng": ORIGIN[1]},
+                    "destination": {"lat": DESTINATION[0], "lng": DESTINATION[1]},
+                    "origin_name": "E2E Origin",
+                    "destination_name": "E2E Destination",
+                },
+                format="json",
+            )
+            self.assertEqual(start.status_code, status.HTTP_201_CREATED, start.data)
+            trip_id = start.data["data"]["trip_id"]
+
+            search = passenger_api.post(
+                reverse("corridor-vehicles"),
+                {
+                    # Passenger-selected pickup/drop are intermediate stops on
+                    # the driver's longer origin→destination journey.
+                    "origin": {"lat": NEAR_STOP[0], "lng": NEAR_STOP[1]},
+                    "destination": {"lat": FAR_STOP[0], "lng": FAR_STOP[1]},
+                },
+                format="json",
+            )
+
+        self.assertEqual(search.status_code, status.HTTP_200_OK, search.data)
+        self.assertTrue(search.data["success"])
+        self.assertTrue(
+            any(row["trip_id"] == trip_id for row in search.data["data"]["vehicles"]),
+            search.data,
+        )
+
+        raised = self.raise_hand(self.passenger, pickup, drop=drop)
+        self.assertEqual(raised.status_code, status.HTTP_201_CREATED, raised.data)
+        request_id = raised.data["data"]["request_id"]
+
+        accepted = self.accept_as_driver(request_id)
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK, accepted.data)
+        self.assertEqual(accepted.data["status"], "accepted")
+        self.assertEqual(accepted.data["trip_id"], trip_id)
+        boarding_id = accepted.data["boarding_request_id"]
+        otp = accepted.data["otp"]
+
+        arrived = driver_api.patch(
+            reverse("dispatch-arrived", args=[trip_id]),
+            {"boarding_request_id": boarding_id},
+            format="json",
+        )
+        self.assertEqual(arrived.status_code, status.HTTP_200_OK, arrived.data)
+
+        boarded = driver_api.patch(
+            reverse("dispatch-start", args=[trip_id]),
+            {"boarding_request_id": boarding_id, "otp": otp},
+            format="json",
+        )
+        self.assertEqual(boarded.status_code, status.HTTP_200_OK, boarded.data)
+        self.assertEqual(
+            BoardingRequest.objects.get(id=boarding_id).status, BOARDING_BOARDED
+        )
+
+        completed = driver_api.patch(
+            reverse("dispatch-complete", args=[trip_id]),
+            {"boarding_request_id": boarding_id},
+            format="json",
+        )
+        self.assertEqual(completed.status_code, status.HTTP_200_OK, completed.data)
+        result = completed.data["data"]
+        self.assertEqual(result["status"], "completed")
+        self.assertGreater(result["fare"], 0)
+        self.assertGreater(result["segment_distance_m"], 0)
+        self.assertGreater(result["segment_duration_s"], 0)
+
+        boarding = BoardingRequest.objects.get(id=boarding_id)
+        self.assertEqual(boarding.status, BOARDING_COMPLETED)
+        self.assertEqual(Transaction.objects.filter(
+            reference=f"trip_{trip_id}:p{boarding_id}:debit"
+        ).count(), 1)
+
+        ended = driver_api.post(
+            reverse("journey-end"), {"trip_id": trip_id}, format="json"
+        )
+        self.assertEqual(ended.status_code, status.HTTP_200_OK, ended.data)
+        self.assertEqual(ended.data["data"]["status"], TRIP_STATUS_COMPLETED)
+        self.assertFalse(ActiveTrip.objects.filter(id=trip_id, status=TRIP_STATUS_ACTIVE).exists())
+        self.assertIsNone(JourneyCacheService.get_journey(trip_id))
+        self.assertEqual(Transaction.objects.filter(
+            reference=f"trip_{trip_id}:p{boarding_id}:debit"
+        ).count(), 1)
+        self.assertEqual(
+            driver_api.get(reverse("journey-active")).data["data"], None
+        )

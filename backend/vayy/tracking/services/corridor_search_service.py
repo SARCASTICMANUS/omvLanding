@@ -12,6 +12,10 @@ path/stop documents), so results here and results on the stop board cannot
 disagree about which vehicles serve a stop.
 """
 
+import hashlib
+import json
+import time
+from django.core.cache import cache
 from geopy.distance import distance as geopy_distance
 
 from tracking.services.corridor_service import CorridorService
@@ -124,71 +128,235 @@ class CorridorSearchService:
         radius_m: int = JOURNEY_CORRIDOR_RADIUS_M,
         limit: int = 20,
     ) -> dict:
-        """
-        Vehicles running the corridor between two points.
+        """Return only live journeys whose actual road path contains both points.
 
-        ``origin``/``destination`` are ``(lat, lng)``.
-
-        Returns ``{"path", "stops", "vehicles", ...}``. A vehicle is ranked by
-        how far along the corridor its boarding stop is - the nearest boardable
-        point to where the passenger set off - with ETA as the tiebreak, because
-        "who can I get onto soonest" is what the search is for.
+        The former implementation matched any journey sharing a global stop
+        with the passenger's independently routed corridor. That could show a
+        driver who passed one point but could never serve the other. This path
+        projects both passenger endpoints onto each driver's cached OSRM
+        geometry and checks direction + current progress.
         """
+        from operations.models import ActiveTrip
         from operations.services.journey_service import JourneyService
+        from tracking.services.redis_geo_service import RedisGeoService
 
-        path_result = JourneyService._build_path(origin, destination)
-        if not path_result:
-            return {
-                "path": [],
-                "stops": [],
-                "vehicles": [],
-                "distance_m": None,
-                "duration_s": None,
-                "resolved": False,
-            }
+        # Cache only route geometry + global-stop indexing. Driver availability,
+        # position, progress and ETA are recomputed from Redis on every refresh.
+        cache_material = json.dumps([
+            round(float(origin[0]), 5), round(float(origin[1]), 5),
+            round(float(destination[0]), 5), round(float(destination[1]), 5),
+            int(radius_m),
+        ], separators=(",", ":"))
+        cache_key = "vayy:corridor-search:" + hashlib.sha1(cache_material.encode()).hexdigest()
+        cached_route = cache.get(cache_key)
+        if cached_route:
+            passenger_path = cached_route["path"]
+            passenger_distance_m = cached_route["distance_m"]
+            passenger_duration_s = cached_route["duration_s"]
+        else:
+            path_result = JourneyService._build_path(origin, destination)
+            if not path_result:
+                return {
+                    "path": [], "stops": [], "nearby_stops": [], "vehicles": [],
+                    "distance_m": None, "duration_s": None, "resolved": False,
+                }
+            passenger_path, passenger_distance_m, passenger_duration_s = path_result
+            cache.set(cache_key, {
+                "path": passenger_path,
+                "distance_m": passenger_distance_m,
+                "duration_s": passenger_duration_s,
+            }, timeout=300)
 
-        coords_latlng, distance_m, duration_s = path_result
-        coords_lnglat = [(c[1], c[0]) for c in coords_latlng]
-        stops = CorridorService.stops_on_path(coords_lnglat, radius_m=radius_m)
+        passenger_path_lnglat = [(point[1], point[0]) for point in passenger_path]
+        match_tolerance_m = min(max(100, int(radius_m)), 500)
+        # Global stops are intentionally read from the DB each refresh so an
+        # admin upload/deactivation is reflected immediately, not after cache TTL.
+        stops = CorridorService.stops_on_path(passenger_path_lnglat, radius_m=radius_m)
+        active_trip_ids = JourneyCacheService.get_active_trip_ids()
+        if not active_trip_ids:
+            active_trips = []
+        else:
+            active_trips = (
+                ActiveTrip.objects.filter(
+                    id__in=active_trip_ids, status=TRIP_STATUS_ACTIVE, route__isnull=True
+                )
+                .select_related("vehicle", "vehicle__driver", "vehicle__city")
+                .prefetch_related("vehicle__state")
+            )
 
-        # One pass per stop, but a vehicle serving several stops on the same
-        # journey must appear once - at the earliest stop the passenger could
-        # board it, which is the best of its positions along the corridor.
-        best_by_trip = {}
-        for stop in stops:
-            for row in CorridorSearchService._vehicle_rows_for_stop(stop["stop_id"]):
-                existing = best_by_trip.get(row["trip_id"])
-                if existing is None:
-                    best_by_trip[row["trip_id"]] = row
-                else:
-                    new_along = row["board_stop"]["dist_along_m"] or 0
-                    old_along = existing["board_stop"]["dist_along_m"] or 0
-                    if new_along < old_along:
-                        best_by_trip[row["trip_id"]] = row
+        vehicles = []
+        for trip in active_trips:
+            journey = JourneyCacheService.get_journey(str(trip.id))
+            path = journey.get("path") if journey else None
+            if not isinstance(path, list) or len(path) < 2:
+                continue
 
-        vehicles = sorted(
-            best_by_trip.values(),
-            key=lambda r: (
-                r["board_stop"]["dist_along_m"] if r["board_stop"]["dist_along_m"] is not None else 1e12,
-                r["eta_minutes"] if r["eta_minutes"] is not None else 1e12,
-            ),
-        )[:limit]
+            # Route coordinates are stored as [lat, lng]. Both points must be
+            # close to the actual driver path, and pickup must be ahead of the
+            # driver's current progress and before the destination.
+            pickup_match = _project_point_to_path(origin, path)
+            drop_match = _project_point_to_path(destination, path)
+            if not pickup_match or not drop_match:
+                continue
+            if pickup_match["distance_m"] > match_tolerance_m or drop_match["distance_m"] > match_tolerance_m:
+                continue
+            if drop_match["along_m"] <= pickup_match["along_m"] + 30:
+                continue
 
+            snapshot = RedisGeoService.get_vehicle_snapshot(str(trip.vehicle_id)) or {}
+            snapshot_ts = _as_float(snapshot.get("ts"))
+            snapshot_age = (time.time() - snapshot_ts) if snapshot_ts else None
+            # Do not surface a driver from an old DB location when the live
+            # Redis heartbeat has expired. A stale marker is worse than no card.
+            if snapshot_age is None or snapshot_age > 60:
+                continue
+            current_lat = _as_float(snapshot.get("lat"))
+            current_lng = _as_float(snapshot.get("lng"))
+            if current_lat is None or current_lng is None:
+                continue
+
+            current_match = _project_point_to_path((current_lat, current_lng), path)
+            if not current_match or current_match["distance_m"] > match_tolerance_m:
+                continue
+            if current_match["along_m"] > pickup_match["along_m"] + 100:
+                continue
+
+            total_distance = float(journey.get("distance_m") or 0)
+            total_duration = float(journey.get("duration_s") or 0)
+            remaining_to_pickup_m = max(0, pickup_match["along_m"] - current_match["along_m"])
+            segment_distance_m = max(0, drop_match["along_m"] - pickup_match["along_m"])
+            route_speed_mps = total_distance / total_duration if total_distance > 0 and total_duration > 0 else 0
+            live_speed_mps = _as_float(snapshot.get("speed")) or 0
+            # Expo/browser GPS speed is metres per second. Ignore noisy near-zero
+            # readings and fall back to OSRM's road-duration average.
+            speed_mps = live_speed_mps if live_speed_mps > 2 else route_speed_mps
+            eta_seconds = remaining_to_pickup_m / speed_mps if speed_mps > 0 else None
+            segment_duration_s = segment_distance_m / route_speed_mps if route_speed_mps > 0 else None
+            driver = trip.vehicle.driver
+            if driver is None:
+                continue
+
+            pickup_stop = _nearest_stop_entry(str(trip.id), pickup_match["along_m"])
+            dropoff_stop = _nearest_stop_entry(str(trip.id), drop_match["along_m"])
+            # Hand-raise currently boards at admin-managed global stops. Keep
+            # both points within a practical snap distance of those stops so the
+            # card never offers a journey that the request API cannot accept.
+            if not pickup_stop or not dropoff_stop:
+                continue
+            if abs(float(pickup_stop.get("dist_along_m") or 0) - pickup_match["along_m"]) > 1000:
+                continue
+            if abs(float(dropoff_stop.get("dist_along_m") or 0) - drop_match["along_m"]) > 1000:
+                continue
+            if float(pickup_stop.get("corridor_distance_m") or 0) > 500:
+                continue
+            if float(dropoff_stop.get("corridor_distance_m") or 0) > 500:
+                continue
+            if pickup_stop["id"] == dropoff_stop["id"] or float(dropoff_stop.get("dist_along_m") or 0) <= float(pickup_stop.get("dist_along_m") or 0):
+                continue
+            try:
+                from operations.services.fare_service import FareService
+                estimated_fare = FareService.calculate_fare(segment_distance_m / 1000.0, trip.vehicle.vehicle_type)
+            except Exception:
+                # Missing fare configuration must not break live discovery; the
+                # client omits the estimate and never substitutes a fake amount.
+                estimated_fare = None
+
+            vehicles.append({
+                "trip_id": str(trip.id),
+                "vehicle_id": str(trip.vehicle_id),
+                "vehicle_number": trip.vehicle.vehicle_number,
+                "vehicle_type": trip.vehicle.vehicle_type,
+                "driver_id": str(driver.id),
+                "driver_name": _driver_name(driver),
+                "driver_rating": _driver_rating(driver),
+                "lat": current_lat,
+                "lng": current_lng,
+                "destination": journey.get("destination"),
+                "pickup_match": {"distance_m": round(pickup_match["distance_m"], 1), "along_m": round(pickup_match["along_m"], 1)},
+                "dropoff_match": {"distance_m": round(drop_match["distance_m"], 1), "along_m": round(drop_match["along_m"], 1)},
+                "distance_to_pickup_m": round(remaining_to_pickup_m, 1),
+                "eta_minutes": max(1, round(eta_seconds / 60)) if eta_seconds is not None else None,
+                "segment_distance_m": round(segment_distance_m, 1),
+                "segment_duration_s": round(segment_duration_s, 1) if segment_duration_s is not None else None,
+                "estimated_fare": estimated_fare,
+                "board_stop": pickup_stop,
+                "drop_stop": dropoff_stop,
+                "upcoming_stops": _upcoming_stops(str(trip.id), pickup_stop["id"] if pickup_stop else ""),
+                "last_location_age_s": round(snapshot_age, 1) if snapshot_age is not None else None,
+            })
+
+        vehicles.sort(key=lambda row: (
+            row["eta_minutes"] if row["eta_minutes"] is not None else 10**6,
+            row["pickup_match"]["distance_m"],
+        ))
+        vehicles = vehicles[:max(1, min(int(limit), 50))]
         return {
-            "path": coords_latlng,
-            "distance_m": round(distance_m, 1),
-            "duration_s": round(duration_s, 1),
+            "path": passenger_path,
+            "distance_m": round(passenger_distance_m, 1),
+            "duration_s": round(passenger_duration_s, 1),
             "origin": {"lat": origin[0], "lng": origin[1]},
             "destination": {"lat": destination[0], "lng": destination[1]},
             "stops": stops,
-            # Stops a passenger can actually walk to from where they searched.
-            # The full corridor can run for kilometres; this is the walkable
-            # slice, so the card can offer somewhere to stand without the rider
-            # being told to walk half the route.
             "nearby_stops": _nearby_stops(stops, origin),
             "vehicles": vehicles,
             "resolved": True,
         }
+
+
+def _as_float(value):
+    try:
+        return float(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _project_point_to_path(point, path):
+    """Return nearest route projection and distance along a [lat,lng] path."""
+    from tracking.services.geo_service import GeoService
+    if len(path) < 2:
+        return None
+    lat, lng = float(point[0]), float(point[1])
+    cumulative = 0.0
+    best = None
+    for a, b in zip(path, path[1:]):
+        a_lat, a_lng = float(a[0]), float(a[1])
+        b_lat, b_lng = float(b[0]), float(b[1])
+        mean_lat = (a_lat + b_lat + lat) / 3.0
+        scale_x = 111320.0 * max(0.01, abs(__import__("math").cos(__import__("math").radians(mean_lat))))
+        scale_y = 111320.0
+        ax, ay = a_lng * scale_x, a_lat * scale_y
+        bx, by = b_lng * scale_x, b_lat * scale_y
+        px, py = lng * scale_x, lat * scale_y
+        dx, dy = bx - ax, by - ay
+        denom = dx * dx + dy * dy
+        t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / denom)) if denom else 0.0
+        proj_lat = a_lat + (b_lat - a_lat) * t
+        proj_lng = a_lng + (b_lng - a_lng) * t
+        segment_m = GeoService.haversine_m(a_lat, a_lng, b_lat, b_lng)
+        distance_m = GeoService.haversine_m(lat, lng, proj_lat, proj_lng)
+        along_m = cumulative + segment_m * t
+        if best is None or distance_m < best["distance_m"]:
+            best = {"distance_m": distance_m, "along_m": along_m, "lat": proj_lat, "lng": proj_lng}
+        cumulative += segment_m
+    return best
+
+
+def _nearest_stop_entry(trip_id, along_m):
+    entries = JourneyCacheService.get_ordered_stops(trip_id)
+    entries = [
+        item for item in entries
+        if float(item.get("corridor_distance_m") or 0) <= 500
+        and abs(float(item.get("dist_along_m") or 0) - along_m) <= 1000
+    ]
+    if not entries:
+        return None
+    entry = min(entries, key=lambda item: abs(float(item.get("dist_along_m") or 0) - along_m))
+    return {"id": str(entry.get("stop_id")), "name": entry.get("name"), "lat": entry.get("lat"), "lng": entry.get("lng"), "dist_along_m": entry.get("dist_along_m")}
+
+
+def _nearest_stop_id(trip_id, along_m):
+    entry = _nearest_stop_entry(trip_id, along_m)
+    return entry.get("id") if entry else ""
 
 
 def _stop_model():

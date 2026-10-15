@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -29,6 +29,7 @@ const BIKES_REFRESH_MS = 15000;
 // which logged "[Mbgl-HttpRequest] Unable to parse resourceUrl null" for each source.
 // An empty collection draws nothing and keeps the source valid until data arrives.
 const EMPTY_FEATURE_COLLECTION = { type: "FeatureCollection", features: [] };
+const EMPTY_TRIP = {};
 
 const USER_TOP_IMAGE = require("../../../assets/VayyUserTop.webp");
 
@@ -58,7 +59,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   const waveAnim3 = useRef(new Animated.Value(0)).current;
 
   // 1. REALTIME API / PARAMS INTEGRATION DATA
-  const trip = route?.params?.trip || {};
+  const trip = route?.params?.trip ?? EMPTY_TRIP;
   const pickup = route?.params?.pickup;
   const pickupName = pickup?.name || pickup?.display_name || trip?.pickup_stop?.name || "Pickup";
   const dropoff = route?.params?.destination;
@@ -83,9 +84,10 @@ export function BikeMapPreRideScreen({ navigation, route }) {
 
   const searchWalkingPathCoords = trip?.walking_path?.coordinates;
 
-  const initialCenter = pickupLat != null && pickupLon != null
-    ? [pickupLon, pickupLat]
-    : null;
+  const initialCenter = useMemo(
+    () => (pickupLat != null && pickupLon != null ? [pickupLon, pickupLat] : null),
+    [pickupLat, pickupLon],
+  );
 
   const hasDistance = stopDistance !== "-" && Number.isFinite(Number(stopDistance));
   const liveWalkDistance = userLocation && pickupLat != null && pickupLon != null
@@ -136,7 +138,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
     loadRoute();
     // `trip` is `route.params.trip || {}` - the `{}` fallback is a new object each
     // render, so depend on the stable geometry/id references instead.
-  }, [routeId, trip?.route_geometry]);
+  }, [routeId, trip]);
 
   // Keep the "bikes nearby" chip live. Polls GET /api/tracking/nearby/ for bike
   // vehicles around the rider (falling back to the pickup stop when GPS is not
@@ -335,7 +337,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           accuracy: Location.Accuracy.Balanced,
           timeout: 4000
         });
-      } catch (err) {
+      } catch {
         loc = await Location.getLastKnownPositionAsync();
       }
 
@@ -361,7 +363,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
     }
   };
 
-  const handleRecenterRouteBounds = () => {
+  const handleRecenterRouteBounds = useCallback(() => {
     if (!cameraRef.current) return;
     if (pickupLat != null && pickupLon != null && dropoffLat != null && dropoffLon != null) {
       const pad = 0.005;
@@ -378,13 +380,13 @@ export function BikeMapPreRideScreen({ navigation, route }) {
     } else {
       cameraRef.current.setStop({ center: initialCenter, zoom: 15, duration: 600 });
     }
-  };
+  }, [pickupLat, pickupLon, dropoffLat, dropoffLon, insets.top, sheetHeight, initialCenter]);
 
   useEffect(() => {
     if (didFitRef.current || !cameraRef.current) return;
     didFitRef.current = true;
     handleRecenterRouteBounds();
-  }, [pickupLat, pickupLon, dropoffLat, dropoffLon, sheetHeight]);
+  }, [handleRecenterRouteBounds]);
 
   return (
     <View style={styles.container}>
@@ -679,9 +681,11 @@ export function BikeMapPreRideScreen({ navigation, route }) {
                 onPress={() => {
                   setShowConfirm(false);
                   navigation.navigate("BikeSearching", {
-                    route_id: routeId,
+                    route_id: null,
+                    target_trip_id: route?.params?.target_trip_id || trip?.trip_id || trip?.id,
                     pickup_stop_id: trip?.pickup_stop?.id,
                     drop_stop_id: trip?.dropoff_stop?.id,
+                    trip,
                     pickup: pickup,
                     pickupName: pickupName,
                     destination: dropoffName,

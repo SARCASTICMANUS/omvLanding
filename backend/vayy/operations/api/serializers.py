@@ -510,7 +510,10 @@ class BoardingRequestCreateSerializer(
 
 
 class DispatchRequestSerializer(serializers.Serializer):
-    route_id = serializers.UUIDField()
+    # route_id is set for legacy fixed-route dispatch. Journey-based hand raises
+    # omit it and may pin the request to the journey card the passenger selected.
+    route_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    target_trip_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     pickup_stop_id = serializers.UUIDField()
     drop_stop_id = serializers.UUIDField(required=False, allow_null=True)
     mode = serializers.ChoiceField(choices=[DISPATCH_MODE_DIRECT, DISPATCH_MODE_BROADCAST], default=DISPATCH_MODE_BROADCAST)

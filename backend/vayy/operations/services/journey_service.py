@@ -680,8 +680,10 @@ class JourneyService:
         state.current_stop_index = 0
         state.current_segment_index = 0
         state.distance_along_route_m = 0
-        if state.current_location is None:
-            state.current_location = Point(first_point[1], first_point[0], srid=4326)
+        # A new journey has an authoritative starting point. Do not retain a
+        # previous trip's last GPS coordinate, otherwise the driver appears
+        # stale/off-route until the next device heartbeat arrives.
+        state.current_location = Point(first_point[1], first_point[0], srid=4326)
         state.save(
             update_fields=[
                 "active_trip",
@@ -690,4 +692,20 @@ class JourneyService:
                 "distance_along_route_m",
                 "current_location",
             ]
+        )
+
+        # Passenger corridor search and hand-raise dispatch deliberately require
+        # a fresh Redis heartbeat. Seed it at the chosen origin so a newly
+        # started journey is discoverable immediately, before the first GPS
+        # callback. The normal location pipeline replaces this snapshot as soon
+        # as the device reports its real position.
+        from tracking.services.redis_geo_service import RedisGeoService
+
+        RedisGeoService.set_vehicle_snapshot(
+            vehicle_id=str(vehicle.id),
+            lat=float(first_point[0]),
+            lng=float(first_point[1]),
+            speed=0,
+            heading=0,
+            trip_id=str(trip.id),
         )

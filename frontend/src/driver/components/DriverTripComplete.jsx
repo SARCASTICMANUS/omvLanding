@@ -29,7 +29,9 @@ export default function DriverTripComplete({ result, onNextRide, onBackHome }) {
 
   const fare = result?.fare || null;
   const earnings = result?.earnings || null;
-  const totalFare = fare?.total_fare ?? ride?.fareAmount ?? null;
+  const totalFare = ride?.boardingRequestId
+    ? (fare?.total_fare ?? null)
+    : (fare?.total_fare ?? ride?.fareAmount ?? null);
   const distanceKm = fare?.distance_km ?? ride?.distanceKm ?? null;
   const perKmRate = fare?.per_km_charge ?? null;
   const baseFare = fare?.base_fare ?? null;

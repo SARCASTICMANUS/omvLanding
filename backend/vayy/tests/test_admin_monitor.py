@@ -14,6 +14,7 @@ Needs the real Django + Channels stack, so it runs under
 
 import json
 
+from asgiref.sync import sync_to_async
 from channels.testing import WebsocketCommunicator
 from django.contrib.gis.geos import LineString, Point
 from django.test import TransactionTestCase
@@ -162,7 +163,7 @@ class AdminMonitorSnapshotTests(TransactionTestCase):
         )
 
     async def test_snapshot_includes_online_vehicle_with_position(self):
-        vehicle = Vehicle.objects.create(
+        vehicle = await sync_to_async(Vehicle.objects.create)(
             city=self.city,
             route=self.route,
             driver=self.driver,
@@ -171,14 +172,14 @@ class AdminMonitorSnapshotTests(TransactionTestCase):
             status="approved",
             is_active=True,
         )
-        trip = ActiveTrip.objects.create(
+        trip = await sync_to_async(ActiveTrip.objects.create)(
             vehicle=vehicle,
             route=self.route,
             driver=self.driver,
             status="active",
             direction="outbound",
         )
-        VehicleState.objects.create(
+        await sync_to_async(VehicleState.objects.create)(
             vehicle=vehicle,
             active_trip=trip,
             current_location=Point(77.209, 28.6139),
@@ -218,7 +219,7 @@ class AdminMonitorSnapshotTests(TransactionTestCase):
         """A vehicle that stopped reporting must not stay on the map forever."""
         from datetime import timedelta
 
-        vehicle = Vehicle.objects.create(
+        vehicle = await sync_to_async(Vehicle.objects.create)(
             city=self.city,
             route=self.route,
             driver=self.driver,
@@ -227,12 +228,16 @@ class AdminMonitorSnapshotTests(TransactionTestCase):
             status="approved",
             is_active=True,
         )
-        VehicleState.objects.create(
+        await sync_to_async(VehicleState.objects.create)(
             vehicle=vehicle,
             current_location=Point(77.209, 28.6139),
             speed_kmph=0.0,
             heading=0.0,
-            last_updated=timezone.now() - timedelta(minutes=30),
+        )
+        # auto_now overrides last_updated passed to create(); simulate an old
+        # heartbeat with a queryset update after the initial insert.
+        await sync_to_async(VehicleState.objects.filter(vehicle=vehicle).update)(
+            last_updated=timezone.now() - timedelta(minutes=30)
         )
 
         communicator = WebsocketCommunicator(

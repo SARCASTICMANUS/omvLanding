@@ -221,6 +221,37 @@ class OSRMService:
             return None
 
     @classmethod
+    def _route_snap_is_valid(cls, result: Dict[str, Any]) -> bool:
+        """Reject OSRM results snapped far from requested coordinates.
+
+        A regional extract can return ``code=Ok`` even when both input points
+        snap hundreds of kilometres away. The resulting distance and duration
+        are not valid for the requested ride, so both route and fare paths must
+        apply the same coverage check.
+        """
+        waypoints = result.get("waypoints") or []
+        if len(waypoints) != 2:
+            logger.warning("OSRM route omitted origin/destination snap metadata")
+            return False
+        try:
+            snap_distances = [float(point["distance"]) for point in waypoints]
+        except (KeyError, TypeError, ValueError):
+            logger.warning("OSRM route returned invalid waypoint snap metadata")
+            return False
+
+        max_snap_distance_m = float(
+            getattr(settings, "OSRM_MAX_SNAP_DISTANCE_M", 5000)
+        )
+        if any(distance > max_snap_distance_m for distance in snap_distances):
+            logger.warning(
+                "OSRM route rejected: waypoint snap distances %s exceed %sm",
+                snap_distances,
+                max_snap_distance_m,
+            )
+            return False
+        return True
+
+    @classmethod
     def get_road_metrics(
         cls,
         origin: Tuple[float, float],
@@ -230,13 +261,13 @@ class OSRMService:
 
         Uses a single /route call; results are cached for ``CACHE_TTL``.
         """
-        cache_key = f"osrm_metrics_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cache_key = f"osrm_metrics_v2_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
 
         result = cls.route(origin, destination, overview="false")
-        if not result or not result.get("routes"):
+        if not result or not result.get("routes") or not cls._route_snap_is_valid(result):
             return None
         route = result["routes"][0]
         metrics = {
@@ -258,7 +289,7 @@ class OSRMService:
         full GeoJSON LineString dict from OSRM. Uses a single /route call with
         ``overview=full``; results are cached for ``CACHE_TTL``.
         """
-        cache_key = f"osrm_path_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cache_key = f"osrm_path_v2_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
@@ -266,6 +297,11 @@ class OSRMService:
         result = cls.route(origin, destination, overview="full", geometries="geojson")
         if not result or not result.get("routes"):
             return None
+
+        # Never build a journey from geometry outside the requested region.
+        if not cls._route_snap_is_valid(result):
+            return None
+
         route = result["routes"][0]
         payload = {
             "distance": route["distance"],
@@ -281,7 +317,7 @@ class OSRMService:
         origin: Tuple[float, float],
         destination: Tuple[float, float],
     ) -> Optional[float]:
-        cache_key = f"osrm_dist_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cache_key = f"osrm_dist_v2_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
@@ -298,7 +334,7 @@ class OSRMService:
         origin: Tuple[float, float],
         destination: Tuple[float, float],
     ) -> Optional[float]:
-        cache_key = f"osrm_dur_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cache_key = f"osrm_dur_v2_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
@@ -319,7 +355,7 @@ class OSRMService:
 
         Used inside serializers to avoid blocking HTTP calls in request hot paths.
         """
-        cache_key = f"osrm_dur_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cache_key = f"osrm_dur_v2_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
         return cache.get(cache_key)
 
     @classmethod
@@ -329,7 +365,7 @@ class OSRMService:
         destination: Tuple[float, float],
     ) -> Optional[Dict[str, float]]:
         """Return cached road metrics without issuing a network request."""
-        cache_key = f"osrm_metrics_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cache_key = f"osrm_metrics_v2_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
         return cache.get(cache_key)
 
     @classmethod

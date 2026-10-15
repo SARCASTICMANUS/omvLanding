@@ -7,6 +7,7 @@ export const WS_SUBPROTOCOL = "vayy.jwt.v1";
 export const WS = {
   cityPublic: "/ws/vayy/city_public/",
   trackingTrip: (tripId) => `/ws/tracking/trip/${tripId}/`,
+  journeySearch: "/ws/tracking/journey-search/",
   trackingVehicle: (vehicleId) => `/ws/tracking/vehicle/${vehicleId}/`,
   routePassengers: (routeId) => `/ws/tracking/route-passengers/${routeId}/`,
   dispatch: (dispatchId) => `/ws/dispatch/${dispatchId}/`,

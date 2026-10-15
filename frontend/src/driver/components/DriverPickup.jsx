@@ -69,14 +69,16 @@ export default function DriverPickup({ ride, route, onBack, onArrived }) {
     setConfirming(false);
     setSubmitting(true);
     try {
-      await api.patch(API_PATHS.dispatchArrived(ride.tripId));
+      await api.patch(API_PATHS.dispatchArrived(ride.tripId), {
+        ...(ride.boardingRequestId ? { boarding_request_id: ride.boardingRequestId } : {}),
+      });
     } catch {
       // Arrival is advisory — the OTP step verifies the real trip state.
     } finally {
       setSubmitting(false);
       onArrived?.();
     }
-  }, [onArrived, ride?.tripId]);
+  }, [onArrived, ride?.tripId, ride?.boardingRequestId]);
 
   return (
     <div className="min-h-screen bg-[#F8FAF9] pb-[430px] sm:pb-[450px]">

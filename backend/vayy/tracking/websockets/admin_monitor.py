@@ -72,7 +72,7 @@ def build_snapshot():
 
     vehicles = list(
         Vehicle.objects.filter(is_active=True).select_related(
-            "city", "route", "driver", "vehicle_state"
+            "city", "route", "driver", "state"
         )
     )
     trips = list(
@@ -85,7 +85,7 @@ def build_snapshot():
 
     vehicle_rows = []
     for vehicle in vehicles:
-        state = getattr(vehicle, "vehicle_state", None)
+        state = getattr(vehicle, "state", None)
         last_seen = state.last_updated if state else None
         online = bool(last_seen and last_seen >= cutoff)
 

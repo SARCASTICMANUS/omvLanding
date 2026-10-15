@@ -111,16 +111,28 @@ class SMSServiceTests(unittest.TestCase):
         self.assertFalse(SMSService.send("", "hi"))
 
     def test_success(self):
-        with mock.patch("communication.services.sms_service.requests.post") as post:
-            post.return_value = _resp(200)
-            self.assertTrue(SMSService.send("+919999999999", "hi"))
+        from django.conf import settings
+        old_url = settings.SMS_PROVIDER_URL
+        settings.SMS_PROVIDER_URL = "https://sms.example/send"
+        try:
+            with mock.patch("communication.services.sms_service.requests.post") as post:
+                post.return_value = _resp(200)
+                self.assertTrue(SMSService.send("+919999999999", "hi"))
+        finally:
+            settings.SMS_PROVIDER_URL = old_url
 
     def test_network_error_is_transient(self):
         import requests as rq
-        with mock.patch("communication.services.sms_service.requests.post") as post:
-            post.side_effect = rq.Timeout("slow")
-            with self.assertRaises(SMSDeliveryError):
-                SMSService.send("+919999999999", "hi")
+        from django.conf import settings
+        old_url = settings.SMS_PROVIDER_URL
+        settings.SMS_PROVIDER_URL = "https://sms.example/send"
+        try:
+            with mock.patch("communication.services.sms_service.requests.post") as post:
+                post.side_effect = rq.Timeout("slow")
+                with self.assertRaises(SMSDeliveryError):
+                    SMSService.send("+919999999999", "hi")
+        finally:
+            settings.SMS_PROVIDER_URL = old_url
 
     def test_4xx_is_permanent(self):
         with mock.patch("communication.services.sms_service.requests.post") as post:

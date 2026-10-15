@@ -5,10 +5,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
-  Platform,
   Modal,
   Linking,
   Share,
+  Alert,
 } from "react-native";
 import VayyMap, { UserLocation, Marker, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import SmoothMarker from "../../shared/components/common/SmoothMarker";
@@ -28,6 +28,7 @@ import { completeDispatch } from "../../store/slices/dispatchSlice";
 import { fetchRouteGeometry } from "../../routes/services/routeService";
 
 const DESTINATION_THRESHOLD = 100;
+const EMPTY_TRIP_DATA = {};
 
 function haversine(a, b) {
   const R = 6371e3;
@@ -56,13 +57,15 @@ export function RideStatsScreen({ navigation, route }) {
   const vehicle = route?.params?.vehicle || "";
   const dispatchId = route?.params?.dispatchId || "";
   const fare = route?.params?.fare || "—";
-  const tripData = route?.params?.tripData || {};
+  const tripData = route?.params?.tripData ?? EMPTY_TRIP_DATA;
+  const boardingRequestId = route?.params?.boardingRequestId || tripData?.boarding_request_id || null;
   const route_id = route?.params?.route_id || "";
   const destLat = tripData?.dropLat ?? tripData?.dropoff_lat ?? route?.params?.dropLat ?? null;
   const destLng = tripData?.dropLng ?? tripData?.dropoff_lng ?? route?.params?.dropLng ?? null;
   const [routePath, setRoutePath] = useState(null);
   const [endRideCase, setEndRideCase] = useState("arrived");
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+  const emergencyContactPhone = route?.params?.emergencyContactPhone || route?.params?.emergencyContact?.phone || null;
   const navigatingRef = useRef(false);
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
@@ -107,7 +110,8 @@ export function RideStatsScreen({ navigation, route }) {
       navigatingRef.current = true;
       navigation.navigate("PassengerTabs");
     }
-    if (data.status === "completed" || data?.type === "trip_completed") {
+    if (data.type === "passenger_segment_completed" && data.boarding_request_id !== boardingRequestId) return;
+    if ((data.status === "completed" && (!data.boarding_request_id || data.boarding_request_id === boardingRequestId)) || data?.type === "trip_completed") {
       navigatingRef.current = true;
       const pickupVal = (() => {
         const p = tripData.pickup_stop?.name || tripData.pickup;
@@ -122,13 +126,13 @@ export function RideStatsScreen({ navigation, route }) {
         dropoff: destination,
         distance: distanceLeft,
         duration: eta,
-        fare: fare,
+        fare: data.fare ?? fare,
         driverRating: 0,
         paymentMethod: "Fuel Share",
         route_id,
       });
     }
-  }, [dispatchId, driverName, vehicle, tripData, destination, distanceLeft, eta, fare, route_id, navigation]);
+  }, [dispatchId, boardingRequestId, driverName, vehicle, tripData, destination, distanceLeft, eta, fare, route_id, navigation]);
 
   useWebSocket(dispatchId ? WS.dispatch(dispatchId) : null, {
     onMessage: handleWsMessage,
@@ -154,10 +158,30 @@ export function RideStatsScreen({ navigation, route }) {
       }, { distanceInterval: 10, timeInterval: 3000 }).then((s) => { sub = s; });
     });
     return () => { removed = true; if (sub?.remove) sub.remove(); };
-  }, []);
+  }, [distanceLeft]);
 
   // Tracking WS for live distance/ETA from backend
   const handleTrackingMessage = useCallback((data) => {
+    if (data.type === "trip_completed") {
+      if (data.cancelled) {
+        navigation.navigate("PassengerTabs");
+        return;
+      }
+      const own = (data.passengers || []).find((item) => item.boarding_request_id === boardingRequestId);
+      if (own && boardingRequestId && !navigatingRef.current) {
+        navigatingRef.current = true;
+        navigation.navigate("RideComplete", {
+          tripId: dispatchId, boardingRequestId, riderName: driverName, vehicleText: vehicle,
+          pickup: own.pickup_stop_name || tripData.pickup_stop?.name || tripData.pickup || "Pickup Stop",
+          dropoff: own.drop_stop_name || tripData.dropoff_stop?.name || tripData.dropoff || destination,
+          fare: own.fare ?? null,
+          distance: own.segment_distance_m != null ? own.segment_distance_m / 1000 : null,
+          duration: own.segment_duration_s != null ? own.segment_duration_s / 60 : null,
+          driverRating: 0, paymentMethod: "Fuel Share", route_id,
+        });
+      }
+      return;
+    }
     if (data.type === "vehicle_update") {
       const lat = data.lat;
       const lng = data.lng || data.lon;
@@ -170,7 +194,7 @@ export function RideStatsScreen({ navigation, route }) {
         setRemainingDistance(data.remaining_distance_km * 1000);
       }
     }
-  }, []);
+  }, [navigation, boardingRequestId, dispatchId, driverName, vehicle, tripData, destination, route_id]);
 
   useWebSocket(dispatchId ? WS.trackingTrip(dispatchId) : null, {
     enabled: !!dispatchId,
@@ -207,13 +231,20 @@ export function RideStatsScreen({ navigation, route }) {
   }
 
   async function handleConfirmEndRide() {
-    setShowEndConfirm(false);
     const tripId = tripData.trip_id || dispatchId;
+    if (!tripId) {
+      console.warn("Cannot complete passenger ride without a trip ID.");
+      return;
+    }
     try {
-      await dispatchRedux(completeDispatch(tripId)).unwrap();
+      const completion = await dispatchRedux(completeDispatch({ tripId, boardingRequestId })).unwrap();
+      const completionData = completion?.data ?? completion;
+      if (completionData?.status === "partially_settled") return;
     } catch (e) {
       console.warn("completeDispatch passenger end ride failed:", e);
+      return;
     }
+    setShowEndConfirm(false);
     navigation.navigate("RideComplete", {
       tripId,
       riderName: driverName,
@@ -423,7 +454,7 @@ export function RideStatsScreen({ navigation, route }) {
 
             {endRideCase === "arrived" ? (
               <>
-                <Text style={styles.endTitle}>Looks like you've reached your destination.</Text>
+                <Text style={styles.endTitle}>Looks like you&apos;ve reached your destination.</Text>
                 <Text style={styles.endMessage}>End Ride?</Text>
                 <View style={styles.endActions}>
                   <TouchableOpacity style={styles.endPrimaryBtn} onPress={handleConfirmEndRide}>
@@ -461,7 +492,7 @@ export function RideStatsScreen({ navigation, route }) {
               <MaterialIcons name="emergency" size={48} color="#EF4444" />
             </View>
             <Text style={styles.emergencyTitle}>Emergency</Text>
-            <Text style={styles.emergencySub}>Your location will be shared with emergency contacts.</Text>
+            <Text style={styles.emergencySub}>Call 112 for emergency assistance. Emergency contacts are not automatically notified.</Text>
 
             <TouchableOpacity
               style={styles.emergencyCallBtn}
@@ -473,7 +504,16 @@ export function RideStatsScreen({ navigation, route }) {
 
             <TouchableOpacity
               style={styles.emergencyContactBtn}
-              onPress={() => Linking.openURL("tel:112")}
+              onPress={() => {
+                const phone = typeof emergencyContactPhone === "string" ? emergencyContactPhone.replace(/[^+0-9]/g, "") : "";
+                if (!phone) {
+                  Alert.alert("Emergency contact unavailable", "No emergency contact phone number is available for this trip.");
+                  return;
+                }
+                Linking.openURL("tel:" + phone).catch(() => {
+                  Alert.alert("Unable to call", "Please use your phone to contact your emergency contact.");
+                });
+              }}
             >
               <Text style={styles.emergencyContactText}>Call Emergency Contact</Text>
             </TouchableOpacity>
@@ -482,7 +522,7 @@ export function RideStatsScreen({ navigation, route }) {
               style={styles.emergencyCloseBtn}
               onPress={() => setShowEmergencyModal(false)}
             >
-              <Text style={styles.emergencyCloseText}>I'm Safe</Text>
+              <Text style={styles.emergencyCloseText}>I&apos;m Safe</Text>
             </TouchableOpacity>
           </View>
         </View>

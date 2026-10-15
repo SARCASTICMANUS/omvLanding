@@ -1,4 +1,6 @@
 from django.contrib.auth import authenticate
+from django.db import transaction
+import uuid
 from rest_framework import serializers
 
 from accounts.models import (
@@ -57,14 +59,52 @@ class UserCreateUpdateSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id",)
 
+    @staticmethod
+    def _username_for_email(email):
+        """Populate AbstractUser.username even though authentication uses email.
+
+        The inherited username column is still unique in the database. Prefer
+        the email for compatibility with existing accounts, but use a compact
+        unique fallback for long emails or a username already claimed by a
+        legacy/admin-created account.
+        """
+        candidate = email.strip()
+        if (
+            candidate
+            and len(candidate) <= User._meta.get_field("username").max_length
+            and not User.objects.filter(username=candidate).exists()
+        ):
+            return candidate
+
+        # UUID-backed usernames are independent of email length and safe when
+        # multiple users are created concurrently.
+        return f"user_{uuid.uuid4().hex}"
+
     def create(self, validated_data):
         password = validated_data.pop("password", None)
+        email = validated_data.get("email", "")
+        validated_data["username"] = self._username_for_email(email)
         user = User(**validated_data)
         if password:
             user.set_password(password)
         else:
             user.set_unusable_password()
         user.save()
+        # Admin-created accounts use the same email OTP flow as registrations.
+        from accounts.services.otp_service import OTPService
+        from communication.tasks import send_otp_task
+        import logging
+        otp = OTPService.create_otp(user)
+
+        def queue_verification_email():
+            try:
+                send_otp_task.delay(user.id, otp)
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "Could not queue verification email for admin-created user %s", user.id
+                )
+
+        transaction.on_commit(queue_verification_email)
         return user
 
     def update(self, instance, validated_data):

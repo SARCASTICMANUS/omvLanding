@@ -4,10 +4,11 @@ import { OPERATIONS, TRACKING } from "../../constants";
 
 export const requestDispatch = createAsyncThunk(
   "dispatch/request",
-  async ({ route_id, pickup_stop_id, drop_stop_id, mode }, { rejectWithValue }) => {
+  async ({ route_id, target_trip_id, pickup_stop_id, drop_stop_id, mode }, { rejectWithValue }) => {
     try {
       const response = await api.post(OPERATIONS.dispatchRequest, {
-        route_id,
+        route_id: route_id || null,
+        ...(target_trip_id ? { target_trip_id } : {}),
         pickup_stop_id,
         drop_stop_id,
         mode: mode || "broadcast",
@@ -85,9 +86,13 @@ export const rejectDispatch = createAsyncThunk(
 
 export const arrivedDispatch = createAsyncThunk(
   "dispatch/arrived",
-  async (tripId, { rejectWithValue }) => {
+  async (input, { rejectWithValue }) => {
     try {
-      const response = await api.patch(OPERATIONS.dispatchArrived(tripId));
+      const tripId = typeof input === "string" ? input : input?.tripId;
+      const boardingRequestId = typeof input === "object" ? input?.boardingRequestId : null;
+      const response = await api.patch(OPERATIONS.dispatchArrived(tripId),
+        boardingRequestId ? { boarding_request_id: boardingRequestId } : {},
+      );
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || "Failed to mark arrived");
@@ -97,9 +102,12 @@ export const arrivedDispatch = createAsyncThunk(
 
 export const startDispatchTrip = createAsyncThunk(
   "dispatch/start",
-  async ({ tripId, otp }, { rejectWithValue }) => {
+  async ({ tripId, otp, boardingRequestId }, { rejectWithValue }) => {
     try {
-      const response = await api.patch(OPERATIONS.dispatchStart(tripId), { otp });
+      const response = await api.patch(OPERATIONS.dispatchStart(tripId), {
+        otp,
+        ...(boardingRequestId ? { boarding_request_id: boardingRequestId } : {}),
+      });
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || "Failed to start trip");
@@ -109,9 +117,14 @@ export const startDispatchTrip = createAsyncThunk(
 
 export const completeDispatch = createAsyncThunk(
   "dispatch/complete",
-  async (tripId, { rejectWithValue }) => {
+  async (input, { rejectWithValue }) => {
     try {
-      const response = await api.patch(OPERATIONS.dispatchComplete(tripId));
+      const tripId = typeof input === "string" ? input : input?.tripId;
+      const boardingRequestId = typeof input === "object" ? input?.boardingRequestId : null;
+      const response = await api.patch(
+        OPERATIONS.dispatchComplete(tripId),
+        boardingRequestId ? { boarding_request_id: boardingRequestId } : {},
+      );
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || "Failed to complete trip");

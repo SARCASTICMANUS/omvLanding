@@ -146,7 +146,8 @@ class DispatchRequestAPIView(APIView):
         try:
             result = DispatchService.request_dispatch(
                 passenger=request.user,
-                route_id=str(serializer.validated_data["route_id"]),
+                route_id=(str(serializer.validated_data["route_id"]) if serializer.validated_data.get("route_id") else None),
+                target_trip_id=(str(serializer.validated_data["target_trip_id"]) if serializer.validated_data.get("target_trip_id") else None),
                 pickup_stop_id=str(serializer.validated_data["pickup_stop_id"]),
                 drop_stop_id=str(serializer.validated_data["drop_stop_id"]) if serializer.validated_data.get("drop_stop_id") else None,
                 mode=serializer.validated_data.get("mode", DISPATCH_MODE_BROADCAST)
@@ -578,7 +579,9 @@ class DispatchArrivedAPIView(APIView):
 
     def patch(self, request, trip_id):
         try:
-            trip = DispatchService.arrived_at_pickup(trip_id, request.user)
+            trip = DispatchService.arrived_at_pickup(
+                trip_id, request.user, boarding_request_id=request.data.get("boarding_request_id")
+            )
             resp = Response({
                 "success": True,
                 "message": "Driver arrived at pickup",
@@ -599,7 +602,7 @@ class DispatchStartAPIView(APIView):
     def patch(self, request, trip_id):
         try:
             otp = request.data.get("otp")
-            trip = DispatchService.start_trip(trip_id, request.user, otp=otp)
+            trip = DispatchService.start_trip(trip_id, request.user, otp=otp, boarding_request_id=request.data.get("boarding_request_id"))
             resp = Response({
                 "success": True,
                 "message": "Trip started",
@@ -623,12 +626,9 @@ class DispatchCompleteAPIView(APIView):
         # enforced by HasTripAccess before this runs; the former inline
         # driver/passenger check moved there so the rule lives in one place.
         try:
-            trip = DispatchService.complete_trip(trip_id, request.user)
-            resp = Response({
-                "success": True,
-                "message": "Trip completed",
-                "data": ActiveTripSerializer(trip).data
-            })
+            result = DispatchService.complete_trip(trip_id, request.user, boarding_request_id=request.data.get("boarding_request_id"))
+            data = result if isinstance(result, dict) else ActiveTripSerializer(result).data
+            resp = Response({"success": True, "message": "Trip completed", "data": data})
             return resp
         except Exception as e:
             logger.exception(f"[DispatchComplete] Failed for trip {trip_id}")

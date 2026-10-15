@@ -379,6 +379,14 @@ class LocationService:
                 f"trip_{trip_id}",
                 {"type": "trip_update", "data": ws_payload},
             )
+            if await RedisGeoService.should_publish_journey_search_update(vehicle_id):
+                await channel_layer.group_send(
+                    "journey_search",
+                    {
+                        "type": "journey_search_update",
+                        "data": {"type": "journey_search_update", "updated_at": ws_payload["timestamp"]},
+                    },
+                )
 
     @staticmethod
     async def get_trip_latest_snapshot_async(trip_id: str) -> Optional[Dict[str, Any]]:

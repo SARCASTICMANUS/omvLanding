@@ -49,9 +49,17 @@ export function RideCompleteScreen({ navigation, route }) {
     }).catch(() => {});
   }, [tripId]);
 
-  const handleStarPress = (star) => {
+  const [ratingSubmitted, setRatingSubmitted] = useState(false);
+  const handleStarPress = async (star) => {
     setRating(star);
-    setShowThankYou(true);
+    if (!tripId) return;
+    try {
+      await dispatch(submitRating({ trip: tripId, rating: star })).unwrap();
+      setRatingSubmitted(true);
+      setShowThankYou(true);
+    } catch (error) {
+      console.warn("Ride rating submission failed:", error);
+    }
   };
 
   const now = new Date();
@@ -65,10 +73,11 @@ export function RideCompleteScreen({ navigation, route }) {
     fareData,
     totalFare: Number(fareData?.total_fare) || Number(fare) || null,
   });
-  const totalFare = breakdown.totalFare;
-  const baseFare = breakdown.baseFare;
-  const distanceFare = breakdown.distanceFare;
-  const perKmRate = breakdown.perKmRate;
+  const fareConfirmed = fareData?.settled === true && fareData?.total_fare != null;
+  const totalFare = fareConfirmed ? breakdown.totalFare : "—";
+  const baseFare = fareConfirmed ? breakdown.baseFare : "—";
+  const distanceFare = fareConfirmed ? breakdown.distanceFare : "—";
+  const perKmRate = fareConfirmed ? breakdown.perKmRate : null;
 
   return (
     <View style={styles.container}>
@@ -90,7 +99,7 @@ export function RideCompleteScreen({ navigation, route }) {
             <Ionicons name="checkmark" size={36} color="#FFFFFF" />
           </View>
           <Text style={styles.title}>Ride Complete</Text>
-          <Text style={styles.subtitle}>You've reached your destination safely</Text>
+          <Text style={styles.subtitle}>You&apos;ve reached your destination safely</Text>
         </View>
 
         <View style={styles.card}>
@@ -161,7 +170,7 @@ export function RideCompleteScreen({ navigation, route }) {
             <Text style={styles.fareValue}>₹{baseFare}</Text>
           </View>
           <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Distance ({distKm > 0 ? `${distKm} km × ₹${perKmRate}/km` : "—"})</Text>
+            <Text style={styles.fareLabel}>Distance ({fareConfirmed && distKm > 0 ? distKm + " km × ₹" + perKmRate + "/km" : "—"})</Text>
             <Text style={styles.fareValue}>₹{distanceFare}</Text>
           </View>
           <View style={styles.fareDivider} />
@@ -176,7 +185,7 @@ export function RideCompleteScreen({ navigation, route }) {
           <View style={styles.paymentBadgeRow}>
             <View style={styles.paymentBadge}>
               <Ionicons name="wallet" size={16} color="#009849" />
-              <Text style={styles.paymentBadgeText}>Paid via {paymentMethod}</Text>
+              <Text style={styles.paymentBadgeText}>Payment method: {paymentMethod}</Text>
             </View>
             <Text style={styles.paymentAmount}>₹{totalFare}</Text>
           </View>
@@ -212,8 +221,14 @@ export function RideCompleteScreen({ navigation, route }) {
             style={[styles.primaryBtn, ratingLoading && { opacity: 0.6 }]}
             disabled={ratingLoading}
             onPress={async () => {
-              if (rating > 0 && tripId) {
-                await dispatch(submitRating({ trip: tripId, rating }));
+              if (rating > 0 && !ratingSubmitted) {
+                if (!tripId) return;
+                try {
+                  await dispatch(submitRating({ trip: tripId, rating })).unwrap();
+                } catch (error) {
+                  console.warn("Ride rating submission failed:", error);
+                  return;
+                }
               }
               navigation.navigate('BikeMapPreRide');
             }}
@@ -226,8 +241,14 @@ export function RideCompleteScreen({ navigation, route }) {
             activeOpacity={0.7}
             style={styles.secondaryBtn}
             onPress={async () => {
-              if (rating > 0 && tripId) {
-                await dispatch(submitRating({ trip: tripId, rating }));
+              if (rating > 0 && !ratingSubmitted) {
+                if (!tripId) return;
+                try {
+                  await dispatch(submitRating({ trip: tripId, rating })).unwrap();
+                } catch (error) {
+                  console.warn("Ride rating submission failed:", error);
+                  return;
+                }
               }
               navigation.reset({ index: 0, routes: [{ name: "PassengerTabs" }] });
             }}

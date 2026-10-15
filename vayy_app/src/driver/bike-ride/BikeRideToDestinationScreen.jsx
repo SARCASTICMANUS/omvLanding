@@ -230,8 +230,8 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
     if (data.status === "cancelled") {
       navigation.navigate("DriverTabs");
     }
-    if (data.status === "completed") {
-      const elapsedSec = Math.floor((Date.now() - startTime.current) / 1000);
+    if (data.type === "passenger_segment_completed" && data.boarding_request_id !== buddy?.boardingRequestId) return;
+    if (data.status === "completed" && (!data.boarding_request_id || data.boarding_request_id === buddy?.boardingRequestId)) {
       const d = destCoordsRef.current;
       navigation.replace("BikeTripComplete", {
         buddy,
@@ -244,9 +244,9 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
           pickupLng: buddy?.pickupLng,
           dropLat: d?.lat || buddy?.dropLat,
           dropLng: d?.lng || buddy?.dropLng,
-          distance: totalDistanceRef.current?.toFixed(1) || "—",
-          duration: Math.round(elapsedSec / 60) || 1,
-          fare: buddy?.fareAmount || 45,
+          distance: data.segment_distance_m != null ? data.segment_distance_m / 1000 : null,
+          duration: data.segment_duration_s != null ? data.segment_duration_s / 60 : null,
+          fare: data.fare ?? null,
         },
       });
     }
@@ -274,14 +274,31 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
   };
 
   const finishRide = async (earlyEnd) => {
-    if (dispatchId) {
-      try {
-        await dispatchRedux(completeDispatch(dispatchId)).unwrap();
-      } catch (e) {
-        console.warn("completeDispatch failed:", e);
-      }
+    let settledFare = null;
+    let settledDistanceM = null;
+    let settledDurationS = null;
+    if (!dispatchId) {
+      console.warn("Cannot complete bike ride without a dispatch ID.");
+      setShowEndModal(true);
+      return;
     }
-    const elapsedSec = Math.floor((Date.now() - startTime.current) / 1000);
+    try {
+      const completion = await dispatchRedux(completeDispatch({
+        tripId: dispatchId,
+        boardingRequestId: buddy?.boardingRequestId,
+      })).unwrap();
+      const completionData = completion?.data ?? completion;
+      if (completionData?.status === "partially_settled") {
+        throw new Error("Passenger fare could not be settled. Please retry before ending this passenger's ride.");
+      }
+      settledFare = completionData?.fare ?? null;
+      settledDistanceM = completionData?.segment_distance_m ?? null;
+      settledDurationS = completionData?.segment_duration_s ?? null;
+    } catch (e) {
+      console.warn("completeDispatch failed:", e);
+      setShowEndModal(true);
+      return;
+    }
     const d = destCoordsRef.current;
     navigation.navigate("BikeTripComplete", {
       buddy,
@@ -295,9 +312,9 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
         pickupLng: buddy?.pickupLng,
         dropLat: d?.lat || buddy?.dropLat,
         dropLng: d?.lng || buddy?.dropLng,
-        distance: totalDistanceRef.current?.toFixed(1) || "—",
-        duration: Math.round(elapsedSec / 60) || 1,
-        fare: buddy?.fareAmount || 45,
+        distance: settledDistanceM != null ? settledDistanceM / 1000 : null,
+        duration: settledDurationS != null ? settledDurationS / 60 : null,
+        fare: settledFare,
       },
     });
   };

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Platform,
@@ -12,6 +12,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import RoutePolylinePreview from "../components/RoutePolylinePreview";
+import { searchRoutesByLocation } from "../../passenger/services/passengerService";
+import useWebSocket from "../../shared/hooks/useWebSocket";
+import { WS } from "../../constants";
 
 /* ─────────────────────────────────────────────
    HELPERS
@@ -279,11 +282,52 @@ export default function PassengerRouteList({ navigation, route }) {
   const pickup = initialPickup;
   const destination = initialDestination;
   const [expandedRouteId, setExpandedRouteId] = useState(null);
+  const [liveTrips, setLiveTrips] = useState(Array.isArray(trips) ? trips : []);
+  const refreshMatchesRef = useRef(null);
+  const refreshInFlightRef = useRef(false);
+
+  useEffect(() => {
+    setLiveTrips(Array.isArray(trips) ? trips : []);
+  }, [trips]);
+
+  useEffect(() => {
+    if (!isBike || !pickup?.lat || !pickup?.lon || !destination?.lat || !destination?.lon) return undefined;
+    let alive = true;
+    let loadingNow = false;
+    const refreshMatches = async () => {
+      if (loadingNow || refreshInFlightRef.current) return;
+      loadingNow = true;
+      refreshInFlightRef.current = true;
+      try {
+        const matches = await searchRoutesByLocation(
+          pickup.lat, pickup.lon, destination.lat, destination.lon, 2000,
+          { vehicleType: "bike", limit: 20 },
+        );
+        if (alive) setLiveTrips(Array.isArray(matches) ? matches : []);
+      } catch (error) {
+        // Preserve the last good cards during a transient network interruption.
+        console.warn("Live journey refresh failed", error);
+      } finally {
+        loadingNow = false;
+        refreshInFlightRef.current = false;
+      }
+    };
+    refreshMatchesRef.current = refreshMatches;
+    const interval = setInterval(refreshMatches, 15000);
+    return () => { alive = false; clearInterval(interval); };
+  }, [isBike, pickup?.lat, pickup?.lon, destination?.lat, destination?.lon]);
+
+  useWebSocket(isBike ? WS.journeySearch : null, {
+    enabled: isBike,
+    onMessage: (message) => {
+      if (message?.type === "journey_search_update") refreshMatchesRef.current?.();
+    },
+  });
 
   /* BEST MATCH: lowest total walk first, then shorter ETA, then lower fare. */
   const sortedTrips = useMemo(() => {
-    if (!Array.isArray(trips)) return [];
-    return [...trips].sort((a, b) => {
+    if (!Array.isArray(liveTrips)) return [];
+    return [...liveTrips].sort((a, b) => {
       const walkA = totalWalkMeters(a);
       const walkB = totalWalkMeters(b);
       if (walkA !== walkB) return walkA - walkB;
@@ -292,7 +336,7 @@ export default function PassengerRouteList({ navigation, route }) {
       if (etaA !== etaB) return etaA - etaB;
       return (Number(a?.fare) || 0) - (Number(b?.fare) || 0);
     });
-  }, [trips]);
+  }, [liveTrips]);
 
   const handleToggleExpand = (routeId) => {
     setExpandedRouteId((cur) =>
@@ -313,7 +357,8 @@ export default function PassengerRouteList({ navigation, route }) {
         pickup,
         destination,
         mode,
-        route_id: selectedTrip?.id,
+        route_id: null,
+        target_trip_id: selectedTrip?.trip_id || selectedTrip?.id,
         fare: selectedTrip?.fare,
       });
       return;

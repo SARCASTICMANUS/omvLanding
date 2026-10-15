@@ -71,7 +71,10 @@ export default function DriverOtpEntry({ ride, route, onBack, onVerified }) {
     setVerifying(true);
     setError("");
     try {
-      const response = await api.patch(API_PATHS.dispatchStart(ride.tripId), { otp: code });
+      const response = await api.patch(API_PATHS.dispatchStart(ride.tripId), {
+        otp: code,
+        ...(ride.boardingRequestId ? { boarding_request_id: ride.boardingRequestId } : {}),
+      });
       const payload = response.data || {};
       if (payload.success !== false) {
         setVerifying(false);
@@ -82,7 +85,7 @@ export default function DriverOtpEntry({ ride, route, onBack, onVerified }) {
     } catch (requestError) {
       try {
         const detail = await api.get(API_PATHS.dispatchDetail(ride.tripId));
-        if (detail.data?.status === "active") {
+        if (!ride.boardingRequestId && detail.data?.status === "active") {
           setVerifying(false);
           finish();
           return;

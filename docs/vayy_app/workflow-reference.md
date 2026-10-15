@@ -1,4 +1,7 @@
-# VAYY — Route-Based Mobility Platform
+# VAYY — Route-Based Mobility Platform: Workflow Reference
+
+> Migrated from the app README. This is a screen/workflow snapshot, not a guarantee that every named screen or proposed transition is currently registered. For the current navigation source of truth, inspect `src/navigation/AppNavigator.jsx`, `DriverNavigator.jsx`, and `PassengerNavigator.jsx`. The app is JavaScript/JSX-based; older TypeScript references in this snapshot may not apply.
+
 
 Passenger & driver platform for bike and auto ride-sharing with route discovery, buddy matching, live tracking, and OTP handshake verification.
 

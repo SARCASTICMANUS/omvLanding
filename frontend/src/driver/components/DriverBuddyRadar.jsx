@@ -57,7 +57,17 @@ export default function DriverBuddyRadar({
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
 
-  useDriverLocationPush({ enabled: online });
+  // Publish a live Redis location snapshot while this route is available for
+  // hand-raises. The journey payload is returned by journeyStart and contains
+  // the authoritative vehicle/trip identity.
+  useDriverLocationPush({
+    enabled: online && Boolean(route?.journey?.trip_id) && Boolean(route?.journey?.vehicle_id),
+    vehicleId: route?.journey?.vehicle_id,
+    tripId: route?.journey?.trip_id,
+    vehicleType: route?.journey?.vehicle_type || route?.vehicle_type,
+    vehicleNumber: route?.journey?.vehicle_number || route?.vehicle_number,
+    driverId: userId,
+  });
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return undefined;

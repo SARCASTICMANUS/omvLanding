@@ -66,6 +66,7 @@ export default function DriverFlow() {
   const [endingRide, setEndingRide] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [routeError, setRouteError] = useState("");
+  const [activeJourneyId, setActiveJourneyId] = useState(null);
 
   const {
     currentStep,
@@ -103,7 +104,7 @@ export default function DriverFlow() {
       }
     };
     syncTripStatus();
-  }, [activeTrip?.id, dispatch]);
+  }, [activeTrip?.id, currentStep, dispatch]);
 
   useEffect(() => {
     if (
@@ -272,10 +273,78 @@ export default function DriverFlow() {
     dispatch(setDriverLoading(false));
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    api.get(API_PATHS.tracking.journeyActive).then((response) => {
+      const journey = response.data?.data ?? response.data;
+      if (cancelled || !journey?.trip_id) return;
+      setActiveJourneyId(journey.trip_id);
+      dispatch(setSelectedRoute({ ...journey, active_journey_id: journey.trip_id, journey }));
+      dispatch(setDriverStatus("online"));
+      dispatch(setStep(STEPS.RADAR));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [dispatch]);
+
+  const handleStartJourney = async () => {
+    try {
+      const point = (value, fallback) => {
+        if (Array.isArray(value) && value.length >= 2) {
+          return { lat: Number(value[1]), lng: Number(value[0]) };
+        }
+        const lat = Number(value?.lat ?? value?.latitude ?? fallback?.lat);
+        const lng = Number(value?.lng ?? value?.lon ?? value?.longitude ?? fallback?.lon);
+        return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+      };
+      const origin = point(selectedRoute?.startCoord, source);
+      const destinationPoint = point(selectedRoute?.endCoord, destination);
+      if (!origin || !destinationPoint) throw new Error("Choose a valid start and destination first.");
+
+      const vehicleResponse = await api.get(API_PATHS.driver.vehicle);
+      const vehiclePayload = vehicleResponse.data?.data ?? vehicleResponse.data ?? {};
+      const vehicleId = vehiclePayload.id || vehiclePayload.vehicle?.id || vehiclePayload.vehicle_id;
+      if (!vehicleId) throw new Error("An active assigned vehicle is required to start a journey.");
+
+      const response = await api.post(API_PATHS.tracking.journeyStart, {
+        vehicle_id: vehicleId,
+        origin,
+        destination: destinationPoint,
+        origin_name: selectedRoute?.startLabel || source?.name || source?.display_name || "",
+        destination_name: selectedRoute?.endLabel || destination?.name || destination?.display_name || "",
+      });
+      const journey = response.data?.data ?? response.data ?? {};
+      if (!journey.trip_id) throw new Error("The server did not return an active journey ID.");
+      setActiveJourneyId(journey.trip_id);
+      dispatch(setSelectedRoute({ ...selectedRoute, active_journey_id: journey.trip_id, journey }));
+      dispatch(setStep(STEPS.RADAR));
+    } catch (error) {
+      const message = error?.response?.data?.detail || error?.response?.data?.message || error?.message || "Could not start this journey.";
+      setRouteError(message);
+      dispatch(setDriverError(message));
+      dispatch(setStep(STEPS.ROUTES));
+    }
+  };
+
+  const handleEndJourney = async () => {
+    if (activeJourneyId) {
+      try {
+        await api.post(API_PATHS.tracking.journeyEnd, { trip_id: activeJourneyId });
+      } catch (error) {
+        const message = error?.response?.data?.detail || error?.response?.data?.message || "Could not end this journey.";
+        setRouteError(message);
+        dispatch(setDriverError(message));
+        return;
+      }
+    }
+    setActiveJourneyId(null);
+    dispatch(setStep(STEPS.ROUTES));
+  };
+
   const handleAcceptRide = async (ride) => {
     try {
       let tripId = ride.tripId || null;
       let otp = ride.otp || null;
+      let boardingRequestId = ride.boardingRequestId || null;
 
       if (ride.requestId) {
         const response = await api.post(BROADCAST_ACCEPT(ride.requestId));
@@ -292,6 +361,7 @@ export default function DriverFlow() {
         }
         tripId = data.trip_id || tripId;
         otp = data.otp || otp;
+        boardingRequestId = data.boarding_request_id || boardingRequestId;
       } else if (tripId) {
         try {
           const response = await api.patch(API_PATHS.dispatchAccept(tripId));
@@ -301,6 +371,7 @@ export default function DriverFlow() {
           }
           tripId = payload.data?.id || tripId;
           otp = payload.data?.otp || otp;
+          boardingRequestId = payload.data?.boarding_request_id || boardingRequestId;
         } catch (acceptError) {
           // Already accepted by us (e.g. after a refresh) is still a success.
           const detail = await api.get(API_PATHS.dispatchDetail(tripId)).catch(() => null);
@@ -310,6 +381,7 @@ export default function DriverFlow() {
           }
           tripId = detail.data?.id || tripId;
           otp = detail.data?.otp || otp;
+          boardingRequestId = detail.data?.boarding_request_id || boardingRequestId;
         }
       } else {
         return { ok: false, error: "This request has no trip reference" };
@@ -320,6 +392,7 @@ export default function DriverFlow() {
           ...ride,
           tripId,
           dispatchId: tripId,
+          boardingRequestId,
           otp,
         }),
       );
@@ -385,10 +458,20 @@ export default function DriverFlow() {
     if (!tripId || endingRide) return;
 
     setEndingRide(true);
+    let segmentFare = null;
     try {
-      await api.patch(API_PATHS.dispatchComplete(tripId));
-    } catch {
-      // Completion is retried implicitly by the health check; still show the summary.
+      const completionResponse = await api.patch(API_PATHS.dispatchComplete(tripId), {
+        ...(activeRide?.boardingRequestId ? { boarding_request_id: activeRide.boardingRequestId } : {}),
+      });
+      const completionData = completionResponse.data?.data ?? completionResponse.data;
+      if (completionData?.status === "partially_settled") {
+        throw new Error("Passenger fare could not be settled. Please retry.");
+      }
+      segmentFare = completionData?.fare ?? completionData?.total_fare ?? null;
+    } catch (error) {
+      dispatch(setDriverError(error?.response?.data?.message || error?.message || "Could not complete passenger segment."));
+      setEndingRide(false);
+      return;
     }
 
     const [fareResponse, earningsResponse] = await Promise.allSettled([
@@ -407,7 +490,9 @@ export default function DriverFlow() {
       tripId,
       ride: activeRide,
       route: selectedRoute,
-      fare: farePayload && farePayload.success !== false ? farePayload : null,
+      fare: activeRide?.boardingRequestId
+        ? (segmentFare != null ? { total_fare: segmentFare } : null)
+        : (farePayload && farePayload.success !== false ? farePayload : null),
       earnings:
         earningsPayload && !earningsPayload.detail && earningsPayload.success !== false
           ? earningsPayload
@@ -488,7 +573,7 @@ export default function DriverFlow() {
       route={selectedRoute}
       onAccept={handleAcceptRide}
       onSkip={handleSkipRide}
-      onBack={() => dispatch(setStep(STEPS.ROUTES))}
+      onBack={handleEndJourney}
     />
   );
 
@@ -498,7 +583,7 @@ export default function DriverFlow() {
     return (
       <div className="relative min-h-screen">
         {buddyRadar}
-        <DriverPreRideCheck onComplete={() => dispatch(setStep(STEPS.RADAR))} />
+        <DriverPreRideCheck onComplete={handleStartJourney} />
       </div>
     );
   }

@@ -1,4 +1,5 @@
 from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.operations import TrigramExtension
 from django.db import migrations
 
 
@@ -9,6 +10,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        TrigramExtension(),
         migrations.AddIndex(
             model_name="stop",
             index=GinIndex(

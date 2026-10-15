@@ -61,11 +61,18 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
       ]).start();
       return;
     }
-    // Verify OTP via backend
-    if (dispatchId) {
-      try {
-        await dispatchRedux(startDispatchTrip({ tripId: dispatchId, otp: code })).unwrap();
-      } catch {
+    // A ride must always be verified by the backend.
+    if (!dispatchId) {
+      setOtpError("This trip is unavailable. Return to requests and try again.");
+      return;
+    }
+    try {
+      await dispatchRedux(startDispatchTrip({
+        tripId: dispatchId,
+        otp: code,
+        boardingRequestId: buddy?.boardingRequestId,
+      })).unwrap();
+    } catch {
         setOtpError("Invalid code. Please try again.");
         Animated.sequence([
           Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
@@ -75,7 +82,6 @@ export default function BikeOTPEntryScreen({ navigation, route }) {
           Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
         ]).start();
         return;
-      }
     }
     setOtpError("");
     setShowSuccess(true);

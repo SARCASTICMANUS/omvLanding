@@ -348,6 +348,7 @@ RABBITMQ_PASSWORD = env(
 
 # OSRM
 OSRM_URL = env("OSRM_URL", default="http://osrm:5000")
+OSRM_MAX_SNAP_DISTANCE_M = env.int("OSRM_MAX_SNAP_DISTANCE_M", default=5000)
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/

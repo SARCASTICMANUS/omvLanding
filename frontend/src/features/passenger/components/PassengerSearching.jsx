@@ -44,10 +44,11 @@ export default function PassengerSearching({
     onMatchedRef.current = onMatched;
   }, [onMatched]);
 
-  const routeId = selectedTrip?.id || selectedTrip?.route_id;
+  const targetTripId = selectedTrip?.trip_id || selectedTrip?.id;
+  const routeId = selectedTrip?.route_id || null;
   const pickupStopId = selectedTrip?.pickup_stop?.id || selectedTrip?.pickup_stop?.stop_id;
   const dropStopId = selectedTrip?.dropoff_stop?.id || selectedTrip?.dropoff_stop?.stop_id;
-  const invalidRequest = !routeId || !pickupStopId;
+  const invalidRequest = !targetTripId || !pickupStopId || !dropStopId;
   const phase = invalidRequest ? "error" : phaseState;
   const errorMessage = invalidRequest
     ? "Missing route or pickup details. Go back and pick your stops again."
@@ -68,6 +69,7 @@ export default function PassengerSearching({
       try {
         const response = await api.post(API_PATHS.operations.dispatchRequest, {
           route_id: routeId,
+          target_trip_id: targetTripId,
           pickup_stop_id: pickupStopId,
           drop_stop_id: dropStopId || undefined,
           mode: "broadcast",
@@ -109,7 +111,7 @@ export default function PassengerSearching({
     return () => {
       alive = false;
     };
-  }, [attempt, routeId, pickupStopId, dropStopId, invalidRequest, handleMatched]);
+  }, [attempt, routeId, targetTripId, pickupStopId, dropStopId, invalidRequest, handleMatched]);
 
   useEffect(() => {
     if (phase !== "searching" || !requestId) return undefined;

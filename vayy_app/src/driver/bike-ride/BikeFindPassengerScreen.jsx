@@ -17,7 +17,7 @@ import { useDispatch, useSelector } from "react-redux";
 import * as Location from "expo-location";
 import { WS } from "../../constants";
 import { acceptBroadcast, rejectBroadcast, acceptDispatch, rejectDispatch } from "../../store/slices/dispatchSlice";
-import { getAssignedVehicle } from "../services/driverService";
+import { getAssignedVehicle, getActiveJourney, startJourney, endJourney } from "../services/driverService";
 import useDriverLocationPush from "../hooks/useDriverLocationPush";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import COLORS from "../../shared/constants/colors";
@@ -54,6 +54,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   const [vehicleIdx, setVehicleIdx] = useState(0);
   const [phase, setPhase] = useState("scanning");
   const [online, setOnline] = useState(false);
+  const [activeJourney, setActiveJourney] = useState(null);
   const [currentBuddy, setCurrentBuddy] = useState(null);
   const [notification, setNotification] = useState(null);
   const [scanSeconds, setScanSeconds] = useState(60);
@@ -67,6 +68,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   const handleWsMessage = useCallback((data) => {
     // New broadcast dispatch request from a passenger
     if (data.type === "new_dispatch_request" && data.dispatch) {
+      if (!online) return;
       const req = data.dispatch;
       const realBuddy = {
         id: req.request_id || req.id || req.trip_id || "ws_req",
@@ -94,7 +96,6 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
       };
       setCurrentBuddy(realBuddy);
       setPhase("found");
-      if (!online) setOnline(true);
       // Slide up the bottom sheet popup
       Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 60, useNativeDriver: true }).start();
       // Show notification banner
@@ -131,7 +132,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
         setPhase("scanning");
       });
     }
-  }, [slideAnim, notifSlide]);
+  }, [slideAnim, notifSlide, online]);
 
   useWebSocket(userId ? WS.notifications(userId) : null, {
     enabled: !!userId,
@@ -178,18 +179,37 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
     if (!showVerify) return;
     let cancelled = false;
     const run = async () => {
-      const updated = CHECKS.map((c) => ({ ...c, status: "pending" }));
-      for (let i = 0; i < updated.length; i++) {
+      setAllPassed(false);
+      setChecks(CHECKS.map((check) => ({ ...check, status: "pending" })));
+      try {
+        setChecks((items) => items.map((item) => item.key === "network" ? { ...item, status: "checking" } : item));
+        const vehicleResponse = await getAssignedVehicle();
+        const vehicle = vehicleResponse?.data || vehicleResponse;
+        const vehicleId = vehicle?.id || vehicle?.vehicle?.id;
         if (cancelled) return;
-        updated[i] = { ...updated[i], status: "checking" };
-        setChecks([...updated]);
-        await new Promise((r) => setTimeout(r, 700 + Math.random() * 600));
+        vehicleIdRef.current = vehicleId || null;
+        setVehicleReady(!!vehicleId);
+        if (!vehicleId) throw new Error("No assigned vehicle");
+        setChecks((items) => items.map((item) => item.key === "network" || item.key === "device" ? { ...item, status: "passed" } : item));
+
+        setChecks((items) => items.map((item) => item.key === "gps" || item.key === "location" ? { ...item, status: "checking" } : item));
+        const permission = await Location.getForegroundPermissionsAsync();
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+        if (permission.status !== "granted" || !servicesEnabled) throw new Error("GPS permission or location services unavailable");
+        const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
         if (cancelled) return;
-        updated[i] = { ...updated[i], status: "passed" };
-        setChecks([...updated]);
-        await new Promise((r) => setTimeout(r, 200));
+        setBikePos({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+        setMapCenter({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+        setChecks((items) => items.map((item) => item.key === "gps" || item.key === "location" ? { ...item, status: "passed" } : item));
+        // Helmet and kickstand are physical checks and cannot be detected by the phone.
+        // Keep them pending rather than falsely claiming that sensors verified them.
+        setAllPassed(true);
+      } catch (error) {
+        if (cancelled) return;
+        setVehicleReady(false);
+        setAllPassed(false);
+        setNotification(error?.message || "Readiness check failed. Check your connection, vehicle and GPS.");
       }
-      if (!cancelled) setAllPassed(true);
     };
     run();
     return () => { cancelled = true; };
@@ -202,8 +222,53 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
     ).start();
   }, [allPassed, spinAnim]);
 
-  const handleStart = () => {
-    if (!allPassed) return;
+  const handleStart = async () => {
+    if (!allPassed || !userId) return;
+    try {
+      const permission = await Location.getForegroundPermissionsAsync();
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (permission.status !== "granted" || !servicesEnabled) throw new Error("Enable GPS and location permission before going online.");
+      const vehicleResponse = await getAssignedVehicle();
+      const vehicle = vehicleResponse?.data || vehicleResponse;
+      const vehicleId = vehicle?.id || vehicle?.vehicle?.id;
+      if (!vehicleId) throw new Error("An assigned vehicle is required before going online.");
+      vehicleIdRef.current = vehicleId;
+      setVehicleReady(true);
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      setBikePos({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+      setMapCenter({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+
+      // Publish the driver's selected free-form journey before becoming visible
+      // to passengers. The backend resolves/stores the authoritative OSRM path
+      // and global-stop index in Redis; the preview geometry is never trusted.
+      const selectedRoute = navRoute?.params?.route || {};
+      const readPoint = (point) => {
+        if (Array.isArray(point) && point.length >= 2) {
+          return { lat: Number(point[1]), lng: Number(point[0]) };
+        }
+        const lat = Number(point?.lat ?? point?.latitude ?? point?.y);
+        const lng = Number(point?.lng ?? point?.lon ?? point?.longitude ?? point?.x);
+        return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+      };
+      const origin = readPoint(selectedRoute.pickup || selectedRoute.origin || selectedRoute.startCoord);
+      const destination = readPoint(selectedRoute.destination || selectedRoute.endCoord);
+      if (!origin || !destination) {
+        throw new Error("Select a valid starting point and destination before going online.");
+      }
+      const journey = await startJourney({
+        vehicleId,
+        origin,
+        destination,
+        originName: selectedRoute.pickup?.name || selectedRoute.pickup?.display_name || selectedRoute.origin_name || selectedRoute.startLabel || "",
+        destinationName: selectedRoute.destination?.name || selectedRoute.destination?.display_name || selectedRoute.destination_name || selectedRoute.endLabel || "",
+      });
+      if (!journey?.trip_id) throw new Error("The server did not return an active journey ID.");
+      setActiveJourney(journey);
+    } catch (error) {
+      setOnline(false);
+      setNotification(error?.message || "Readiness or journey start failed.");
+      return;
+    }
     Animated.parallel([
       Animated.timing(verifySlide, { toValue: 0, duration: 350, easing: Easing.in(Easing.ease), useNativeDriver: true }),
       Animated.timing(verifyOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
@@ -252,9 +317,28 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   // live only here, so autodrivers never registered a token and PushService had
   // nothing to deliver to.
 
+  useEffect(() => {
+    if (!userId) return undefined;
+    let cancelled = false;
+    getActiveJourney().then((journey) => {
+      if (cancelled || !journey?.trip_id) return;
+      setActiveJourney(journey);
+      vehicleIdRef.current = journey.vehicle_id || vehicleIdRef.current;
+      setVehicleReady(true);
+      setOnline(true);
+      setShowVerify(false);
+      setPhase("scanning");
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [userId]);
+
   useDriverLocationPush({
-    enabled: online && vehicleReady,
+    enabled: online && vehicleReady && Boolean(activeJourney?.trip_id),
     vehicleId: vehicleIdRef.current,
+    tripId: activeJourney?.trip_id,
+    vehicleType: navRoute?.params?.route?.vehicle_type || "bike",
+    vehicleNumber: activeJourney?.vehicle_number,
+    driverId: userId,
     onLocation: (loc) => setBikePos(loc),
   });
 
@@ -291,41 +375,69 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
     return () => clearInterval(iv);
   }, [online, phase]);
 
-  const handleAccept = async () => {
-    let otp = null;
-    let activeTripId = null;
-    if (currentBuddy?.requestId) {
+
+  const handleBack = async () => {
+    if (activeJourney?.trip_id) {
       try {
-        const result = await dispatch(acceptBroadcast(currentBuddy.requestId)).unwrap();
-        const payload = result?.data || result;
-        otp = payload?.otp || null;
-        activeTripId = payload?.trip_id || null;
-      } catch (e) {
-        console.warn("acceptBroadcast failed:", e);
+        await endJourney(activeJourney.trip_id);
+      } catch (error) {
+        setNotification(error?.message || "Could not end the active journey. Stay online and try again.");
+        return;
       }
-    } else if (currentBuddy?.dispatchId) {
-      try {
-        await dispatch(acceptDispatch(currentBuddy.dispatchId)).unwrap();
-      } catch (e) {
-        console.warn("acceptDispatch failed:", e);
-      }
+      setActiveJourney(null);
+      setOnline(false);
     }
-    const tripId = activeTripId || currentBuddy?.dispatchId || currentBuddy?.requestId;
-    const buddyWithOtp = { ...currentBuddy, otp: otp || currentBuddy?.otp, dispatchId: tripId };
-    navigation.navigate("BikeRideToPickup", { buddy: buddyWithOtp, dispatchId: tripId });
+    navigation.goBack();
   };
 
-  const handleIgnore = () => {
-    if (currentBuddy?.requestId) {
-      dispatch(rejectBroadcast(currentBuddy.requestId));
-    } else if (currentBuddy?.dispatchId) {
-      // Fallback to direct dispatch reject
-      dispatch(rejectDispatch(currentBuddy.dispatchId));
+  const handleAccept = async () => {
+    if (!currentBuddy || (!currentBuddy.requestId && !currentBuddy.dispatchId)) {
+      setNotification("This request is no longer available. Please wait for another request.");
+      return;
     }
-    Animated.timing(slideAnim, { toValue: height, duration: 250, useNativeDriver: true }).start(() => {
-      setCurrentBuddy(null);
-      setPhase("scanning");
-    });
+    try {
+      let payload;
+      if (currentBuddy.requestId) {
+        const result = await dispatch(acceptBroadcast(currentBuddy.requestId)).unwrap();
+        payload = result?.data || result;
+        if (payload?.status && payload.status !== "accepted") throw new Error(payload.message || "Request is no longer available.");
+      } else {
+        const result = await dispatch(acceptDispatch(currentBuddy.dispatchId)).unwrap();
+        payload = result?.data || result;
+        if (payload?.status && !["accepted", "assigned", "confirmed"].includes(payload.status)) throw new Error(payload.message || "Request could not be accepted.");
+      }
+      const tripId = payload?.trip_id || payload?.dispatch_id || payload?.id || (!currentBuddy.requestId ? currentBuddy.dispatchId : null);
+      if (!tripId) throw new Error("The server did not return a valid trip ID.");
+      const buddyWithOtp = {
+        ...currentBuddy,
+        otp: payload?.otp || currentBuddy.otp,
+        dispatchId: tripId,
+        boardingRequestId: payload?.boarding_request_id || currentBuddy.boardingRequestId || null,
+      };
+      navigation.navigate("BikeRideToPickup", { buddy: buddyWithOtp, dispatchId: tripId });
+    } catch (error) {
+      console.warn("Accept dispatch failed:", error);
+      setNotification(error?.message || "Could not accept this request. Please try again.");
+    }
+  };
+
+  const handleIgnore = async () => {
+    try {
+      if (currentBuddy?.requestId) {
+        await dispatch(rejectBroadcast(currentBuddy.requestId)).unwrap();
+      } else if (currentBuddy?.dispatchId) {
+        await dispatch(rejectDispatch(currentBuddy.dispatchId)).unwrap();
+      } else {
+        throw new Error("This request is no longer available.");
+      }
+      Animated.timing(slideAnim, { toValue: height, duration: 250, useNativeDriver: true }).start(() => {
+        setCurrentBuddy(null);
+        setPhase("scanning");
+      });
+    } catch (error) {
+      console.warn("Reject dispatch failed:", error);
+      setNotification(error?.message || "Could not reject this request. Please try again.");
+    }
   };
 
   const sweepRotate = sweepAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
@@ -459,11 +571,18 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
         zIndex={20}
         title="Buddy Radar"
         subtitle={online ? "Searching for buddies nearby" : "Go online to start scanning"}
-        onBack={() => navigation.goBack()}
+        onBack={handleBack}
         right={
           <TouchableOpacity
             style={[styles.headerBtn, online && styles.headerBtnActive]}
-            onPress={() => setOnline(!online)}
+            onPress={() => {
+              if (online) {
+                setOnline(false);
+                setPhase("scanning");
+              } else {
+                handleStart();
+              }
+            }}
             accessibilityRole="button"
             accessibilityLabel={online ? "Go offline" : "Go online"}
           >

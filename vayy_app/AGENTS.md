@@ -44,8 +44,9 @@ vayy_app/
 │   ├── theme/              # Legacy theme files
 │   ├── tracking/           # Live tracking screens
 │   └── utils/              # Utility functions
-├── docs/                   # Documentation (bike-flow-audit.md)
 └── assets/                 # Images (splash, icons, vehicle images)
+
+Engineering documentation is maintained at repository root in `docs/vayy_app/`.
 ```
 
 ## Design System

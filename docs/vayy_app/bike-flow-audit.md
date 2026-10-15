@@ -1,4 +1,7 @@
-# VAYY Passenger Bike Flow — Production Audit & Redesign
+# VAYY Passenger Bike Flow — Audit and Proposed Improvements
+
+> **Status: proposal/audit snapshot, not an implementation checklist of confirmed missing features.** Some items may have changed since this audit. Compare every item with current passenger navigation, screens, API services and backend endpoints before implementing it. Do not treat suggested WebSocket events or APIs below as existing contracts.
+
 
 ---
 

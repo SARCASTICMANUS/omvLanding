@@ -148,7 +148,10 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
     setShowArrivedModal(false);
     if (dispatchId) {
       try {
-        await dispatchRedux(arrivedDispatch(dispatchId)).unwrap();
+        await dispatchRedux(arrivedDispatch({
+          tripId: dispatchId,
+          boardingRequestId: buddy?.boardingRequestId,
+        })).unwrap();
       } catch (e) {
         console.warn("arrivedDispatch failed:", e);
       }

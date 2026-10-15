@@ -74,6 +74,14 @@ export const TRACKING = {
   driverLocation: "/api/tracking/driver-location/",
   nearbyVehicles: "/api/tracking/nearby/",
   activeRouteTrips: (routeId) => `/api/tracking/route/${routeId}/active-trips/`,
+  journeyPreview: "/api/tracking/journeys/preview/",
+  journeyStart: "/api/tracking/journeys/start/",
+  journeyActive: "/api/tracking/journeys/active/",
+  journeyEnd: "/api/tracking/journeys/end/",
+  journeyDetail: (tripId) => `/api/tracking/journeys/${tripId}/`,
+  corridorVehicles: "/api/tracking/corridor/vehicles/",
+  raiseHand: "/api/tracking/raise-hand/",
+  stopPassingVehicles: (stopId) => `/api/tracking/stops/${stopId}/passing-vehicles/`,
 };
 
 export const COMMUNICATION = {

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -11,10 +11,6 @@ import PassengerRideComplete from "./PassengerRideComplete";
 import PassengerLiveTracking from "./PassengerLiveTracking";
 import api from "../../../lib/api";
 import { API_PATHS } from "../../../constants/apiPaths";
-import {
-  fetchDynamicRoutes,
-  isDynamicRouteCreationEnabled,
-} from "../../../services/routes/routeProvider";
 import { useSocketSubscription } from "../../../hooks/useSocketSubscription";
 import {
   setJourneyStep,
@@ -94,10 +90,6 @@ export default function PassengerFlow({ onBackToDashboard }) {
   const [routeError, setRouteError] = useState("");
   const settledRef = useRef(false);
 
-  /* City and vehicle type come from the existing profile / URL mode — no second
-     location-selection or config state is introduced. */
-  const user = useSelector((state) => state.auth?.user);
-
   const hasValidCoords = (point) =>
     point &&
     typeof point.lat === "number" &&
@@ -105,75 +97,52 @@ export default function PassengerFlow({ onBackToDashboard }) {
     typeof point.lon === "number" &&
     Number.isFinite(point.lon);
 
-  const normalizeTrips = (data) => {
-    if (Array.isArray(data)) return data;
-    if (!data || typeof data !== "object") return [];
-
-    if (Array.isArray(data.active_trips)) return data.active_trips;
-    if (Array.isArray(data.trips)) return data.trips;
-    if (Array.isArray(data.results)) return data.results;
-    if (Array.isArray(data.routes)) return data.routes;
-    if (Array.isArray(data.data)) return data.data;
-
-    return [];
-  };
-
   const fetchFilteredTrips = async (from, to) => {
     if (!hasValidCoords(from) || !hasValidCoords(to)) {
-      console.error("Invalid pickup/drop coordinates", { from, to });
-      return [];
+      throw new Error("Pickup and destination coordinates are required.");
     }
 
-    // ==========================================================================
-    // DYNAMIC ROUTE CREATION — ACTIVE (DYNAMIC_ROUTE_CREATION_ENABLED = true)
-    //
-    // The origin/destination chosen in the existing planner are posted to the
-    // backend Dynamic Route API. The generated response is mapped by
-    // normalizeDynamicRoute() into the same shape the existing Route Card and
-    // the existing pre-ride / searching steps already consume, so only the data
-    // source changed.
-    // ==========================================================================
-    if (isDynamicRouteCreationEnabled()) {
-      const { routes } = await fetchDynamicRoutes({
-        audience: "passenger",
-        origin: from,
-        destination: to,
-        cityId: user?.city ?? null,
-        vehicleType: mode,
-      });
-      return routes;
-    }
+    const response = await api.post(API_PATHS.tracking.corridorVehicles, {
+      origin: { lat: from.lat, lng: from.lon },
+      destination: { lat: to.lat, lng: to.lon },
+      radius: 2000,
+      limit: 20,
+    });
+    const data = response.data?.data ?? response.data ?? {};
+    const path = Array.isArray(data.path) ? data.path : [];
+    const routeGeometry = path.length > 1
+      ? { type: "LineString", coordinates: path.map(([lat, lng]) => [lng, lat]) }
+      : null;
 
-    // ==========================================================================
-    // LEGACY FIXED-ROUTE FETCH — REPLACED BY DYNAMIC ROUTE CREATION
-    //
-    // Previous behaviour:
-    //   fetch an existing manually traced route and render it.
-    //
-    // Current behaviour (when DYNAMIC_ROUTE_CREATION_ENABLED = true):
-    //   request a route from the dynamic route API above.
-    //
-    // Retained temporarily for rollback/reference.
-    // Do not use when dynamic route creation is enabled.
-    // Set VITE_DYNAMIC_ROUTE_CREATION_ENABLED=false to restore this path.
-    // ==========================================================================
-    try {
-      const response = await api.get(API_PATHS.transport.routeSearchByLocation, {
-        params: {
-          origin_lat: from.lat,
-          origin_lng: from.lon,
-          dest_lat: to.lat,
-          dest_lng: to.lon,
-        },
+    return (Array.isArray(data.vehicles) ? data.vehicles : [])
+      .filter((vehicle) => !mode || vehicle.vehicle_type === mode)
+      .map((vehicle) => {
+        const board = vehicle.board_stop;
+        const drop = vehicle.drop_stop;
+        const segmentDistanceM = Number(vehicle.segment_distance_m);
+        const etaSeconds = vehicle.eta_minutes == null ? null : Number(vehicle.eta_minutes) * 60;
+        return {
+          ...vehicle,
+          id: vehicle.trip_id,
+          trip_id: vehicle.trip_id,
+          route_id: null,
+          route_code: vehicle.vehicle_number,
+          name: vehicle.driver_name || vehicle.vehicle_number,
+          source_name: board?.name || from.name || from.display_name || "Pickup",
+          destination_name: drop?.name || to.name || to.display_name || "Destination",
+          origin: board?.name || from.name || from.display_name || "Pickup",
+          destination: drop?.name || to.name || to.display_name || "Destination",
+          pickup_stop: board ? { ...board, lon: board.lng, lat: Number(board.lat) } : null,
+          dropoff_stop: drop ? { ...drop, lon: drop.lng, lat: Number(drop.lat) } : null,
+          fare: vehicle.estimated_fare ?? null,
+          distance_km: Number.isFinite(segmentDistanceM) ? Number((segmentDistanceM / 1000).toFixed(2)) : null,
+          total_distance_meters: Number.isFinite(segmentDistanceM) ? segmentDistanceM : null,
+          eta_seconds: Number.isFinite(etaSeconds) ? etaSeconds : null,
+          stops: Array.isArray(vehicle.upcoming_stops) ? vehicle.upcoming_stops : [],
+          route_geometry: routeGeometry,
+          is_live_journey: true,
+        };
       });
-      return normalizeTrips(response.data).filter((trip) => {
-        const type = String(trip?.vehicle_type || trip?.vehicle?.vehicle_type || "").toLowerCase();
-        return !type.includes("auto");
-      });
-    } catch (error) {
-      console.error("Failed to fetch filtered trips", error);
-      return [];
-    }
   };
 
   const handlePlannerNext = async ({ from, to }) => {
@@ -217,6 +186,54 @@ export default function PassengerFlow({ onBackToDashboard }) {
     setEndError("");
     setBooking({ ...EMPTY_BOOKING, mode: mode || EMPTY_BOOKING.mode });
   }, []);
+
+  // Keep the driver cards live without remounting or changing their UI. The
+  // endpoint reads live coordinates/progress from Redis and cached OSRM geometry.
+  useEffect(() => {
+    if (
+      currentStep !== STEPS.ROUTE_LIST || stage !== null ||
+      !hasValidCoords(pickup) || !hasValidCoords(destination)
+    ) return undefined;
+
+    let alive = true;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const trips = await fetchFilteredTrips(pickup, destination);
+        if (alive) dispatch(setFilteredTrips(trips));
+      } catch {
+        // Keep the last successful list if a refresh fails transiently.
+      } finally {
+        inFlight = false;
+      }
+    };
+    const timer = setInterval(refresh, 15000);
+    return () => { alive = false; clearInterval(timer); };
+    // fetchFilteredTrips only depends on the coordinates and mode listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, stage, pickup?.lat, pickup?.lon, destination?.lat, destination?.lon, mode, dispatch]);
+
+  const journeySearchInFlightRef = useRef(false);
+  useSocketSubscription({
+    key: "passenger-journey-search",
+    path: `/ws/tracking/journey-search/?token=${getAccessToken()}`,
+    enabled: currentStep === STEPS.ROUTE_LIST && stage === null,
+    onMessage: async (message) => {
+      if (message?.type !== "journey_search_update" || journeySearchInFlightRef.current) return;
+      if (!hasValidCoords(pickup) || !hasValidCoords(destination)) return;
+      journeySearchInFlightRef.current = true;
+      try {
+        const trips = await fetchFilteredTrips(pickup, destination);
+        dispatch(setFilteredTrips(trips));
+      } catch {
+        // Keep last successful cards during a transient failure.
+      } finally {
+        journeySearchInFlightRef.current = false;
+      }
+    },
+  });
 
   const handleChooseRoute = (trip) => {
     dispatch(setSelectedTrip(trip));
@@ -274,6 +291,7 @@ export default function PassengerFlow({ onBackToDashboard }) {
         ...prev,
         tripId,
         requestId: payload.request_id || prev.requestId,
+        boardingRequestId: payload.boarding_request_id || prev.boardingRequestId || null,
         driverName: payload.driver_name || prev.driverName,
         vehicleNumber: payload.vehicle_number || prev.vehicleNumber,
         driverRating: payload.driver_rating ?? prev.driverRating,
@@ -300,13 +318,13 @@ export default function PassengerFlow({ onBackToDashboard }) {
       setBooking((prev) => ({
         ...prev,
         status: "completed",
-        finalFare: finalFare ?? prev.finalFare ?? prev.estimateFare ?? null,
+        finalFare: finalFare ?? prev.finalFare ?? null,
       }));
       setStage(STAGES.COMPLETE);
       dispatch(setJourneyStep(STEPS.ROUTE_LIST));
 
       const tripId = booking.tripId;
-      if (finalFare == null && tripId) {
+      if (finalFare == null && tripId && !booking.boardingRequestId) {
         api
           .get(API_PATHS.operations.tripDetail(tripId))
           .then((response) => {
@@ -318,13 +336,21 @@ export default function PassengerFlow({ onBackToDashboard }) {
           .catch(() => null);
       }
     },
-    [dispatch, booking.tripId],
+    [dispatch, booking.tripId, booking.boardingRequestId],
   );
 
   const handleTripStatus = useCallback(
-    (status) => {
+    (status, message = null) => {
+      if (message?.type === "passenger_segment_completed" && message.boarding_request_id !== booking.boardingRequestId) return;
+      if (message?.type === "passenger_arrived" && message.boarding_request_id !== booking.boardingRequestId) return;
+      if (message?.type === "trip_completed" && Array.isArray(message.passengers)) {
+        const ownSegment = message.passengers.find((item) => item.boarding_request_id === booking.boardingRequestId);
+        if (booking.boardingRequestId && !ownSegment) return;
+        settleTrip(ownSegment?.fare ?? null);
+        return;
+      }
       if (status === "completed") {
-        settleTrip(null);
+        settleTrip(message?.fare ?? null);
         return;
       }
       if (status === "cancelled") {
@@ -337,7 +363,7 @@ export default function PassengerFlow({ onBackToDashboard }) {
       }
       setBooking((prev) => (prev.status === status ? prev : { ...prev, status }));
     },
-    [settleTrip, resetBooking, booking.mode, dispatch],
+    [settleTrip, resetBooking, booking.mode, booking.boardingRequestId, dispatch],
   );
 
   const dispatchSocket = useSocketSubscription({
@@ -358,7 +384,7 @@ export default function PassengerFlow({ onBackToDashboard }) {
       }
 
       if (message.status) {
-        handleTripStatus(message.status);
+        handleTripStatus(message.status, message);
       }
     },
   });
@@ -368,15 +394,18 @@ export default function PassengerFlow({ onBackToDashboard }) {
     setEnding(true);
     setEndError("");
     try {
-      const response = await api.patch(API_PATHS.operations.dispatchComplete(booking.tripId));
+      const response = await api.patch(API_PATHS.operations.dispatchComplete(booking.tripId), {
+        ...(booking.boardingRequestId ? { boarding_request_id: booking.boardingRequestId } : {}),
+      });
       const data = response.data?.data ?? response.data ?? {};
-      settleTrip(data.total_fare ?? null);
+      if (data.status === "partially_settled") throw new Error("Passenger fare could not be settled. Please retry.");
+      settleTrip(data.fare ?? data.total_fare ?? null);
     } catch (error) {
       setEndError(errorText(error, "We couldn't end the ride. Please try again."));
     } finally {
       setEnding(false);
     }
-  }, [booking.tripId, ending, settleTrip]);
+  }, [booking.tripId, booking.boardingRequestId, ending, settleTrip]);
 
   const handleCancelRide = useCallback(async () => {
     if (!booking.tripId || cancelling) return;

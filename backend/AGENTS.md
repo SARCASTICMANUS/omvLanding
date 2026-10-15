@@ -310,4 +310,4 @@ python3 scripts/driver_gps_rabbitmq_simulator.py \
 - `backend/vayy/common/websockets/auth.py`: JWT WebSocket authentication
 - `backend/vayy/docker-compose.yaml`: Docker service definitions
 - `backend/vayy/requirements.txt`: Python dependencies
-- `backend/vayy/README.md`: Comprehensive backend documentation
+- `docs/backend/README.md` and `docs/backend/api-reference.md`: canonical backend documentation

@@ -1,7 +1,35 @@
 import api, { normalizeApiError } from "../../shared/lib/api";
-import { dynamicPreview } from "../../routes/services/routeService";
 import { normalizeRecentSearch } from "../../shared/services/searchHistoryService";
 import { AUTH, OPERATIONS, TRANSPORT, TRACKING, RIDE } from "../../constants";
+
+
+/** Search active free-form journeys whose road path contains both endpoints. */
+export const searchCorridorVehicles = async (origin, destination, options = {}) => {
+  try {
+    const response = await api.post(TRACKING.corridorVehicles, {
+      origin, destination,
+      ...(options.radius ? { radius: options.radius } : {}),
+      ...(options.limit ? { limit: options.limit } : {}),
+    });
+    return response.data?.data ?? response.data;
+  } catch (error) {
+    throw normalizeApiError(error, "Unable to find drivers on this route.");
+  }
+};
+
+/** Existing stop-based request contract; the backend validates stop membership and order. */
+export const raiseHand = async ({ pickupStopId, dropStopId, lat, lng }) => {
+  try {
+    const response = await api.post(TRACKING.raiseHand, {
+      pickup_stop_id: pickupStopId,
+      ...(dropStopId ? { dropoff_stop_id: dropStopId } : {}),
+      lat, lng,
+    });
+    return response.data?.data ?? response.data;
+  } catch (error) {
+    throw normalizeApiError(error, "Unable to send your ride request.");
+  }
+};
 
 /**
  * Fetch passenger dashboard data (active trips, etc.)
@@ -117,16 +145,47 @@ export const searchRoutesByLocation = async (
   options = {}
 ) => {
   try {
-    const { routes } = await dynamicPreview({
+    const response = await api.post(TRACKING.corridorVehicles, {
       origin: { lat: originLat, lng: originLng },
       destination: { lat: destLat, lng: destLng },
-      vehicleType: options.vehicleType || "bike",
-      audience: "passenger",
+      radius: options.radius || 2000,
+      limit: options.limit || 20,
     });
-    return routes;
+    const data = response.data?.data ?? response.data;
+    const path = Array.isArray(data?.path) ? data.path : [];
+    const routeGeometry = path.length > 1
+      ? { type: "LineString", coordinates: path.map(([lat, lng]) => [lng, lat]) }
+      : null;
+    return (Array.isArray(data?.vehicles) ? data.vehicles : [])
+      .filter((vehicle) => !options.vehicleType || vehicle.vehicle_type === options.vehicleType)
+      .map((vehicle) => {
+        const board = vehicle.board_stop;
+        const drop = vehicle.drop_stop;
+        const segmentDistanceM = Number(vehicle.segment_distance_m);
+        const etaSeconds = vehicle.eta_minutes == null ? null : Number(vehicle.eta_minutes) * 60;
+        return {
+          ...vehicle,
+          id: vehicle.trip_id,
+          trip_id: vehicle.trip_id,
+          route_code: vehicle.vehicle_number,
+          name: vehicle.driver_name || vehicle.vehicle_number,
+          source_name: board?.name || "Pickup",
+          destination_name: drop?.name || "Destination",
+          origin: board?.name || "Pickup",
+          destination: drop?.name || "Destination",
+          pickup_stop: board ? { ...board, lon: board.lng, lat: Number(board.lat) } : null,
+          dropoff_stop: drop ? { ...drop, lon: drop.lng, lat: Number(drop.lat) } : null,
+          fare: vehicle.estimated_fare ?? null,
+          distance_km: Number.isFinite(segmentDistanceM) ? Number((segmentDistanceM / 1000).toFixed(2)) : null,
+          total_distance_meters: Number.isFinite(segmentDistanceM) ? segmentDistanceM : null,
+          eta_seconds: Number.isFinite(etaSeconds) ? etaSeconds : null,
+          stops: Array.isArray(vehicle.upcoming_stops) ? vehicle.upcoming_stops : [],
+          route_geometry: routeGeometry,
+          is_live_journey: true,
+        };
+      });
   } catch (error) {
-    console.error("Failed to search routes:", error);
-    return [];
+    throw normalizeApiError(error, "Unable to find active drivers on this route.");
   }
 };
 
@@ -164,6 +223,8 @@ export const getRideHistory = async () => {
 };
 
 export default {
+  searchCorridorVehicles,
+  raiseHand,
   getPassengerDashboard,
   getRecentSearches,
   saveRecentSearch,

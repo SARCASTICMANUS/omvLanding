@@ -334,6 +334,16 @@ class RedisGeoService:
             logger.warning(f"Redis GEO async pipeline failed for {vehicle_id}: {e}")
 
     @classmethod
+    async def should_publish_journey_search_update(cls, vehicle_id: str, interval_seconds: int = 2) -> bool:
+        """Throttle global search invalidations per vehicle without storing locations there."""
+        try:
+            client = cls._async_client()
+            return bool(await client.set(f"vayy:journey-search-ping:{vehicle_id}", "1", ex=interval_seconds, nx=True))
+        except Exception as exc:
+            logger.debug("Journey-search notification throttle unavailable: %s", exc)
+            return False
+
+    @classmethod
     async def get_vehicle_meta_async(cls, vehicle_id: str) -> Optional[Dict]:
         """Async read vehicle metadata from Redis."""
         try:

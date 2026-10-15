@@ -7,7 +7,6 @@ import {
   StatusBar,
   Animated,
   Easing,
-  Platform,
   Image,
 } from "react-native";
 import VayyMap, { ViewAnnotation, UserLocation } from "../../shared/components/VayyMap";
@@ -66,7 +65,7 @@ export function BikeSearchingScreen({ navigation, route }) {
   const isMountedRef = useRef(true);
 
   // Route Parameters Destructuring
-  const { route_id, pickup_stop_id, drop_stop_id, pickup, pickupName, destination, fare, trip } = route?.params || {};
+  const { route_id, target_trip_id, pickup_stop_id, drop_stop_id, pickup, pickupName, destination, fare, trip } = route?.params || {};
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
@@ -161,9 +160,9 @@ export function BikeSearchingScreen({ navigation, route }) {
       const pickupStr = typeof pickup === "string" ? pickup : pickup?.name || pickup?.display_name || "Pickup";
       const distMeters = data.distance_km ? Math.round(data.distance_km * 1000) : null;
       const distKm = data.distance_km ? `${data.distance_km} km` : "—";
-      const distLabels = distMeters ? [distKm, `${Math.round(distMeters * 0.66)}m`, `${Math.round(distMeters * 0.33)}m`, "Arrived"] : [distKm];
-      const etaMin = data.eta || 5;
-      const etaLabels = [`${etaMin} min`, `${Math.max(1, Math.round(etaMin * 0.6))} min`, `${Math.max(1, Math.round(etaMin * 0.3))} min`, "0 min"];
+      const distLabels = [distKm];
+      const etaMin = data.eta ?? null;
+      const etaLabels = [etaMin != null ? String(etaMin) + " min" : "—"];
       const dropName = data.drop_name
         || (destination && (destination.name || destination.display_name))
         || "Destination";
@@ -199,7 +198,8 @@ export function BikeSearchingScreen({ navigation, route }) {
           distance: distMeters ? String(distMeters) : "—",
           fare: fare || "—",
           route_id,
-          tripData,
+          tripData: { ...tripData, boarding_request_id: data.boarding_request_id || null },
+          boardingRequestId: data.boarding_request_id || null,
         });
       }, 600);
     } else if (data.type === "no_drivers_available") {
@@ -253,10 +253,11 @@ export function BikeSearchingScreen({ navigation, route }) {
       setSearchStatus("searching");
     }
 
-    if (route_id && pickup_stop_id) {
+    if (pickup_stop_id && (route_id || target_trip_id)) {
       try {
         const result = await dispatch(requestDispatch({
-          route_id,
+          route_id: route_id || null,
+          target_trip_id: target_trip_id || null,
           pickup_stop_id,
           drop_stop_id,
           mode: "broadcast",
@@ -301,7 +302,7 @@ export function BikeSearchingScreen({ navigation, route }) {
         }
       }
     }
-  }, [route_id, pickup_stop_id, drop_stop_id, dispatch]);
+  }, [route_id, target_trip_id, pickup_stop_id, drop_stop_id, dispatch]);
 
   useEffect(() => {
     if (locationReadyRef.current && !searchStartedRef.current) {
@@ -310,14 +311,24 @@ export function BikeSearchingScreen({ navigation, route }) {
   }, [searchStatus, startSearch]);
 
   async function handleTryAgain() {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    const previousRequestId = requestIdRef.current;
+    if (previousRequestId) {
+      try {
+        await dispatch(cancelBroadcast(previousRequestId)).unwrap();
+      } catch (error) {
+        console.warn("Previous broadcast cancellation failed:", error);
+        setShowNoRide(true);
+        setSearchStatus("failed");
+        return;
+      }
+    }
     setShowNoRide(false);
     setSearchStatus("searching");
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setActiveTripId(null);
     setActiveRequestId(null);
     requestIdRef.current = null;
     searchStartedRef.current = false;
-
     await startSearch();
   }
 
@@ -331,8 +342,8 @@ export function BikeSearchingScreen({ navigation, route }) {
       const rawDist = Number(driverData.distance) || null;
       const rawEta = Number(driverData.eta) || null;
       const fmtDist = (d) => d == null ? "—" : d > 1000 ? `${(d / 1000).toFixed(1)} km` : `${d} m`;
-      const distanceLabels = rawDist != null ? [fmtDist(rawDist), fmtDist(Math.round(rawDist * 0.66)), fmtDist(Math.round(rawDist * 0.33)), "Arrived"] : ["—"];
-      const etaLabels = rawEta != null ? [`${rawEta} min`, `${Math.max(1, Math.round(rawEta * 0.6))} min`, `${Math.max(1, Math.round(rawEta * 0.3))} min`, "0 min"] : ["—"];
+      const distanceLabels = [fmtDist(rawDist)];
+      const etaLabels = [rawEta != null ? String(rawEta) + " min" : "—"];
 
       const pickupStop = trip?.pickup_stop || {};
       const dropoffStop = trip?.dropoff_stop || {};
@@ -565,8 +576,8 @@ export function BikeSearchingScreen({ navigation, route }) {
                 const rawDist = Number(driverData.distance) || null;
                 const rawEta = Number(driverData.eta) || null;
                 const fmtDist = (d) => d == null ? "—" : d > 1000 ? `${(d / 1000).toFixed(1)} km` : `${d} m`;
-                const distLabels = rawDist != null ? [fmtDist(rawDist), fmtDist(Math.round(rawDist * 0.66)), fmtDist(Math.round(rawDist * 0.33)), "Arrived"] : ["—"];
-                const etaLbls = rawEta != null ? [`${rawEta} min`, `${Math.max(1, Math.round(rawEta * 0.6))} min`, `${Math.max(1, Math.round(rawEta * 0.3))} min`, "0 min"] : ["—"];
+                const distLabels = [fmtDist(rawDist)];
+                const etaLbls = [rawEta != null ? String(rawEta) + " min" : "—"];
 
                 navigateToRiderPopup({
                   driverName: driverData.driver_name || driverData.driver?.full_name || "Driver",

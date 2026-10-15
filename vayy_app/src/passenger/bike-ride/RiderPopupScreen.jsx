@@ -1,11 +1,10 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   StatusBar,
-  Platform,
   Image,
 } from "react-native";
 import VayyMap, { UserLocation, Marker, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
@@ -30,8 +29,9 @@ export function RiderPopupScreen({ navigation, route }) {
   const driverName = route?.params?.driverName || "Driver";
   const vehicle = route?.params?.vehicle || "";
   const dispatchId = route?.params?.dispatchId;
+  const boardingRequestId = route?.params?.boardingRequestId || route?.params?.tripData?.boarding_request_id || null;
+  const tripData = useMemo(() => route?.params?.tripData || {}, [route?.params?.tripData]);
   const destination = route?.params?.destination || "Destination";
-  const pickupStr = route?.params?.pickup || "Pickup";
   const routeId = route?.params?.route_id;
   const fare = route?.params?.fare || "—";
   const driverRating = route?.params?.driverRating || route?.params?.tripData?.driver_rating || null;
@@ -76,6 +76,7 @@ export function RiderPopupScreen({ navigation, route }) {
       distance,
       fare,
       route_id: routeId,
+      boardingRequestId,
       tripData: {
         ...(route?.params?.tripData || {}),
         pickupLat: route?.params?.pickupLat ?? null,
@@ -86,7 +87,7 @@ export function RiderPopupScreen({ navigation, route }) {
       },
     };
     navigation.navigate("RideStats", params);
-  }, [navigation, driverName, vehicle, dispatchId, destination, eta, distance, fare, routeId, route?.params?.pickupLat, route?.params?.pickupLng, route?.params?.dropLat, route?.params?.dropLng, route?.params?.dropName, route?.params?.tripData]);
+  }, [navigation, driverName, vehicle, dispatchId, destination, eta, distance, fare, routeId, boardingRequestId, route?.params?.pickupLat, route?.params?.pickupLng, route?.params?.dropLat, route?.params?.dropLng, route?.params?.dropName, route?.params?.tripData]);
 
   useEffect(() => {
     if (eta === "Arriving" && arrivedPhase == null) {
@@ -111,6 +112,7 @@ export function RiderPopupScreen({ navigation, route }) {
       }
     }
     if (data.status === "arrived") {
+      if (data.boarding_request_id && data.boarding_request_id !== boardingRequestId) return;
       setArrivedPhase("waiting");
     }
     if (data.status === "active" || data.type === "trip_started") {
@@ -121,10 +123,26 @@ export function RiderPopupScreen({ navigation, route }) {
       navigatingRef.current = true;
       navigation.navigate("PassengerTabs");
     }
-    if (data.status === "completed" || data.type === "trip_completed") {
-      goToRideStats();
+    if (data.type === "passenger_segment_completed") {
+      if (data.boarding_request_id !== boardingRequestId) return;
+      navigation.navigate("RideComplete", {
+        tripId: dispatchId,
+        boardingRequestId,
+        riderName: driverName,
+        vehicleText: vehicle,
+        pickup: tripData.pickup_stop?.name || tripData.pickup || "Pickup Stop",
+        dropoff: tripData.dropoff_stop?.name || tripData.dropoff || destination,
+        fare: data.fare ?? null,
+        distance: data.segment_distance_m != null ? data.segment_distance_m / 1000 : null,
+        duration: data.segment_duration_s != null ? data.segment_duration_s / 60 : null,
+        driverRating: 0,
+        paymentMethod: "Fuel Share",
+        route_id: routeId,
+      });
+      return;
     }
-  }, [navigation, goToRideStats]);
+    if (data.status === "completed" || data.type === "trip_completed") goToRideStats();
+  }, [navigation, goToRideStats, boardingRequestId, dispatchId, driverName, vehicle, tripData, destination, routeId]);
 
   useWebSocket(dispatchId ? WS.dispatch(dispatchId) : null, {
     enabled: !!dispatchId,
@@ -133,6 +151,25 @@ export function RiderPopupScreen({ navigation, route }) {
 
   // Separate tracking WS for live vehicle location/speed/ETA updates
   const handleTrackingMessage = useCallback((data) => {
+    if (data.type === "trip_completed") {
+      if (data.cancelled) {
+        navigation.navigate("PassengerTabs");
+        return;
+      }
+      const own = (data.passengers || []).find((item) => item.boarding_request_id === boardingRequestId);
+      if (own && boardingRequestId) {
+        navigation.navigate("RideComplete", {
+          tripId: dispatchId, boardingRequestId, riderName: driverName, vehicleText: vehicle,
+          pickup: own.pickup_stop_name || tripData.pickup_stop?.name || tripData.pickup || "Pickup Stop",
+          dropoff: own.drop_stop_name || tripData.dropoff_stop?.name || tripData.dropoff || destination,
+          fare: own.fare ?? null,
+          distance: own.segment_distance_m != null ? own.segment_distance_m / 1000 : null,
+          duration: own.segment_duration_s != null ? own.segment_duration_s / 60 : null,
+          driverRating: 0, paymentMethod: "Fuel Share", route_id: routeId,
+        });
+      }
+      return;
+    }
     if (data.type === "vehicle_update") {
       const lat = data.lat;
       const lng = data.lng || data.lon;
@@ -153,7 +190,7 @@ export function RiderPopupScreen({ navigation, route }) {
     if (data.type === "trip_completed" || data.status === "completed") {
       goToRideStats();
     }
-  }, [goToRideStats]);
+  }, [goToRideStats, navigation, boardingRequestId, dispatchId, driverName, vehicle, tripData, destination, routeId]);
 
   useWebSocket(dispatchId ? WS.trackingTrip(dispatchId) : null, {
     enabled: !!dispatchId,

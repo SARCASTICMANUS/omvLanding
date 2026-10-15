@@ -1,4 +1,7 @@
-# VAYY Backend
+# VAYY Backend — Detailed Reference
+
+> This file was consolidated from the former backend README. It contains useful domain, event, infrastructure and environment notes, but some details may predate the current URL configuration. For active endpoint paths, use [the maintained API reference](api-reference.md); verify broker queues and deployment topology against settings and Compose before relying on them.
+
 
 Django REST backend for the VAYY route-based mobility platform. Handles auth, dispatch, tracking, transport, payments, and real-time communication for Passenger, Bike Driver, Auto Driver, and Admin roles.
 
@@ -447,7 +450,7 @@ docker-compose exec web python manage.py createsuperuser
 docker-compose exec web python scripts/route_gps_simulator.py \
   --api-url http://localhost:8000 \
   --email driver@gmail.com \
-  --password zxcv9876 \
+  --password <test-password> \
   --vehicle-id <UUID> \
   --route-id <UUID> \
   --duration 600
@@ -463,14 +466,14 @@ Required in `.env`:
 SECRET_KEY=your-secret-key
 DEBUG=true
 ALLOWED_HOSTS=*
-DATABASE_URL=postgis://postgres:password@localhost:5432/vayy
+DATABASE_URL=postgis://<db-user>:<db-password>@localhost:5432/vayy
 REDIS_URL=redis://localhost:6379/0
-CELERY_BROKER_URL=amqp://admin:admin123@localhost:5672/
-RABBITMQ_URL=amqp://admin:admin123@localhost:5672/
+CELERY_BROKER_URL=amqp://<broker-user>:<broker-password>@localhost:5672/
+RABBITMQ_URL=amqp://<broker-user>:<broker-password>@localhost:5672/
 RABBITMQ_HOST=localhost
 RABBITMQ_PORT=5672
 RABBITMQ_USER=admin
-RABBITMQ_PASSWORD=admin123
+RABBITMQ_PASSWORD=<broker-password>
 OSRM_URL=http://localhost:5000
 EMAIL_HOST=smtp.example.com
 EMAIL_PORT=587
@@ -533,7 +536,7 @@ python manage.py spectacular --color --file schema.yml
 python3 scripts/route_gps_simulator.py \
   --api-url http://localhost:8000 \
   --email driver@gmail.com \
-  --password zxcv9876 \
+  --password <test-password> \
   --vehicle-id <UUID> \
   --route-id <UUID> \
   --duration 600
@@ -542,14 +545,14 @@ python3 scripts/route_gps_simulator.py \
 python3 scripts/driver_gps_simulator.py \
   --api-url http://localhost:8000 \
   --email driver@gmail.com \
-  --password Test@1234 \
+  --password <test-password> \
   --vehicle-id <UUID>
 
 # GPS simulator through the RabbitMQ pipeline
 python3 scripts/driver_gps_rabbitmq_simulator.py \
   --api-url http://localhost:8000 \
   --email driver@gmail.com \
-  --password Test@1234 \
+  --password <test-password> \
   --vehicle-id <UUID>
 ```
 

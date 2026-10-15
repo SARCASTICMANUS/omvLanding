@@ -187,11 +187,11 @@ const PassengerLiveTracking = ({
 
       // 0. Trip lifecycle events pushed by the backend
       if (data.status === "completed" || data.type === "trip_completed") {
-        onTripStatusRef.current?.("completed");
+        onTripStatusRef.current?.("completed", data);
         return;
       }
       if (data.status === "cancelled" || data.type === "trip_cancelled") {
-        onTripStatusRef.current?.("cancelled");
+        onTripStatusRef.current?.("cancelled", data);
         return;
       }
 

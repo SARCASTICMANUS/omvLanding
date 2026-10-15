@@ -197,7 +197,7 @@ services:
     command: >
       sh -c "if [ ! -f /data/map.osm.pbf ]; then
                echo 'Downloading central-zone map...';
-               wget -q -O /data/map.osm.pbf.tmp https://download.geofabrik.de/asia/india/central-zone-latest.osm.pbf &&
+               wget -q -O /data/map.osm.pbf.tmp https://download.geofabrik.de/asia/india/central-zone.osm.pbf &&
                mv /data/map.osm.pbf.tmp /data/map.osm.pbf &&
                echo 'Map downloaded to /data/map.osm.pbf';
              else
