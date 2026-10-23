@@ -12,12 +12,12 @@ export default function PassengerModeSelectScreen({ navigation }) {
         <Text style={styles.hero}>How are you travelling?</Text>
         <View style={styles.cardStack}>
           <TouchableOpacity style={styles.roleCard} onPress={() => navigation.navigate("SharedAutoHome")}>
-            <Image source={require('../../../assets/vayySideAuto-small.webp')} style={styles.roleIcon} />
+            <Image source={require('../../../assets/vayySideAuto-small.webp')} style={styles.roleIcon} resizeMode="contain" />
             <Text style={styles.roleTitle}>Shared Auto</Text>
             <Text style={styles.roleMeta}>Stop based boarding and live autos</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.roleCard} onPress={() => navigation.navigate("BikeRideHome")}>
-            <Image source={require('../../../assets/vayyPulsureBike-small.webp')} style={styles.roleIcon} />
+            <Image source={require('../../../assets/vayyPulsureBike-small.webp')} style={styles.roleIcon} resizeMode="contain" />
             <Text style={styles.roleTitle}>Bike Ride</Text>
             <Text style={styles.roleMeta}>Quick bike buddy pickup flow</Text>
           </TouchableOpacity>
@@ -54,7 +54,6 @@ const styles = StyleSheet.create({
   roleIcon: {
     width: 50,
     height: 50,
-    resizeMode: "contain",
     alignSelf: "center",
     marginBottom: spacing.xs,
   },

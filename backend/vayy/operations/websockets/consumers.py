@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 @database_sync_to_async
-def user_owns_trip(user, trip_id):
+def user_owns_trip(user, trip_id=None, dispatch_id=None):
     """
     True when the user is the trip's driver or a passenger boarding it.
 
@@ -17,8 +17,11 @@ def user_owns_trip(user, trip_id):
     BoardingRequest, so a trip's participants are the driver plus every
     passenger with a boarding request against it.
     """
+    resource_id = trip_id or dispatch_id
+    if resource_id is None:
+        return False
     trip = (
-        ActiveTrip.objects.filter(id=trip_id)
+        ActiveTrip.objects.filter(id=resource_id)
         .only("id", "driver_id")
         .first()
     )

@@ -9,6 +9,7 @@ import {
   Linking,
   Share,
   Alert,
+  Image,
 } from "react-native";
 import VayyMap, { UserLocation, Marker, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import SmoothMarker from "../../shared/components/common/SmoothMarker";
@@ -26,6 +27,8 @@ import { WS } from "../../constants";
 import { useDispatch } from "react-redux";
 import { completeDispatch } from "../../store/slices/dispatchSlice";
 import { fetchRouteGeometry } from "../../routes/services/routeService";
+
+const BIKE_TOP_IMAGE = require("../../../assets/vayyTopBike1.webp");
 
 const DESTINATION_THRESHOLD = 100;
 const EMPTY_TRIP_DATA = {};
@@ -297,6 +300,7 @@ export function RideStatsScreen({ navigation, route }) {
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
+          grayscale
           initialViewState={{
             center: [mapCenter.longitude, mapCenter.latitude],
             zoom: 14,
@@ -315,7 +319,7 @@ export function RideStatsScreen({ navigation, route }) {
           {driverPos && (
             <SmoothMarker id="driver" targetLat={driverPos.latitude} targetLng={driverPos.longitude} heading={driverHeading} speedKmh={driverSpeed}>
               <View style={styles.driverMarker}>
-                <Text style={styles.driverEmoji}>🏍️</Text>
+                <Image source={BIKE_TOP_IMAGE} style={{ width: 40, height: 46 }} resizeMode="contain" />
               </View>
             </SmoothMarker>
           )}
@@ -571,9 +575,6 @@ const styles = StyleSheet.create({
   driverMarker: {
     alignItems: "center",
     justifyContent: "center",
-  },
-  driverEmoji: {
-    fontSize: 28,
   },
   distanceCallout: {
     position: "absolute",

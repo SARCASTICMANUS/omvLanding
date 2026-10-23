@@ -660,6 +660,8 @@ class DispatchRequest(models.Model):
     drop_lat = models.FloatField(null=True, blank=True)
     drop_lng = models.FloatField(null=True, blank=True)
 
+    passenger_fare = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,

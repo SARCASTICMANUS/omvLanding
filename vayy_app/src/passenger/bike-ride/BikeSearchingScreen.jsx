@@ -66,6 +66,7 @@ export function BikeSearchingScreen({ navigation, route }) {
 
   // Route Parameters Destructuring
   const { route_id, target_trip_id, pickup_stop_id, drop_stop_id, pickup, pickupName, destination, fare, trip } = route?.params || {};
+  const pickupWalkDistanceMeters = route?.params?.pickupWalkDistanceMeters ?? trip?.first_mile_walk_meters ?? null;
 
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
@@ -161,6 +162,9 @@ export function BikeSearchingScreen({ navigation, route }) {
       const distMeters = data.distance_km ? Math.round(data.distance_km * 1000) : null;
       const distKm = data.distance_km ? `${data.distance_km} km` : "—";
       const distLabels = [distKm];
+      const marshalDistance = distMeters == null
+        ? "—"
+        : distMeters <= 1000 ? `${distMeters} m` : `${(distMeters / 1000).toFixed(1)} km`;
       const etaMin = data.eta ?? null;
       const etaLabels = [etaMin != null ? String(etaMin) + " min" : "—"];
       const dropName = data.drop_name
@@ -188,6 +192,7 @@ export function BikeSearchingScreen({ navigation, route }) {
           destination: destination || "Destination",
           pickup: pickupStr,
           pickupName: pickupName || pickupStr,
+          pickupWalkDistanceMeters,
           pickupLat: tripData.pickupLat,
           pickupLng: tripData.pickupLng,
           dropLat: tripData.dropLat,
@@ -195,7 +200,7 @@ export function BikeSearchingScreen({ navigation, route }) {
           dropName,
           route_name: data.route_name || "",
           eta: String(etaMin),
-          distance: distMeters ? String(distMeters) : "—",
+          distance: marshalDistance,
           fare: fare || "—",
           route_id,
           tripData: { ...tripData, boarding_request_id: data.boarding_request_id || null },
@@ -210,7 +215,7 @@ export function BikeSearchingScreen({ navigation, route }) {
       setActiveRequestId(null);
       setDriversNotified(null);
     }
-  }, [dispatch, pickup, destination, pickupName, fare, route_id, navigateToRiderPopup]);
+  }, [dispatch, pickup, destination, pickupName, pickupWalkDistanceMeters, fare, route_id, navigateToRiderPopup]);
 
   useWebSocket(activeRequestId ? WS.dispatchBroadcast(activeRequestId) : null, {
     enabled: !!activeRequestId,
@@ -253,13 +258,16 @@ export function BikeSearchingScreen({ navigation, route }) {
       setSearchStatus("searching");
     }
 
-    if (pickup_stop_id && (route_id || target_trip_id)) {
+    // Journey-scoped requests intentionally have no fixed route or target trip;
+    // the backend matches any active driver journey that passes this stop.
+    if (pickup_stop_id) {
       try {
         const result = await dispatch(requestDispatch({
           route_id: route_id || null,
           target_trip_id: target_trip_id || null,
           pickup_stop_id,
           drop_stop_id,
+          fare,
           mode: "broadcast",
         })).unwrap();
 
@@ -374,6 +382,7 @@ export function BikeSearchingScreen({ navigation, route }) {
           destination: destination || "Destination",
           pickup: pickupStr,
           pickupName: resolvedPickupName,
+          pickupWalkDistanceMeters,
           pickupLat,
           pickupLng,
           dropLat,
@@ -381,7 +390,7 @@ export function BikeSearchingScreen({ navigation, route }) {
           dropName,
           route_name: driverData.route_name || trip?.name || "",
           eta: driverData.eta || "—",
-          distance: driverData.distance || "—",
+          distance: fmtDist(rawDist),
           fare: driverData.fare || fare || "—",
           route_id,
           tripData,
@@ -394,7 +403,7 @@ export function BikeSearchingScreen({ navigation, route }) {
       setShowNoRide(true);
       setSearchStatus("failed");
     }
-  }, [dispatchStatus, activeDispatch, pickup, pickupName, destination, fare, trip, route_id, navigateToRiderPopup]);
+  }, [dispatchStatus, activeDispatch, pickup, pickupName, pickupWalkDistanceMeters, destination, fare, trip, route_id, navigateToRiderPopup]);
 
   // Wave Animations
   useEffect(() => {
@@ -452,6 +461,7 @@ export function BikeSearchingScreen({ navigation, route }) {
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
+          grayscale
           initialViewState={{
             center: currentPosition ? [currentPosition.longitude, currentPosition.latitude] : [80.8, 26.8],
             zoom: 15,
@@ -589,8 +599,9 @@ export function BikeSearchingScreen({ navigation, route }) {
                   destination: destination || "Destination",
                   pickup: pickupStr,
                   pickupName: pickupName || pickupStr,
+                  pickupWalkDistanceMeters,
                   eta: driverData.eta || "—",
-                  distance: driverData.distance || "—",
+                  distance: fmtDist(rawDist),
                   fare: driverData.fare || fare || "—",
                   route_id,
                   tripData: driverData,

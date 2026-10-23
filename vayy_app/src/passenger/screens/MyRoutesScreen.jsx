@@ -10,14 +10,14 @@ import COLORS from "../../shared/constants/colors";
 import RADIUS from "../../shared/constants/radius";
 import SPACING from "../../shared/constants/spacing";
 import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
-import { getRideHistory } from "../services/passengerService";
+import { getRideHistory, getTripFare } from "../services/passengerService";
 
 function formatTrip(trip) {
   const pickup = trip.pickup_name || trip.route_name || trip.pickup || "--";
   const destination = trip.destination_name || trip.route_name || trip.destination || "--";
   const date = trip.date || trip.ended_at || trip.started_at || "";
   const formattedDate = date ? new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "--";
-  const fare = trip.fare || trip.total_fare || null;
+  const fare = trip.fare ?? trip.total_fare ?? null;
   const vehicleType = trip.vehicle_type || trip.mode || "Auto";
   const distance = trip.distance_km || (trip.total_distance_m != null ? trip.total_distance_m / 1000 : null);
   const distanceText = distance != null ? (typeof distance === "number" ? `${distance.toFixed(1)} km` : distance) : "--";
@@ -30,7 +30,7 @@ function formatTrip(trip) {
     pickup,
     destination,
     date: formattedDate,
-    fare: fare ? `₹${fare}` : "--",
+    fare: fare != null ? `₹${fare}` : "--",
     vehicleType,
     status: trip.status || "Completed",
     routeName,
@@ -84,7 +84,7 @@ function RouteCard({ item }) {
         </View>
         <View style={styles.metaDivider} />
         <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Fuel Share</Text>
+          <Text style={styles.metaLabel}>Fare</Text>
           <Text style={styles.fareValue}>{item.fare}</Text>
         </View>
       </View>
@@ -99,9 +99,27 @@ export default function MyRoutesScreen() {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const data = await getRideHistory();
-        const items = Array.isArray(data) ? data : data?.results || [];
-        setRoutes(items.map(formatTrip));
+        const data = await getRideHistory({ status: "completed" });
+        const items = (Array.isArray(data) ? data : data?.results || [])
+          .filter((trip) => trip?.status === "completed" && Number(trip.fare ?? trip.total_fare) > 0);
+        const detailedItems = await Promise.all(items.map(async (trip) => {
+          if (trip.pickup_name && trip.pickup_name !== "--" && trip.destination_name && trip.destination_name !== "--" && trip.fare != null) return trip;
+          try {
+            const details = await getTripFare(trip.id);
+            return {
+              ...trip,
+              pickup_name: trip.pickup_name && trip.pickup_name !== "--" ? trip.pickup_name : details.pickup_stop_name,
+              destination_name: trip.destination_name && trip.destination_name !== "--" ? trip.destination_name : details.drop_stop_name,
+              fare: trip.fare ?? details.total_fare,
+              distance_km: details.segment_distance_m > 0
+                ? details.segment_distance_m / 1000
+                : details.distance_km || trip.distance_km,
+            };
+          } catch {
+            return trip;
+          }
+        }));
+        setRoutes(detailedItems.map(formatTrip));
       } catch (error) {
         console.error("Failed to fetch ride history:", error);
       } finally {

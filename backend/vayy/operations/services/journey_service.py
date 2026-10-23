@@ -125,6 +125,15 @@ class JourneyService:
 
         cls._attach_vehicle_state(trip, vehicle, coords_latlng[0])
 
+        try:
+            from operations.services.dispatch_service import DispatchService
+            DispatchService.notify_pending_journey_requests(driver)
+        except Exception:
+            logger.exception(
+                "Could not sync pending passenger requests to journey %s",
+                trip.id,
+            )
+
         logger.info(
             "Journey started: trip=%s driver=%s stops=%d distance=%.0fm",
             trip.id,
@@ -255,6 +264,9 @@ class JourneyService:
 
             if not cancel:
                 settlement = DispatchService.settle_journey_passengers(trip)
+                settled_fares = settlement.get("settled") or []
+                trip.total_fare = round(sum(float(item.get("fare") or 0) for item in settled_fares), 2)
+                trip.save(update_fields=["total_fare"])
 
             state, _ = VehicleState.objects.get_or_create(vehicle=trip.vehicle)
             state.active_trip = None
@@ -289,15 +301,14 @@ class JourneyService:
         # Each rider settled on their own pickup→drop segment, so the driver is
         # shown per-passenger fares rather than one figure for the whole run.
         settled_fares = settlement.get("settled") or []
+        total_fare = round(sum(float(item.get("fare") or 0) for item in settled_fares), 2)
         return {
             "trip_id": str(trip.id),
             "status": trip.status,
             "distance_m": journey_distance,
             "passenger_count": settlement.get("total", 0),
             "passengers": settled_fares,
-            "total_fare": round(
-                sum(float(p.get("fare") or 0) for p in settled_fares), 2
-            ),
+            "total_fare": total_fare,
             # Passengers whose debit failed. Surfaced so the driver is not shown
             # a clean-looking summary while revenue is still outstanding.
             "outstanding": settlement.get("outstanding") or [],

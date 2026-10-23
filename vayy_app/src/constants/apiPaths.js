@@ -44,6 +44,7 @@ export const OPERATIONS = {
   broadcastReject: (requestId) => `/api/operations/dispatch/broadcast/${requestId}/reject/`,
   broadcastCancel: (requestId) => `/api/operations/dispatch/broadcast/${requestId}/cancel/`,
   boardingRequests: "/api/operations/boarding-requests/",
+  boardingRequestDetail: (id) => `/api/operations/boarding-requests/${id}/`,
   boardingRequestBoarded: (id) => `/api/operations/boarding-requests/${id}/boarded/`,
 };
 
@@ -58,6 +59,7 @@ export const TRANSPORT = {
   stopsNearby: "/api/transport/stops/nearby/",
   cities: "/api/transport/cities/",
   roadDistance: "/api/transport/road-distance/",
+  roadDirections: "/api/transport/road-directions/",
   walkingPath: "/api/transport/walking-path/",
 };
 

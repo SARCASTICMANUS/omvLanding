@@ -20,7 +20,6 @@ import {
   DEFAULT_CENTER,
   isDefaultMapCenter,
   getInitialMapZoom,
-  MAPTILER_STYLE,
 } from "./mapUtils";
 
 function flattenStyles(style) {
@@ -199,6 +198,33 @@ const VayyMap = forwardRef(function VayyMap(
     if (!r) return null;
     return typeof r.getMap === "function" ? r.getMap() : r;
   }, []);
+
+  const handleStyleImageMissing = useCallback(({ id }) => {
+    const map = glInstance();
+    if (!map || !id || map.hasImage(id) || typeof document === "undefined") return;
+    const canvas = document.createElement("canvas");
+    canvas.width = 16;
+    canvas.height = 16;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.fillStyle = "#657384";
+    context.beginPath();
+    context.arc(8, 8, 7, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = "#FFFFFF";
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(8, 8, 3, 0, Math.PI * 2);
+    context.stroke();
+    map.addImage(id, context.getImageData(0, 0, 16, 16), { sdf: true });
+  }, [glInstance]);
+
+  useEffect(() => {
+    const map = glInstance();
+    if (!map) return undefined;
+    map.on("styleimagemissing", handleStyleImageMissing);
+    return () => map.off("styleimagemissing", handleStyleImageMissing);
+  }, [glInstance, handleStyleImageMissing, grayscaleStyle]);
 
   const centerRef = useRef(null);
   const zoomRef = useRef(null);

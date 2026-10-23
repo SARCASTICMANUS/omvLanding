@@ -49,6 +49,7 @@ const notificationSlice = createSlice({
     builder
       .addCase(fetchNotifications.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(fetchNotifications.fulfilled, (state, action) => {
         state.loading = false;

@@ -69,11 +69,11 @@ function mapHistoryItem(raw, accent) {
     pickup: raw?.pickup_name || raw?.pickup || raw?.route_name || "--",
     destination: raw?.destination_name || raw?.destination || raw?.route_name || "--",
     date: dateFormatted,
-    fare: raw?.total_fare !== undefined && raw?.total_fare !== null ? `₹${raw.total_fare}` : raw?.fare !== undefined ? `₹${raw.fare}` : "--",
+    fare: raw?.total_fare != null ? `₹${raw.total_fare}` : raw?.fare != null ? `₹${raw.fare}` : "--",
     distance: distM != null ? `${(distM / 1000).toFixed(1)} km` : raw?.distance !== undefined ? (typeof raw.distance === "number" ? `${raw.distance.toFixed(1)} km` : raw.distance) : "--",
     duration: durS != null ? `${Math.round(durS / 60)} min` : raw?.duration !== undefined ? `${raw.duration} min` : "--",
     vehicle,
-    earnings: raw?.total_fare !== undefined && raw?.total_fare !== null ? `₹${raw.total_fare}` : raw?.earnings !== undefined ? `₹${raw.earnings}` : "--",
+    earnings: raw?.total_fare != null ? `₹${raw.total_fare}` : raw?.earnings != null ? `₹${raw.earnings}` : "--",
   };
 }
 

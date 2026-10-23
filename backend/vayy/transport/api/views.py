@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 from uuid import UUID
 import json
 from typing import Dict, Any, List
@@ -682,10 +683,10 @@ class PassengersAlongRouteAPIView(APIView):
 
 
 class RoadDistanceInputSerializer(serializers.Serializer):
-    origin_lat = serializers.FloatField()
-    origin_lng = serializers.FloatField()
-    dest_lat = serializers.FloatField()
-    dest_lng = serializers.FloatField()
+    origin_lat = serializers.FloatField(min_value=Decimal("-90"), max_value=Decimal("90"))
+    origin_lng = serializers.FloatField(min_value=Decimal("-180"), max_value=Decimal("180"))
+    dest_lat = serializers.FloatField(min_value=Decimal("-90"), max_value=Decimal("90"))
+    dest_lng = serializers.FloatField(min_value=Decimal("-180"), max_value=Decimal("180"))
 
 
 class RoadDistanceAPIView(APIView):
@@ -739,6 +740,22 @@ class RoadDistanceAPIView(APIView):
                 "duration_min": max(1, round(duration_s / 60)),
             },
         })
+
+
+class RoadDirectionsAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = RoadDistanceInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        result = OSRMService.get_road_directions(
+            (values["origin_lng"], values["origin_lat"]),
+            (values["dest_lng"], values["dest_lat"]),
+        )
+        if not result:
+            return Response({"success": False, "code": "ROAD_DIRECTIONS_UNAVAILABLE", "message": "Driving directions are unavailable for this location.", "data": None}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({"success": True, "data": result})
 
 
 class WalkingPathInputSerializer(serializers.Serializer):

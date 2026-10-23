@@ -56,7 +56,7 @@ export default function ScreenHeader({
         },
       ]}
     >
-      <View style={styles.gradient} pointerEvents="none">
+      <View style={[styles.gradient, { pointerEvents: "none" }]}>
         <View style={[styles.ray, styles.rayOne]} />
         <View style={[styles.ray, styles.rayTwo]} />
       </View>

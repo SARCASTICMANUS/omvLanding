@@ -159,6 +159,7 @@ export function AutoRideActiveScreen({ navigation, route }) {
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
+          grayscale
           initialRegion={{
             latitude: DEFAULT_CENTER.latitude,
             longitude: DEFAULT_CENTER.longitude,

@@ -174,6 +174,20 @@ class BoardingService:
             boarding_request_id=request.id,
         )
 
+        try:
+            async_to_sync(get_channel_layer().group_send)(
+                f"dispatch_{trip.id}",
+                {
+                    "type": "dispatch_update",
+                    "data": {
+                        "type": "boarding_request_cancelled",
+                        "boarding_request_id": str(request.id),
+                    },
+                },
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify trip participants of boarding cancellation: {e}")
+
         return request
 
     @staticmethod

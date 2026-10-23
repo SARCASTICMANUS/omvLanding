@@ -469,6 +469,33 @@ class TestRaiseHandAtGlobalStop(JourneyTestBase):
             {str(d) for d in dispatch_request.notified_drivers},
         )
 
+    def test_new_journey_driver_gets_an_existing_pending_request(self):
+        stop = self.make_stop("Boarding Stop", NEAR_STOP)
+        self.start_journey()
+        response = self.raise_hand(self.passenger, stop)
+        request_id = response.data["data"]["request_id"]
+        late_driver = self.make_driver("late-journey-driver")
+        late_vehicle = Vehicle.objects.create(
+            vehicle_number="JV-2",
+            vehicle_type="bike",
+            city=self.city,
+            driver=late_driver,
+        )
+
+        with patch.object(DispatchService, "_notify_ws") as notify_ws:
+            self.start_journey(driver=late_driver, vehicle=late_vehicle)
+
+        dispatch_request = DispatchRequest.objects.get(id=request_id)
+        self.assertIn(str(late_driver.id), dispatch_request.notified_drivers)
+        late_driver_messages = [
+            call.args[2]
+            for call in notify_ws.call_args_list
+            if call.args[0] == f"notifications_{late_driver.id}"
+        ]
+        self.assertEqual(len(late_driver_messages), 1)
+        self.assertEqual(late_driver_messages[0]["type"], "new_dispatch_request")
+        self.assertEqual(late_driver_messages[0]["dispatch"]["request_id"], str(request_id))
+
     def test_hand_far_from_the_stop_is_refused(self):
         """A hand from far away would be served by drivers who never reach the
         passenger, so it is rejected at the boundary."""
@@ -789,15 +816,10 @@ class TestEndJourney(JourneyTestBase):
         self.assertEqual(response.data["data"]["status"], TRIP_STATUS_COMPLETED)
 
 
-class TestDuplicatePendingBoardingIsNotFatal(JourneyTestBase):
+class TestDuplicatePendingBoardingIsIdempotent(JourneyTestBase):
     """
-    A duplicate pending boarding must not take down the accept endpoint.
-
-    The driver saw a 500 "An error occurred in the current transaction" when
-    the passenger they were accepting already had a pending boarding on the
-    same journey. unique_pending_boarding_request rejected the insert, the
-    handler caught it, but accept_broadcast_request is @transaction.atomic so
-    the transaction stayed aborted and the claim release raised instead.
+    Retrying acceptance for the same passenger and stop pair reuses their
+    pending booking; a different stop pair is reported as a conflict.
     """
 
     def _seed_duplicate_pending(self, trip, passenger, stop, drop):
@@ -811,7 +833,28 @@ class TestDuplicatePendingBoardingIsNotFatal(JourneyTestBase):
             otp="1111",
         )
 
-    def test_duplicate_pending_boarding_returns_no_500(self):
+    def test_duplicate_pending_boarding_reuses_existing_booking(self):
+        stop = self.make_stop("Boarding Stop", NEAR_STOP)
+        drop = self.make_stop("Drop Stop", FAR_STOP)
+        journey = self.start_journey()
+        trip = ActiveTrip.objects.get(id=journey["trip_id"])
+        existing = self._seed_duplicate_pending(trip, self.passenger, stop, drop)
+
+        request_id = self._request_id_for(self.passenger, stop, drop)
+        response = self.accept_as_driver(request_id)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["status"], "accepted")
+        self.assertEqual(response.data["boarding_request_id"], str(existing.id))
+        self.assertEqual(response.data["otp"], existing.otp)
+        self.assertEqual(
+            BoardingRequest.objects.filter(
+                passenger=self.passenger, trip=trip, status=BOARDING_PENDING
+            ).count(),
+            1,
+        )
+
+    def test_duplicate_boarding_accepts_dispatch_claim(self):
         stop = self.make_stop("Boarding Stop", NEAR_STOP)
         drop = self.make_stop("Drop Stop", FAR_STOP)
         journey = self.start_journey()
@@ -821,33 +864,25 @@ class TestDuplicatePendingBoardingIsNotFatal(JourneyTestBase):
         request_id = self._request_id_for(self.passenger, stop, drop)
         response = self.accept_as_driver(request_id)
 
-        self.assertNotEqual(
-            response.status_code,
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            f"duplicate boarding must not 500: {response.data}",
-        )
-        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
-        self.assertEqual(response.data["status"], "no_vehicle")
+        dispatch = DispatchRequest.objects.get(id=request_id)
+        self.assertEqual(response.data["status"], "accepted")
+        self.assertEqual(dispatch.status, DispatchRequest.STATUS_ACCEPTED)
+        self.assertEqual(dispatch.accepted_by, self.driver)
 
-    def test_duplicate_boarding_releases_the_claim(self):
-        """The request must go back to the pool, not sit accepted with nobody
-        on board."""
+    def test_existing_booking_with_different_drop_is_not_reused(self):
         stop = self.make_stop("Boarding Stop", NEAR_STOP)
         drop = self.make_stop("Drop Stop", FAR_STOP)
         journey = self.start_journey()
         trip = ActiveTrip.objects.get(id=journey["trip_id"])
         self._seed_duplicate_pending(trip, self.passenger, stop, drop)
 
-        request_id = self._request_id_for(self.passenger, stop, drop)
-        self.accept_as_driver(request_id)
+        request_id = self._request_id_for(self.passenger, stop, None)
+        response = self.accept_as_driver(request_id)
 
-        dispatch = DispatchRequest.objects.get(id=request_id)
-        self.assertEqual(dispatch.status, DispatchRequest.STATUS_PENDING)
-        self.assertIsNone(dispatch.accepted_by)
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(response.data["message"], "You already have a pending booking on this journey.")
 
-    def test_outer_transaction_still_usable_after_the_rejection(self):
-        """The savepoint is the actual fix: without it the release save() raises
-        TransactionManagementError."""
+    def test_outer_transaction_still_usable_after_idempotent_accept(self):
         stop = self.make_stop("Boarding Stop", NEAR_STOP)
         drop = self.make_stop("Drop Stop", FAR_STOP)
         journey = self.start_journey()
@@ -863,7 +898,7 @@ class TestDuplicatePendingBoardingIsNotFatal(JourneyTestBase):
             # If the insert had poisoned this transaction, this query raises.
             DispatchRequest.objects.get(id=request_id)
 
-        self.assertEqual(result["status"], "no_vehicle")
+        self.assertEqual(result["status"], "accepted")
 
     def test_accept_response_carries_passenger_identity(self):
         """The driver's accepted-rider card needs a name, a number to dial and

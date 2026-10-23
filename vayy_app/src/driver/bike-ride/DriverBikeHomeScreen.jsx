@@ -279,8 +279,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
 
       {/* Locate button — floats above the search card */}
       <Animated.View
-        style={[styles.locateWrap, { bottom: Animated.add(Animated.add(sheetHeight, keyboardHeight), 16) }]}
-        pointerEvents="box-none"
+        style={[styles.locateWrap, { bottom: Animated.add(Animated.add(sheetHeight, keyboardHeight), 16), pointerEvents: "box-none" }]}
       >
         <TouchableOpacity style={styles.locateBtn} onPress={locateUser} activeOpacity={0.85}>
           <Ionicons name="locate" size={20} color="#111827" />
@@ -292,8 +291,7 @@ export default function DriverBikeHomeScreen({ navigation }) {
         colors={["rgba(10, 22, 60, 0.94)", "rgba(10, 22, 62, 0.0010)"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
-        style={styles.greetingGradient}
-        pointerEvents="none"
+        style={[styles.greetingGradient, { pointerEvents: "none" }]}
       >
         <View style={styles.greetingContent}>
           <View style={styles.greetingRow}>

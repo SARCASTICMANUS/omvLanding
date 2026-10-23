@@ -334,7 +334,7 @@ export default function PassengerRouteList({ navigation, route }) {
         destination,
         mode,
         route_id: null,
-        target_trip_id: selectedTrip?.trip_id || selectedTrip?.id,
+        target_trip_id: selectedTrip?.trip_id,
         fare: selectedTrip?.fare,
       });
       return;

@@ -54,7 +54,7 @@ export default function BikeSearchingScreen({ navigation }) {
         )}
       </View>
 
-      <SafeAreaView style={styles.overlay} pointerEvents="box-none">
+      <SafeAreaView style={[styles.overlay, { pointerEvents: "box-none" }]}>
         <LinearGradient
           colors={["rgba(10, 22, 60, 0.94)", "rgba(10, 22, 62, 0.0010)"]}
           start={{ x: 0, y: 0 }}

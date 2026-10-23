@@ -4,13 +4,14 @@ import { OPERATIONS, TRACKING } from "../../constants";
 
 export const requestDispatch = createAsyncThunk(
   "dispatch/request",
-  async ({ route_id, target_trip_id, pickup_stop_id, drop_stop_id, mode }, { rejectWithValue }) => {
+  async ({ route_id, target_trip_id, pickup_stop_id, drop_stop_id, mode, fare }, { rejectWithValue }) => {
     try {
       const response = await api.post(OPERATIONS.dispatchRequest, {
         route_id: route_id || null,
         ...(target_trip_id ? { target_trip_id } : {}),
         pickup_stop_id,
         drop_stop_id,
+        ...(fare != null ? { fare } : {}),
         mode: mode || "broadcast",
       });
       return response.data;
@@ -44,6 +45,18 @@ export const createBoardingRequest = createAsyncThunk(
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || "Failed to create boarding request");
+    }
+  }
+);
+
+export const cancelBoardingRequest = createAsyncThunk(
+  "dispatch/cancelBoardingRequest",
+  async (requestId, { rejectWithValue }) => {
+    try {
+      const response = await api.delete(OPERATIONS.boardingRequestDetail(requestId));
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || "Failed to cancel ride request");
     }
   }
 );
@@ -216,6 +229,19 @@ const dispatchSlice = createSlice({
         state.boardingRequest = payload;
       })
       .addCase(createBoardingRequest.rejected, (state, action) => {
+        state.status = "failed";
+        state.error = action.payload;
+      })
+      .addCase(cancelBoardingRequest.pending, (state) => {
+        state.status = "cancelling";
+        state.error = null;
+      })
+      .addCase(cancelBoardingRequest.fulfilled, (state) => {
+        state.status = "cancelled";
+        state.activeDispatch = null;
+        state.boardingRequest = null;
+      })
+      .addCase(cancelBoardingRequest.rejected, (state, action) => {
         state.status = "failed";
         state.error = action.payload;
       })

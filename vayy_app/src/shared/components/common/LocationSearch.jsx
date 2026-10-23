@@ -30,6 +30,7 @@ const mapResult = (item) => {
     lon: Number.isFinite(lng) ? lng : null,
     kind: item?.kind || (item?.id ? "city_stop" : "osm_place"),
     stop_id: item?.stop_id ?? (item?.id ? item.id : null),
+    city_name: item?.city_name || item?.address?.city || item?.address?.town || item?.address?.county || "",
     key: String(item?.kind || (item?.id ? "city_stop" : "osm_place")) + ":" + String(item?.id ?? item?.osm_id ?? item?.place_id ?? name),
   };
 };
@@ -86,12 +87,20 @@ function LocationSearch({
           const lat = Number(item?.lat);
           const lon = Number(item?.lon ?? item?.lng);
           if (!Number.isFinite(lat) || !Number.isFinite(lon) || (!item?.name && !item?.display_name)) return false;
-          const key = item.id ? "stop:" + item.id : lat.toFixed(5) + ":" + lon.toFixed(5) + ":" + (item.name || item.display_name);
+          const key = lat.toFixed(5) + ":" + lon.toFixed(5);
           if (seen.has(key)) return false;
           seen.add(key);
           return true;
-        }).slice(0, 5);
-        setResults(merged.map(mapResult));
+        });
+        const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+        merged.sort((a, b) => {
+          const score = (item) => {
+            const text = `${item.name || ""} ${item.display_name || ""} ${item.city_name || ""} ${item.address?.city || ""}`.toLocaleLowerCase();
+            return terms.reduce((total, term) => total + Number(text.includes(term)), 0);
+          };
+          return score(b) - score(a);
+        });
+        setResults(merged.slice(0, 5).map(mapResult));
         setSearched(true);
       } catch {
         if (!active) return;
@@ -219,7 +228,7 @@ function LocationSearch({
                   {item.name || item.display_name?.split(",")?.[0]}
                 </Text>
                 <Text numberOfLines={2} style={styles.resultSubtitle}>
-                  {item.display_name}
+                  {item.display_name || [item.name, item.city_name].filter(Boolean).join(", ")}
                 </Text>
               </View>
             </Pressable>

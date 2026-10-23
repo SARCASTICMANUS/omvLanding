@@ -46,12 +46,17 @@ const rideSlice = createSlice({
       .addCase(fetchRideHistory.pending, (state) => {
         state.historyLoading = true;
         state.historyError = null;
+        state.history = [];
+        state.historyCount = 0;
       })
       .addCase(fetchRideHistory.fulfilled, (state, action) => {
         state.historyLoading = false;
         const data = unwrap(action.payload);
-        state.history = data?.results || (Array.isArray(data) ? data : []);
-        state.historyCount = data?.count || 0;
+        const results = data?.results || (Array.isArray(data) ? data : []);
+        state.history = results.filter((trip) =>
+          trip?.status === "completed" && Number(trip.earnings ?? trip.total_fare ?? trip.fare) > 0
+        );
+        state.historyCount = state.history.length;
       })
       .addCase(fetchRideHistory.rejected, (state, action) => {
         state.historyLoading = false;

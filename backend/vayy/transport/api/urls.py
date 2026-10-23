@@ -18,6 +18,7 @@ from transport.api.views import (
     DriverRouteListAPIView,
     PassengersAlongRouteAPIView,
     RoadDistanceAPIView,
+    RoadDirectionsAPIView,
     WalkingPathAPIView,
     GeocodeSearchAPIView,
     GeocodeDbSearchAPIView,
@@ -126,6 +127,11 @@ urlpatterns = [
         "road-distance/",
         RoadDistanceAPIView.as_view(),
         name="road-distance",
+    ),
+    path(
+        "road-directions/",
+        RoadDirectionsAPIView.as_view(),
+        name="road-directions",
     ),
     path(
         "walking-path/",

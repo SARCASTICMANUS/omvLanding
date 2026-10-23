@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 _geolocator = GeopyNominatim(user_agent="vayy/1.0", timeout=10)
 
-GEOCODE_CACHE_KEY_PREFIX = "geocode:search:v1"
+GEOCODE_CACHE_KEY_PREFIX = "geocode:search:v2"
 GEOCODE_CACHE_TTL = 24 * 60 * 60  # 24h
 GEOCODE_SEARCH_TIMEOUT = int(os.environ.get("GEOCODE_SEARCH_TIMEOUT", "3"))
 GEOCODE_WARMUP_DELAY = 30
@@ -127,16 +127,22 @@ class GeocodingService:
                 .select_related("route")[:limit]
             )
 
-            return [
-                {
+            results = []
+            for stop in stops:
+                route = stop.route
+                city = stop.city or (route.city if route else None)
+                city_name = city.name if city else ""
+                results.append({
                     "place_id": f"stop-{stop.id}",
+                    "id": str(stop.id),
+                    "stop_id": str(stop.id),
                     "lat": stop.location.y,
                     "lon": stop.location.x,
                     "name": stop.name,
-                    "display_name": stop.name,
-                }
-                for stop in stops
-            ]
+                    "city_name": city_name,
+                    "display_name": f"{stop.name}, {city_name}" if city_name else stop.name,
+                })
+            return results
         except Exception as exc:
             logger.error("Geocode DB stop search failed for query %s: %s", query, exc)
             return []
@@ -168,7 +174,7 @@ class GeocodingService:
                 score=F("fts_rank") + F("tri_score"),
             ).filter(
                 Q(tri_score__gt=0.15) | Q(fts_rank__gt=0)
-            ).order_by("-score").select_related("route__city")
+            ).order_by("-score").select_related("city", "route__city")
 
             if route_id:
                 qs = qs.filter(route_id=route_id)
@@ -176,23 +182,27 @@ class GeocodingService:
             results = []
             for stop in qs[:limit]:
                 route = stop.route
-                city_name = route.city.name if route.city else ""
+                city = stop.city or (route.city if route else None)
+                city_name = city.name if city else ""
                 route_label = " - ".join(
                     n for n in (route.start_name, route.end_name) if n
-                )
+                ) if route else ""
                 display = stop.name
                 if route_label:
                     display = f"{stop.name}, {route_label}"
+                if city_name:
+                    display = f"{display}, {city_name}"
                 results.append({
                     "place_id": f"stop-{stop.id}",
                     "id": str(stop.id),
+                    "stop_id": str(stop.id),
                     "name": stop.name,
                     "display_name": display,
                     "lat": stop.location.y,
                     "lon": stop.location.x,
-                    "route_id": str(stop.route_id),
-                    "route_name": route.name,
-                    "route_code": route.route_code,
+                    "route_id": str(stop.route_id) if stop.route_id else None,
+                    "route_name": route.name if route else None,
+                    "route_code": route.route_code if route else None,
                     "city_name": city_name,
                     "order": stop.order,
                     "score": round(stop.score, 4),

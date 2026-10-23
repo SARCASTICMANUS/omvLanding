@@ -10,6 +10,7 @@ import {
   WS_RECONNECT_JITTER,
   WS_RECONNECT_MAX_MS,
   WS_IDLE_TTL_MS,
+  WS_SUBPROTOCOL,
 } from "../../constants";
 
 const LOG_TAG = "[SocketManager]";
@@ -338,12 +339,6 @@ class SocketManager {
         (await AsyncStorage.getItem(STORAGE_KEYS.accessToken)) ||
         (await AsyncStorage.getItem(STORAGE_KEYS.token));
       const baseUrl = getWsUrl(path);
-      // omv-backend authenticates sockets from "?token=<access jwt>" only
-      // (common/websockets/auth.py). A Sec-WebSocket-Protocol token is ignored,
-      // the user stays anonymous and Daphne answers "403 Access denied".
-      const url = token
-        ? `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`
-        : baseUrl;
 
       // Re-check after async gap — state may have changed during await
       if (entry._connecting === false || entry.socket) {
@@ -353,11 +348,14 @@ class SocketManager {
 
       this._setState(path, "connecting");
 
-      const ws = new WebSocket(url);
+      const ws = new WebSocket(
+        baseUrl,
+        token ? [WS_SUBPROTOCOL, token] : undefined
+      );
       entry.socket = ws;
       entry._connecting = false;
 
-      console.log(`${LOG_TAG} _connectInternal WS_CREATED path=${path} auth=${token ? "query-token" : "none"}`);
+      console.log(`${LOG_TAG} _connectInternal WS_CREATED path=${path} auth=${token ? "subprotocol" : "none"}`);
 
       ws.onopen = () => {
         if (entry.socket !== ws) return;

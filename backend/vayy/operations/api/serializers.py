@@ -14,7 +14,7 @@ from transport.models import (
     Stop,
     TripSchedule,
 )
-from common.constants import VEHICLE_TYPE_CHOICES, VEHICLE_TYPE_AUTO, DISPATCH_MODE_DIRECT, DISPATCH_MODE_BROADCAST
+from common.constants import VEHICLE_TYPE_CHOICES, VEHICLE_TYPE_AUTO, DISPATCH_MODE_DIRECT, DISPATCH_MODE_BROADCAST, TRIP_STATUS_COMPLETED
 
 class VehicleSerializer(
     serializers.ModelSerializer
@@ -147,7 +147,13 @@ class ActiveTripSerializer(
         )
 
     def get_pickup_name(self, obj):
-        """First stop name as pickup."""
+        boarding = self._history_boarding_request(obj)
+        if boarding and boarding.pickup_stop_id:
+            return boarding.pickup_stop.name
+        if obj.origin_name:
+            return obj.origin_name
+        if obj.origin_point:
+            return f"{obj.origin_point.y:.5f}, {obj.origin_point.x:.5f}"
         try:
             stops = obj.route.stops.order_by("order")
             first = stops.first()
@@ -156,7 +162,13 @@ class ActiveTripSerializer(
             return obj.route.name if obj.route else "--"
 
     def get_destination_name(self, obj):
-        """Last stop name as destination."""
+        boarding = self._history_boarding_request(obj)
+        if boarding and boarding.drop_stop_id:
+            return boarding.drop_stop.name
+        if obj.destination_name:
+            return obj.destination_name
+        if obj.destination_point:
+            return f"{obj.destination_point.y:.5f}, {obj.destination_point.x:.5f}"
         try:
             stops = obj.route.stops.order_by("order")
             last = stops.last()
@@ -164,7 +176,17 @@ class ActiveTripSerializer(
         except Exception:
             return obj.route.name if obj.route else "--"
 
+    def _history_boarding_request(self, obj):
+        request = self.context.get("request")
+        if not request or getattr(request.user, "id", None) == obj.driver_id:
+            return None
+        requests = getattr(obj, "passenger_history_requests", [])
+        return requests[0] if requests else None
+
     def get_distance_km(self, obj):
+        boarding = self._history_boarding_request(obj)
+        if boarding and boarding.segment_distance_m is not None:
+            return round(boarding.segment_distance_m / 1000, 1)
         if obj.total_distance_m is not None:
             return round(obj.total_distance_m / 1000, 1)
         return None
@@ -181,15 +203,28 @@ class ActiveTripSerializer(
         return None
 
     def get_fare(self, obj):
+        boarding = self._history_boarding_request(obj)
+        if boarding and boarding.fare is not None:
+            return float(boarding.fare)
         if obj.total_fare is not None:
             return float(obj.total_fare)
         return None
 
     def get_earnings(self, obj):
-        """Driver earnings = total fare (same as fare for now)."""
+        """Return the route fare or the sum earned from completed passenger segments."""
+        request = self.context.get("request")
+        if request and getattr(request.user, "id", None) != obj.driver_id:
+            return None
         if obj.total_fare is not None:
             return float(obj.total_fare)
-        return None
+        fares = [
+            item.fare
+            for item in getattr(obj, "completed_boarding_requests", [])
+            if item.fare is not None
+        ]
+        if fares:
+            return float(sum(fares))
+        return 0.0 if obj.status == TRIP_STATUS_COMPLETED and not obj.route_id else None
 
 
 class BoardingStopNameSerializer(
@@ -516,6 +551,7 @@ class DispatchRequestSerializer(serializers.Serializer):
     target_trip_id = serializers.UUIDField(required=False, allow_null=True, default=None)
     pickup_stop_id = serializers.UUIDField()
     drop_stop_id = serializers.UUIDField(required=False, allow_null=True)
+    fare = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0, required=False)
     mode = serializers.ChoiceField(choices=[DISPATCH_MODE_DIRECT, DISPATCH_MODE_BROADCAST], default=DISPATCH_MODE_BROADCAST)
 
 

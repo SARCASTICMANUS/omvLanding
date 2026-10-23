@@ -22,7 +22,7 @@ import useDriverLocationPush from "../hooks/useDriverLocationPush";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import COLORS from "../../shared/constants/colors";
 import VayyMap, { ViewAnnotation } from "../../shared/components/VayyMap";
-import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
+import ScreenHeader, { HEADER_CONTENT_HEIGHT } from "../../shared/components/navigation/ScreenHeader";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 
 const { height } = Dimensions.get("window");
@@ -64,13 +64,31 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   const slideAnim = useRef(new Animated.Value(height)).current;
   const [bikePos, setBikePos] = useState(null);
   const mapRef = useRef(null);
+  const centeredOnGpsRef = useRef(false);
+
+  useEffect(() => {
+    if (!navRoute?.params?.cancelAcceptedRide) return;
+    setCurrentBuddy(null);
+    setPhase("scanning");
+    navigation.setParams({ cancelAcceptedRide: undefined });
+  }, [navigation, navRoute?.params?.cancelAcceptedRide]);
   const zoomIn = () => mapRef.current?.zoomIn();
   const zoomOut = () => mapRef.current?.zoomOut();
+
+  useEffect(() => {
+    if (!bikePos || centeredOnGpsRef.current) return;
+    centeredOnGpsRef.current = true;
+    mapRef.current?.setCamera({
+      center: [bikePos.longitude, bikePos.latitude],
+      zoom: 14,
+      duration: 0,
+    });
+  }, [bikePos]);
 
   const handleWsMessage = useCallback((data) => {
     // New broadcast dispatch request from a passenger
     if (data.type === "new_dispatch_request" && data.dispatch) {
-      if (!online) return;
+      if (!online && !startingJourney) return;
       const req = data.dispatch;
       const realBuddy = {
         id: req.request_id || req.id || req.trip_id || "ws_req",
@@ -88,8 +106,8 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
         distance: req.distance_km != null ? req.distance_km : null,
         distanceDisplay: req.distance_km != null ? `${req.distance_km} km` : "—",
         duration: req.duration || req.duration_min || null,
-        fare: req.fare ? `₹${req.fare}` : "—",
-        fareAmount: req.fare || 0,
+        fare: req.fare != null ? `₹${req.fare}` : "—",
+        fareAmount: req.fare ?? 0,
         eta: req.eta ? `${req.eta} min` : "—",
         otp: req.otp || null,
         route_id: req.route_id || null,
@@ -134,7 +152,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
         setPhase("scanning");
       });
     }
-  }, [slideAnim, notifSlide, online]);
+  }, [slideAnim, notifSlide, online, startingJourney]);
 
   useWebSocket(userId ? WS.notifications(userId) : null, {
     enabled: !!userId,
@@ -291,7 +309,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
     }
     setShowVerify(false);
     setOnline(true);
-    setPhase("scanning");
+    setPhase((currentPhase) => currentPhase === "found" ? currentPhase : "scanning");
   };
 
   const vehicleIdRef = useRef(null);
@@ -406,7 +424,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   const handleBack = async () => {
     if (activeJourney?.trip_id) {
       try {
-        await endJourney(activeJourney.trip_id);
+        await endJourney(activeJourney.trip_id, { cancel: true });
       } catch (error) {
         setNotification(error?.message || "Could not end the active journey. Stay online and try again.");
         return;
@@ -461,9 +479,36 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
         setCurrentBuddy(null);
         setPhase("scanning");
       });
+      return true;
     } catch (error) {
       console.warn("Reject dispatch failed:", error);
       setNotification(error?.message || "Could not reject this request. Please try again.");
+      return false;
+    }
+  };
+
+  const handleToggleOnline = async () => {
+    if (startingJourney) return;
+    if (!online) {
+      handleStart();
+      return;
+    }
+
+    setStartingJourney(true);
+    setNotification(null);
+    try {
+      if (currentBuddy && !(await handleIgnore())) return;
+      if (activeJourney?.trip_id) {
+        await endJourney(activeJourney.trip_id, { cancel: true });
+      }
+      setActiveJourney(null);
+      setCurrentBuddy(null);
+      setOnline(false);
+      setPhase("scanning");
+    } catch (error) {
+      setNotification(error?.message || "Could not take the radar offline. Please try again.");
+    } finally {
+      setStartingJourney(false);
     }
   };
 
@@ -564,7 +609,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
       <View style={styles.overlayTint} />
 
       {/* Radar center */}
-      <View style={styles.radarCenter} pointerEvents="none">
+      <View style={[styles.radarCenter, { pointerEvents: "none" }]}>
         {online && (
           <>
             <Animated.View style={[styles.pulseRing, { transform: [{ scale: pulseAnim }] }]} />
@@ -601,22 +646,17 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
         onBack={handleBack}
         right={
           <TouchableOpacity
-            style={[styles.headerBtn, online && styles.headerBtnActive]}
-            onPress={() => {
-              if (online) {
-                setOnline(false);
-                setPhase("scanning");
-              } else {
-                handleStart();
-              }
-            }}
+            style={[styles.headerBtn, online && styles.headerBtnActive, startingJourney && styles.headerBtnDisabled]}
+            onPress={handleToggleOnline}
+            disabled={startingJourney}
             accessibilityRole="button"
-            accessibilityLabel={online ? "Go offline" : "Go online"}
+            accessibilityLabel={startingJourney ? "Updating radar status" : online ? "Go offline" : "Go online"}
+            accessibilityState={{ disabled: startingJourney, busy: startingJourney }}
           >
             <Ionicons
-              name={online ? "radio" : "radio-button-off"}
+              name={startingJourney ? "sync" : online ? "radio" : "radio-button-off"}
               size={20}
-              color={online ? "#fff" : "#111827"}
+              color={online || startingJourney ? "#fff" : "#111827"}
             />
           </TouchableOpacity>
         }
@@ -624,7 +664,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
 
       {/* Scan timer */}
       {online && phase === "scanning" && (
-        <View style={[styles.scanTimerWrap, { top: insets.top + 58 }]}>
+        <View style={[styles.scanTimerWrap, { top: insets.top + HEADER_CONTENT_HEIGHT + 28 }]}>
           <View style={styles.scanTimerHead}>
             <Text style={styles.scanTimerTitle}>Scanning for buddies</Text>
             <Text style={styles.scanTimerSecs}>
@@ -658,8 +698,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
 
       {/* Bottom sheet */}
       <Animated.View
-        style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16, transform: [{ translateY: slideAnim }] }]}
-        pointerEvents={phase === "found" ? "auto" : "none"}
+        style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16, transform: [{ translateY: slideAnim }], pointerEvents: phase === "found" ? "auto" : "none" }]}
       >
         <View style={styles.handle} />
         {currentBuddy && phase === "found" && (
@@ -737,8 +776,9 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
                   <View style={styles.vTrackWrap}>
                     <Animated.Image
                       source={VEHICLE_IMAGES[vehicleIdx]}
+                      resizeMode="contain"
                       style={{
-                        width: 80, height: 80, resizeMode: "contain",
+                        width: 80, height: 80,
                         marginBottom: -10,
                         transform: [{
                           translateX: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [-14, 14] }),
@@ -1017,6 +1057,9 @@ const styles = StyleSheet.create({
   },
   headerBtnActive: {
     backgroundColor: COLORS.primary,
+  },
+  headerBtnDisabled: {
+    opacity: 0.7,
   },
 
   /* notification banner */

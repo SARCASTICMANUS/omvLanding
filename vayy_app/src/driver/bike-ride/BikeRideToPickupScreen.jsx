@@ -12,16 +12,67 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
 import * as Location from "expo-location";
-import { arrivedDispatch } from "../../store/slices/dispatchSlice";
-import { getRoadDistance } from "../../routes/services/routeService";
+import { arrivedDispatch, cancelBoardingRequest, cancelDispatch } from "../../store/slices/dispatchSlice";
+import { getRoadDirections } from "../../routes/services/routeService";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import useDriverLocationPush from "../hooks/useDriverLocationPush";
 import api from "../../shared/lib/api";
 import { WS, OPERATIONS } from "../../constants";
 import COLORS from "../../shared/constants/colors";
-import VayyMap, { UserLocation, Marker } from "../../shared/components/VayyMap";
+import VayyMap, { UserLocation, Marker, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import ZoomControls from "../../shared/components/common/ZoomControls";
+
+const turnLabel = (step) => {
+  const modifier = step?.modifier || "straight";
+  if (modifier.includes("left")) return "Turn left";
+  if (modifier.includes("right")) return "Turn right";
+  if (modifier === "uturn") return "Make a U-turn";
+  if (step?.type === "roundabout" || step?.type === "rotary") return "Enter roundabout";
+  if (step?.type === "arrive") return "Arrive at pickup";
+  return "Continue straight";
+};
+
+const distanceBetween = (a, b) => {
+  const rad = (deg) => (deg * Math.PI) / 180;
+  const dLat = rad(b[1] - a[1]);
+  const dLng = rad(b[0] - a[0]);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[1])) * Math.cos(rad(b[1])) * Math.sin(dLng / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+};
+
+const bearingBetween = (a, b) => {
+  const rad = (deg) => (deg * Math.PI) / 180;
+  const y = Math.sin(rad(b[0] - a[0])) * Math.cos(rad(b[1]));
+  const x = Math.cos(rad(a[1])) * Math.sin(rad(b[1])) - Math.sin(rad(a[1])) * Math.cos(rad(b[1])) * Math.cos(rad(b[0] - a[0]));
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+};
+
+const distanceToSegment = (px, py, ax, ay, bx, by) => {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lengthSquared = dx * dx + dy * dy;
+  const t = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+};
+
+const routeBearingAtPosition = (coordinates, position) => {
+  if (!coordinates || coordinates.length < 2) return null;
+  let nearestIndex = 0;
+  let nearestDistance = Infinity;
+  for (let index = 0; index < coordinates.length - 1; index += 1) {
+    const [lng1, lat1] = coordinates[index];
+    const [lng2, lat2] = coordinates[index + 1];
+    const distance = distanceToSegment(position.longitude, position.latitude, lng1, lat1, lng2, lat2);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  }
+  return bearingBetween(coordinates[nearestIndex], coordinates[nearestIndex + 1]);
+};
+
+const PICKUP_NAVIGATION_ZOOM = 19;
 
 export default function BikeRideToPickupScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -32,12 +83,25 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
   const pickupLng = Number(buddy?.pickupLng) || null;
   const mapRef = useRef(null);
   const cameraRef = useRef(null);
+  const lastDirectionsRequest = useRef(null);
+  const directionsRequestId = useRef(0);
+  const passedTurnCount = useRef(0);
   const [mapCenter, setMapCenter] = useState(null);
   const [driverPos, setDriverPos] = useState(null);
   const [heading, setHeading] = useState(0);
   const [distance, setDistance] = useState(null);
   const [eta, setEta] = useState("—");
+  const [approachPath, setApproachPath] = useState(null);
+  const [turnSteps, setTurnSteps] = useState([]);
+  const [directionsError, setDirectionsError] = useState("");
+  const [turnIndex, setTurnIndex] = useState(0);
+  const [turnDistance, setTurnDistance] = useState(null);
   const [showArrivedModal, setShowArrivedModal] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancellingRide, setCancellingRide] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const allowExitRef = useRef(false);
+  const cancelInProgressRef = useRef(false);
   const [vehicleReady, setVehicleReady] = useState(false);
   const vehicleIdRef = useRef(null);
   const isInRange = distance !== null && distance <= 0.3;
@@ -45,6 +109,12 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
   const dot3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => navigation.addListener("beforeRemove", (event) => {
+    if (allowExitRef.current) return;
+    event.preventDefault();
+    setShowCancelConfirm(true);
+  }), [navigation]);
 
   useEffect(() => {
     let stopped = false;
@@ -62,13 +132,6 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
       const initLng = pos.coords.longitude;
       setDriverPos({ latitude: initLat, longitude: initLng });
       setMapCenter({ latitude: initLat, longitude: initLng });
-      if (pickupLat && pickupLng) {
-        getRoadDistance(initLat, initLng, pickupLat, pickupLng).then((data) => {
-          if (stopped) return;
-          setDistance(data.distance_km);
-          setEta(data.duration_min <= 1 ? "Arriving" : `${data.duration_min} min`);
-        }).catch(() => {});
-      }
     })();
     return () => { stopped = true; };
   }, [pickupLat, pickupLng]);
@@ -76,13 +139,38 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
   useEffect(() => {
     if (!driverPos) return;
     const { latitude, longitude } = driverPos;
-    if (pickupLat && pickupLng) {
-      getRoadDistance(latitude, longitude, pickupLat, pickupLng).then((data) => {
-        setDistance(data.distance_km);
-        setEta(data.duration_min <= 1 ? "Arriving" : `${data.duration_min} min`);
-      }).catch(() => {});
-    }
+    if (!pickupLat || !pickupLng) return;
+    const now = Date.now();
+    const previous = lastDirectionsRequest.current;
+    if (previous && now - previous.time < 12000 && distanceBetween([longitude, latitude], previous.point) < 100) return;
+    lastDirectionsRequest.current = { time: now, point: [longitude, latitude] };
+    const requestId = ++directionsRequestId.current;
+    getRoadDirections(latitude, longitude, pickupLat, pickupLng).then((data) => {
+      if (requestId !== directionsRequestId.current) return;
+      setDistance(Number(data.distance) / 1000);
+      setEta(Number(data.duration) <= 60 ? "Arriving" : `${Math.max(1, Math.round(Number(data.duration) / 60))} min`);
+      setApproachPath(data.geometry?.coordinates || null);
+      setDirectionsError("");
+      const turns = (data.steps || []).filter((step) => !["depart", "notification"].includes(step.type));
+      setTurnSteps(turns);
+      passedTurnCount.current = 0;
+      setTurnIndex(0);
+    }).catch((error) => {
+      setDirectionsError(error?.message || "Check your connection and try again.");
+      if (__DEV__) console.warn("Pickup navigation directions unavailable:", error?.message || error);
+    });
   }, [driverPos, pickupLat, pickupLng]);
+
+  useEffect(() => {
+    const step = turnSteps[turnIndex];
+    if (!step || !driverPos || !Array.isArray(step.location)) return;
+    const meters = distanceBetween([driverPos.longitude, driverPos.latitude], step.location);
+    setTurnDistance(meters);
+    if (meters < 35 && turnIndex < turnSteps.length - 1 && passedTurnCount.current !== turnIndex) {
+      passedTurnCount.current = turnIndex;
+      setTurnIndex((index) => Math.min(index + 1, turnSteps.length - 1));
+    }
+  }, [driverPos, turnIndex, turnSteps]);
 
   useDriverLocationPush({
     enabled: vehicleReady && !!vehicleIdRef.current,
@@ -93,12 +181,15 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
 
   useEffect(() => {
     if (!driverPos || !mapRef.current) return;
+    const routeBearing = routeBearingAtPosition(approachPath, driverPos);
     mapRef.current.setCamera({
       center: [driverPos.longitude, driverPos.latitude],
-      zoom: 17,
+      zoom: PICKUP_NAVIGATION_ZOOM,
+      pitch: 50,
+      bearing: routeBearing ?? heading,
       duration: 1500,
     });
-  }, [driverPos, heading]);
+  }, [driverPos, heading, approachPath]);
 
   useEffect(() => {
     if (isInRange) {
@@ -130,6 +221,8 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
 
   const handleWsMessage = useCallback((data) => {
     if (data.status === "cancelled" || data.status === "completed") {
+      if (cancelInProgressRef.current) return;
+      allowExitRef.current = true;
       navigation.navigate("DriverTabs");
     }
   }, [navigation]);
@@ -144,6 +237,31 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
 
   const handleArrived = () => setShowArrivedModal(true);
 
+  const cancelAcceptedRide = async () => {
+    if (cancelInProgressRef.current) return;
+    cancelInProgressRef.current = true;
+    setCancellingRide(true);
+    setCancelError("");
+    try {
+      if (buddy?.boardingRequestId) {
+        await dispatchRedux(cancelBoardingRequest(buddy.boardingRequestId)).unwrap();
+      } else if (dispatchId) {
+        await dispatchRedux(cancelDispatch(dispatchId)).unwrap();
+      } else {
+        throw new Error("The accepted ride could not be identified.");
+      }
+      allowExitRef.current = true;
+      setShowCancelConfirm(false);
+      navigation.navigate("FindPassenger", { cancelAcceptedRide: true });
+    } catch (error) {
+      console.warn("Cancel accepted ride failed:", error);
+      setCancelError(error?.message || "Could not cancel the ride. Please try again.");
+    } finally {
+      cancelInProgressRef.current = false;
+      setCancellingRide(false);
+    }
+  };
+
   const confirmArrival = async () => {
     setShowArrivedModal(false);
     if (dispatchId) {
@@ -156,6 +274,7 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
         console.warn("arrivedDispatch failed:", e);
       }
     }
+    allowExitRef.current = true;
     navigation.navigate("BikeOTPEntry", { buddy, dispatchId });
   };
 
@@ -174,13 +293,19 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
           style={styles.mapBg}
           initialViewState={{
             center: [mapCenter.longitude, mapCenter.latitude],
-            zoom: 17,
+            zoom: PICKUP_NAVIGATION_ZOOM,
+            pitch: 50,
           }}
         >
           <UserLocation
             visible={true}
             showsUserHeadingIndicator={true}
           />
+          {approachPath?.length > 1 && (
+            <GeoJSONSource id="pickupApproach" data={{ type: "Feature", geometry: { type: "LineString", coordinates: approachPath } }}>
+              <Layer id="pickupApproachLine" type="line" layout={{ "line-join": "round", "line-cap": "round" }} paint={{ "line-color": COLORS.primary, "line-width": 6 }} />
+            </GeoJSONSource>
+          )}
           {pickupLng && pickupLat && (
             <Marker
               id="pickup"
@@ -200,8 +325,19 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
           zIndex={20}
           title="Ride to Pickup"
           subtitle="Head to the passenger's boarding stop"
-          onBack={() => navigation.goBack()}
+          onBack={() => setShowCancelConfirm(true)}
         />
+        {!!turnSteps[turnIndex] || !!directionsError ? (
+          <View style={styles.turnCard}>
+            <Ionicons name={directionsError ? "alert-circle-outline" : turnLabel(turnSteps[turnIndex]).includes("left") ? "arrow-undo" : turnLabel(turnSteps[turnIndex]).includes("right") ? "arrow-redo" : "arrow-up"} size={28} color="#fff" />
+            <View style={styles.turnTextWrap}>
+              <Text style={styles.turnTitle}>{directionsError ? "Directions unavailable" : turnLabel(turnSteps[turnIndex])}</Text>
+              <Text style={styles.turnSubtitle}>
+                {directionsError ? "Check your connection; guidance will retry." : `${turnDistance == null ? "Follow the road" : turnDistance >= 1000 ? `${(turnDistance / 1000).toFixed(1)} km` : `${Math.max(0, Math.round(turnDistance))} m`}${turnSteps[turnIndex].name ? ` · ${turnSteps[turnIndex].name}` : ""}`}
+              </Text>
+            </View>
+          </View>
+        ) : null}
       </View>
 
       <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
@@ -304,6 +440,42 @@ export default function BikeRideToPickupScreen({ navigation, route }) {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={showCancelConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCancelConfirm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconWrap}>
+              <Ionicons name="warning-outline" size={48} color="#EF4444" />
+            </View>
+            <Text style={styles.modalTitle}>Cancel accepted ride?</Text>
+            <Text style={styles.modalDesc}>
+              The passenger will be notified and this pickup will be removed from your trip.
+            </Text>
+            {!!cancelError && <Text style={styles.cancelError}>{cancelError}</Text>}
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancel}
+                onPress={() => { setShowCancelConfirm(false); setCancelError(""); }}
+                disabled={cancellingRide}
+              >
+                <Text style={styles.modalCancelText}>Keep Ride</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirm, styles.modalConfirmDanger]}
+                onPress={cancelAcceptedRide}
+                disabled={cancellingRide}
+              >
+                <Text style={styles.modalConfirmText}>{cancellingRide ? "Cancelling…" : "Cancel Ride"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -324,6 +496,24 @@ const styles = StyleSheet.create({
   mapBg: {
     ...StyleSheet.absoluteFillObject,
   },
+  turnCard: {
+    position: "absolute",
+    top: 104,
+    left: 16,
+    right: 16,
+    zIndex: 15,
+    minHeight: 68,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "#17372B",
+    boxShadow: "0 3 12 rgba(0,0,0,0.22)",
+  },
+  turnTextWrap: { flex: 1 },
+  turnTitle: { color: "#fff", fontSize: 17, fontWeight: "800" },
+  turnSubtitle: { color: "#D1FAE5", fontSize: 13, marginTop: 3 },
   gpsLoading: {
     flex: 1,
     alignItems: "center",
@@ -574,6 +764,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
+  cancelError: {
+    color: "#B91C1C",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
   modalActions: {
     flexDirection: "row",
     gap: 12,
@@ -603,6 +799,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingVertical: 14,
   },
+  modalConfirmDanger: { backgroundColor: "#EF4444" },
   modalConfirmText: {
     fontSize: 15,
     fontWeight: "700",

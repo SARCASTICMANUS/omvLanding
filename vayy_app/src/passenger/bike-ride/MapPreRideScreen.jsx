@@ -353,6 +353,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
+          grayscale
           initialViewState={{
             center: initialCenter,
             zoom: 14,
@@ -382,8 +383,8 @@ export function BikeMapPreRideScreen({ navigation, route }) {
             id="walkingLayer"
             type="line"
             source="walkingSource"
-            layout={{ "line-join": "round", "line-cap": "round", "line-dasharray": [1.5, 1.5] }}
-            paint={{ "line-color": "#E99B24", "line-width": 4 }}
+            layout={{ "line-join": "round", "line-cap": "round" }}
+            paint={{ "line-color": "#E99B24", "line-width": 4, "line-dasharray": [1.5, 1.5] }}
           />
           {routeStops.map((stop) => {
             const coords = stop.road_access_point
@@ -620,7 +621,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
                   setShowConfirm(false);
                   navigation.navigate("BikeSearching", {
                     route_id: null,
-                    target_trip_id: route?.params?.target_trip_id || trip?.trip_id || trip?.id,
+                    target_trip_id: route?.params?.target_trip_id || trip?.trip_id,
                     pickup_stop_id: trip?.pickup_stop?.id,
                     drop_stop_id: trip?.dropoff_stop?.id,
                     trip,
@@ -628,6 +629,7 @@ export function BikeMapPreRideScreen({ navigation, route }) {
                     pickupName: pickupName,
                     destination: dropoffName,
                     dropoffName: dropoffName,
+                    pickupWalkDistanceMeters: walkingPath?.distance_m ?? trip?.first_mile_walk_meters ?? null,
                     fare: route?.params?.fare,
                   });
                 }}

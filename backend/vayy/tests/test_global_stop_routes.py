@@ -54,6 +54,21 @@ class GlobalStopRouteTests(TestCase):
         self.assertEqual(nearest[0].id, self.pickup.id)
         self.assertIn(farther.id, [stop.id for stop in nearest])
 
+    def test_geocode_db_search_includes_city_for_global_stops(self):
+        noida = City.objects.create(name="Noida")
+        Stop.objects.create(
+            city=noida, name="Amity University Noida",
+            location=Point(77.3327483, 28.5432229, srid=4326), coordinate_status="provisional",
+        )
+        response = APIClient().get(
+            "/api/transport/geocode/db/search/",
+            {"q": "Amity University Noida", "limit": 10},
+        )
+        self.assertEqual(response.status_code, 200)
+        result = next(item for item in response.data["data"] if item["city_name"] == "Noida")
+        self.assertIn("Noida", result["display_name"])
+        self.assertEqual(result["stop_id"], result["id"])
+
     def test_ordered_shared_stop_membership_matches_direction_and_preserves_sequence(self):
         self.add_direction()
         pickups, drops = self.candidates()
@@ -316,6 +331,41 @@ class GlobalStopRouteTests(TestCase):
         self.assertEqual(response.status_code, 502)
         self.assertEqual(response.data["code"], "ROUTE_GEOMETRY_UNAVAILABLE")
 
+    def test_dynamic_generate_resolves_each_endpoint_city_from_global_stops(self):
+        destination_city = City.objects.create(name="Destination City")
+        CityAdminConfiguration.objects.create(city=destination_city, max_walk_to_stop_m=1200)
+        destination_stop = Stop.objects.create(
+            city=destination_city, name="Destination City Stop",
+            location=Point(self.destination.x, self.destination.y, srid=4326), coordinate_status="provisional",
+        )
+        user = User.objects.create_user(email="cross-city-route@test.invalid", password="pw", role="passenger")
+        client = APIClient()
+        client.force_authenticate(user=user)
+        route = {
+            "routes": [{"distance": 12000, "duration": 1800,
+                        "geometry": {"type": "LineString", "coordinates": [[80.9002, 26.8002], [80.9001, 26.8998]]}}],
+        }
+        walking = {"distance": 100, "duration": 75,
+                   "geometry": {"type": "LineString", "coordinates": [[80.9, 26.8], [80.9001, 26.8001]]}}
+        with patch("transport.api.dynamic_admin_views.OSRMService.route", return_value=route), \
+             patch.object(OSRMService, "get_walking_path", return_value=walking):
+            response = client.post("/api/transport/routes/dynamic-generate/", {
+                "city_id": None,
+                "origin": {"lat": self.origin.y, "lng": self.origin.x},
+                "destination": {"lat": self.destination.y, "lng": self.destination.x},
+                "vehicle_type": "bike",
+            }, format="json")
+
+        self.assertEqual(response.status_code, 201, response.data)
+        route_preview = response.data["data"]["routes"][0]
+        self.assertEqual(route_preview["route"]["pickup_stop"]["id"], str(self.pickup.id))
+        self.assertEqual(route_preview["route"]["dropoff_stop"]["id"], str(destination_stop.id))
+        saved_route = Route.objects.get(pk=route_preview["route"]["id"])
+        self.assertEqual(saved_route.city_id, self.city.id)
+        self.assertEqual(set(saved_route.route_stop_associations.values_list("stop_id", flat=True)), {
+            self.pickup.id, destination_stop.id,
+        })
+
     def test_dynamic_preview_rejects_route_stops_snapped_far_from_routable_roads(self):
         user = User.objects.create_user(email="route-snap@test.invalid", password="pw", role="passenger")
         client = APIClient()
@@ -572,5 +622,27 @@ class GlobalStopRouteTests(TestCase):
         self.assertEqual(failure.data["code"], "ROAD_GEOMETRY_UNAVAILABLE")
         invalid = client.post("/api/transport/routes/preview/", {
             **payload, "start": {"lat": 100, "lon": self.origin.x},
+        }, format="json")
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_driver_road_directions_returns_osrm_geometry_and_turns(self):
+        data = {
+            "geometry": {"type": "LineString", "coordinates": [[80.9, 26.8], [80.91, 26.81]]},
+            "distance": 1250,
+            "duration": 220,
+            "steps": [{"name": "Main Road", "distance_m": 400, "type": "turn", "modifier": "left", "location": [80.905, 26.805]}],
+        }
+        with patch("transport.api.views.OSRMService.get_road_directions", return_value=data):
+            response = APIClient().post("/api/transport/road-directions/", {
+                "origin_lat": 26.8, "origin_lng": 80.9,
+                "dest_lat": 26.81, "dest_lng": 80.91,
+            }, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["geometry"], data["geometry"])
+        self.assertEqual(response.data["data"]["steps"][0]["modifier"], "left")
+
+        invalid = APIClient().post("/api/transport/road-directions/", {
+            "origin_lat": 91, "origin_lng": 80.9,
+            "dest_lat": 26.81, "dest_lng": 0,
         }, format="json")
         self.assertEqual(invalid.status_code, 400)

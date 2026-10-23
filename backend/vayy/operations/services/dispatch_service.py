@@ -104,7 +104,7 @@ class DispatchService:
         )
 
     @staticmethod
-    def request_dispatch(passenger: User, route_id: Optional[str], pickup_stop_id: str, drop_stop_id: str = None, mode: str = DISPATCH_MODE_BROADCAST, target_trip_id: Optional[str] = None) -> Dict[str, Any]:
+    def request_dispatch(passenger: User, route_id: Optional[str], pickup_stop_id: str, drop_stop_id: str = None, mode: str = DISPATCH_MODE_BROADCAST, target_trip_id: Optional[str] = None, passenger_fare: Optional[Decimal] = None) -> Dict[str, Any]:
         """
         Initiates a ride request and triggers the matching engine.
         Supports 'direct' and 'broadcast' modes.
@@ -138,7 +138,10 @@ class DispatchService:
         # already mid-journey, so a direct assign would conflict with the live
         # trip they are running; attaching them is what the accept path does.
         if route_id is None or mode == DISPATCH_MODE_BROADCAST:
-            return DispatchService._handle_broadcast_dispatch(passenger, route_id, pickup_stop_id, drop_stop_id, candidates)
+            return DispatchService._handle_broadcast_dispatch(
+                passenger, route_id, pickup_stop_id, drop_stop_id, candidates,
+                passenger_fare=passenger_fare,
+            )
 
         best_candidate = candidates[0]
         return DispatchService._assign_to_driver(passenger, route_id, pickup_stop_id, best_candidate, drop_stop_id)
@@ -370,7 +373,7 @@ class DispatchService:
         return trip
 
     @staticmethod
-    def _handle_broadcast_dispatch(passenger: User, route_id: Optional[str], pickup_stop_id: str, drop_stop_id: str, candidates: List[Dict], dispatch_request: Optional[DispatchRequest] = None) -> Dict[str, Any]:
+    def _handle_broadcast_dispatch(passenger: User, route_id: Optional[str], pickup_stop_id: str, drop_stop_id: str, candidates: List[Dict], dispatch_request: Optional[DispatchRequest] = None, passenger_fare: Optional[Decimal] = None, reschedule_expiry: bool = True) -> Dict[str, Any]:
         """
         Broadcasts the dispatch request to ALL nearby drivers on the route.
         First driver to accept wins; others get dismissed via WS.
@@ -404,12 +407,16 @@ class DispatchService:
         # candidate drivers into notified_drivers and extend the deadline.
         existing = dispatch_request
         if existing is not None:
+            passenger_fare = existing.passenger_fare
             notified = set(existing.notified_drivers)
             notified.update(str(c["driver"].id) for c in candidates)
-            existing.status = DispatchRequest.STATUS_PENDING
             existing.notified_drivers = list(notified)
-            existing.expires_at = timezone.now() + timedelta(seconds=45)
-            existing.save(update_fields=["status", "notified_drivers", "expires_at"])
+            update_fields = ["notified_drivers"]
+            if reschedule_expiry:
+                existing.status = DispatchRequest.STATUS_PENDING
+                existing.expires_at = timezone.now() + timedelta(seconds=45)
+                update_fields.extend(["status", "expires_at"])
+            existing.save(update_fields=update_fields)
             dispatch_request = existing
         else:
             # Create broadcast dispatch request
@@ -422,6 +429,7 @@ class DispatchService:
                 drop_stop=drop_stop,
                 drop_lat=drop_stop.location.y if drop_stop else None,
                 drop_lng=drop_stop.location.x if drop_stop else None,
+                passenger_fare=passenger_fare,
                 notified_drivers=[str(c["driver"].id) for c in candidates],
                 expires_at=timezone.now() + timedelta(seconds=45),
             )
@@ -461,7 +469,7 @@ class DispatchService:
             vehicle_type = candidate["vehicle"].vehicle_type
 
             # Fare estimate from pickup stop to route end (vehicle-type specific)
-            fare = None
+            fare = float(passenger_fare) if passenger_fare is not None else None
             # A journey hand-raise names the destination as a stop rather than
             # sending coordinates, so fall back to it; otherwise the driver saw
             # no fare at all on every journey request.
@@ -471,7 +479,7 @@ class DispatchService:
                     drop_lng = drop_stop.location.x
                 except Exception:
                     pass
-            if drop_lat is not None and drop_lng is not None:
+            if fare is None and drop_lat is not None and drop_lng is not None:
                 try:
                     estimate = RideService.calculate_estimate(
                         stop.location.y, stop.location.x,
@@ -520,11 +528,12 @@ class DispatchService:
         # Schedule the next expiry round — expire if no one accepts. The
         # cascade in operations.tasks is bounded by DispatchRequest.max_rounds,
         # so this cannot reschedule forever.
-        from operations.tasks import expire_broadcast_request, BROADCAST_ROUND_SECONDS
-        expire_broadcast_request.apply_async(
-            (str(dispatch_request.id),),
-            countdown=BROADCAST_ROUND_SECONDS,
-        )
+        if reschedule_expiry:
+            from operations.tasks import expire_broadcast_request, BROADCAST_ROUND_SECONDS
+            expire_broadcast_request.apply_async(
+                (str(dispatch_request.id),),
+                countdown=BROADCAST_ROUND_SECONDS,
+            )
 
         logger.info(
             f"Broadcast dispatch {dispatch_request.id} sent to {len(candidates)} drivers "
@@ -536,6 +545,56 @@ class DispatchService:
             "request_id": str(dispatch_request.id),
             "drivers_notified": len(candidates),
         }
+
+    @staticmethod
+    def notify_pending_journey_requests(driver: User) -> None:
+        """Offer open stop requests to a driver whose journey just came online."""
+        now = timezone.now()
+        requests = DispatchRequest.objects.filter(
+            route__isnull=True,
+            status=DispatchRequest.STATUS_PENDING,
+            expires_at__gt=now,
+        ).select_related("passenger", "pickup_stop", "drop_stop")
+
+        for request in requests:
+            driver_id = str(driver.id)
+            if driver_id in {str(value) for value in request.notified_drivers or []}:
+                continue
+            if driver_id in {str(value) for value in request.dismissed_drivers or []}:
+                continue
+
+            try:
+                candidate = next((
+                    item for item in DispatchService.find_candidates_for_stop(
+                        str(request.pickup_stop_id), limit=50
+                    )
+                    if str(item["driver"].id) == driver_id
+                ), None)
+                if candidate:
+                    request.refresh_from_db()
+                    if (
+                        request.status != DispatchRequest.STATUS_PENDING
+                        or not request.expires_at
+                        or request.expires_at <= timezone.now()
+                        or driver_id in {str(value) for value in request.notified_drivers or []}
+                        or driver_id in {str(value) for value in request.dismissed_drivers or []}
+                    ):
+                        continue
+                    DispatchService._handle_broadcast_dispatch(
+                        request.passenger,
+                        None,
+                        str(request.pickup_stop_id),
+                        str(request.drop_stop_id) if request.drop_stop_id else None,
+                        [candidate],
+                        dispatch_request=request,
+                        reschedule_expiry=False,
+                    )
+            except Exception:
+                logger.exception(
+                    "Failed to offer pending dispatch %s to newly online driver %s",
+                    request.id,
+                    driver_id,
+                )
 
     @staticmethod
     @transaction.atomic
@@ -810,7 +869,15 @@ class DispatchService:
             otp=otp,
         )
         if boarding is None:
+            existing = BoardingRequest.objects.filter(
+                passenger=dispatch_request.passenger,
+                trip=trip,
+                status=BOARDING_PENDING,
+            ).first()
+            if existing:
+                return _release("You already have a pending booking on this journey.")
             return _release("Could not create the booking")
+        otp = boarding.otp or otp
 
         # A journey outlasts the default key TTL when it keeps taking riders, so
         # an accepted boarding pushes the documents' expiry out.
@@ -979,6 +1046,19 @@ class DispatchService:
         queries until the end of the 'atomic' block." and the driver got a 500
         instead of being told the passenger was already on their way.
         """
+        existing = BoardingRequest.objects.filter(
+            passenger=dispatch_request.passenger,
+            trip=trip,
+            status=BOARDING_PENDING,
+        ).first()
+        if existing:
+            if (
+                existing.pickup_stop_id == dispatch_request.pickup_stop_id
+                and existing.drop_stop_id == dispatch_request.drop_stop_id
+            ):
+                return existing
+            return None
+
         try:
             with transaction.atomic():
                 return BoardingRequest.objects.create(
@@ -990,6 +1070,18 @@ class DispatchService:
                     otp=otp,
                 )
         except Exception as exc:
+            # A concurrent accept can create the same pending booking after
+            # the lookup above. Reuse it only when the stop pair also matches.
+            existing = BoardingRequest.objects.filter(
+                passenger=dispatch_request.passenger,
+                trip=trip,
+                status=BOARDING_PENDING,
+            ).first()
+            if existing and (
+                existing.pickup_stop_id == dispatch_request.pickup_stop_id
+                and existing.drop_stop_id == dispatch_request.drop_stop_id
+            ):
+                return existing
             logger.warning(
                 "Failed to link boarding request %s to trip %s: %s",
                 dispatch_request.id,

@@ -213,12 +213,21 @@ export const getRouteGeometry = async (routeId) => {
   }
 };
 
-export const getRideHistory = async () => {
+export const getRideHistory = async (params) => {
   try {
-    const response = await api.get(RIDE.history);
+    const response = await api.get(RIDE.history, { params });
     return response.data?.data || response.data?.results || response.data || [];
   } catch (error) {
     throw normalizeApiError(error, "Unable to fetch ride history.");
+  }
+};
+
+export const getTripFare = async (tripId) => {
+  try {
+    const response = await api.get(RIDE.tripFare(tripId));
+    return response.data?.data || response.data || {};
+  } catch (error) {
+    throw normalizeApiError(error, "Unable to fetch trip details.");
   }
 };
 
@@ -236,4 +245,5 @@ export default {
   getRouteGeometry,
   searchRoutesByLocation,
   getRideHistory,
+  getTripFare,
 };

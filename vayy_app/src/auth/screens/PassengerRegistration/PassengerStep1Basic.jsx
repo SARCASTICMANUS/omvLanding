@@ -115,7 +115,7 @@ export default function PassengerStep1Basic({ onNext, onBack, loading, error }) 
           <Text style={styles.label}>Date of Birth</Text>
           <TouchableOpacity style={inputStyle("dob")} onPress={() => setShowDatePicker(true)} activeOpacity={0.7}>
             <Calendar size={18} color={focused.dob ? COLORS.primary : "#9ca3af"} />
-            <TextInput style={styles.input} placeholder="DD/MM/YYYY" placeholderTextColor="#aaa" value={form.dob} editable={false} pointerEvents="none" />
+            <TextInput style={[styles.input, { pointerEvents: "none" }]} placeholder="DD/MM/YYYY" placeholderTextColor="#aaa" value={form.dob} editable={false} />
           </TouchableOpacity>
           {errors.dob && <Text style={styles.errorText}>{errors.dob}</Text>}
 

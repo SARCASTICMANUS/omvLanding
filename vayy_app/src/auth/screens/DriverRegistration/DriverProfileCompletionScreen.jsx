@@ -287,7 +287,10 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
     });
     if (result.canceled || !result.assets?.[0]?.uri) return;
 
-    const uri = result.assets[0].uri;
+    const asset = result.assets[0];
+    const uri = asset.uri;
+    const fileName = asset.fileName || uri.split("/").pop() || `${field}.jpg`;
+    const mimeType = asset.mimeType || asset.file?.type || "image/jpeg";
     console.log(`[Completion] Uploading doc: field=${field} type=${documentType} uri=${uri}`);
     setDocs((p) => ({ ...p, [field]: { uri, id: p[field]?.id, status: "uploading", docStatus: null } }));
 
@@ -295,14 +298,16 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
       const formData = new FormData();
       formData.append("document_type", documentType);
       formData.append("doc_key", field);
-      formData.append("file", {
-        uri,
-        name: uri.split("/").pop() || "upload.jpg",
-        type: "image/jpeg",
-      });
-      const response = await api.post(AUTH.driverDocuments, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      if (Platform.OS === "web") {
+        const file = asset.file || await fetch(uri).then((response) => {
+          if (!response.ok) throw new Error("Could not read the selected document.");
+          return response.blob();
+        });
+        formData.append("file", file, fileName);
+      } else {
+        formData.append("file", { uri, name: fileName, type: mimeType });
+      }
+      const response = await api.post(AUTH.driverDocuments, formData);
       const docData = response.data?.data || response.data;
       const docId = docData?.id;
       const updatedStatus = docData?.status || "PENDING";
@@ -322,7 +327,8 @@ export default function DriverProfileCompletionScreen({ navigation, route }) {
     } catch (e) {
       console.error(`[Completion] Upload failed: field=${field}`, e?.response?.status, e?.response?.data || e?.message);
       setDocs((p) => ({ ...p, [field]: { ...p[field], uri, status: "error" } }));
-      Alert.alert("Upload Failed", "Could not upload document. Tap to retry.");
+      const message = e?.response?.data?.message || e?.response?.data?.detail || e?.message;
+      Alert.alert("Upload Failed", message || "Could not upload document. Tap to retry.");
     }
   };
 

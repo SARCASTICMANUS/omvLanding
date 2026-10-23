@@ -214,7 +214,7 @@ export default function PassengerHomeScreen({ navigation }) {
 
           <View style={styles.greetingSection}>
             <View style={styles.namasteRow}>
-              <Image source={NAMASTE_ICON} style={styles.namasteIcon} />
+              <Image source={NAMASTE_ICON} style={styles.namasteIcon} resizeMode="contain" />
               <Text style={styles.namasteText}>{greeting}</Text>
               {greeting.length < 8 && <Animated.View style={[styles.typeCursor, { opacity: cursorRef }]} />}
             </View>
@@ -353,7 +353,6 @@ const styles = StyleSheet.create({
   namasteIcon: {
     width: 30,
     height: 38,
-    resizeMode: "contain",
     marginBottom: 6,
   },
   namasteText: {

@@ -8,9 +8,9 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-export function ConfirmPopup({ visible, title, message, confirmLabel, confirmColor, icon, onConfirm, onCancel }) {
+export function ConfirmPopup({ visible, title, message, confirmLabel, cancelLabel, confirmColor, icon, onConfirm, onCancel }) {
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onCancel}>
       <View style={styles.overlay}>
         <View style={styles.card}>
           <View style={styles.iconWrapper}>
@@ -34,7 +34,7 @@ export function ConfirmPopup({ visible, title, message, confirmLabel, confirmCol
               style={styles.cancelBtn}
               onPress={onCancel}
             >
-              <Text style={styles.cancelText}>No, go back</Text>
+              <Text style={styles.cancelText}>{cancelLabel || "No, go back"}</Text>
             </TouchableOpacity>
           </View>
         </View>

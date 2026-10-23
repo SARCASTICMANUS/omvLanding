@@ -139,6 +139,20 @@ export const getRoadDistance = async (originLat, originLng, destLat, destLng) =>
   }
 };
 
+export const getRoadDirections = async (originLat, originLng, destLat, destLng) => {
+  try {
+    const response = await api.post(TRANSPORT.roadDirections, {
+      origin_lat: originLat,
+      origin_lng: originLng,
+      dest_lat: destLat,
+      dest_lng: destLng,
+    });
+    return response.data?.data || response.data;
+  } catch (error) {
+    throw normalizeApiError(error, "Unable to fetch driving directions to pickup.");
+  }
+};
+
 export const getWalkingPath = async (originLat, originLng, destLat, destLng, cityId = null) => {
   try {
     const response = await api.post(TRANSPORT.walkingPath, {
@@ -162,5 +176,6 @@ export default {
   previewRoute,
   dynamicPreview,
   getRoadDistance,
+  getRoadDirections,
   getWalkingPath,
 };

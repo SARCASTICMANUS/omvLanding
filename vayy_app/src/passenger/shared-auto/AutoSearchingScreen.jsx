@@ -47,7 +47,7 @@ export function AutoSearchingScreen({ navigation, route }) {
   const cameraRef = useRef(null);
   const didFitRef = useRef(false);
 
-  const { route_id, pickup_stop_id, drop_stop_id, trip, pickup, destination, boardingRequestId } = route?.params || {};
+  const { route_id, pickup_stop_id, drop_stop_id, trip, pickup, destination, fare, boardingRequestId } = route?.params || {};
 
   const pickupStop = trip?.pickup_stop || {};
   const pickupName = pickupStop?.name || pickup?.name || pickup?.display_name || "the stop";
@@ -142,6 +142,7 @@ export function AutoSearchingScreen({ navigation, route }) {
         route_id,
         pickup_stop_id,
         drop_stop_id,
+        fare,
         mode: "broadcast",
       })).unwrap();
 
@@ -258,6 +259,7 @@ export function AutoSearchingScreen({ navigation, route }) {
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
+          grayscale
           scrollEnabled={true}
           zoomEnabled={true}
           initialViewState={

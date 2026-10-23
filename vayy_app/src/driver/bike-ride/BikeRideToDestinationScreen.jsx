@@ -195,14 +195,14 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
     if (brg != null) setRouteBearing(brg);
   }, [driverPos, routePath]);
 
-  const cameraBearing = heading > 0 ? heading : (routeBearing || 0);
+  const cameraBearing = routeBearing ?? heading ?? 0;
 
   useEffect(() => {
     if (!driverPos || !mapRef.current) return;
     mapRef.current.setCamera({
       center: [driverPos.longitude, driverPos.latitude],
-      zoom: 17,
-      pitch: 60,
+      zoom: 19,
+      pitch: 50,
       bearing: cameraBearing,
       duration: 1500,
     });
@@ -332,8 +332,8 @@ export default function BikeRideToDestinationScreen({ navigation, route }) {
           style={styles.mapBg}
           initialViewState={{
             center: [mapCenter.longitude, mapCenter.latitude],
-            zoom: 17,
-            pitch: 60,
+            zoom: 19,
+            pitch: 50,
           }}
           scrollEnabled
           zoomEnabled

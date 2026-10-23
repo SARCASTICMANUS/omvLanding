@@ -117,16 +117,6 @@ def _resolve_city(request, city_id, origin=None):
         if config and not config.is_active:
             raise serializers.ValidationError({"city_id": "This city is inactive for routing."})
         return city
-    # Some account deployments have a city FK; only use it when it resolves to a City.
-    user_city_id = getattr(request.user, "city_id", None)
-    if user_city_id:
-        city = City.objects.filter(pk=user_city_id).first()
-        if city:
-            config = CityAdminConfiguration.objects.filter(city=city).first()
-            if config and not config.is_active:
-                raise serializers.ValidationError({"city_id": "This city is inactive for routing."})
-            return city
-
     # A city centroid is not its service boundary. A nearby existing global
     # stop is the strongest geographic evidence when resolving this request.
     if origin:
@@ -169,6 +159,17 @@ def _resolve_city(request, city_id, origin=None):
                 raise serializers.ValidationError({"city_id": "The nearest service city is inactive for routing."})
             return nearest
 
+    # Account city is only a fallback when no pickup coordinates were supplied.
+    # A saved home city must not override the actual city of a cross-city pickup.
+    user_city_id = getattr(request.user, "city_id", None)
+    if origin is None and user_city_id:
+        city = City.objects.filter(pk=user_city_id).first()
+        if city:
+            config = CityAdminConfiguration.objects.filter(city=city).first()
+            if config and not config.is_active:
+                raise serializers.ValidationError({"city_id": "This city is inactive for routing."})
+            return city
+
     # Some deployments have not populated City.location yet. If exactly one
     # city is configured and active, it is unambiguous and safe to use as the
     # service city; never guess when multiple cities are available.
@@ -179,6 +180,25 @@ def _resolve_city(request, city_id, origin=None):
     raise serializers.ValidationError({
         "city_id": "Unable to determine a service city from your account or pickup location. Please select a supported city."
     })
+
+
+def _city_for_endpoint(point):
+    """Resolve a route endpoint from the nearest active city's global stop inventory."""
+    nearby_stop = Stop.objects.filter(
+        city__isnull=False,
+        is_global=True,
+    ).filter(
+        Q(city__admin_configuration__isnull=True)
+        | Q(city__admin_configuration__is_active=True)
+    ).select_related("city").annotate(
+        distance=Distance("location", point),
+    ).order_by("distance", "city_id").first()
+    if not nearby_stop or nearby_stop.distance is None:
+        return None
+
+    config = CityAdminConfiguration.objects.filter(city=nearby_stop.city).first()
+    radius_m = config.max_walk_to_stop_m if config else 3000
+    return nearby_stop.city if nearby_stop.distance.m <= radius_m else None
 
 
 def _route_payload(city, origin, destination, vehicle_type, persist=False, global_stops=None):
@@ -307,15 +327,27 @@ def _route_payload(city, origin, destination, vehicle_type, persist=False, globa
 
 def _corridor_preview_payload(city, origin, destination, vehicle_type, persist=False):
     """Build an OSRM road preview between the best existing global stops."""
-    config = CityAdminConfiguration.objects.filter(city=city, is_active=True).first()
-    max_walk_m = config.max_walk_to_stop_m if config else 3000
+    pickup_config = CityAdminConfiguration.objects.filter(city=city, is_active=True).first()
+    pickup_walk_limit_m = pickup_config.max_walk_to_stop_m if pickup_config else 3000
     origin_point = Point(origin["lng"], origin["lat"], srid=4326)
     destination_point = Point(destination["lng"], destination["lat"], srid=4326)
+    destination_city = _city_for_endpoint(destination_point)
+    if destination_city is None:
+        return {
+            "routes": [], "city": {"id": str(city.id), "name": city.name},
+            "vehicle_type": vehicle_type or "bike",
+            "empty_reason": "UNSUPPORTED_DESTINATION_CITY",
+            "message": "The destination is outside configured service areas with nearby global stops.",
+        }, None
+    destination_config = CityAdminConfiguration.objects.filter(
+        city=destination_city, is_active=True,
+    ).first()
+    destination_walk_limit_m = destination_config.max_walk_to_stop_m if destination_config else 3000
     pickup_candidates = StopDiscoveryService.nearby_global_stops(
-        city.id, origin_point, max_walk_m,
+        city.id, origin_point, pickup_walk_limit_m,
     )
     destination_candidates = StopDiscoveryService.nearby_global_stops(
-        city.id, destination_point, max_walk_m,
+        destination_city.id, destination_point, destination_walk_limit_m,
     )
     city_payload = {"id": str(city.id), "name": city.name}
 
@@ -334,7 +366,7 @@ def _corridor_preview_payload(city, origin, destination, vehicle_type, persist=F
 
     walking_route_found = {"pickup": False, "destination": False}
 
-    def best_stop(candidates, point, endpoint):
+    def best_stop(candidates, point, endpoint, walk_limit_m):
         best = None
         for stop in candidates:
             # Candidates are straight-distance ordered, which is a lower bound
@@ -346,14 +378,18 @@ def _corridor_preview_payload(city, origin, destination, vehicle_type, persist=F
                 (point.x, point.y), (stop.location.x, stop.location.y),
             )
             walking_route_found[endpoint] = walking_route_found[endpoint] or bool(walked)
-            if walked and walked["distance"] <= max_walk_m and (
+            if walked and walked["distance"] <= walk_limit_m and (
                 best is None or walked["distance"] < best[1]["distance"]
             ):
                 best = (stop, walked)
         return best if best else (None, None)
 
-    pickup_stop, first_walk = best_stop(pickup_candidates, origin_point, "pickup")
-    destination_stop, last_walk = best_stop(destination_candidates, destination_point, "destination")
+    pickup_stop, first_walk = best_stop(
+        pickup_candidates, origin_point, "pickup", pickup_walk_limit_m,
+    )
+    destination_stop, last_walk = best_stop(
+        destination_candidates, destination_point, "destination", destination_walk_limit_m,
+    )
     if not all(walking_route_found.values()):
         return None, Response({
             "success": False, "code": "WALKING_DIRECTIONS_UNAVAILABLE",
@@ -400,7 +436,11 @@ def _corridor_preview_payload(city, origin, destination, vehicle_type, persist=F
              stop_data(destination_stop, 2, route_data["snapped_endpoints"][1])]
     route_data.update({
         "id": route_data["id"], "route_code": "OSRM_PREVIEW", "route_source": "osrm_global_stops",
-        "city_id": str(city.id), "max_walk_to_stop_m": max_walk_m,
+        "city_id": str(city.id),
+        "origin_city_id": str(city.id), "destination_city_id": str(destination_city.id),
+        "max_walk_to_stop_m": pickup_walk_limit_m,
+        "pickup_max_walk_to_stop_m": pickup_walk_limit_m,
+        "dropoff_max_walk_to_stop_m": destination_walk_limit_m,
         "preview_only": not persist, "requested_origin": origin, "requested_destination": destination,
         "stops": stops, "stop_count": 2, "pickup_stop": stops[0], "dropoff_stop": stops[1],
         "first_mile": {"distance_meters": round(first_walk["distance"], 2),

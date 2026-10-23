@@ -16,6 +16,8 @@ prices at 0.0.
 
 from django.contrib.gis.geos import Point
 from django.test import TestCase
+from django.urls import reverse
+from rest_framework.test import APIClient
 
 from accounts.models import PublicDriverProfile, User
 from operations.api.serializers import BoardingRequestCreateSerializer
@@ -135,6 +137,26 @@ class JourneyBoardingStopResolutionTests(TestCase):
         self.assertEqual(req.status, BOARDING_PENDING)
         self.assertEqual(req.pickup_stop_id, self.first_stop.id)
         self.assertEqual(req.drop_stop_id, self.second_stop.id)
+
+    def test_assigned_driver_can_cancel_pending_boarding_without_ending_journey(self):
+        boarding = BoardingService.create_request(
+            passenger=self.passenger,
+            trip=self.trip,
+            pickup_stop=self.first_stop,
+            drop_stop=self.second_stop,
+        )
+        client = APIClient()
+        client.force_authenticate(self.driver)
+
+        response = client.delete(
+            reverse("boarding-request-detail", args=[boarding.id])
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        boarding.refresh_from_db()
+        self.trip.refresh_from_db()
+        self.assertEqual(boarding.status, "cancelled")
+        self.assertEqual(self.trip.status, "active")
 
     def test_unknown_stop_id_errors_instead_of_silently_zero_faring(self):
         """A bad drop id must not become None and price the ride at 0.0."""

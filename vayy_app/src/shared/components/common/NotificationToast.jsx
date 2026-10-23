@@ -143,7 +143,7 @@ const NotificationToast = forwardRef(function NotificationToast(_, ref) {
   if (toasts.length === 0) return null;
 
   return (
-    <Animated.View style={[styles.overlay, { pointerEvents: "box-none" }]} pointerEvents="box-none">
+    <Animated.View style={[styles.overlay, { pointerEvents: "box-none" }]}>
       {toasts.map((toast, i) => (
         <ToastItem
           key={toast.id}

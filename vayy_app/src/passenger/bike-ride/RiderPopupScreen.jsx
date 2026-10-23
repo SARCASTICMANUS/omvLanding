@@ -6,6 +6,7 @@ import {
   StyleSheet,
   StatusBar,
   Image,
+  Alert,
 } from "react-native";
 import VayyMap, { UserLocation, Marker, GeoJSONSource, Layer } from "../../shared/components/VayyMap";
 import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
@@ -14,11 +15,14 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useDispatch } from "react-redux";
 import * as Location from "expo-location";
 import { fetchRouteGeometry } from "../../routes/services/routeService";
-import { cancelDispatch } from "../../store/slices/dispatchSlice";
+import { cancelBoardingRequest } from "../../store/slices/dispatchSlice";
 import useWebSocket from "../../shared/hooks/useWebSocket";
 import { WS } from "../../constants";
 import { ConfirmPopup } from "./ConfirmPopup";
 import SmoothMarker from "../../shared/components/common/SmoothMarker";
+import { formatDistance } from "../../shared/utils/walkingDistance";
+
+const BIKE_TOP_IMAGE = require("../../../assets/vayyTopBike1.webp");
 
 export function RiderPopupScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -32,6 +36,7 @@ export function RiderPopupScreen({ navigation, route }) {
   const boardingRequestId = route?.params?.boardingRequestId || route?.params?.tripData?.boarding_request_id || null;
   const tripData = useMemo(() => route?.params?.tripData || {}, [route?.params?.tripData]);
   const destination = route?.params?.destination || "Destination";
+  const pickupName = route?.params?.pickupName || route?.params?.pickup?.name || route?.params?.pickup?.display_name || (typeof route?.params?.pickup === "string" ? route.params.pickup : null) || tripData.pickup_stop?.name || "pickup stop";
   const routeId = route?.params?.route_id;
   const fare = route?.params?.fare || "—";
   const driverRating = route?.params?.driverRating || route?.params?.tripData?.driver_rating || null;
@@ -40,6 +45,7 @@ export function RiderPopupScreen({ navigation, route }) {
 
   const [routePath, setRoutePath] = useState(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancellingRide, setCancellingRide] = useState(false);
   const [driverPos, setDriverPos] = useState(null);
   const [driverHeading, setDriverHeading] = useState(null);
   const [driverSpeed, setDriverSpeed] = useState(null);
@@ -49,6 +55,14 @@ export function RiderPopupScreen({ navigation, route }) {
   const [mapCenter, setMapCenter] = useState(null);
   const navigatingRef = useRef(false);
   const [arrivedPhase, setArrivedPhase] = useState(null);
+  const pickupWalkDistanceMeters = route?.params?.pickupWalkDistanceMeters ?? null;
+  const cancelInProgressRef = useRef(false);
+
+  useEffect(() => navigation.addListener("beforeRemove", (event) => {
+    if (navigatingRef.current) return;
+    event.preventDefault();
+    setShowCancelConfirm(true);
+  }), [navigation]);
 
   useEffect(() => {
     let stopped = false;
@@ -96,6 +110,12 @@ export function RiderPopupScreen({ navigation, route }) {
   }, [eta, arrivedPhase]);
 
   const handleWsMessage = useCallback((data) => {
+    if (data.type === "boarding_request_cancelled") {
+      if (data.boarding_request_id !== boardingRequestId) return;
+      navigatingRef.current = true;
+      navigation.reset({ index: 0, routes: [{ name: "PassengerTabs" }] });
+      return;
+    }
     if (data.type === "vehicle_update") {
       const lat = data.lat;
       const lng = data.lng || data.lon;
@@ -125,6 +145,7 @@ export function RiderPopupScreen({ navigation, route }) {
     }
     if (data.type === "passenger_segment_completed") {
       if (data.boarding_request_id !== boardingRequestId) return;
+      navigatingRef.current = true;
       navigation.navigate("RideComplete", {
         tripId: dispatchId,
         boardingRequestId,
@@ -153,11 +174,13 @@ export function RiderPopupScreen({ navigation, route }) {
   const handleTrackingMessage = useCallback((data) => {
     if (data.type === "trip_completed") {
       if (data.cancelled) {
+        navigatingRef.current = true;
         navigation.navigate("PassengerTabs");
         return;
       }
       const own = (data.passengers || []).find((item) => item.boarding_request_id === boardingRequestId);
       if (own && boardingRequestId) {
+        navigatingRef.current = true;
         navigation.navigate("RideComplete", {
           tripId: dispatchId, boardingRequestId, riderName: driverName, vehicleText: vehicle,
           pickup: own.pickup_stop_name || tripData.pickup_stop?.name || tripData.pickup || "Pickup Stop",
@@ -234,16 +257,25 @@ export function RiderPopupScreen({ navigation, route }) {
   };
 
   const handleCancel = async () => {
-    if (navigatingRef.current) return;
+    if (navigatingRef.current || cancelInProgressRef.current) return;
+    if (!boardingRequestId) {
+      Alert.alert("Unable to cancel ride", "Your ride request details are missing. Please contact support before leaving this screen.");
+      return;
+    }
+    cancelInProgressRef.current = true;
+    setCancellingRide(true);
+    try {
+      await dispatch(cancelBoardingRequest(boardingRequestId)).unwrap();
+    } catch (error) {
+      console.warn("cancelBoardingRequest failed:", error);
+      Alert.alert("Ride not cancelled", "Please try again. Your Marshal may still be on the way.");
+      return;
+    } finally {
+      cancelInProgressRef.current = false;
+      setCancellingRide(false);
+    }
     navigatingRef.current = true;
     setShowCancelConfirm(false);
-    if (dispatchId) {
-      try {
-        await dispatch(cancelDispatch(dispatchId)).unwrap();
-      } catch (e) {
-        console.warn("cancelDispatch failed:", e);
-      }
-    }
     navigation.reset({ index: 0, routes: [{ name: "PassengerTabs" }] });
   };
 
@@ -261,6 +293,7 @@ export function RiderPopupScreen({ navigation, route }) {
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
+          grayscale
           initialViewState={{
             center: [mapCenter.longitude, mapCenter.latitude],
             zoom: 14,
@@ -277,7 +310,7 @@ export function RiderPopupScreen({ navigation, route }) {
           {driverPos && (
             <SmoothMarker id="driver" targetLat={driverPos.latitude} targetLng={driverPos.longitude} heading={driverHeading} speedKmh={driverSpeed}>
               <View style={styles.driverMarker}>
-                <Text style={{ fontSize: 24 }}>🏍️</Text>
+                <Image source={BIKE_TOP_IMAGE} style={{ width: 40, height: 46 }} resizeMode="contain" />
               </View>
             </SmoothMarker>
           )}
@@ -311,7 +344,7 @@ export function RiderPopupScreen({ navigation, route }) {
           zIndex={20}
           title="Ride Accepted!"
           subtitle="Your Marshal is on the way to the pickup stop"
-          onBack={() => navigation.goBack()}
+          onBack={() => setShowCancelConfirm(true)}
           right={
             <TouchableOpacity
               style={styles.cancelBtn}
@@ -350,7 +383,7 @@ export function RiderPopupScreen({ navigation, route }) {
             <Text style={styles.acceptedSubtitle}>
               {arrivedPhase === "waiting"
                 ? "Your Marshal is here. Please get ready."
-                : "Your Marshal is on the way to you"}
+                : "Your Marshal is heading to your pickup stop"}
             </Text>
           </View>
           <Text style={styles.timestamp}>
@@ -397,19 +430,31 @@ export function RiderPopupScreen({ navigation, route }) {
         </View>
 
         <View style={styles.arrivalNote}>
-          <Text style={styles.arrivalNoteText}>
-            {arrivedPhase === "waiting"
-              ? "Your Marshal has arrived. Share the Safety Code below to start the ride."
-              : `Your Marshal is ${distance} away • Arriving in ${eta}`}
-          </Text>
+          {arrivedPhase === "waiting" ? (
+            <Text style={styles.arrivalNoteText}>
+              Your Marshal has arrived. Share the Safety Code below to start the ride.
+            </Text>
+          ) : (
+            <>
+              {pickupWalkDistanceMeters != null && (
+                <Text style={styles.arrivalNoteText}>
+                  Walk to {pickupName}: {formatDistance(pickupWalkDistanceMeters)}
+                </Text>
+              )}
+              <Text style={styles.arrivalNoteText}>
+                Marshal is {distance} from the pickup stop • Arriving in {eta}
+              </Text>
+            </>
+          )}
         </View>
       </View>
 
       <ConfirmPopup
         visible={showCancelConfirm}
-        title="Cancel Ride?"
-        message={`Your ride with ${driverName} will be cancelled.`}
-        confirmLabel="Yes, Cancel"
+        title="Cancel your ride?"
+        message={`Your request with ${driverName} will be cancelled, and your Marshal will be notified.`}
+        confirmLabel={cancellingRide ? "Cancelling…" : "Cancel Ride"}
+        cancelLabel="Keep Ride"
         confirmColor="#EF4444"
         icon="close-circle-outline"
         onConfirm={handleCancel}

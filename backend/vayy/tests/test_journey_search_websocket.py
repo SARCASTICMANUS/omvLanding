@@ -9,6 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import User
 from common.websockets.auth import WS_SUBPROTOCOL
+from operations.models import ActiveTrip, Vehicle
 from vayy.asgi import application
 
 
@@ -55,3 +56,58 @@ class JourneySearchWebSocketTests(TransactionTestCase):
         connected, _ = await communicator.connect()
         self.assertFalse(connected)
         await communicator.disconnect()
+
+
+@override_settings(CHANNEL_LAYERS={
+    "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}
+})
+class DispatchStatusWebSocketTests(TransactionTestCase):
+    def setUp(self):
+        self.driver = User.objects.create_user(
+            email="dispatch-ws-driver@example.test",
+            password="test-password",
+            role="bikedriver",
+        )
+        self.other_user = User.objects.create_user(
+            email="dispatch-ws-other@example.test",
+            password="test-password",
+            role="passenger",
+        )
+        vehicle = Vehicle.objects.create(
+            vehicle_number="DISPATCH-WS-1",
+            vehicle_type="bike",
+            driver=self.driver,
+        )
+        self.trip = ActiveTrip.objects.create(
+            vehicle=vehicle,
+            driver=self.driver,
+            route=None,
+            status="active",
+        )
+
+    async def _connect(self, user, path):
+        token = str(RefreshToken.for_user(user).access_token)
+        communicator = WebsocketCommunicator(
+            application,
+            path,
+            headers=[("host", "testserver"), ("origin", "http://testserver")],
+            subprotocols=[WS_SUBPROTOCOL, token],
+        )
+        connected, _ = await communicator.connect()
+        await communicator.disconnect()
+        return connected
+
+    async def test_trip_driver_can_connect_with_dispatch_id_route_kwarg(self):
+        self.assertTrue(await self._connect(
+            self.driver, f"/ws/dispatch/{self.trip.id}/"
+        ))
+
+    async def test_trip_driver_can_connect_with_trip_id_route_kwarg(self):
+        self.assertTrue(await self._connect(
+            self.driver, f"/ws/tracking/trip/{self.trip.id}/"
+        ))
+
+    async def test_unrelated_user_cannot_connect_to_dispatch(self):
+        self.assertFalse(await self._connect(
+            self.other_user, f"/ws/dispatch/{self.trip.id}/"
+        ))

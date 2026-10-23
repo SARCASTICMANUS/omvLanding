@@ -58,7 +58,7 @@ from transport.api.serializers import (
     StopTimeSerializer,
 )
 from transport.models import StopTime
-from operations.models import ActiveTrip, DispatchRequest, VehicleState, FareConfiguration
+from operations.models import ActiveTrip, BoardingRequest, DispatchRequest, VehicleState, FareConfiguration
 from transport.models import City, CityAdminConfiguration
 from operations.permissions import (
     HasBoardingRequestAccess,
@@ -76,6 +76,7 @@ from common.constants import (
     VEHICLE_AUTO,
     DISPATCH_MODE_BROADCAST,
     BOARDING_PENDING,
+    BOARDING_COMPLETED,
 )
 from django.utils import timezone
 from channels.layers import get_channel_layer
@@ -150,6 +151,7 @@ class DispatchRequestAPIView(APIView):
                 target_trip_id=(str(serializer.validated_data["target_trip_id"]) if serializer.validated_data.get("target_trip_id") else None),
                 pickup_stop_id=str(serializer.validated_data["pickup_stop_id"]),
                 drop_stop_id=str(serializer.validated_data["drop_stop_id"]) if serializer.validated_data.get("drop_stop_id") else None,
+                passenger_fare=serializer.validated_data.get("fare"),
                 mode=serializer.validated_data.get("mode", DISPATCH_MODE_BROADCAST)
             )
             resp = Response(result, status=status.HTTP_202_ACCEPTED)
@@ -791,16 +793,14 @@ class BoardingRequestDetailAPIView(APIView):
     ):
         boarding_request = self._owned_object
 
-        # Stricter than HasBoardingRequestAccess on purpose: the trip driver may
-        # *read* a boarding request, but withdrawing it is the passenger's call
-        # alone.
-        if (
-            boarding_request.passenger_id
-            != request.user.id
-        ):
+        is_passenger = boarding_request.passenger_id == request.user.id
+        is_driver_cancelling_pending_pickup = (
+            boarding_request.trip.driver_id == request.user.id
+            and boarding_request.status == BOARDING_PENDING
+        )
+        if not is_passenger and not is_driver_cancelling_pending_pickup:
             raise PermissionDenied(
-                "Only the passenger can cancel "
-                "this request."
+                "Only the passenger or the assigned driver before pickup can cancel this request."
             )
 
         boarding_request = (
@@ -884,18 +884,36 @@ class TripHistoryAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from django.db.models import Q
+        from django.db.models import Prefetch, Q
         
         user = request.user
-        query = Q(driver=user) | Q(boarding_requests__passenger=user)
+        query = (
+            Q(driver=user, boarding_requests__status=BOARDING_COMPLETED, boarding_requests__fare__gt=0)
+            | Q(boarding_requests__passenger=user, boarding_requests__status=BOARDING_COMPLETED, boarding_requests__fare__gt=0)
+        )
         
         status_filter = request.query_params.get("status")
         if status_filter:
             query &= Q(status=status_filter)
         else:
-            query &= Q(status__in=[TRIP_STATUS_COMPLETED, TRIP_STATUS_CANCELLED])
+            query &= Q(status=TRIP_STATUS_COMPLETED)
 
-        trips = ActiveTrip.objects.filter(query).distinct().order_by("-started_at")
+        trips = ActiveTrip.objects.filter(query).distinct().order_by("-started_at").prefetch_related(
+            Prefetch(
+                "boarding_requests",
+                queryset=BoardingRequest.objects.filter(
+                    passenger=user,
+                    status=BOARDING_COMPLETED,
+                    fare__gt=0,
+                ).select_related("pickup_stop", "drop_stop").order_by("-created_at"),
+                to_attr="passenger_history_requests",
+            ),
+            Prefetch(
+                "boarding_requests",
+                queryset=BoardingRequest.objects.filter(status=BOARDING_COMPLETED, fare__gt=0),
+                to_attr="completed_boarding_requests",
+            ),
+        )
         
         # Simple pagination
         page = int(request.query_params.get("page", 1))
@@ -903,7 +921,7 @@ class TripHistoryAPIView(APIView):
         start = (page - 1) * page_size
         end = start + page_size
         
-        serializer = ActiveTripSerializer(trips[start:end], many=True)
+        serializer = ActiveTripSerializer(trips[start:end], many=True, context={"request": request})
         resp = Response({
             "count": trips.count(),
             "results": serializer.data

@@ -8,74 +8,25 @@ import {
   ActivityIndicator,
   TouchableOpacity,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 
 import VayyCard from "../../shared/components/common/VayyCard";
 import ScreenHeader from "../../shared/components/navigation/ScreenHeader";
 import COLORS from "../../shared/constants/colors";
 import SPACING from "../../shared/constants/spacing";
+import { colors as THEME_COLORS } from "../../constants/theme";
 import {
   fetchNotifications,
   markNotificationRead,
 } from "../../store/slices/notificationSlice";
 
-const DUMMY_ALERTS = [
-  {
-    id: "1",
-    title: "Bus Approaching",
-    message: "Bus #OMV-101 is 500m away from your stop (Sector 12).",
-    created_at: new Date(Date.now() - 2 * 60000).toISOString(),
-    read: false,
-    notification_type: "info",
-  },
-  {
-    id: "2",
-    title: "Bus Arrived",
-    message: "Bus #OMV-101 has arrived at Sector 12 stop. Please board promptly.",
-    created_at: new Date(Date.now() - 1 * 60000).toISOString(),
-    read: false,
-    notification_type: "info",
-  },
-  {
-    id: "3",
-    title: "Boarding Confirmed",
-    message: "Your boarding request for Trip #823 has been accepted by the driver.",
-    created_at: new Date(Date.now() - 1 * 3600000).toISOString(),
-    read: true,
-    notification_type: "success",
-  },
-  {
-    id: "4",
-    title: "Trip Delay",
-    message: "Bus #OMV-205 is delayed by 10 minutes due to heavy traffic.",
-    created_at: new Date(Date.now() - 3 * 3600000).toISOString(),
-    read: true,
-    notification_type: "warning",
-  },
-  {
-    id: "5",
-    title: "Boarding Rejected",
-    message: "Boarding request for Trip #999 was rejected. The vehicle has reached capacity.",
-    created_at: new Date(Date.now() - 4 * 3600000).toISOString(),
-    read: true,
-    notification_type: "error",
-  },
-  {
-    id: "6",
-    title: "Route Diversion",
-    message: "Trip #442 has a route diversion near M.G. Road. Please check the map.",
-    created_at: new Date(Date.now() - 5 * 3600000).toISOString(),
-    read: true,
-    notification_type: "warning",
-  },
-];
-
-function getAlertColor(type) {
+function getAlertStyle(type) {
   switch (type) {
-    case "success": return COLORS.success;
-    case "warning": return COLORS.warning;
-    case "error": return COLORS.error;
-    default: return COLORS.info;
+    case "success": return { color: THEME_COLORS.success, icon: "checkmark-circle" };
+    case "warning": return { color: THEME_COLORS.warning, icon: "warning" };
+    case "error": return { color: THEME_COLORS.danger, icon: "close-circle" };
+    default: return { color: THEME_COLORS.info, icon: "information-circle" };
   }
 }
 
@@ -109,33 +60,38 @@ export default function PassengerAlertsScreen() {
     }
   };
 
-  const data = (list && list.length > 0) || !error ? (list || []) : DUMMY_ALERTS;
+  const data = list || [];
 
   const renderAlertItem = ({ item }) => {
-    const accent = getAlertColor(item.notification_type);
+    const alertStyle = getAlertStyle(item.notification_type || item.type);
     const isRead = !!item.read;
 
     return (
-      <TouchableOpacity activeOpacity={0.7} onPress={() => handlePress(item)}>
-        <VayyCard style={styles.alertCard}>
-          <View style={styles.alertHeader}>
-            <View style={styles.alertTitleRow}>
-              {!isRead && <View style={[styles.unreadDot, { backgroundColor: accent }]} />}
-              <Text
-                style={[
-                  styles.alertTitle,
-                  isRead && styles.alertTitleRead,
-                  { color: isRead ? COLORS.textSecondary : accent },
-                ]}
-              >
-                {item.title}
+      <TouchableOpacity
+        activeOpacity={0.82}
+        onPress={() => handlePress(item)}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.title}. ${item.message}`}
+        accessibilityHint={isRead ? undefined : "Marks this notification as read"}
+      >
+        <VayyCard style={[styles.alertCard, !isRead && styles.unreadCard]}>
+          <View style={styles.alertRow}>
+            <View style={[styles.iconWrap, { backgroundColor: `${alertStyle.color}14` }]}>
+              <Ionicons name={alertStyle.icon} size={21} color={alertStyle.color} />
+            </View>
+            <View style={styles.alertContent}>
+              <View style={styles.alertHeader}>
+                <Text style={styles.alertTitle} numberOfLines={2}>{item.title}</Text>
+                {!isRead && <View style={styles.unreadDot} />}
+              </View>
+              <Text style={[styles.alertMessage, isRead && styles.alertMessageRead]}>
+                {item.message}
+              </Text>
+              <Text style={styles.timestamp}>
+                {formatRelativeTime(item.created_at || item.timestamp)}
               </Text>
             </View>
-            <Text style={styles.timestamp}>{formatRelativeTime(item.created_at)}</Text>
           </View>
-          <Text style={[styles.alertMessage, isRead && styles.alertMessageRead]}>
-            {item.message}
-          </Text>
         </VayyCard>
       </TouchableOpacity>
     );
@@ -155,10 +111,20 @@ export default function PassengerAlertsScreen() {
         <View style={styles.center}>
           <ActivityIndicator size="large" color={COLORS.primary} />
         </View>
+      ) : error && data.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyText}>Couldn&apos;t load notifications</Text>
+          <TouchableOpacity onPress={() => dispatch(fetchNotifications())}>
+            <Text style={styles.retryText}>Tap to retry</Text>
+          </TouchableOpacity>
+        </View>
       ) : data.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyText}>No new alerts</Text>
-          <Text style={styles.emptySubtext}>Your notifications will appear here</Text>
+          <View style={styles.emptyIconWrap}>
+            <Ionicons name="notifications-outline" size={26} color={COLORS.textMuted} />
+          </View>
+          <Text style={styles.emptyText}>You&apos;re all caught up</Text>
+          <Text style={styles.emptySubtext}>Important trip and account updates will appear here.</Text>
         </View>
       ) : (
         <FlatList
@@ -182,62 +148,102 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    gap: SPACING.xs,
+    paddingHorizontal: SPACING.xl,
+    gap: SPACING.sm,
   },
   listContent: {
-    gap: SPACING.base,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.xxl,
+    gap: SPACING.md,
   },
   alertCard: {
     padding: SPACING.md,
-    gap: SPACING.xs,
+    borderRadius: 16,
+  },
+  unreadCard: {
+    borderColor: COLORS.successBorder,
+  },
+  alertRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: SPACING.md,
+  },
+  iconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  alertContent: {
+    flex: 1,
+    minWidth: 0,
   },
   alertHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  alertTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexShrink: 1,
-    marginRight: SPACING.sm,
+    alignItems: "flex-start",
+    gap: SPACING.sm,
   },
   unreadDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
-    marginRight: 6,
+    marginTop: 6,
+    backgroundColor: COLORS.primary,
   },
   alertTitle: {
-    fontSize: 16,
-    fontWeight: "800",
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "700",
     flexShrink: 1,
   },
-  alertTitleRead: {
-    fontWeight: "600",
-  },
   timestamp: {
+    marginTop: SPACING.sm,
     fontSize: 12,
+    lineHeight: 16,
     color: COLORS.textMuted,
   },
   alertMessage: {
+    marginTop: SPACING.xs,
     fontSize: 14,
-    color: COLORS.textSecondary,
     lineHeight: 20,
+    color: COLORS.textSecondary,
   },
   alertMessageRead: {
-    opacity: 0.75,
+    color: COLORS.textMuted,
+  },
+  emptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: SPACING.sm,
   },
   emptyText: {
     textAlign: "center",
-    marginTop: SPACING.xxxl,
-    color: COLORS.textMuted,
-    fontSize: 15,
+    color: COLORS.text,
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: "700",
   },
   emptySubtext: {
     textAlign: "center",
     color: COLORS.textMuted,
     fontSize: 13,
-    marginTop: 2,
+    lineHeight: 19,
+  },
+  retryText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: "700",
+    marginTop: SPACING.sm,
   },
 });

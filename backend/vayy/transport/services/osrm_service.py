@@ -315,6 +315,32 @@ class OSRMService:
         return payload
 
     @classmethod
+    def get_road_directions(cls, origin, destination):
+        """Return real OSRM geometry and maneuver steps for driver navigation."""
+        result = cls.route(origin, destination, overview="full", geometries="geojson", steps=True)
+        if not result or not result.get("routes") or not cls._route_snap_is_valid(result):
+            return None
+        route = result["routes"][0]
+        geometry = route.get("geometry")
+        if not geometry or geometry.get("type") != "LineString" or len(geometry.get("coordinates") or []) < 2:
+            return None
+        steps = []
+        for leg in route.get("legs", []):
+            for step in leg.get("steps", []):
+                maneuver = step.get("maneuver", {})
+                location = maneuver.get("location")
+                if not location or len(location) < 2:
+                    continue
+                steps.append({
+                    "name": step.get("name") or "",
+                    "distance_m": step.get("distance", 0),
+                    "type": maneuver.get("type", "continue"),
+                    "modifier": maneuver.get("modifier", "straight"),
+                    "location": location,
+                })
+        return {"geometry": geometry, "distance": route["distance"], "duration": route["duration"], "steps": steps}
+
+    @classmethod
     def get_walking_path(
         cls,
         origin: Tuple[float, float],

@@ -924,7 +924,7 @@ export function AutoPreRideScreen({ navigation, route }) {
       route_id: trip?.route_id,
       pickup_stop_id: stopId,
       drop_stop_id: trip?.dropoff_stop?.id || null,
-      trip, pickup, destination,
+      trip, pickup, destination, fare,
     });
 
     (async () => {
@@ -1014,6 +1014,7 @@ export function AutoPreRideScreen({ navigation, route }) {
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
+          grayscale
           scrollEnabled={true}
           zoomEnabled={true}
           initialViewState={

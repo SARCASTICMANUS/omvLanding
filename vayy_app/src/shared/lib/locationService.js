@@ -124,8 +124,8 @@ class LocationService {
           },
           {
             enableHighAccuracy: options.enableHighAccuracy ?? true,
-            timeout: options.timeout ?? 15000,
             maximumAge: options.maximumAge ?? 3000,
+            ...(options.timeout != null ? { timeout: options.timeout } : {}),
           }
         );
 
