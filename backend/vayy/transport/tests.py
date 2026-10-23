@@ -1,3 +1,4 @@
+import hashlib
 from unittest.mock import patch
 
 from django.core.cache import cache
@@ -69,3 +70,20 @@ class OSRMRouteCoverageTests(SimpleTestCase):
         with patch.object(OSRMService, "route", return_value=self.route_response):
             result = OSRMService.get_road_path(self.origin, self.destination)
         self.assertIsNone(result)
+
+    def test_route_path_ignores_cached_geometry_from_the_previous_profile(self):
+        old_key = f"osrm_path_v3_{self.origin[1]}_{self.origin[0]}_{self.destination[1]}_{self.destination[0]}"
+        cache.set(old_key, {"distance": 1.0, "geometry": None}, 600)
+        with patch.object(OSRMService, "route", return_value=self.route_response) as route:
+            result = OSRMService.get_road_path(self.origin, self.destination)
+        self.assertEqual(result["distance"], 8500.0)
+        route.assert_called_once()
+
+    def test_ordered_route_path_ignores_cached_geometry_from_the_previous_profile(self):
+        key_points = ";".join(f"{lng:.6f},{lat:.6f}" for lng, lat in (self.origin, self.destination))
+        old_key = f"osrm_path_through_v2_{hashlib.sha256(key_points.encode()).hexdigest()}"
+        cache.set(old_key, {"distance": 1.0, "geometry": None}, 600)
+        with patch.object(OSRMService, "route", return_value=self.route_response) as route:
+            result = OSRMService.get_road_path_through(self.origin, self.destination)
+        self.assertEqual(result["distance"], 8500.0)
+        route.assert_called_once()

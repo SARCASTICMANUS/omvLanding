@@ -1,6 +1,6 @@
-import { DEFAULT_CENTER } from "../../constants/mapConfig";
+import { DEFAULT_CENTER, isDefaultMapCenter, getInitialMapZoom } from "../../constants/mapConfig";
 
-export { DEFAULT_CENTER };
+export { DEFAULT_CENTER, isDefaultMapCenter, getInitialMapZoom };
 
 // Sourced from the environment only — this module is bundled into the shipped
 // app, so a committed fallback would leak the key. See .env.example.

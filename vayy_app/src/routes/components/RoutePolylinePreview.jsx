@@ -3,6 +3,12 @@ import { StyleSheet, View } from "react-native";
 import VayyMap, { GeoJSONSource, Layer, Marker } from "../../shared/components/VayyMap";
 import ZoomControls from "../../shared/components/common/ZoomControls";
 import { toRouteGeoJSON } from "../services/dynamicRouteNormalizer";
+import {
+  getRouteEndpoints,
+  getRoutePreviewBounds,
+  getRoutePreviewCenter,
+  getValidRouteCoordinates,
+} from "./routePreviewUtils";
 
 /**
  * Route polyline preview for a route CARD.
@@ -30,7 +36,20 @@ export default function RoutePolylinePreview({
   const cameraRef = useRef(null);
 
   const geojson = useMemo(() => toRouteGeoJSON(route), [route]);
-  const coordinates = useMemo(() => geojson?.coordinates || [], [geojson]);
+  const coordinates = useMemo(
+    () => getValidRouteCoordinates(geojson?.coordinates),
+    [geojson]
+  );
+  const endpoints = useMemo(() => getRouteEndpoints(route), [route]);
+  const previewCenter = useMemo(
+    () => getRoutePreviewCenter(route, coordinates),
+    [route, coordinates]
+  );
+  const bounds = useMemo(
+    () => getRoutePreviewBounds(coordinates, route),
+    [coordinates, route]
+  );
+  const hasRouteLine = coordinates.length >= 2;
 
   const sourceId = useMemo(
     () => `routeLine-${route?.id ?? "x"}-${route?.route_id ?? "y"}`,
@@ -38,7 +57,7 @@ export default function RoutePolylinePreview({
   );
 
   useEffect(() => {
-    if (coordinates.length < 2) return undefined;
+    if (!bounds) return undefined;
     let cancelled = false;
 
     // The camera mounts asynchronously, so retry briefly until the ref lands.
@@ -49,39 +68,28 @@ export default function RoutePolylinePreview({
         if (attempt < 12) setTimeout(() => fit(attempt + 1), 120);
         return;
       }
-      let west = Infinity;
-      let south = Infinity;
-      let east = -Infinity;
-      let north = -Infinity;
-      for (const pair of coordinates) {
-        const [lng, lat] = pair;
-        if (lng < west) west = lng;
-        if (lng > east) east = lng;
-        if (lat < south) south = lat;
-        if (lat > north) north = lat;
-      }
-      map.fitBounds([west, south, east, north], { padding: 36 }, 0);
+      map.fitBounds(bounds, { padding: 36 }, 0);
     };
 
     fit();
     return () => {
       cancelled = true;
     };
-  }, [coordinates]);
+  }, [bounds]);
 
-  // Nothing honest to draw - stay out of the card rather than render an empty map.
-  if (coordinates.length < 2) return null;
+  // Keep the map visible when a route geometry is absent but real endpoint
+  // coordinates exist. In that case show the endpoints without inventing a
+  // straight-line route; only draw a line when actual route geometry is valid.
+  if (!previewCenter) return null;
 
-  // honour the height prop supplied by the card; if the caller passes 0
+  // Honour the height prop supplied by the card; if the caller passes 0
   // we still render a minimal map so the touch area isn't zero.
   const mapHeight = height > 0 ? height : 170;
 
-  const pickup = route?.pickup_stop;
-  const dropoff = route?.dropoff_stop;
-  const canMark =
-    showEndpoints &&
-    Number.isFinite(pickup?.lat) &&
-    Number.isFinite(pickup?.lon);
+  const pickup = endpoints.pickup;
+  const dropoff = endpoints.dropoff;
+  const canMark = showEndpoints && Boolean(pickup);
+
 
   return (
     <View style={[styles.wrap, { height: mapHeight }]}>
@@ -92,27 +100,31 @@ export default function RoutePolylinePreview({
         zoomEnabled
         style={styles.map}
         initialViewState={{
-          center: [coordinates[0][0], coordinates[0][1]],
+          center: previewCenter,
           zoom: 13,
         }}
       >
-        <GeoJSONSource id={sourceId} data={geojson} />
-        <Layer
-          id={`${sourceId}-layer`}
-          type="line"
-          source={sourceId}
-          layout={{ "line-join": "round", "line-cap": "round" }}
-          paint={{ "line-color": "#009849", "line-width": 4, "line-opacity": 0.9 }}
-        />
+        {hasRouteLine ? (
+          <>
+            <GeoJSONSource id={sourceId} data={{ type: "LineString", coordinates }} />
+            <Layer
+              id={`${sourceId}-layer`}
+              type="line"
+              source={sourceId}
+              layout={{ "line-join": "round", "line-cap": "round" }}
+              paint={{ "line-color": "#009849", "line-width": 4, "line-opacity": 0.9 }}
+            />
+          </>
+        ) : null}
         {/* MapLibre RN v11 Marker takes `lngLat` (the pre-ride screens use the
             same prop); `coordinate` was the v10 name and is ignored here. */}
         {canMark ? (
-          <Marker lngLat={[pickup.lon, pickup.lat]}>
+          <Marker lngLat={[pickup.lng, pickup.lat]}>
             <View style={styles.pinPickup} />
           </Marker>
         ) : null}
-        {showEndpoints && Number.isFinite(dropoff?.lat) && Number.isFinite(dropoff?.lon) ? (
-          <Marker lngLat={[dropoff.lon, dropoff.lat]}>
+        {showEndpoints && Number.isFinite(dropoff?.lat) && Number.isFinite(dropoff?.lng) ? (
+          <Marker lngLat={[dropoff.lng, dropoff.lat]}>
             <View style={styles.pinDropoff} />
           </Marker>
         ) : null}

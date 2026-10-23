@@ -52,6 +52,7 @@ export const TRANSPORT = {
   routesPreview: "/api/transport/routes/preview/",
   routesSearchByLocation: "/api/transport/routes/search-by-location/",
   routesDynamicPreview: "/api/transport/routes/dynamic-preview/",
+  routesDynamicGenerate: "/api/transport/routes/dynamic-generate/",
   routesNearbyPassengers: (routeId) => `/api/transport/routes/${routeId}/nearby-passengers/`,
   driverRoutes: "/api/transport/driver/routes/",
   stopsNearby: "/api/transport/stops/nearby/",

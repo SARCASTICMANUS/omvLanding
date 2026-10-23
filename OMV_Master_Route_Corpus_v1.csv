@@ -1,0 +1,1 @@
+schema_version,city_id,city_name,route_id,route_number,route_name,direction_id,direction_name,stop_sequence,stop_id,stop_name,stop_aliases_json,latitude,longitude,boarding_allowed,alighting_allowed,route_geometry_id,source_name,source_reference

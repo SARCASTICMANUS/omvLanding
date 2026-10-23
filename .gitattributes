@@ -1,0 +1,22 @@
+# Line endings for files that are executed *inside* containers.
+#
+# backend/vayy/entrypoint.sh is run by /bin/sh (dash) in python:3.12-slim.
+# With CRLF endings every invocation path breaks:
+#   - "sh /app/entrypoint.sh"  -> line 2 becomes `set -e\r`
+#                                -> dash: "set: Illegal option -" -> exit 2
+#   - "/entrypoint.sh"         -> shebang becomes `/bin/sh\r`
+#                                -> "bad interpreter" -> exit 126
+#   - the `PYEOF` heredoc terminator never matches -> unterminated `if`
+#
+# This matters more than it looks: the Docker build context is the *worktree*,
+# not the committed blob. On a Windows host with core.autocrlf=true, `git status`
+# reports the file as clean while the worktree copy is CRLF, so the CRLF still
+# ships into the image. `text eol=lf` pins both the worktree and the build
+# context to LF regardless of each machine's autocrlf setting.
+*.sh text eol=lf
+
+# Compose files: the root docker-compose.yaml is checked out with CRLF on Windows
+# hosts, which shows up as a phantom whole-file diff (every line "changed") and
+# risks committing CRLF into the stack definition. YAML tolerates either ending,
+# so normalise to LF. Scoped to compose files only.
+docker-compose*.yaml text eol=lf

@@ -79,7 +79,7 @@ class CityAdminConfiguration(models.Model):
     platform_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     rounding_rule = models.CharField(max_length=20, choices=ROUNDING_CHOICES, default="none")
     corridor_m = models.PositiveIntegerField(default=100)
-    max_walk_to_stop_m = models.PositiveIntegerField(default=1200)
+    max_walk_to_stop_m = models.PositiveIntegerField(default=3000)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -110,6 +110,14 @@ class Route(models.Model):
         blank=True,
         default="",
     )
+
+    source_route_id = models.CharField(max_length=100, blank=True, default="")
+    source_direction_id = models.CharField(max_length=100, blank=True, default="")
+    route_number = models.CharField(max_length=100, blank=True, default="")
+    direction_name = models.CharField(max_length=255, blank=True, default="")
+    route_geometry_id = models.CharField(max_length=100, blank=True, default="")
+    source_name = models.CharField(max_length=255, blank=True, default="")
+    source_reference = models.CharField(max_length=500, blank=True, default="")
 
     path = gis_models.LineStringField(
         geography=True,
@@ -142,6 +150,15 @@ class Route(models.Model):
     updated_at = models.DateTimeField(
         auto_now=True,
     )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["city", "source_route_id", "source_direction_id"],
+                condition=models.Q(source_route_id__gt=""),
+                name="transport_route_source_direction_unique",
+            ),
+        ]
 
     def __str__(self):
         return self.name
@@ -201,6 +218,11 @@ class Stop(models.Model):
     coordinate_status = models.CharField(max_length=24, choices=COORDINATE_STATUS_CHOICES, default="verified")
     aliases = models.JSONField(default=list, blank=True)
     serviceability_reason = models.CharField(max_length=255, blank=True, default="")
+    source_stop_id = models.CharField(max_length=100, blank=True, default="")
+    boarding_allowed = models.BooleanField(default=True)
+    alighting_allowed = models.BooleanField(default=True)
+    source_name = models.CharField(max_length=255, blank=True, default="")
+    source_reference = models.CharField(max_length=500, blank=True, default="")
 
     location = gis_models.PointField(
         geography=True,
@@ -282,6 +304,34 @@ class Stop(models.Model):
     def coords(self):
         """(lng, lat) tuple for this stop's location."""
         return (self.location.x, self.location.y)
+
+
+class RouteStopAssociation(models.Model):
+    """Ordered membership of an existing physical stop on one route direction."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    route = models.ForeignKey(Route, related_name="route_stop_associations", on_delete=models.CASCADE)
+    stop = models.ForeignKey(Stop, related_name="route_memberships", on_delete=models.PROTECT)
+    order = models.PositiveIntegerField()
+    boarding_allowed = models.BooleanField(default=True)
+    alighting_allowed = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["order"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["route", "order"],
+                name="transport_route_stop_association_order_unique",
+            ),
+        ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.stop_id and self.stop.route_id:
+            raise ValidationError({"stop": "Route membership must reference an existing global stop."})
+        if self.stop_id and self.stop.city_id != self.route.city_id:
+            raise ValidationError({"stop": "The stop and route must belong to the same city."})
 
 class TripSchedule(models.Model):
     id = models.UUIDField(

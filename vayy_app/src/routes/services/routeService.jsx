@@ -1,15 +1,16 @@
 import api, { normalizeApiError } from "../../shared/lib/api";
 import { TRANSPORT } from "../../constants";
 import { normalizeDynamicRoutes } from "./dynamicRouteNormalizer";
+import { requireServiceCityId } from "./serviceCityMatching";
 
-// ---- Dynamic route preview (the ONLY mobile route source) ----
-// POST /api/transport/routes/dynamic-preview/
+// ---- OSRM route generation from nearest global stops ----
+// POST /api/transport/routes/dynamic-generate/
 // body: { city_id, origin:{lat,lng}, destination:{lat,lng}, vehicle_type }
 // The legacy routes/search-by-location returns EMPTY on this backend and must
 // never be used as a route source.
 
-const DYNAMIC_PREVIEW_PATH =
-  TRANSPORT.routesDynamicPreview || "/api/transport/routes/dynamic-preview/";
+const DYNAMIC_ROUTE_PATH =
+  TRANSPORT.routesDynamicGenerate || "/api/transport/routes/dynamic-generate/";
 
 const toContractPoint = (point) => {
   const lat = Number(point?.lat ?? point?.latitude ?? point?.y);
@@ -24,8 +25,9 @@ const toContractPoint = (point) => {
  * @param {{lat:number, lon?:number, lng?:number}} params.destination
  * @param {"bike"|"auto"} [params.vehicleType]
  * @param {"passenger"|"driver"} [params.audience] which backend fare the card shows
- * @param {number|null} [params.cityId] null lets the backend resolve the user's city
- * @returns {Promise<{ routes: object[], cached: boolean }>}
+ * @param {string|null} [params.cityId] explicit city id; omit/null to let the
+ *   authenticated backend resolve it from the account, pickup, and active city config.
+ * @returns {Promise<{ routes: object[], cached: boolean, cityId: string|null }>}
  */
 export const dynamicPreview = async ({
   origin,
@@ -40,9 +42,14 @@ export const dynamicPreview = async ({
     throw new Error("Pickup and destination are required.");
   }
 
+  // The backend owns city assignment; a client centroid cutoff can reject valid
+  // pickups inside the service area, and a failed city-list request is not proof
+  // that the pickup is outside every supported city.
+  const resolvedCityId = requireServiceCityId(cityId);
+
   try {
-    const response = await api.post(DYNAMIC_PREVIEW_PATH, {
-      city_id: cityId ?? null,
+    const response = await api.post(DYNAMIC_ROUTE_PATH, {
+      city_id: resolvedCityId ?? null,
       origin: from,
       destination: to,
       vehicle_type: vehicleType || "bike",
@@ -55,8 +62,13 @@ export const dynamicPreview = async ({
       destination: to,
     });
     const cached = body?.cached === true || body?.data?.cached === true;
+    const responseCityId = body?.data?.city?.id ?? body?.city?.id ?? resolvedCityId;
 
-    return { routes, cached };
+    return {
+      routes, cached, cityId: responseCityId ?? null,
+      emptyReason: body?.data?.empty_reason ?? body?.empty_reason ?? null,
+      emptyMessage: body?.data?.message ?? body?.message ?? null,
+    };
   } catch (error) {
     throw normalizeApiError(error, "Unable to create this route.");
   }
@@ -127,17 +139,18 @@ export const getRoadDistance = async (originLat, originLng, destLat, destLng) =>
   }
 };
 
-export const getWalkingPath = async (originLat, originLng, destLat, destLng) => {
+export const getWalkingPath = async (originLat, originLng, destLat, destLng, cityId = null) => {
   try {
     const response = await api.post(TRANSPORT.walkingPath, {
       origin_lat: originLat,
       origin_lng: originLng,
       dest_lat: destLat,
       dest_lng: destLng,
+      ...(cityId ? { city_id: cityId } : {}),
     });
     return response.data?.data || response.data;
   } catch (error) {
-    throw normalizeApiError(error, "Unable to fetch walking path.");
+    throw normalizeApiError(error, "Unable to fetch the road path to your pickup stop.");
   }
 };
 

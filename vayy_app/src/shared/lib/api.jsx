@@ -1,8 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { STORAGE_KEYS, AUTH, API_TIMEOUT, API_URL } from "../../constants";
+import { normalizeApiError } from "./apiError";
 
-export { API_URL };
+export { API_URL, normalizeApiError };
 
 // Use the config-resolved base URL directly
 const api = axios.create({
@@ -181,21 +182,6 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
-
-export const normalizeApiError = (error, fallbackMessage) => {
-  if (error.response?.data) {
-    const data = error.response.data;
-    if (typeof data === "string") return new Error(data);
-    if (data.message) return new Error(data.message);
-    if (data.detail) return new Error(data.detail);
-    if (data.error) return new Error(data.error);
-    const firstKey = Object.keys(data)[0];
-    if (firstKey && Array.isArray(data[firstKey])) {
-      return new Error(data[firstKey][0]);
-    }
-  }
-  return new Error(fallbackMessage || "An unexpected error occurred");
-};
 
 // DRF list endpoints answer with a paginated envelope, and the admin viewsets
 // wrap that again in { success, data }. Reduce any of those shapes to the array

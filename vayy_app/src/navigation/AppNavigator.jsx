@@ -13,13 +13,24 @@ import AdminScreen from "../admin/screens/AdminScreen";
 import SplashCarouselScreen, { onboardingSession } from "../shared/screens/SplashCarouselScreen";
 import { DRIVER_ROLES, STORAGE_KEYS } from "../constants";
 import NotificationRoot from "../shared/components/common/NotificationRoot";
+import VerificationGate from "../VerificationGate";
+import { navigationRef } from "./navigationRef";
 
 const Stack = createStackNavigator();
+
+const isDriverProfileCompletion = (state) => {
+  let route = state?.routes?.[state.index];
+  while (route?.state) {
+    route = route.state.routes?.[route.state.index];
+  }
+  return route?.name === "DriverProfileCompletion";
+};
 
 export default function AppNavigator() {
   const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state) => state.auth);
   const [booting, setBooting] = useState(!onboardingSession.decided);
+  const [isCompletingDriverProfile, setIsCompletingDriverProfile] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +95,12 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer key={navKey}>
+    <NavigationContainer
+      key={navKey}
+      ref={navigationRef}
+      onReady={() => setIsCompletingDriverProfile(isDriverProfileCompletion(navigationRef.getRootState()))}
+      onStateChange={(state) => setIsCompletingDriverProfile(isDriverProfileCompletion(state))}
+    >
       <View style={{ flex: 1 }}>
         <Stack.Navigator
           initialRouteName={initialRoute}
@@ -100,6 +116,13 @@ export default function AppNavigator() {
           <Stack.Screen name="PassengerNavigator" component={PassengerNavigator} />
           <Stack.Screen name="AdminScreen" component={AdminScreen} />
         </Stack.Navigator>
+        <VerificationGate
+          isCompletionScreen={isCompletingDriverProfile}
+          onComplete={(stage) => navigationRef.navigate("DriverNavigator", {
+            screen: "DriverProfileCompletion",
+            params: stage === "docs_rejected" ? { mode: "manage" } : {},
+          })}
+        />
         {/* Must live inside NavigationContainer: the notification listener
             uses useNavigation() to route taps, and it was never mounted, so no
             WS event ever reached addNotification in the slice. */}

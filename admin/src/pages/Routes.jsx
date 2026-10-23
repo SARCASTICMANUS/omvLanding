@@ -118,10 +118,18 @@ export default function Routes() {
   const stopsRef = useRef([]);
   const startNameRef = useRef("");
   const endNameRef = useRef("");
+  const previewRequestRef = useRef(0);
 
   const [cities, setCities] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [selectedCity, setSelectedCity] = useState("");
+  const [globalStopQuery, setGlobalStopQuery] = useState("");
+  const [globalStopResults, setGlobalStopResults] = useState([]);
+  const [globalStopNearby, setGlobalStopNearby] = useState(null);
+  const [globalStopRadius, setGlobalStopRadius] = useState(5000);
+  const [selectedGlobalStops, setSelectedGlobalStops] = useState([]);
+  const [globalStopMode, setGlobalStopMode] = useState(false);
+  const [routeMembershipDraft, setRouteMembershipDraft] = useState([]);
   const [tab, setTab] = useState("library");
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [expandedRoute, setExpandedRoute] = useState(null);
@@ -131,6 +139,9 @@ export default function Routes() {
   const [end, setEnd] = useState(null);
   const [stops, setStops] = useState([]);
   const [routeName, setRouteName] = useState("");
+  const [routeCode, setRouteCode] = useState("");
+  const [directionName, setDirectionName] = useState("");
+  const [routeMetadataDraft, setRouteMetadataDraft] = useState({ name: "", route_code: "", direction_name: "" });
   const [startName, setStartName] = useState("");
   const [endName, setEndName] = useState("");
   const [isAddingStop, setIsAddingStop] = useState(false);
@@ -172,10 +183,32 @@ export default function Routes() {
     }).catch(() => {});
   }, [selectedCity]);
 
+  useEffect(() => {
+    if (!selectedCity || (globalStopQuery.trim().length < 2 && !globalStopNearby)) {
+      setGlobalStopResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const params = { scope: "global", city: selectedCity, has_coordinates: 1, limit: 15 };
+      if (globalStopQuery.trim().length >= 2) params.q = globalStopQuery.trim();
+      if (globalStopNearby) Object.assign(params, {
+        near_lat: globalStopNearby.lat, near_lng: globalStopNearby.lon, radius_m: globalStopRadius,
+      });
+      api.get("/transport/admin/stops/", {
+        params,
+      }).then((r) => setGlobalStopResults(r.data?.results || r.data?.data || []))
+        .catch(() => setGlobalStopResults([]));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [selectedCity, globalStopQuery, globalStopNearby, globalStopRadius]);
+
   const fetchRouteDetail = async (route) => {
     try {
       const res = await api.get(`/transport/routes/${route.id}/`);
-      setSelectedRoute(res.data);
+      const detail = res.data?.data || res.data;
+      setSelectedRoute(detail);
+      setRouteMetadataDraft({ name: detail.name || "", route_code: detail.route_code || "", direction_name: detail.direction_name || "" });
+      setRouteMembershipDraft(detail.route_memberships || []);
     } catch (err) { console.error("Route error:", err); alert("Failed to select route"); }
   };
 
@@ -279,15 +312,39 @@ export default function Routes() {
 
   const fetchPreview = async (s, e, st, sn, en) => {
     if (!s || !e) return;
+    const requestId = ++previewRequestRef.current;
     try {
       const res = await api.post("/transport/routes/preview/", {
         start: { lat: s.lat, lon: s.lon, name: sn || "" },
         end: { lat: e.lat, lon: e.lon, name: en || "" },
         stops: (st || []).map((s, i) => ({ lat: s.lat, lon: s.lon, name: s.name, order: i })),
       });
+      if (requestId !== previewRequestRef.current) return;
       setPreviews(Array.isArray(res.data) ? res.data : []);
       setSelectedPreview(0);
-    } catch (err) { console.error("Route error:", err); alert("Failed to load previews"); }
+      return res.data;
+    } catch (err) {
+      if (requestId !== previewRequestRef.current) return;
+      setPreviews([]);
+      console.error("Route geometry preview failed:", err);
+      alert("Road geometry unavailable: " + (err.response?.data?.message || err.response?.data?.detail || err.message));
+    }
+  };
+
+  const applyGlobalStopSequence = async (sequence) => {
+    setSelectedGlobalStops(sequence);
+    previewRequestRef.current += 1;
+    setPreviews([]);
+    if (sequence.length < 2) return;
+    const point = (stop) => ({ lat: Number(stop.lat), lon: Number(stop.lng) });
+    const nextStart = point(sequence[0]);
+    const nextEnd = point(sequence[sequence.length - 1]);
+    const middle = sequence.slice(1, -1).map((stop) => ({ ...point(stop), name: stop.name }));
+    setStart(nextStart); setEnd(nextEnd); setStops(middle);
+    setStartName(sequence[0].name); setEndName(sequence[sequence.length - 1].name);
+    startRef.current = nextStart; endRef.current = nextEnd; stopsRef.current = middle;
+    startNameRef.current = sequence[0].name; endNameRef.current = sequence[sequence.length - 1].name;
+    await fetchPreview(nextStart, nextEnd, middle, sequence[0].name, sequence[sequence.length - 1].name);
   };
 
   const fitToBounds = () => {
@@ -316,6 +373,8 @@ export default function Routes() {
     if (selectedRoute) {
       const route = selectedRoute;
       const path = route.path?.coordinates || [];
+      const useGlobalMemberships = routeMembershipDraft.length > 0 || (route.route_memberships || []).length > 0;
+      const mapStops = useGlobalMemberships ? routeMembershipDraft : route.stops || [];
       const src = m.getSource("route-path");
       if (src) src.setData(geoJsonify(path));
 
@@ -324,25 +383,27 @@ export default function Routes() {
         m.fitBounds(bounds, { padding: 80, duration: 1000 });
       }
 
-      (route.stops || []).forEach((s, i) => {
-        const coords = s.location?.coordinates || [];
-        if (coords.length < 2) return;
+      mapStops.forEach((s, i) => {
+        const coords = s.location?.coordinates || [s.lng, s.lat];
+        if (coords.length < 2 || !Number.isFinite(Number(coords[0])) || !Number.isFinite(Number(coords[1]))) return;
         const el = document.createElement("div");
         el.className = "flex items-center justify-center text-white w-7 h-7 rounded-full border-2 border-white/80 shadow-md text-[11px] font-semibold";
         el.style.backgroundColor = "var(--accent-blue)";
         el.innerHTML = i + 1;
-        const mk = new maplibregl.Marker({ element: el, draggable: true })
+        const mk = new maplibregl.Marker({ element: el, draggable: !useGlobalMemberships })
           .setLngLat(coords)
           .setPopup(new maplibregl.Popup({ offset: 15 }).setText(s.name))
           .addTo(m);
-        mk.on("dragend", async () => {
-          const pos = mk.getLngLat();
-          const newCoords = [pos.lng, pos.lat];
-          s.location.coordinates = newCoords;
-          await api.patch(`/transport/admin/stops/${s.id}/`, {
-            location: { type: "Point", coordinates: newCoords },
+        if (!useGlobalMemberships) {
+          mk.on("dragend", async () => {
+            const pos = mk.getLngLat();
+            const newCoords = [pos.lng, pos.lat];
+            s.location.coordinates = newCoords;
+            await api.patch(`/transport/admin/stops/${s.id}/`, {
+              location: { type: "Point", coordinates: newCoords },
+            });
           });
-        });
+        }
         markers.current[`s-${i}`] = mk;
       });
       return;
@@ -403,7 +464,7 @@ export default function Routes() {
       });
       markers.current[`stop-${i}`] = mk;
     });
-  }, [start, end, stops, selectedRoute, mapLoaded]);
+  }, [start, end, stops, selectedRoute, routeMembershipDraft, mapLoaded]);
 
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
@@ -431,43 +492,65 @@ export default function Routes() {
   const saveRoute = async () => {
     if (!start || !end || !selectedCity) return;
     setLoading(true);
+    let createdRouteId = null;
     const preview = previews[selectedPreview];
-    const pathCoords = preview?.path || [[end.lon, end.lat], [start.lon, start.lat]];
+    const pathCoords = preview?.path;
     try {
+      if (!globalStopMode || selectedGlobalStops.length < 2) {
+        throw new Error("Choose at least two existing global stops for the route direction.");
+      }
+      if (!Array.isArray(pathCoords) || pathCoords.length < 2) {
+        throw new Error("Road geometry is unavailable. Load a route preview before saving.");
+      }
       const res = await api.post("/transport/admin/routes/", {
         city: selectedCity,
         name: routeName || "New Route",
+        route_code: routeCode,
+        direction_name: directionName,
         start_name: startName,
         end_name: endName,
         path: { type: "LineString", coordinates: pathCoords },
         total_distance_meters: preview?.distance || 0,
+        is_public: false,
       });
-      const routeId = res.data.data.id;
-      const allStops = [
-        { name: startName || "Start", location: { type: "Point", coordinates: [start.lon, start.lat] }, order: 0 },
-        ...stops.map((s, i) => ({ name: s.name, location: { type: "Point", coordinates: [s.lon, s.lat] }, order: i + 1 })),
-        { name: endName || "End", location: { type: "Point", coordinates: [end.lon, end.lat] }, order: stops.length + 1 },
-      ];
-      for (const s of allStops) {
-        await api.post("/transport/admin/stops/", { ...s, route: routeId });
-      }
+      const routeId = res.data?.data?.id || res.data?.id;
+      if (!routeId) throw new Error("The backend did not return the created route ID.");
+      createdRouteId = routeId;
+      await api.put(`/transport/admin/routes/${routeId}/ordered-stops/`, {
+        stops: selectedGlobalStops.map((stop, order) => ({
+          stop_id: stop.id, order, boarding_allowed: true, alighting_allowed: true,
+        })),
+        path: { type: "LineString", coordinates: pathCoords },
+        total_distance_meters: preview.distance,
+        start_name: selectedGlobalStops[0].name,
+        end_name: selectedGlobalStops[selectedGlobalStops.length - 1].name,
+      });
       resetForm();
       api.get(`/transport/routes/?city_id=${selectedCity}`).then((r) => {
         setRoutes(Array.isArray(r.data) ? r.data : r.data.results || []);
       });
     } catch (err) {
-      alert("Failed to save route: " + (err.response?.data?.detail || err.message));
+      const reason = err.response?.data?.message || err.response?.data?.detail || err.response?.data;
+      if (createdRouteId) {
+        await fetchRouteDetail({ id: createdRouteId });
+        alert("The private route draft was created, but its stop order could not be saved. The draft is open so you can retry the stop order.");
+      } else {
+        alert("Failed to save route: " + (typeof reason === "string" ? reason : JSON.stringify(reason || err.message)));
+      }
     }
     setLoading(false);
   };
 
   const resetForm = () => {
+    previewRequestRef.current += 1;
     setStart(null); setEnd(null); setStops([]);
     setRouteName(""); setStartName(""); setEndName("");
+    setRouteCode(""); setDirectionName("");
     setPreviews([]); setSelectedPreview(0);
     setSelectedRoute(null);
     startRef.current = null; endRef.current = null; stopsRef.current = [];
     startNameRef.current = ""; endNameRef.current = "";
+    setSelectedGlobalStops([]); setGlobalStopMode(false); setGlobalStopQuery(""); setGlobalStopResults([]);
   };
 
   const reorderStop = (idx, dir) => {
@@ -485,6 +568,65 @@ export default function Routes() {
     if (newName && newName !== stop.name) {
       await api.patch(`/transport/admin/stops/${stop.id}/`, { name: newName });
       fetchRouteDetail(selectedRoute);
+    }
+  };
+
+  const saveRouteMemberships = async () => {
+    if (!selectedRoute) return;
+    if (routeMembershipDraft.length < 2) {
+      alert("A route direction needs at least two ordered global stops.");
+      return;
+    }
+    try {
+      const coordinates = routeMembershipDraft.map((stop) => stop.location?.coordinates || [stop.lng, stop.lat]);
+      if (coordinates.some((point) => point.length < 2 || point.some((value) => !Number.isFinite(Number(value))))) {
+        throw new Error("Every selected global stop must have valid coordinates.");
+      }
+      const previewResponse = await api.post("/transport/routes/preview/", {
+        start: { lon: coordinates[0][0], lat: coordinates[0][1] },
+        end: { lon: coordinates.at(-1)[0], lat: coordinates.at(-1)[1] },
+        stops: coordinates.slice(1, -1).map(([lon, lat]) => ({ lon, lat })),
+      });
+      const preview = Array.isArray(previewResponse.data) ? previewResponse.data[0] : null;
+      if (!Array.isArray(preview?.path) || preview.path.length < 2) {
+        throw new Error("The road router did not return valid geometry for this stop order.");
+      }
+      const stops = routeMembershipDraft.map((stop, order) => ({
+        stop_id: stop.id, order,
+        boarding_allowed: stop.boarding_allowed !== false,
+        alighting_allowed: stop.alighting_allowed !== false,
+      }));
+      await api.put(`/transport/admin/routes/${selectedRoute.id}/ordered-stops/`, {
+        stops,
+        path: { type: "LineString", coordinates: preview.path },
+        total_distance_meters: preview.distance,
+        start_name: routeMembershipDraft[0].name,
+        end_name: routeMembershipDraft.at(-1).name,
+      });
+      await fetchRouteDetail(selectedRoute);
+    } catch (err) {
+      alert("Failed to save ordered stops: " + (err.response?.data?.message || err.response?.data?.detail || err.message));
+    }
+  };
+
+  const saveRouteMetadata = async () => {
+    if (!selectedRoute) return;
+    try {
+      await api.patch(`/transport/admin/routes/${selectedRoute.id}/`, routeMetadataDraft);
+      await fetchRouteDetail({ ...selectedRoute, ...routeMetadataDraft });
+    } catch (err) {
+      alert("Failed to save route details: " + (err.response?.data?.detail || err.response?.data?.message || err.message));
+    }
+  };
+
+  const setRoutePublished = async (isPublic) => {
+    if (!selectedRoute) return;
+    try {
+      const response = await api.patch(`/transport/admin/routes/${selectedRoute.id}/`, { is_public: isPublic });
+      const detail = response.data?.data || response.data;
+      setSelectedRoute(detail);
+    } catch (err) {
+      alert("Failed to update publication status: " + (err.response?.data?.message || err.message));
     }
   };
 
@@ -710,6 +852,11 @@ export default function Routes() {
 
   const endStopCount = (start ? 1 : 0) + (end ? 1 : 0);
 
+  const savedMembershipOrder = [...(selectedRoute?.route_memberships || [])]
+    .sort((left, right) => left.order - right.order).map((stop) => stop.id).join("|");
+  const draftMembershipOrder = routeMembershipDraft.map((stop) => stop.id).join("|");
+  const membershipDraftChanged = Boolean(selectedRoute) && savedMembershipOrder !== draftMembershipOrder;
+
   return (
     <div className="flex h-full">
       <div className="w-[420px] flex flex-col shrink-0">
@@ -839,7 +986,66 @@ export default function Routes() {
                   placeholder="e.g. Downtown Express"
                   className="glass-input w-full" />
               </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1"><label className="glass-label">Route code</label>
+                  <input value={routeCode} onChange={(e) => setRouteCode(e.target.value)} placeholder="e.g. LKO-01" className="glass-input w-full" /></div>
+                <div className="space-y-1"><label className="glass-label">Direction</label>
+                  <input value={directionName} onChange={(e) => setDirectionName(e.target.value)} placeholder="e.g. SGPGI to IIM" className="glass-input w-full" /></div>
+              </div>
 
+              <div className="glass-card-subtle rounded-xl p-4 space-y-2">
+                <label className="glass-label">Existing global stops, in travel order</label>
+                <input value={globalStopQuery} onChange={(e) => setGlobalStopQuery(e.target.value)}
+                  placeholder="Search this city's existing stops" className="glass-input w-full" />
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500">Optionally filter near a location</label>
+                  <LocationSearch placeholder="Search geographic area" initialValue={globalStopNearby?.display_name || ""}
+                    onSelect={(item) => setGlobalStopNearby(item || null)} className="w-full" />
+                  <div className="flex items-center gap-2">
+                    <select value={globalStopRadius} onChange={(e) => setGlobalStopRadius(Number(e.target.value))} className="glass-input flex-1">
+                      {[1000, 2500, 5000, 10000, 20000].map((radius) => <option key={radius} value={radius}>{radius / 1000} km radius</option>)}
+                    </select>
+                    {globalStopNearby && <button type="button" className="text-xs text-slate-500" onClick={() => setGlobalStopNearby(null)}>Clear area</button>}
+                  </div>
+                </div>
+                {globalStopResults.map((stop) => (
+                  <button key={stop.id} type="button"
+                    disabled={selectedGlobalStops.some((item) => item.id === stop.id) || stop.lat == null || stop.lng == null}
+                    onClick={() => {
+                      setGlobalStopMode(true);
+                      setGlobalStopQuery(""); setGlobalStopResults([]);
+                      applyGlobalStopSequence([...selectedGlobalStops, stop]);
+                    }}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-white disabled:opacity-40">
+                    <span className="block">{stop.name} · {stop.coordinate_status || "coordinates available"}</span>
+                    <span className="block text-[10px] text-slate-500">{Number(stop.lat).toFixed(5)}, {Number(stop.lng).toFixed(5)}{stop.distance_m != null ? ` · ${Math.round(stop.distance_m)} m away` : ""}</span>
+                  </button>
+                ))}
+                {selectedGlobalStops.map((stop, index) => (
+                  <div key={stop.id} className="flex items-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-xs">
+                    <span className="flex-1 truncate">{index + 1}. {stop.name}<small className="block text-[10px] text-slate-500">{Number(stop.lat).toFixed(5)}, {Number(stop.lng).toFixed(5)}</small></span>
+                    <button type="button" title="Move up" disabled={index === 0}
+                      onClick={() => {
+                        const next = [...selectedGlobalStops];
+                        [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                        applyGlobalStopSequence(next);
+                      }}><ArrowUp size={13} /></button>
+                    <button type="button" title="Move down" disabled={index === selectedGlobalStops.length - 1}
+                      onClick={() => {
+                        const next = [...selectedGlobalStops];
+                        [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                        applyGlobalStopSequence(next);
+                      }}><ArrowDown size={13} /></button>
+                    <button type="button" title="Remove stop"
+                      onClick={() => applyGlobalStopSequence(selectedGlobalStops.filter((_, i) => i !== index))}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+                <p className="text-[10px] text-slate-500">Selecting global stops reuses their records and saves explicit route order. New routes stay private until published.</p>
+              </div>
+
+              {!globalStopMode && <>
               <div className="glass-card-subtle rounded-xl p-4 space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="w-1 h-12 bg-emerald-500 rounded-full shrink-0" />
@@ -941,7 +1147,9 @@ export default function Routes() {
                 )}
               </div>
 
-              <button onClick={saveRoute} disabled={!end || loading}
+              </>}
+
+              <button onClick={saveRoute} disabled={!end || loading || !globalStopMode || selectedGlobalStops.length < 2}
                 className="glass-btn-primary w-full py-4 flex items-center justify-center gap-2">
                 <Save size={16} /> {loading ? "Saving..." : "Save Route"}
               </button>
@@ -961,7 +1169,61 @@ export default function Routes() {
                   <button onClick={() => setSelectedRoute(null)} className="text-xs font-medium text-slate-400 hover:text-slate-600">Close</button>
                 </div>
               </div>
+              <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+                <label className="glass-label">Route details</label>
+                <input aria-label="Route name" value={routeMetadataDraft.name} onChange={(e) => setRouteMetadataDraft((v) => ({ ...v, name: e.target.value }))} className="glass-input w-full" placeholder="Route name" />
+                <div className="grid grid-cols-2 gap-2">
+                  <input aria-label="Route code" value={routeMetadataDraft.route_code} onChange={(e) => setRouteMetadataDraft((v) => ({ ...v, route_code: e.target.value }))} className="glass-input w-full" placeholder="Route code" />
+                  <input aria-label="Direction name" value={routeMetadataDraft.direction_name} onChange={(e) => setRouteMetadataDraft((v) => ({ ...v, direction_name: e.target.value }))} className="glass-input w-full" placeholder="Direction" />
+                </div>
+                <button onClick={saveRouteMetadata} className="glass-btn-secondary w-full py-2">Save route details</button>
+              </div>
               <p className="text-sm text-slate-500">{selectedRoute.start_name} → {selectedRoute.end_name}</p>
+              <div className="glass-card-subtle rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="glass-label">Global stop sequence</label>
+                  <span className="text-[10px] text-slate-500">{selectedRoute.is_public ? "Published" : "Private draft"}</span>
+                </div>
+                <input value={globalStopQuery} onChange={(e) => setGlobalStopQuery(e.target.value)}
+                  placeholder="Search this city's global stops" className="glass-input w-full" />
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500">Optionally filter near a location</label>
+                  <LocationSearch placeholder="Search geographic area" initialValue={globalStopNearby?.display_name || ""}
+                    onSelect={(item) => setGlobalStopNearby(item || null)} className="w-full" />
+                  <div className="flex items-center gap-2">
+                    <select value={globalStopRadius} onChange={(e) => setGlobalStopRadius(Number(e.target.value))} className="glass-input flex-1">
+                      {[1000, 2500, 5000, 10000, 20000].map((radius) => <option key={radius} value={radius}>{radius / 1000} km radius</option>)}
+                    </select>
+                    {globalStopNearby && <button type="button" className="text-xs text-slate-500" onClick={() => setGlobalStopNearby(null)}>Clear area</button>}
+                  </div>
+                </div>
+                {globalStopResults.map((stop) => (
+                  <button key={stop.id} type="button"
+                    disabled={routeMembershipDraft.some((item) => item.id === stop.id) || stop.lat == null || stop.lng == null}
+                    onClick={() => { setRouteMembershipDraft((rows) => [...rows, { ...stop, location: { type: "Point", coordinates: [stop.lng, stop.lat] } }]); setGlobalStopQuery(""); setGlobalStopResults([]); }}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-white disabled:opacity-40">
+                    {stop.name} · {Number(stop.lat).toFixed(5)}, {Number(stop.lng).toFixed(5)}{stop.distance_m != null ? ` · ${Math.round(stop.distance_m)} m` : ""}
+                  </button>
+                ))}
+                {routeMembershipDraft.map((stop, index) => (
+                  <div key={stop.id} className="flex items-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-xs">
+                    <span className="flex-1 truncate">{index + 1}. {stop.name}<small className="block text-[10px] text-slate-500">{stop.location?.coordinates?.[1]?.toFixed(5)}, {stop.location?.coordinates?.[0]?.toFixed(5)}</small></span>
+                    <button type="button" disabled={index === 0} title="Move up" onClick={() => setRouteMembershipDraft((rows) => {
+                      const next = [...rows]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next;
+                    })}><ArrowUp size={13} /></button>
+                    <button type="button" disabled={index === routeMembershipDraft.length - 1} title="Move down" onClick={() => setRouteMembershipDraft((rows) => {
+                      const next = [...rows]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; return next;
+                    })}><ArrowDown size={13} /></button>
+                    <button type="button" title="Remove stop" onClick={() => setRouteMembershipDraft((rows) => rows.filter((_, i) => i !== index))}><Trash2 size={13} /></button>
+                  </div>
+                ))}
+                <button onClick={saveRouteMemberships} className="glass-btn-primary w-full py-2">Save stop order</button>
+                <button onClick={() => setRoutePublished(!selectedRoute.is_public)}
+                  disabled={!selectedRoute.is_public && (routeMembershipDraft.length < 2 || membershipDraftChanged)}
+                  className="glass-btn-secondary w-full py-2 disabled:opacity-40">
+                  {selectedRoute.is_public ? "Unpublish route" : membershipDraftChanged ? "Save stop order to publish" : "Publish route"}
+                </button>
+              </div>
               {selectedRoute.total_distance_meters && (
                 <p className="text-sm font-semibold text-slate-800">{(selectedRoute.total_distance_meters / 1000).toFixed(1)} km</p>
               )}

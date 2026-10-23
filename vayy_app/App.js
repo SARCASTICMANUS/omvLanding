@@ -12,7 +12,6 @@ import {
 import AppNavigator from "./src/navigation/AppNavigator";
 import { LanguageProvider } from "./src/shared/lib/i18n/LanguageContext";
 import WebSocketProvider from "./src/shared/lib/WebSocketProvider";
-import VerificationGate from "./src/VerificationGate";
 
 // While the gate is showing, re-ask the server this often so an admin approval
 // (or a completed upload) unlocks the app without a relaunch.
@@ -60,7 +59,6 @@ function Root() {
       <WebSocketProvider>
         <LanguageProvider>
           <StatusBar style="dark" backgroundColor="#FFFFFF" />
-          {isAuthenticated && <VerificationGate />}
           <AppNavigator />
         </LanguageProvider>
       </WebSocketProvider>

@@ -1,9 +1,12 @@
 import React, { forwardRef, useImperativeHandle, useRef, useCallback, useEffect, useState } from "react";
+import * as Location from "expo-location";
 import { StyleSheet, View } from "react-native";
 import {
   loadSanitizedMapStyle,
   convertInitialRegion,
   DEFAULT_CENTER,
+  isDefaultMapCenter,
+  getInitialMapZoom,
   MAPTILER_STYLE,
   FALLBACK_STYLE_URL,
 } from "./mapUtils";
@@ -66,6 +69,48 @@ const VayyMap = forwardRef(function VayyMap(
       center: [DEFAULT_CENTER.longitude, DEFAULT_CENTER.latitude],
       zoom: 14,
     };
+
+  const shouldResolveDeviceCenter = isDefaultMapCenter(viewState.center);
+  const mapViewState = {
+    ...viewState,
+    center: shouldResolveDeviceCenter
+      ? [DEFAULT_CENTER.longitude, DEFAULT_CENTER.latitude]
+      : viewState.center,
+    zoom: getInitialMapZoom(viewState.center, viewState.zoom),
+  };
+
+  // Prefer an already-authorized device fix when this map is only using the
+  // shared fallback. Generic map mounts must not trigger a permission prompt.
+  useEffect(() => {
+    let cancelled = false;
+    if (!shouldResolveDeviceCenter) return undefined;
+
+    const centerOnDevice = async () => {
+      try {
+        const permission = await Location.getForegroundPermissionsAsync();
+        if (permission.status !== "granted") return;
+
+        let location = await Location.getLastKnownPositionAsync();
+        if (!location?.coords) {
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+        }
+        if (cancelled || !location?.coords) return;
+
+        activeCameraRef.current?.setStop({
+          center: [location.coords.longitude, location.coords.latitude],
+          zoom: viewState.zoom ?? 14,
+          duration: 0,
+        });
+      } catch {
+        // Keep the neutral fallback if device location is unavailable.
+      }
+    };
+
+    centerOnDevice();
+    return () => { cancelled = true; };
+  }, [shouldResolveDeviceCenter, viewState.zoom, activeCameraRef]);
 
   useImperativeHandle(ref, () => ({
     getZoom: async () => {
@@ -215,7 +260,7 @@ const VayyMap = forwardRef(function VayyMap(
     >
       <Camera
         ref={activeCameraRef}
-        initialViewState={viewState}
+        initialViewState={mapViewState}
       />
       {children}
     </Map>

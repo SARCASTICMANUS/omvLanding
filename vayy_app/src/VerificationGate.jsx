@@ -4,18 +4,20 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
   StyleSheet,
 } from "react-native";
 import { useSelector } from "react-redux";
+import { DRIVER_ROLES } from "./constants";
 
-const VerificationGate = () => {
+const VerificationGate = ({ isCompletionScreen, onComplete }) => {
   // Server is the only source of truth (GET /api/accounts/me/ -> data.verification).
   // Until the server has answered there is nothing to show: never block the UI
   // on "loading" or on a failed fetch — the backend's 403 still enforces access.
   const verification = useSelector((state) => state.verification?.state ?? null);
+  const user = useSelector((state) => state.auth?.user);
 
   if (!verification) return null;
+  if (isCompletionScreen) return null;
 
   const {
     stage,
@@ -48,8 +50,12 @@ const VerificationGate = () => {
             ? `Your documents were rejected: ${rejection_reason || "Please review the feedback"}.`
             : "We’re checking your verification status. Please wait.");
 
+  const canCompleteDriverKyc =
+    DRIVER_ROLES.includes(user?.role) &&
+    (stage === "docs_pending" || stage === "docs_rejected");
+
   const handleClose = () => {
-    // Intentionally prevent dismissal. Verification is server-controlled.
+    // Keep the verification gate blocking until the server allows access.
   };
 
   return (
@@ -94,18 +100,16 @@ const VerificationGate = () => {
             <Text style={styles.stageMessage}>{rejection_reason}</Text>
           )}
 
-          {stage !== "docs_under_review" && stage !== "fully_verified" && (
+          {canCompleteDriverKyc && (
             <TouchableOpacity
               accessibilityRole="button"
               style={styles.submitBtn}
-              onPress={handleClose}
+              onPress={() => onComplete?.(stage)}
             >
-              <Text style={styles.submitBtnText}>Submit for review</Text>
+              <Text style={styles.submitBtnText}>
+                {stage === "docs_rejected" ? "Review documents" : "Add vehicle & documents"}
+              </Text>
             </TouchableOpacity>
-          )}
-
-          {stage !== "fully_verified" && stage !== "docs_under_review" && (
-            <ActivityIndicator style={styles.activity} size="small" />
           )}
         </View>
       </View>
@@ -164,9 +168,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 14,
-  },
-  activity: {
-    marginTop: 12,
   },
 });
 

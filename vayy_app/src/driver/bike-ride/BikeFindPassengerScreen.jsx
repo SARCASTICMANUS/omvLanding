@@ -45,6 +45,7 @@ const CHECKS = [
 
 export default function BikeFindPassengerScreen({ navigation, route: navRoute }) {
   const insets = useSafeAreaInsets();
+  const demoPreRideChecks = __DEV__ && navRoute?.params?.demoPreRideChecks !== false;
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const userId = user?.id;
@@ -55,6 +56,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   const [phase, setPhase] = useState("scanning");
   const [online, setOnline] = useState(false);
   const [activeJourney, setActiveJourney] = useState(null);
+  const [startingJourney, setStartingJourney] = useState(false);
   const [currentBuddy, setCurrentBuddy] = useState(null);
   const [notification, setNotification] = useState(null);
   const [scanSeconds, setScanSeconds] = useState(60);
@@ -181,6 +183,11 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
     const run = async () => {
       setAllPassed(false);
       setChecks(CHECKS.map((check) => ({ ...check, status: "pending" })));
+      if (demoPreRideChecks) {
+        setChecks(CHECKS.map((check) => ({ ...check, status: "passed" })));
+        setAllPassed(true);
+        return;
+      }
       try {
         setChecks((items) => items.map((item) => item.key === "network" ? { ...item, status: "checking" } : item));
         const vehicleResponse = await getAssignedVehicle();
@@ -190,7 +197,9 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
         vehicleIdRef.current = vehicleId || null;
         setVehicleReady(!!vehicleId);
         if (!vehicleId) throw new Error("No assigned vehicle");
-        setChecks((items) => items.map((item) => item.key === "network" || item.key === "device" ? { ...item, status: "passed" } : item));
+        setChecks((items) => items.map((item) => item.key === "device" || item.key === "network"
+          ? { ...item, status: "passed" }
+          : item));
 
         setChecks((items) => items.map((item) => item.key === "gps" || item.key === "location" ? { ...item, status: "checking" } : item));
         const permission = await Location.getForegroundPermissionsAsync();
@@ -201,8 +210,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
         setBikePos({ latitude: position.coords.latitude, longitude: position.coords.longitude });
         setMapCenter({ latitude: position.coords.latitude, longitude: position.coords.longitude });
         setChecks((items) => items.map((item) => item.key === "gps" || item.key === "location" ? { ...item, status: "passed" } : item));
-        // Helmet and kickstand are physical checks and cannot be detected by the phone.
-        // Keep them pending rather than falsely claiming that sensors verified them.
+        // The development preview marks manual safety checks ready for screen testing.
         setAllPassed(true);
       } catch (error) {
         if (cancelled) return;
@@ -213,7 +221,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
     };
     run();
     return () => { cancelled = true; };
-  }, [showVerify]);
+  }, [showVerify, demoPreRideChecks]);
 
   useEffect(() => {
     if (!allPassed) return;
@@ -223,7 +231,17 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   }, [allPassed, spinAnim]);
 
   const handleStart = async () => {
-    if (!allPassed || !userId) return;
+    if (startingJourney) return;
+    if (!allPassed) {
+      setNotification("Complete the pre-ride checks before going online.");
+      return;
+    }
+    if (!userId) {
+      setNotification("Your session is unavailable. Sign in again before going online.");
+      return;
+    }
+    setStartingJourney(true);
+    setNotification(null);
     try {
       const permission = await Location.getForegroundPermissionsAsync();
       const servicesEnabled = await Location.hasServicesEnabledAsync();
@@ -268,15 +286,12 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
       setOnline(false);
       setNotification(error?.message || "Readiness or journey start failed.");
       return;
+    } finally {
+      setStartingJourney(false);
     }
-    Animated.parallel([
-      Animated.timing(verifySlide, { toValue: 0, duration: 350, easing: Easing.in(Easing.ease), useNativeDriver: true }),
-      Animated.timing(verifyOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
-    ]).start(() => {
-      setShowVerify(false);
-      setOnline(true);
-      setPhase("scanning");
-    });
+    setShowVerify(false);
+    setOnline(true);
+    setPhase("scanning");
   };
 
   const vehicleIdRef = useRef(null);
@@ -284,6 +299,18 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
   const [mapCenter, setMapCenter] = useState(null);
 
   useEffect(() => {
+    if (demoPreRideChecks) {
+      const selectedRoute = navRoute?.params?.route || {};
+      const origin = selectedRoute.pickup || selectedRoute.origin || selectedRoute.startCoord;
+      const point = Array.isArray(origin)
+        ? { latitude: Number(origin[1]), longitude: Number(origin[0]) }
+        : {
+            latitude: Number(origin?.lat ?? origin?.latitude ?? origin?.y),
+            longitude: Number(origin?.lng ?? origin?.lon ?? origin?.longitude ?? origin?.x),
+          };
+      if (Number.isFinite(point.latitude) && Number.isFinite(point.longitude)) setMapCenter(point);
+      return undefined;
+    }
     let stopped = false;
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -295,7 +322,7 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
       setMapCenter({ latitude, longitude });
     })();
     return () => { stopped = true; };
-  }, []);
+  }, [demoPreRideChecks, navRoute?.params?.route]);
 
   useEffect(() => {
     if (!userId) return;
@@ -759,12 +786,19 @@ export default function BikeFindPassengerScreen({ navigation, route: navRoute })
               {checks.slice(3).map(renderCheckRow)}
             </ScrollView>
 
+            {notification && <Text accessibilityRole="alert" style={styles.vStartError}>{notification}</Text>}
             {allPassed && (
-              <TouchableOpacity style={styles.vStartBtn} onPress={handleStart} activeOpacity={0.85}>
+                <TouchableOpacity
+                  style={[styles.vStartBtn, startingJourney && styles.vStartBtnDisabled]}
+                  onPress={handleStart}
+                  activeOpacity={0.85}
+                  disabled={startingJourney}
+                  accessibilityState={{ disabled: startingJourney, busy: startingJourney }}
+                >
                 <View style={styles.vStartBtnInner}>
                   <Ionicons name="radio" size={20} color={COLORS.primary} />
-                  <Text style={styles.vStartBtnText}>Go Live</Text>
-                  <Ionicons name="arrow-forward" size={18} color={COLORS.primary} />
+                  <Text style={styles.vStartBtnText}>{startingJourney ? "Starting…" : "Go Live"}</Text>
+                  <Ionicons name={startingJourney ? "sync" : "arrow-forward"} size={18} color={COLORS.primary} />
                 </View>
               </TouchableOpacity>
             )}
@@ -1429,6 +1463,10 @@ const styles = StyleSheet.create({
 
   /* start button */
   vStartBtn: { width: "100%", borderRadius: 16, overflow: "hidden", marginTop: 12 },
+  vStartBtnDisabled: { opacity: 0.65 },
+  vStartError: {
+    color: "#FECACA", fontSize: 13, textAlign: "center", marginTop: 10,
+  },
   vStartBtnInner: {
     flexDirection: "row",
     alignItems: "center",

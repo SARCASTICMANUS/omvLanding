@@ -1,5 +1,6 @@
 import requests
 import logging
+import hashlib
 from typing import List, Tuple, Optional, Dict, Any, Union
 from django.conf import settings
 from django.core.cache import cache
@@ -16,6 +17,8 @@ class OSRMService:
 
     BASE_URL = getattr(settings, "OSRM_URL", "http://osrm:5000")
     DEFAULT_PROFILE = "driving"
+    WALKING_PROFILE = getattr(settings, "OSRM_WALKING_PROFILE", "")
+    WALKING_SPEED_MPS = 1.33
     CACHE_TTL = getattr(settings, "OSRM_CACHE_TTL", 600)
 
     @classmethod
@@ -261,7 +264,7 @@ class OSRMService:
 
         Uses a single /route call; results are cached for ``CACHE_TTL``.
         """
-        cache_key = f"osrm_metrics_v2_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cache_key = f"osrm_metrics_v4_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
@@ -289,7 +292,7 @@ class OSRMService:
         full GeoJSON LineString dict from OSRM. Uses a single /route call with
         ``overview=full``; results are cached for ``CACHE_TTL``.
         """
-        cache_key = f"osrm_path_v2_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cache_key = f"osrm_path_v4_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
@@ -312,12 +315,86 @@ class OSRMService:
         return payload
 
     @classmethod
+    def get_walking_path(
+        cls,
+        origin: Tuple[float, float],
+        destination: Tuple[float, float],
+    ) -> Optional[Dict[str, Any]]:
+        """Return a road-following path and a walking-time estimate."""
+        profile = cls.WALKING_PROFILE or cls.DEFAULT_PROFILE
+        cache_key = f"osrm_walk_v4_{profile}_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        result = cls.route(
+            origin,
+            destination,
+            profile=profile,
+            overview="full",
+            geometries="geojson",
+        )
+        if not result or not result.get("routes") or not cls._route_snap_is_valid(result):
+            return None
+
+        route = result["routes"][0]
+        geometry = route.get("geometry")
+        if not geometry or geometry.get("type") != "LineString" or len(geometry.get("coordinates") or []) < 2:
+            return None
+        payload = {
+            "distance": route["distance"],
+            # The configured OSRM image is car-profile; use its road distance,
+            # never its vehicle ETA, for a human walking-time estimate.
+            "duration": route["distance"] / cls.WALKING_SPEED_MPS,
+            "geometry": geometry,
+            "profile": profile,
+            "duration_is_estimate": True,
+        }
+        cache.set(cache_key, payload, cls.CACHE_TTL)
+        return payload
+
+    @classmethod
+    def get_road_path_through(cls, *coords: Tuple[float, float]) -> Optional[Dict[str, Any]]:
+        """Return actual driving geometry through ordered stop coordinates."""
+        if len(coords) < 2:
+            return None
+        key_points = ";".join(f"{lng:.6f},{lat:.6f}" for lng, lat in coords)
+        cache_key = f"osrm_path_through_v3_{hashlib.sha256(key_points.encode()).hexdigest()}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        result = cls.route(*coords, overview="full", geometries="geojson")
+        routes = (result or {}).get("routes") or []
+        waypoints = (result or {}).get("waypoints") or []
+        if not routes or len(waypoints) != len(coords):
+            return None
+        try:
+            snap_distances = [float(point["distance"]) for point in waypoints]
+        except (KeyError, TypeError, ValueError):
+            return None
+        max_snap_m = float(getattr(settings, "OSRM_MAX_SNAP_DISTANCE_M", 5000))
+        if any(distance > max_snap_m for distance in snap_distances):
+            return None
+        route = routes[0]
+        geometry = route.get("geometry")
+        if not geometry or geometry.get("type") != "LineString" or len(geometry.get("coordinates") or []) < 2:
+            return None
+        payload = {
+            "distance": route.get("distance"),
+            "duration": route.get("duration"),
+            "geometry": geometry,
+        }
+        cache.set(cache_key, payload, cls.CACHE_TTL)
+        return payload
+
+    @classmethod
     def get_road_distance_m(
         cls,
         origin: Tuple[float, float],
         destination: Tuple[float, float],
     ) -> Optional[float]:
-        cache_key = f"osrm_dist_v2_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cache_key = f"osrm_dist_v4_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
@@ -334,7 +411,7 @@ class OSRMService:
         origin: Tuple[float, float],
         destination: Tuple[float, float],
     ) -> Optional[float]:
-        cache_key = f"osrm_dur_v2_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cache_key = f"osrm_dur_v4_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
@@ -355,7 +432,7 @@ class OSRMService:
 
         Used inside serializers to avoid blocking HTTP calls in request hot paths.
         """
-        cache_key = f"osrm_dur_v2_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cache_key = f"osrm_dur_v4_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
         return cache.get(cache_key)
 
     @classmethod
@@ -365,7 +442,7 @@ class OSRMService:
         destination: Tuple[float, float],
     ) -> Optional[Dict[str, float]]:
         """Return cached road metrics without issuing a network request."""
-        cache_key = f"osrm_metrics_v2_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
+        cache_key = f"osrm_metrics_v4_{origin[1]}_{origin[0]}_{destination[1]}_{destination[0]}"
         return cache.get(cache_key)
 
     @classmethod
@@ -386,7 +463,7 @@ class OSRMService:
         destinations: Optional[List[int]] = None,
     ) -> Optional[Dict[str, Any]]:
         coord_key = "_".join(f"{c[0]}_{c[1]}" for c in coords)
-        cache_key = f"osrm_matrix_{coord_key}_{sources}_{destinations}"
+        cache_key = f"osrm_matrix_v2_{coord_key}_{sources}_{destinations}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached

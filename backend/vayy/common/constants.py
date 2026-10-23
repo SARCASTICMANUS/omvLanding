@@ -150,7 +150,8 @@ DISPATCH_MODE_CHOICES = (
 JOURNEY_CORRIDOR_RADIUS_M = 5000
 
 # How close a passenger must be to a global stop to raise a hand there.
-PASSENGER_STOP_RADIUS_M = 1000
+PASSENGER_STOP_RADIUS_M = 500
+PASSENGER_HAND_RAISE_RADIUS_M = 3000
 
 # Safety net for the Redis journey documents. Journey end deletes them
 # explicitly; this only catches keys orphaned by a crash mid-trip.

@@ -349,6 +349,9 @@ RABBITMQ_PASSWORD = env(
 # OSRM
 OSRM_URL = env("OSRM_URL", default="http://osrm:5000")
 OSRM_MAX_SNAP_DISTANCE_M = env.int("OSRM_MAX_SNAP_DISTANCE_M", default=5000)
+# The current Compose OSRM graph is extracted with car.lua. Keep pedestrian
+# directions disabled unless a backend with that profile is explicitly configured.
+OSRM_WALKING_PROFILE = env("OSRM_WALKING_PROFILE", default="").strip()
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/

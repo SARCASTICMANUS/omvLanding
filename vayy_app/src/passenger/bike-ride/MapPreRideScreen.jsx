@@ -16,17 +16,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { fetchRouteGeometry, getWalkingPath } from "../../routes/services/routeService";
 import { toRouteGeoJSON } from "../../routes/services/dynamicRouteNormalizer";
-import { haversine, formatDistance, walkingTimeText, walkingTimeValue } from "../../shared/utils/walkingDistance";
+import { formatDistance, walkingTimeText, walkingTimeValue } from "../../shared/utils/walkingDistance";
 import { formatWaitDuration } from "../../utils/formatters";
 import { getNearbyVehicles } from "../services/passengerService";
+import { HAND_RAISE_RADIUS_METERS, isWithinStopBoardingRadius } from "./handRaiseUtils";
 
 const ARRIVAL_THRESHOLD = 500;
 const BIKES_RADIUS_M = 2000;
 const BIKES_REFRESH_MS = 15000;
 
 // A GeoJSONSource whose `data` is not an object is treated by MapLibre Native as a
-// URL to download. While the route / walking path are still loading they are `null`,
-// which logged "[Mbgl-HttpRequest] Unable to parse resourceUrl null" for each source.
+// URL to download. While route geometry is loading it is `null`, which logged
+// "[Mbgl-HttpRequest] Unable to parse resourceUrl null" for the route source.
 // An empty collection draws nothing and keeps the source valid until data arrives.
 const EMPTY_FEATURE_COLLECTION = { type: "FeatureCollection", features: [] };
 const EMPTY_TRIP = {};
@@ -38,11 +39,12 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [sheetHeight, setSheetHeight] = useState(280);
   const [routePath, setRoutePath] = useState(null);
+  const [walkingPath, setWalkingPath] = useState(null);
+  const [walkingPathError, setWalkingPathError] = useState(null);
   const [routeStops, setRouteStops] = useState([]);
   const [currentZoomLevel, setCurrentZoomLevel] = useState(14);
   const [followMode, setFollowMode] = useState(true);
   const [userLocation, setUserLocation] = useState(null);
-  const [walkingPath, setWalkingPath] = useState(null);
   // Live count of bike Marshals around the pickup point, backing the
   // "bikes nearby" chip. This used to read a `bikesOnRoute` route param that
   // no caller ever supplied, so the chip was permanently stuck on "0".
@@ -61,10 +63,10 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   // 1. REALTIME API / PARAMS INTEGRATION DATA
   const trip = route?.params?.trip ?? EMPTY_TRIP;
   const pickup = route?.params?.pickup;
-  const pickupName = pickup?.name || pickup?.display_name || trip?.pickup_stop?.name || "Pickup";
+  const pickupName = trip?.pickup_stop?.name || pickup?.name || pickup?.display_name || "Pickup stop";
   const dropoff = route?.params?.destination;
-  const dropoffName = dropoff?.name || dropoff?.display_name || trip?.dropoff_stop?.name || "Dropoff";
-  const stopDistance = route?.params?.trip?.total_distance_meters || "-";
+  const dropoffName = trip?.dropoff_stop?.name || dropoff?.name || dropoff?.display_name || "Drop-off stop";
+  const stopDistance = trip?.first_mile_walk_meters ?? "-";
   const etaSeconds = Number(route?.params?.trip?.eta_seconds) || 0;
   const etaText = formatWaitDuration(etaSeconds);
 
@@ -82,19 +84,16 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   const nearestRoadLon = Array.isArray(nearestRoadCoords) && Number.isFinite(nearestRoadCoords[0]) ? nearestRoadCoords[0] : null;
   const nearestRoadLat = Array.isArray(nearestRoadCoords) && Number.isFinite(nearestRoadCoords[1]) ? nearestRoadCoords[1] : null;
 
-  const searchWalkingPathCoords = trip?.walking_path?.coordinates;
-
   const initialCenter = useMemo(
     () => (pickupLat != null && pickupLon != null ? [pickupLon, pickupLat] : null),
     [pickupLat, pickupLon],
   );
 
   const hasDistance = stopDistance !== "-" && Number.isFinite(Number(stopDistance));
-  const liveWalkDistance = userLocation && pickupLat != null && pickupLon != null
-    ? haversine(userLocation.latitude, userLocation.longitude, pickupLat, pickupLon)
-    : null;
-  const distNum = liveWalkDistance != null ? liveWalkDistance : (hasDistance ? Number(stopDistance) : null);
-  const isNearby = distNum == null ? true : distNum <= ARRIVAL_THRESHOLD;
+  const distNum = walkingPath?.distance_m ?? (!userLocation && hasDistance ? Number(stopDistance) : null);
+  // Hand Raise is enabled only when the passenger is confirmed within 3 km
+  // of the selected corridor stop. Missing GPS/distance must fail closed.
+  const isNearby = isWithinStopBoardingRadius(distNum);
   // When the passenger still has to walk to the stop, the wait badge shows
   // walk time instead of the vehicle wait estimate.
   const isWalking = distNum != null && distNum > ARRIVAL_THRESHOLD;
@@ -145,8 +144,10 @@ export function BikeMapPreRideScreen({ navigation, route }) {
   // available yet), so the hand-raise screen reflects real Marshal positions
   // instead of a hardcoded zero.
   useEffect(() => {
-    const lat = userLocation?.latitude ?? pickupLat;
-    const lon = userLocation?.longitude ?? pickupLon;
+    // Count Marshals around the boarding stop, not around the passenger's
+    // current position; the vehicle must be approaching the same corridor point.
+    const lat = pickupLat;
+    const lon = pickupLon;
     if (lat == null || lon == null) return undefined;
 
     let cancelled = false;
@@ -199,73 +200,27 @@ export function BikeMapPreRideScreen({ navigation, route }) {
     };
   }, []);
 
-  // Walking line path from the rider's actual location to the nearest pickup stop.
-  // Fetches the road-following path from the backend using the live position so it
-  // starts exactly where the passenger is; falls back to the search-time trip path
-  // and finally a straight haversine line when the fetch fails.
+  // Use an OSRM road-following geometry for the live first mile; never draw a
+  // straight-line fallback when the routing service cannot find a path.
   useEffect(() => {
+    if (!userLocation || pickupLat == null || pickupLon == null) return undefined;
     let cancelled = false;
-    if (userLocation && pickupLat != null && pickupLon != null) {
-      const fetchPath = async () => {
-        try {
-          const data = await getWalkingPath(
-            userLocation.latitude,
-            userLocation.longitude,
-            pickupLat,
-            pickupLon,
-          );
-          const coords = data?.path?.coordinates;
-          if (cancelled || !Array.isArray(coords) || coords.length < 2) return;
-          setWalkingPath({
-            type: "FeatureCollection",
-            features: [
-              {
-                type: "Feature",
-                properties: {},
-                geometry: { type: "LineString", coordinates: coords },
-              },
-            ],
-          });
-        } catch {
-          if (cancelled) return;
-          const backendCoords = searchWalkingPathCoords;
-          if (Array.isArray(backendCoords) && backendCoords.length >= 2) {
-            setWalkingPath({
-              type: "FeatureCollection",
-              features: [
-                {
-                  type: "Feature",
-                  properties: {},
-                  geometry: { type: "LineString", coordinates: backendCoords },
-                },
-              ],
-            });
-          } else {
-            setWalkingPath({
-              type: "FeatureCollection",
-              features: [
-                {
-                  type: "Feature",
-                  properties: {},
-                  geometry: {
-                    type: "LineString",
-                    coordinates: [
-                      [userLocation.longitude, userLocation.latitude],
-                      [pickupLon, pickupLat],
-                    ],
-                  },
-                },
-              ],
-            });
-          }
-        }
-      };
-      fetchPath();
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [userLocation, pickupLat, pickupLon, searchWalkingPathCoords]);
+    setWalkingPath(null);
+    setWalkingPathError(null);
+    getWalkingPath(
+      userLocation.latitude, userLocation.longitude, pickupLat, pickupLon, trip?.city_id,
+    ).then((result) => {
+      const coordinates = result?.path?.coordinates;
+      if (!cancelled && Array.isArray(coordinates) && coordinates.length > 1) {
+        setWalkingPath(result);
+      }
+    }).catch((error) => {
+      if (cancelled) return;
+      setWalkingPathError(error?.message || "Unable to find a road path to this pickup stop.");
+      if (__DEV__) console.warn("Unable to load road path to pickup stop", error);
+    });
+    return () => { cancelled = true; };
+  }, [userLocation, pickupLat, pickupLon, trip?.city_id]);
 
   // Continuous search ring pulse around the buddy location
   useEffect(() => {
@@ -419,42 +374,21 @@ export function BikeMapPreRideScreen({ navigation, route }) {
               "line-width": 5,
             }}
           />
-          {/* Walking path to the pickup stop. Declared after the route so it
-              renders on top, and `line-dasharray` belongs to layout (not paint)
-              in the MapLibre style spec. */}
-          <GeoJSONSource id="walkSource" data={walkingPath || EMPTY_FEATURE_COLLECTION} />
-          <Layer
-            id="walkCasingLayer"
-            type="line"
-            source="walkSource"
-            layout={{
-              "line-join": "round",
-              "line-cap": "round",
-              "line-dasharray": [0.6, 1.8],
-            }}
-            paint={{
-              "line-color": "#FFFFFF",
-              "line-width": 7,
-              "line-opacity": 0.9,
-            }}
+          <GeoJSONSource
+            id="walkingSource"
+            data={walkingPath ? toRouteGeoJSON({ path: walkingPath.path }) || EMPTY_FEATURE_COLLECTION : EMPTY_FEATURE_COLLECTION}
           />
           <Layer
-            id="walkLayer"
+            id="walkingLayer"
             type="line"
-            source="walkSource"
-            layout={{
-              "line-join": "round",
-              "line-cap": "round",
-              "line-dasharray": [0.6, 1.8],
-            }}
-            paint={{
-              "line-color": "#4F46E5",
-              "line-width": 3.5,
-              "line-opacity": 0.95,
-            }}
+            source="walkingSource"
+            layout={{ "line-join": "round", "line-cap": "round", "line-dasharray": [1.5, 1.5] }}
+            paint={{ "line-color": "#E99B24", "line-width": 4 }}
           />
           {routeStops.map((stop) => {
-            const coords = stop.location?.coordinates;
+            const coords = stop.road_access_point
+              ? [stop.road_access_point.lng, stop.road_access_point.lat]
+              : stop.location?.coordinates || [stop.lng ?? stop.lon, stop.lat];
             if (!coords || coords.length < 2) return null;
             const isPickup = stop.id === pickupStop?.id;
             const isDropoff = stop.id === dropoffStop?.id;
@@ -590,10 +524,14 @@ export function BikeMapPreRideScreen({ navigation, route }) {
             <Ionicons name="flag" size={19} color="#009849" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.cardLabel}>Nearest stop</Text>
-            <Text style={styles.cardDistance} numberOfLines={1}>
-              <Text style={styles.greenText}>{formatDistance(distNum)}</Text> away · {walkingTimeText(distNum)}
-            </Text>
+            <Text style={styles.cardLabel}>Road distance to pickup stop</Text>
+            {walkingPathError ? (
+              <Text style={styles.cardDistance}>{walkingPathError}</Text>
+            ) : (
+              <Text style={styles.cardDistance} numberOfLines={1}>
+                <Text style={styles.greenText}>{formatDistance(distNum)}</Text> away · {walkingTimeText(distNum)}
+              </Text>
+            )}
           </View>
           <View style={styles.etaBadge}>
             <Text style={styles.etaBadgeValue}>{isWalking ? walkingTimeValue(distNum) : `~${etaText}`}</Text>
@@ -639,8 +577,8 @@ export function BikeMapPreRideScreen({ navigation, route }) {
             <View style={[styles.sheetStatusDot, isNearby ? styles.sheetStatusDotReady : styles.sheetStatusDotAway]} />
             <Text style={[styles.sheetStatusText, isNearby ? styles.sheetStatusTextReady : styles.sheetStatusTextAway]}>
               {isNearby
-                ? "You're at the pickup stop. Raise your hand to notify nearby Marshals."
-                : `Get within ${ARRIVAL_THRESHOLD} m of ${pickupName} to raise your hand and notify nearby Marshals.`}
+                ? `You're within ${(HAND_RAISE_RADIUS_METERS / 1000).toFixed(0)} km of the pickup stop. Raise your hand to notify nearby Marshals.`
+                : `Get within ${(HAND_RAISE_RADIUS_METERS / 1000).toFixed(0)} km of ${pickupName} to raise your hand and notify nearby Marshals.`}
             </Text>
           </View>
 

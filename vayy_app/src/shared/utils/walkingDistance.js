@@ -1,4 +1,4 @@
-const WALKING_SPEED_MPS = 1.4; // ~5 km/h average walking speed
+const WALKING_SPEED_MPS = 1.33; // ~4.8 km/h average walking speed
 
 // Seconds -> human readable "45 sec" / "12 min" / "1 hr 20 min".
 function formatDuration(seconds) {

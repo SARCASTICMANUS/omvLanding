@@ -1250,11 +1250,14 @@ class AdminPendingDriversAPIView(APIView):
 
     def get(self, request):
         from operations.models import Vehicle
-        from django.db.models import Q
+        from django.db.models import F, Q
 
         # Drivers with vehicle pending approval
         pending_vehicles = Vehicle.objects.filter(
             status=VEHICLE_STATUS_PENDING,
+            vehicle_number__gt="",
+            driver__driver_profile__vehicle_number__gt="",
+            vehicle_number=F("driver__driver_profile__vehicle_number"),
         ).select_related("driver", "driver__driver_profile")
 
         pending_driver_ids = set()
@@ -1303,6 +1306,9 @@ class AdminPendingDriversAPIView(APIView):
         drivers_with_pending_docs = User.objects.filter(
             role__in=[ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER],
             documents__status=DOC_STATUS_PENDING,
+            driver_profile__vehicle_number__gt="",
+            assigned_vehicle__isnull=False,
+            assigned_vehicle__vehicle_number=F("driver_profile__vehicle_number"),
         ).exclude(
             id__in=pending_driver_ids
         ).select_related("driver_profile").distinct()
@@ -1377,9 +1383,30 @@ class AdminDriverVerifyAPIView(APIView):
             )
 
         if action == "approve":
-            # KYC is recalculated from approved required documents below; approving
-            # the vehicle must not independently force the profile to verified.
-            # Approve vehicle too
+            profile = PublicDriverProfile.objects.filter(user=driver).first()
+            vehicle = Vehicle.objects.filter(driver=driver).first()
+            if (
+                not profile
+                or not profile.vehicle_number.strip()
+                or not vehicle
+                or vehicle.vehicle_number.strip().upper() != profile.vehicle_number.strip().upper()
+            ):
+                return Response({
+                    "success": False,
+                    "code": "VEHICLE_KYC_REQUIRED",
+                    "message": "Add the driver's vehicle number and register the matching vehicle before approval.",
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            from accounts.services.verification_service import VerificationService
+            missing_slots = VerificationService.missing_required_slots(driver)
+            if missing_slots:
+                return Response({
+                    "success": False,
+                    "code": "DRIVER_DOCUMENTS_INCOMPLETE",
+                    "message": "Upload all required driver and vehicle documents before approval.",
+                    "missing_slots": missing_slots,
+                }, status=status.HTTP_400_BAD_REQUEST)
+
             Vehicle.objects.filter(driver=driver).update(
                 status=VEHICLE_STATUS_APPROVED,
                 is_active=True,
@@ -1392,7 +1419,6 @@ class AdminDriverVerifyAPIView(APIView):
                 verified_at=timezone.now(),
                 rejection_reason="",
             )
-            from accounts.services.verification_service import VerificationService
             VerificationService.check_and_verify_profile(driver)
 
             # Send notification
@@ -1549,7 +1575,7 @@ class FareConfigurationListCreateAPIView(APIView):
             "rounding_rule": config.rounding_rule if config else "none",
             "currency": config.currency if config else "INR",
             "corridor_m": config.corridor_m if config else 100,
-            "max_walk_to_stop_m": config.max_walk_to_stop_m if config else 1200,
+            "max_walk_to_stop_m": config.max_walk_to_stop_m if config else 3000,
             "is_active": config.is_active if config else True,
         }
 

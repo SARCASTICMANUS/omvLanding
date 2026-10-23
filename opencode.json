@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "figbridge": {
+      "type": "local",
+      "command": ["node", "F:/Figma/figbridge-mcp/dist/index.js"],
+      "enabled": true,
+      "environment": {
+        "DESIGN_TOOL_URL": "tcp://127.0.0.1:7979",
+        "ALLOW_WRITE": "true",
+        "EXPORTS_DIR": "F:/Figma/figbridge-mcp/exports",
+        "LOG_LEVEL": "info"
+      }
+    }
+  }
+}

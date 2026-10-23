@@ -6,6 +6,7 @@ from accounts.models import User, DriverDocument, PublicDriverProfile
 from common.constants import (
     DOC_STATUS_VERIFIED, DOC_STATUS_REJECTED,
     DOC_TYPE_LICENSE, DOC_TYPE_RC,
+    VEHICLE_STATUS_APPROVED,
 )
 from communication.services.notification_service import NotificationService
 
@@ -16,6 +17,54 @@ class VerificationService:
     """
     Handles administrative verification of driver documents and profiles.
     """
+
+    REQUIRED_SLOTS = {
+        "dlFront": DOC_TYPE_LICENSE, "dlBack": DOC_TYPE_LICENSE,
+        "rcFront": DOC_TYPE_RC, "rcBack": DOC_TYPE_RC,
+        "insuranceFront": "INSURANCE", "insuranceBack": "INSURANCE",
+        "aadhaarFront": "IDENTITY", "aadhaarBack": "IDENTITY", "selfie": "IDENTITY",
+    }
+    FALLBACK_SLOTS = {
+        DOC_TYPE_LICENSE: ["dlFront", "dlBack"], DOC_TYPE_RC: ["rcFront", "rcBack"],
+        "INSURANCE": ["insuranceFront", "insuranceBack"],
+        "IDENTITY": ["aadhaarFront", "aadhaarBack", "selfie"],
+    }
+
+    @classmethod
+    def document_slots(cls, user):
+        slot_docs = {key: [] for key in cls.REQUIRED_SLOTS}
+        unkeyed = []
+        for doc in DriverDocument.objects.filter(driver=user).order_by("created_at"):
+            if doc.doc_key in slot_docs and doc.document_type == cls.REQUIRED_SLOTS[doc.doc_key]:
+                slot_docs[doc.doc_key].append(doc)
+            elif doc.document_type in cls.FALLBACK_SLOTS:
+                unkeyed.append(doc)
+        for doc in unkeyed:
+            for key in cls.FALLBACK_SLOTS[doc.document_type]:
+                if not slot_docs[key]:
+                    slot_docs[key].append(doc)
+                    break
+        return slot_docs
+
+    @classmethod
+    def missing_required_slots(cls, user):
+        slots = cls.document_slots(user)
+        return [key for key, docs in slots.items() if not docs]
+
+    @staticmethod
+    def has_approved_vehicle(user):
+        profile = PublicDriverProfile.objects.filter(user=user).only("vehicle_number").first()
+        vehicle_number = (profile.vehicle_number or "").strip() if profile else ""
+        if not vehicle_number:
+            return False
+        from operations.models import Vehicle
+
+        return Vehicle.objects.filter(
+            driver=user,
+            vehicle_number__iexact=vehicle_number,
+            status=VEHICLE_STATUS_APPROVED,
+            is_active=True,
+        ).exists()
 
     @staticmethod
     @transaction.atomic
@@ -65,35 +114,13 @@ class VerificationService:
 
     @staticmethod
     def check_and_verify_profile(user: User):
-        """Persist verified status only after all nine required upload slots pass review."""
-        required_slots = {
-            "dlFront": DOC_TYPE_LICENSE, "dlBack": DOC_TYPE_LICENSE,
-            "rcFront": DOC_TYPE_RC, "rcBack": DOC_TYPE_RC,
-            "insuranceFront": "INSURANCE", "insuranceBack": "INSURANCE",
-            "aadhaarFront": "IDENTITY", "aadhaarBack": "IDENTITY", "selfie": "IDENTITY",
-        }
-        fallback_slots = {
-            DOC_TYPE_LICENSE: ["dlFront", "dlBack"], DOC_TYPE_RC: ["rcFront", "rcBack"],
-            "INSURANCE": ["insuranceFront", "insuranceBack"],
-            "IDENTITY": ["aadhaarFront", "aadhaarBack", "selfie"],
-        }
-        documents = list(DriverDocument.objects.filter(driver=user).order_by("created_at"))
-        slot_docs = {key: [] for key in required_slots}
-        unkeyed = []
-        for doc in documents:
-            if doc.doc_key in slot_docs and doc.document_type == required_slots[doc.doc_key]:
-                slot_docs[doc.doc_key].append(doc)
-            elif doc.document_type in fallback_slots:
-                unkeyed.append(doc)
-        for doc in unkeyed:
-            for key in fallback_slots.get(doc.document_type, []):
-                if not slot_docs[key]:
-                    slot_docs[key].append(doc)
-                    break
-        should_be_verified = all(
+        """Verify only when the driver, registered vehicle, and all required docs pass."""
+        slot_docs = VerificationService.document_slots(user)
+        docs_verified = all(
             slot_docs[key] and all(doc.status == DOC_STATUS_VERIFIED for doc in slot_docs[key])
-            for key in required_slots
+            for key in VerificationService.REQUIRED_SLOTS
         )
+        should_be_verified = docs_verified and VerificationService.has_approved_vehicle(user)
         try:
             profile = user.driver_profile
         except PublicDriverProfile.DoesNotExist:

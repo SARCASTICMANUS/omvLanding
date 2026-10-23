@@ -29,9 +29,17 @@ from rest_framework.test import APIClient
 
 from accounts.services.wallet_service import WalletService
 from accounts.models import (
+    DriverDocument,
     PublicDriverProfile,
     PublicPassengerProfile,
     User,
+)
+from common.constants import (
+    DOC_STATUS_VERIFIED,
+    DOC_TYPE_IDENTITY,
+    DOC_TYPE_INSURANCE,
+    DOC_TYPE_LICENSE,
+    DOC_TYPE_RC,
 )
 from operations.models import (
     ActiveTrip,
@@ -92,7 +100,7 @@ class DriverDisplayNameTests(TestCase):
 
 class VerificationStatusTests(TestCase):
     """
-    A verified account must not be told to verify again.
+    Driver verification requires both reviewed documents and an approved vehicle.
 
     ``not_submitted`` and ``unverified`` both render a non-dismissible modal, so
     reporting them for an account that is already verified locks the user out of
@@ -110,18 +118,47 @@ class VerificationStatusTests(TestCase):
         self.assertEqual(res.status_code, 200, res.data)
         return res.data["data"]["status"]
 
-    def test_verified_user_without_documents_is_verified(self):
+    def test_legacy_verified_driver_without_vehicle_is_not_verified(self):
         driver = User.objects.create_user(
             email="vs-driver", password="x", role="bikedriver", is_verified=True
         )
-        PublicDriverProfile.objects.create(user=driver, is_verified=True)
-        self.assertEqual(self._status(driver), "verified")
+        PublicDriverProfile.objects.create(user=driver, is_verified=True, vehicle_number="")
+        self.assertEqual(self._status(driver), "not_submitted")
 
-    def test_verified_profile_alone_is_enough(self):
+    def test_profile_flag_and_approved_vehicle_without_documents_is_not_verified(self):
         driver = User.objects.create_user(
-            email="vs-driver2", password="x", role="bikedriver"
+            email="vs-driver2", password="x", role="bikedriver", otp_verified=True
         )
-        PublicDriverProfile.objects.create(user=driver, is_verified=True)
+        PublicDriverProfile.objects.create(user=driver, is_verified=True, vehicle_number="VS-2")
+        Vehicle.objects.create(
+            driver=driver, vehicle_number="VS-2", vehicle_type="bike",
+            status="approved", is_active=True,
+        )
+        self.assertEqual(self._status(driver), "not_submitted")
+
+    def test_verified_driver_requires_all_documents_and_an_approved_vehicle(self):
+        driver = User.objects.create_user(
+            email="vs-driver3", password="x", role="bikedriver", otp_verified=True
+        )
+        PublicDriverProfile.objects.create(user=driver, vehicle_number="VS-3")
+        Vehicle.objects.create(
+            driver=driver, vehicle_number="VS-3", vehicle_type="bike",
+            status="approved", is_active=True,
+        )
+        docs = [
+            ("dlFront", DOC_TYPE_LICENSE), ("dlBack", DOC_TYPE_LICENSE),
+            ("rcFront", DOC_TYPE_RC), ("rcBack", DOC_TYPE_RC),
+            ("insuranceFront", DOC_TYPE_INSURANCE), ("insuranceBack", DOC_TYPE_INSURANCE),
+            ("aadhaarFront", DOC_TYPE_IDENTITY), ("aadhaarBack", DOC_TYPE_IDENTITY),
+            ("selfie", DOC_TYPE_IDENTITY),
+        ]
+        DriverDocument.objects.bulk_create([
+            DriverDocument(
+                driver=driver, doc_key=doc_key, document_type=doc_type,
+                status=DOC_STATUS_VERIFIED, file_data="test",
+            )
+            for doc_key, doc_type in docs
+        ])
         self.assertEqual(self._status(driver), "verified")
 
     def test_verified_passenger_is_not_locked_out(self):
@@ -137,6 +174,36 @@ class VerificationStatusTests(TestCase):
             email="vs-unverified", password="x", role="bikedriver"
         )
         self.assertEqual(self._status(driver), "not_submitted")
+
+
+class VehicleKYCRequestGuardTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(email="kyc-admin@example.test", password="x")
+        self.driver = User.objects.create_user(
+            email="kyc-driver@example.test", password="x", role="bikedriver", otp_verified=True,
+        )
+        PublicDriverProfile.objects.create(user=self.driver)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin)
+
+    def test_document_upload_without_vehicle_is_not_a_verification_request(self):
+        DriverDocument.objects.create(
+            driver=self.driver, document_type="LICENSE", doc_key="dlFront", file_data="test",
+        )
+
+        response = self.client.get("/api/operations/admin/drivers/pending/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(str(self.driver.id), [row["id"] for row in response.data["data"]])
+
+    def test_admin_cannot_approve_driver_without_vehicle_registration(self):
+        response = self.client.patch(
+            f"/api/operations/admin/drivers/{self.driver.id}/verify/",
+            {"action": "approve"}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["code"], "VEHICLE_KYC_REQUIRED")
 
 
 class AcceptPayloadContractTests(TestCase):

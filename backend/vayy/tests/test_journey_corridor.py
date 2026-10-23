@@ -21,6 +21,7 @@ depend on the runner.
 """
 
 from decimal import Decimal
+from math import degrees
 from unittest.mock import patch
 
 from django.contrib.gis.geos import LineString, Point
@@ -43,6 +44,7 @@ from operations.api.serializers import BoardingRequestSerializer
 from operations.models import ActiveTrip, BoardingRequest, DispatchRequest, Vehicle, VehicleState
 from operations.services.dispatch_service import DispatchService
 from operations.services.journey_service import JourneyService
+from tracking.api.serializers import PassengerRaiseHandSerializer
 from tracking.services.corridor_service import CorridorService
 from tracking.services.journey_cache_service import JourneyCacheService
 from transport.models import City, Route, Stop
@@ -408,6 +410,45 @@ class TestPassingVehicles(JourneyTestBase):
 
 
 class TestRaiseHandAtGlobalStop(JourneyTestBase):
+    def test_server_enforces_3_kilometer_limit_for_global_stops(self):
+        stop = self.make_stop("Boarding Stop", NEAR_STOP)
+        # A latitude delta uses the same spherical radius as the API distance.
+        just_inside = PassengerRaiseHandSerializer(data={
+            "pickup_stop_id": str(stop.id),
+            "lat": stop.location.y + degrees(2999 / 6_371_000),
+            "lng": stop.location.x,
+        })
+        self.assertTrue(just_inside.is_valid(), just_inside.errors)
+
+        at_limit = PassengerRaiseHandSerializer(data={
+            "pickup_stop_id": str(stop.id),
+            "lat": stop.location.y + degrees(3000 / 6_371_000),
+            "lng": stop.location.x,
+        })
+        self.assertTrue(at_limit.is_valid(), at_limit.errors)
+
+        outside = PassengerRaiseHandSerializer(data={
+            "pickup_stop_id": str(stop.id),
+            "lat": stop.location.y + degrees(3001 / 6_371_000),
+            "lng": stop.location.x,
+        })
+        self.assertFalse(outside.is_valid())
+        self.assertIn("3000 meters", str(outside.errors))
+
+    def test_server_enforces_3_kilometer_limit_for_route_stops_too(self):
+        route = self.make_route()
+        pickup = self.make_route_stop("P1", NEAR_STOP, order=1, route=route)
+        drop = self.make_route_stop("D1", DESTINATION, order=2, route=route)
+        outside = PassengerRaiseHandSerializer(data={
+            "route_id": str(route.id),
+            "pickup_stop_id": str(pickup.id),
+            "dropoff_stop_id": str(drop.id),
+            "lat": pickup.location.y + degrees(3001 / 6_371_000),
+            "lng": pickup.location.x,
+        })
+        self.assertFalse(outside.is_valid())
+        self.assertIn("3000 meters", str(outside.errors))
+
     def test_hand_near_the_stop_notifies_passing_drivers(self):
         stop = self.make_stop("Boarding Stop", NEAR_STOP)
         self.start_journey()

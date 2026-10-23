@@ -455,6 +455,8 @@ class ChangePasswordAPIView(APIView):
         return resp
 
 def _driver_verification_payload(user):
+    from accounts.services.verification_service import VerificationService
+
     """Canonical KYC state; OTP/account verification is separate from document verification."""
     is_driver = user.role in (ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER)
     docs = DriverDocument.objects.filter(driver=user).order_by("created_at") if is_driver else DriverDocument.objects.none()
@@ -504,16 +506,16 @@ def _driver_verification_payload(user):
         slot_docs[key] and all(doc.get("status") == DOC_STATUS_VERIFIED for doc in slot_docs[key])
         for key, _, _ in required
     )
-    profile = PublicDriverProfile.objects.filter(user=user).only("is_verified").first()
-    legacy_verified_without_docs = bool(profile and profile.is_verified and not relevant)
-    if legacy_verified_without_docs:
-        stage, status_value, message = "fully_verified", "verified", "Your driver profile is verified."
-    elif not user.otp_verified:
+    vehicle_verified = VerificationService.has_approved_vehicle(user)
+    if not user.otp_verified:
         stage = "email_pending"
         status_value = "not_submitted" if not relevant else "pending"
         message = "Verify your email before completing driver verification."
     elif rejected:
         stage, status_value, message = "docs_rejected", "rejected", "One or more required documents were rejected. Please replace the rejected documents."
+    elif not vehicle_verified:
+        stage, status_value = "docs_pending", "not_submitted" if not relevant else "pending"
+        message = "Add your vehicle number, registration, and vehicle documents before verification can be completed."
     elif all_approved:
         stage, status_value, message = "fully_verified", "verified", "All required driver documents have been verified."
     elif missing:

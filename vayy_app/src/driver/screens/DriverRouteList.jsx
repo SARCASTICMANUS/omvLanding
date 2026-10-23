@@ -31,16 +31,20 @@ function RouteCard({ item, index, pickup, destination, onSelect, expanded, onTog
   const stops = item?.stops || [];
 
   const startLabel =
-    // pickup?.name ||
-    // pickup?.display_name?.split(",")?.[0]?.trim() ||
-    // firstStop?.name ||
-    item.pickup_stop.name ||
+    item?.pickup_stop?.name ||
+    pickup?.name ||
+    pickup?.display_name?.split(",")?.[0]?.trim() ||
+    item?.source_name ||
+    item?.start_name ||
+    stops[0]?.name ||
     "--";
   const endLabel =
-    // destination?.name ||
-    // destination?.display_name?.split(",")?.[0]?.trim() ||
-    // lastStop?.name ||
-    item.dropoff_stop.name ||
+    item?.dropoff_stop?.name ||
+    destination?.name ||
+    destination?.display_name?.split(",")?.[0]?.trim() ||
+    item?.destination_name ||
+    item?.end_name ||
+    stops[stops.length - 1]?.name ||
     "--";
 
   const fare = item?.fare;

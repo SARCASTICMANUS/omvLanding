@@ -1,4 +1,4 @@
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 
 /**
  * Convert a file URI (from expo-image-picker) to a base64 data string.
@@ -7,10 +7,7 @@ import * as FileSystem from "expo-file-system";
 export async function uriToBase64(uri) {
   if (!uri) return null;
   try {
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    return base64;
+    return await FileSystem.readAsStringAsync(uri, { encoding: "base64" });
   } catch (err) {
     console.warn("[uriToBase64] FAILED:", uri?.substring(0, 80), err?.message);
     return null;

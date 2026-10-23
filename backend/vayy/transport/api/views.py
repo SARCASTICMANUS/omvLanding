@@ -2,7 +2,6 @@ import logging
 from uuid import UUID
 import json
 from typing import Dict, Any, List
-from math import radians, sin, cos, sqrt, atan2
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.views import APIView
@@ -31,6 +30,7 @@ from transport.api.serializers import (
     NearbyStopSerializer,
     RouteListSerializer,
     RouteDetailSerializer,
+    RouteStopMembershipInputSerializer,
     StopSerializer,
     TripScheduleSerializer,
     StopTimeSerializer,
@@ -39,7 +39,7 @@ from transport.api.serializers import (
     RouteSearchResponseSerializer,
     DriverRouteSearchResponseSerializer,
 )
-from transport.models import City, Stop, Route, TripSchedule, StopTime
+from transport.models import City, CityAdminConfiguration, Stop, Route, RouteStopAssociation, TripSchedule, StopTime
 from tracking.services.eta_service import ETAService
 from tracking.services.geo_service import GeoService
 from transport.selectors.city_selector import CitySelector
@@ -528,10 +528,16 @@ class RouteSearchByLocationAPIView(APIView):
         })
 
 
-class RoutePreviewInputSerializer(serializers.Serializer):
-    lat = serializers.FloatField()
-    lon = serializers.FloatField()
-    name = serializers.CharField(required=False, default="")
+class RoutePreviewPointSerializer(serializers.Serializer):
+    lat = serializers.FloatField(min_value=-90.0, max_value=90.0)
+    lon = serializers.FloatField(min_value=-180.0, max_value=180.0)
+    name = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class RoutePreviewRequestSerializer(serializers.Serializer):
+    start = RoutePreviewPointSerializer()
+    end = RoutePreviewPointSerializer()
+    stops = RoutePreviewPointSerializer(many=True, required=False, default=list, max_length=100)
 
 class DriverRouteListAPIView(APIView):
     """
@@ -557,45 +563,25 @@ class RoutePreviewAPIView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        try:
-            start_data = request.data.get("start")
-            end_data = request.data.get("end")
-            stops_data = request.data.get("stops", [])
-
-            if not start_data or not end_data:
-                return Response(
-                    {"success": False, "message": "Start and end are required"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            # Build waypoints: start → stops → end
-            waypoints = [(start_data["lon"], start_data["lat"])]
-            for stop in stops_data:
-                waypoints.append((stop["lon"], stop["lat"]))
-            waypoints.append((end_data["lon"], end_data["lat"]))
-
-            result = OSRMService.route(*waypoints)
-            routes = result.get("routes", []) if result else []
-
-            previews = []
-            for i, route in enumerate(routes):
-                coords = route.get("geometry", {}).get("coordinates", [])
-                previews.append({
-                    "path": coords,
-                    "distance": route.get("distance", 0),
-                    "duration": route.get("duration", 0),
-                })
-
-            logger.info(f"[RoutePreview] Generated {len(previews)} route previews for {len(waypoints)} waypoints")
-            resp = Response(previews, status=status.HTTP_200_OK)
-            return resp
-
-        except Exception as e:
-            logger.exception("[RoutePreview] Route preview failed")
-            return Response(
-                {"success": False, "message": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        request_serializer = RoutePreviewRequestSerializer(data=request.data)
+        request_serializer.is_valid(raise_exception=True)
+        data = request_serializer.validated_data
+        waypoints = [data["start"], *data["stops"], data["end"]]
+        coordinates = [(point["lon"], point["lat"]) for point in waypoints]
+        result = OSRMService.get_road_path_through(*coordinates)
+        if not result:
+            return Response({
+                "success": False,
+                "code": "ROAD_GEOMETRY_UNAVAILABLE",
+                "message": "The road router could not produce a valid route through every selected stop.",
+            }, status=status.HTTP_502_BAD_GATEWAY)
+        geometry = result["geometry"]
+        logger.info("[RoutePreview] Generated road preview through %s waypoints", len(waypoints))
+        return Response([{
+            "path": geometry["coordinates"],
+            "distance": result["distance"],
+            "duration": result["duration"],
+        }], status=status.HTTP_200_OK)
 
 class PassengersAlongRouteAPIView(APIView):
     """
@@ -756,18 +742,18 @@ class RoadDistanceAPIView(APIView):
 
 
 class WalkingPathInputSerializer(serializers.Serializer):
-    origin_lat = serializers.FloatField()
-    origin_lng = serializers.FloatField()
-    dest_lat = serializers.FloatField()
-    dest_lng = serializers.FloatField()
+    city_id = serializers.UUIDField(required=False)
+    origin_lat = serializers.FloatField(min_value=-90, max_value=90)
+    origin_lng = serializers.FloatField(min_value=-180, max_value=180)
+    dest_lat = serializers.FloatField(min_value=-90, max_value=90)
+    dest_lng = serializers.FloatField(min_value=-180, max_value=180)
 
 
 class WalkingPathAPIView(APIView):
     """
     POST /api/transport/walking-path/
-    Returns the road path (GeoJSON LineString) plus distance/duration between
-    two coordinates via OSRM. Used to draw the walking route from the
-    passenger's current location to the nearest stop.
+    Returns a road-following path and human walking-time estimate. When no
+    pedestrian OSRM profile is configured, the configured road profile is used.
 
     Request:
     {
@@ -796,12 +782,26 @@ class WalkingPathAPIView(APIView):
         origin = (serializer.validated_data["origin_lng"], serializer.validated_data["origin_lat"])
         dest = (serializer.validated_data["dest_lng"], serializer.validated_data["dest_lat"])
 
-        result = OSRMService.get_road_path(origin, dest)
+        result = OSRMService.get_walking_path(origin, dest)
         if not result or not result.get("geometry"):
             return Response(
-                {"success": False, "message": "OSRM routing failed", "data": None},
+                {"success": False, "code": "WALKING_DIRECTIONS_UNAVAILABLE", "message": "Pedestrian routing failed", "data": None},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+
+        city_id = serializer.validated_data.get("city_id")
+        city_config = CityAdminConfiguration.objects.filter(
+            city_id=city_id, is_active=True,
+        ).first() if city_id else None
+        max_walk_m = city_config.max_walk_to_stop_m if city_config else 3000
+        if result["distance"] > max_walk_m:
+            return Response({
+                "success": False,
+                "code": "WALKING_PATH_TOO_FAR",
+                "message": f"Your current location is too far to walk to this pickup stop (limit {max_walk_m} m).",
+                "max_walk_m": max_walk_m,
+                "data": None,
+            }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         return Response({
             "success": True,
@@ -809,6 +809,8 @@ class WalkingPathAPIView(APIView):
                 "path": result["geometry"],
                 "distance_m": result["distance"],
                 "duration_s": result["duration"],
+                "duration_is_estimate": result["duration_is_estimate"],
+                "profile": result["profile"],
             },
         })
 
@@ -933,6 +935,81 @@ class AdminRouteViewSet(viewsets.ModelViewSet):
         super().destroy(request, *args, **kwargs)
         return Response({"success": True, "message": "Route deleted"}, status=status.HTTP_200_OK)
 
+    def perform_create(self, serializer):
+        if serializer.validated_data.get("is_public", True):
+            raise serializers.ValidationError({"is_public": "Create routes as private drafts; add an ordered stop sequence before publishing."})
+        serializer.save()
+
+    @action(detail=True, methods=["put"], url_path="ordered-stops")
+    def ordered_stops(self, request, pk=None):
+        route = self.get_object()
+        route_data = {}
+        stop_payload = request.data
+        if isinstance(request.data, dict):
+            stop_payload = request.data.get("stops", [])
+            route_serializer = RouteDetailSerializer(route, data={
+                key: request.data[key]
+                for key in ("path", "total_distance_meters", "start_name", "end_name")
+                if key in request.data
+            }, partial=True)
+            route_serializer.is_valid(raise_exception=True)
+            route_data = route_serializer.validated_data
+            if "path" in route_data and "total_distance_meters" not in route_data:
+                raise serializers.ValidationError({"total_distance_meters": "Distance is required when updating route geometry."})
+        serializer = RouteStopMembershipInputSerializer(data=stop_payload, many=True)
+        serializer.is_valid(raise_exception=True)
+        rows = serializer.validated_data
+        stop_ids = [row["stop_id"] for row in rows]
+        orders = [row["order"] for row in rows]
+        if len(set(stop_ids)) != len(stop_ids):
+            raise serializers.ValidationError({"stops": "A stop can appear only once in a route direction."})
+        if len(set(orders)) != len(orders):
+            raise serializers.ValidationError({"stops": "Stop order values must be unique."})
+        if orders and sorted(orders) != list(range(min(orders), min(orders) + len(orders))):
+            raise serializers.ValidationError({"stops": "Stop order values must form a continuous sequence."})
+        stops = {stop.pk: stop for stop in Stop.objects.filter(
+            pk__in=stop_ids, city_id=route.city_id, is_global=True, route__isnull=True,
+        )}
+        missing = [str(stop_id) for stop_id in stop_ids if stop_id not in stops]
+        if missing:
+            raise serializers.ValidationError({"stops": "Every stop must be an existing global stop in this route's city."})
+        if route.is_public and len(rows) < 2:
+            raise serializers.ValidationError({"stops": "A public route needs at least two ordered stops."})
+        if rows and "path" not in route_data:
+            raise serializers.ValidationError({"path": "Actual road geometry through the ordered stops is required."})
+
+        with transaction.atomic():
+            route.route_stop_associations.all().delete()
+            RouteStopAssociation.objects.bulk_create([
+                RouteStopAssociation(
+                    route=route, stop=stops[row["stop_id"]], order=row["order"],
+                    boarding_allowed=row["boarding_allowed"],
+                    alighting_allowed=row["alighting_allowed"],
+                ) for row in rows
+            ])
+            path_data = route_data.pop("path", None)
+            if path_data:
+                route_data["path"] = LineString(path_data["coordinates"], srid=4326)
+            if route_data:
+                for field, value in route_data.items():
+                    setattr(route, field, value)
+                route.save(update_fields=[*route_data.keys(), "updated_at"])
+        route.refresh_from_db()
+        return Response({"success": True, "data": RouteDetailSerializer(route, context=self.get_serializer_context()).data})
+
+    def perform_update(self, serializer):
+        will_be_public = serializer.validated_data.get("is_public", serializer.instance.is_public)
+        if will_be_public:
+            association_orders = list(serializer.instance.route_stop_associations.order_by("order").values_list("order", flat=True))
+            has_associations = (
+                len(association_orders) >= 2 and
+                association_orders == list(range(association_orders[0], association_orders[0] + len(association_orders)))
+            )
+            has_legacy_stops = serializer.instance.stops.count() >= 2
+            if not (has_associations or has_legacy_stops):
+                raise serializers.ValidationError({"is_public": "A public route needs at least two ordered stops."})
+        serializer.save()
+
 
 class AdminStopViewSet(viewsets.ModelViewSet):
     """Admin stop CRUD plus the filtered, paginated table contract used by Dynamic Routing."""
@@ -988,6 +1065,7 @@ class AdminStopViewSet(viewsets.ModelViewSet):
             "aliases": stop.aliases or ([stop.name] if stop.name else []),
             "route": str(stop.route_id) if stop.route_id else None,
             "order": stop.order,
+            "distance_m": round(stop.search_distance.m, 1) if getattr(stop, "search_distance", None) is not None else None,
         }
 
     def list(self, request, *args, **kwargs):
@@ -996,6 +1074,22 @@ class AdminStopViewSet(viewsets.ModelViewSet):
         search = (request.query_params.get("q") or request.query_params.get("search") or "").strip()
         if search:
             qs = qs.filter(name__icontains=search)
+        if request.query_params.get("has_coordinates") == "1":
+            qs = qs.filter(location__isnull=False)
+        near_lat = request.query_params.get("near_lat")
+        near_lng = request.query_params.get("near_lng")
+        if (near_lat is None) != (near_lng is None):
+            return Response({"success": False, "message": "near_lat and near_lng must be provided together."}, status=400)
+        if near_lat is not None:
+            try:
+                lat, lng = float(near_lat), float(near_lng)
+                radius_m = float(request.query_params.get("radius_m", 5000))
+            except (TypeError, ValueError):
+                return Response({"success": False, "message": "Geographic filter coordinates and radius must be numeric."}, status=400)
+            if not (-90 <= lat <= 90) or not (-180 <= lng <= 180) or not (1 <= radius_m <= 50000):
+                return Response({"success": False, "message": "Coordinates are out of range or radius_m must be between 1 and 50000."}, status=400)
+            point = Point(lng, lat, srid=4326)
+            qs = qs.filter(location__distance_lte=(point, D(m=radius_m))).annotate(search_distance=Distance("location", point))
         qs = self._coordinate_filter(qs, request.query_params.get("coordinate_status") or request.query_params.get("status"))
         serviceable = request.query_params.get("serviceable")
         if serviceable == "1":
@@ -1008,7 +1102,8 @@ class AdminStopViewSet(viewsets.ModelViewSet):
         except (TypeError, ValueError):
             return Response({"success": False, "message": "limit and offset must be valid non-negative integers."}, status=400)
         count = qs.count()
-        rows = [self._table_row(stop) for stop in qs.order_by("name", "id")[offset:offset + limit]]
+        ordering = ("search_distance", "name", "id") if near_lat is not None else ("name", "id")
+        rows = [self._table_row(stop) for stop in qs.order_by(*ordering)[offset:offset + limit]]
         return Response({"success": True, "count": count, "total": count, "limit": limit,
                          "offset": offset, "results": rows, "data": rows}, status=200)
 
@@ -1280,47 +1375,16 @@ class AdminRouteImportAPIView(APIView):
 
         stops_data.sort(key=lambda s: s["order"])
 
-        osrm_coords = [(s["lon"], s["lat"]) for s in stops_data]
-        all_waypoints = list(range(len(osrm_coords)))
+        road_route = OSRMService.get_road_path_through(*[(s["lon"], s["lat"]) for s in stops_data])
+        if not road_route:
+            return Response({
+                "success": False,
+                "code": "ROAD_GEOMETRY_UNAVAILABLE",
+                "message": "The road router could not produce valid geometry through every imported stop. No route was created.",
+            }, status=status.HTTP_502_BAD_GATEWAY)
 
-        logger.info(f"IMPORT: Routing {len(osrm_coords)} stops via OSRM: {osrm_coords[:3]}...")
-
-        osrm_result = OSRMService.route(
-            *osrm_coords,
-            geometries="geojson",
-            overview="full",
-            waypoints=all_waypoints,
-        )
-
-        road_coords = []
-        total_distance = 0
-
-        if osrm_result and osrm_result.get("routes"):
-            route_geom = osrm_result["routes"][0]
-            geometry = route_geom.get("geometry", {})
-            coords = geometry.get("coordinates", [])
-            if geometry.get("type") == "LineString" and len(coords) >= 2:
-                road_coords = [tuple(c) for c in coords]
-                total_distance = route_geom.get("distance", 0)
-                logger.info(f"IMPORT: OSRM returned {len(road_coords)} geometry points, distance={total_distance}m")
-            else:
-                logger.warning(f"IMPORT: OSRM geometry invalid: type={geometry.get('type')}, coords={len(coords)}")
-        else:
-            err = osrm_result.get("code") if osrm_result else "no response"
-            logger.warning(f"IMPORT: OSRM failed: {err}, result={osrm_result}")
-
-        if not road_coords:
-            logger.info("IMPORT: Falling back to straight-line geometry")
-            road_coords = osrm_coords
-            for i in range(len(road_coords) - 1):
-                lon1, lat1 = road_coords[i]
-                lon2, lat2 = road_coords[i + 1]
-                R = 6371000
-                dlat = radians(lat2 - lat1)
-                dlon = radians(lon2 - lon1)
-                a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
-                total_distance += R * 2 * atan2(sqrt(a), sqrt(1 - a))
-
+        road_coords = road_route["geometry"]["coordinates"]
+        total_distance = road_route["distance"]
         path = LineString(road_coords, srid=4326)
 
         with transaction.atomic():
@@ -1354,7 +1418,7 @@ class AdminRouteImportAPIView(APIView):
             "data": {
                 "route": RouteDetailSerializer(route).data,
                 "stops_created": len(stop_objs),
-                "road_snapped": len(road_coords) > len(osrm_coords),
+                "road_snapped": True,
                 "geometry_points": len(road_coords),
                 "message": f"Route imported with {len(stop_objs)} stops and {len(road_coords)} road-snapped geometry points",
             },

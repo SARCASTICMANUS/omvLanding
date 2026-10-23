@@ -143,6 +143,7 @@ services:
       - sh
       - -c
       - |
+        set -eu
         REGION="$${OSRM_REGION:-india}"
         mkdir -p "/data/$$REGION"
         if [ ! -f "/data/$$REGION/map.osm.pbf" ]; then
@@ -159,13 +160,14 @@ services:
         fi
 
   osrm:
-    image: osrm/osrm-backend:latest
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
     environment:
       OSRM_REGION: ${OSRM_REGION:-india}
     ports:
       - "5000:5000"
     volumes:
       - ./backend/vayy/osrm:/data
+      - ./backend/vayy/osrm_profiles/major_roads.lua:/opt/major_roads.lua:ro
     depends_on:
       osrm-download:
         condition: service_completed_successfully
@@ -174,16 +176,28 @@ services:
       - -c
       - |
         REGION="$${OSRM_REGION:-india}"
-        mkdir -p "/data/$$REGION"
-        if [ ! -f "/data/$$REGION/map.osrm.ready" ]; then
-          echo "Preparing map for $$REGION (one-time, may take a while)"
-          rm -f "/data/$$REGION"/map.osrm*
-          osrm-extract -p /opt/car.lua "/data/$$REGION/map.osm.pbf" &&
-            osrm-partition "/data/$$REGION/map.osrm" &&
-            osrm-customize "/data/$$REGION/map.osrm" &&
-            touch "/data/$$REGION/map.osrm.ready"
+        PROFILE="/opt/major_roads.lua"
+        PROFILE_SHA="$$(sha256sum "$$PROFILE" | cut -d ' ' -f 1)"
+        GRAPH="/data/$$REGION/major-roads-$$PROFILE_SHA"
+        PBF="/data/$$REGION/map.osm.pbf"
+        mkdir -p "$$GRAPH"
+        if [ "$$(cat "$$GRAPH/profile.sha256" 2>/dev/null || true)" != "$$PROFILE_SHA" ] ||
+           [ ! -s "$$GRAPH/map.osrm.mldgr" ] || [ ! -s "$$GRAPH/map.osrm.cell_metrics" ]; then
+          [ -s "$$PBF" ] || { echo "ERROR: missing existing OSM extract: $$PBF" >&2; exit 1; }
+          echo "Building major-road OSRM graph for $$REGION from existing PBF"
+          rm -f "$$GRAPH"/map.osrm* "$$GRAPH/map.osm.pbf" "$$GRAPH/profile.sha256"
+          ln -s "../map.osm.pbf" "$$GRAPH/map.osm.pbf"
+          osrm-extract -t 2 -p "$$PROFILE" "$$GRAPH/map.osm.pbf"
+          osrm-partition -t 1 "$$GRAPH/map.osrm"
+          osrm-customize -t 1 "$$GRAPH/map.osrm"
+          for suffix in partition cells cell_metrics mldgr; do
+            [ -s "$$GRAPH/map.osrm.$$suffix" ] || { echo "ERROR: incomplete custom graph: map.osrm.$$suffix missing" >&2; exit 1; }
+          done
+          printf '%s\n' "$$PROFILE_SHA" > "$$GRAPH/profile.sha256.tmp"
+          mv "$$GRAPH/profile.sha256.tmp" "$$GRAPH/profile.sha256"
         fi
-        exec osrm-routed --algorithm mld "/data/$$REGION/map.osrm"
+        echo "Serving major-road OSRM graph $$GRAPH profile=$$PROFILE_SHA"
+        exec osrm-routed --algorithm mld "$$GRAPH/map.osrm"
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/5000' 2>/dev/null || exit 1"]
       interval: 30s

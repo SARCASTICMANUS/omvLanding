@@ -18,6 +18,8 @@ import {
   loadSanitizedMapStyle,
   convertInitialRegion,
   DEFAULT_CENTER,
+  isDefaultMapCenter,
+  getInitialMapZoom,
   MAPTILER_STYLE,
 } from "./mapUtils";
 
@@ -308,8 +310,39 @@ const VayyMap = forwardRef(function VayyMap(
       zoom: 14,
     };
 
+  const shouldResolveDeviceCenter = isDefaultMapCenter(viewState.center);
+
+  // If no explicit city/route coordinate was supplied, center on the browser's
+  // live location when available. An explicit map center is never overridden.
+  useEffect(() => {
+    if (
+      !shouldResolveDeviceCenter ||
+      typeof navigator === "undefined" ||
+      !navigator.geolocation
+    ) return undefined;
+
+    let cancelled = false;
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (cancelled) return;
+        const nextCenter = [position.coords.longitude, position.coords.latitude];
+        centerRef.current = nextCenter;
+        const map = glInstance();
+        if (map) {
+          map.easeTo({ center: nextCenter, zoom: viewState.zoom ?? 14, duration: 0 });
+        }
+      },
+      () => {
+        // Keep the neutral fallback if browser location is denied or unavailable.
+      },
+      { enableHighAccuracy: true, maximumAge: 60000, timeout: 5000 },
+    );
+
+    return () => { cancelled = true; };
+  }, [shouldResolveDeviceCenter, viewState.zoom, glInstance]);
+
   const center = toCenter(viewState.center);
-  zoomRef.current = viewState.zoom ?? 14;
+  zoomRef.current = getInitialMapZoom(viewState.center, viewState.zoom);
   bearingRef.current = viewState.bearing || 0;
   pitchRef.current = viewState.pitch || 0;
   centerRef.current = center;
@@ -419,7 +452,7 @@ const VayyMap = forwardRef(function VayyMap(
         initialViewState={{
           longitude: center[0],
           latitude: center[1],
-          zoom: viewState.zoom ?? 14,
+          zoom: getInitialMapZoom(viewState.center, viewState.zoom),
           pitch: viewState.pitch ?? 0,
           bearing: viewState.bearing ?? 0,
         }}

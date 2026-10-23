@@ -28,7 +28,9 @@ import PageToolbar from "../components/PageToolbar";
 //   action endpoints -> { success, message, data }
 const rowsOf = (body) => (Array.isArray(body) ? body : body?.results || []);
 const errMsg = (err, fallback) =>
-  err?.response?.data?.message || err?.response?.data?.detail || fallback;
+  err?.response?.data?.message || err?.response?.data?.detail || err?.response?.data?.error ||
+  (err?.response?.status ? `${fallback} (HTTP ${err.response.status}).` : null) ||
+  err?.message || fallback;
 
 const STATUS_STYLES = {
   verified: "glass-badge-success",
@@ -104,7 +106,7 @@ function CitiesPanel({ cities, onReload, notify }) {
             platform_fee: "0",
             rounding_rule: "none",
             corridor_m: "100",
-            max_walk_to_stop_m: "1200",
+            max_walk_to_stop_m: "3000",
             is_active: true,
           }
     );
@@ -344,17 +346,25 @@ function CitiesPanel({ cities, onReload, notify }) {
 
 function UploadPanel({ cities, onReload, notify }) {
   const [file, setFile] = useState(null);
+  const [geometryFile, setGeometryFile] = useState(null);
   const [citySlug, setCitySlug] = useState("");
   const [cityName, setCityName] = useState("");
   const [fare, setFare] = useState("");
+  const [importFormat, setImportFormat] = useState("existing");
   const [mode, setMode] = useState("validate");
   const [report, setReport] = useState(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef(null);
+  const geometryFileRef = useRef(null);
+  const simpleNoidaImport = importFormat === "noida_route_stops";
 
   const submit = async (asMode) => {
     if (!file) {
       alert("Choose a file first.");
+      return;
+    }
+    if (simpleNoidaImport && citySlug !== "noida") {
+      alert("Select the existing Noida city before previewing this file.");
       return;
     }
     setBusy(true);
@@ -362,20 +372,27 @@ function UploadPanel({ cities, onReload, notify }) {
     try {
       const fd = new FormData();
       fd.append("file", file);
+      if (!simpleNoidaImport && geometryFile) fd.append("geometry_file", geometryFile);
       fd.append("mode", asMode);
+      if (simpleNoidaImport) fd.append("import_format", "noida_route_stops");
       if (citySlug) fd.append("city_slug", citySlug);
       if (cityName) fd.append("city_name", cityName);
       if (fare) fd.append("fare_per_km", fare);
-      const res = await api.post("/transport/admin/onboarding/", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      if (asMode === "apply" && report?.apply_token) {
+        fd.append("apply_token", report.apply_token);
+      }
+      // Leave multipart Content-Type to the browser so it adds the matching
+      // boundary required by Django's MultiPartParser.
+      const res = await api.post("/transport/admin/onboarding/", fd);
       setReport(res.data?.data || null);
       if (asMode === "apply") {
-        notify(`Imported into ${cityName || citySlug}`);
+        notify(res.data?.message || `Imported into ${cityName || citySlug}`);
         setFile(null);
+        setGeometryFile(null);
         setCityName("");
         setFare("");
         if (fileRef.current) fileRef.current.value = "";
+        if (geometryFileRef.current) geometryFileRef.current.value = "";
         onReload();
       }
     } catch (err) {
@@ -396,62 +413,116 @@ function UploadPanel({ cities, onReload, notify }) {
           disabled={busy || !file}
           className="glass-btn-secondary flex items-center gap-2 disabled:opacity-50"
         >
-          <FileSpreadsheet size={16} /> Dry run
+          <FileSpreadsheet size={16} /> {simpleNoidaImport ? "Preview" : "Dry run"}
         </button>
         <button
           onClick={() => submit("apply")}
-          disabled={busy || !file || !report}
+          disabled={busy || !file || !report?.apply_token || report?.can_apply === false || report?.applied}
           className="glass-btn-primary flex items-center gap-2 disabled:opacity-50"
           title={!report ? "Run a dry run first — it shows exactly what would change" : ""}
         >
-          <Upload size={16} /> {mode === "apply" && busy ? "Importing…" : "Apply import"}
+          <Upload size={16} /> {mode === "apply" && busy ? "Importing…" : simpleNoidaImport ? "Import" : "Apply import"}
         </button>
       </PageToolbar>
 
       <div className="glass-card p-6 mb-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <Field label="File" required hint="CSV, XLSX or JSON · route-corpus format is detected automatically">
+          <Field label="Import format" required>
+            <select
+              className="glass-select"
+              value={importFormat}
+              onChange={(e) => {
+                const nextFormat = e.target.value;
+                setImportFormat(nextFormat);
+                setReport(null);
+                if (nextFormat === "noida_route_stops") {
+                  setCitySlug("noida");
+                  setCityName("");
+                  setFare("");
+                  setGeometryFile(null);
+                  if (geometryFileRef.current) geometryFileRef.current.value = "";
+                }
+              }}
+            >
+              <option value="existing">Existing route corpus / master CSV</option>
+              <option value="noida_route_stops">Simple Noida route-stop rows</option>
+            </select>
+          </Field>
+          <Field
+            label="File"
+            required
+            hint={simpleNoidaImport
+              ? "CSV, XLSX or XLSM. One row per ordered stop; coordinates and stop_sequence are required."
+              : "CSV, XLSX or JSON · route-corpus format is detected automatically"}
+          >
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,.txt,.xlsx,.xlsm,.json"
+              accept={simpleNoidaImport ? ".csv,.xlsx,.xlsm" : ".csv,.xlsx,.xlsm,.json"}
               onChange={(e) => { setFile(e.target.files?.[0] || null); setReport(null); }}
               className="glass-input py-2"
             />
           </Field>
-          <Field label="Into city" hint="Pick an existing city, or type a new name below">
+          {!simpleNoidaImport && (
+            <Field label="Route geometry" hint="Required for routes. Version 1 GeoJSON features use city_id + route_id + route_geometry_id">
+              <input
+                ref={geometryFileRef}
+                type="file"
+                accept=".geojson,.json,application/geo+json,application/json"
+                onChange={(e) => { setGeometryFile(e.target.files?.[0] || null); setReport(null); }}
+                className="glass-input py-2"
+              />
+            </Field>
+          )}
+          <Field label={simpleNoidaImport ? "City (Noida only)" : "Into city / master CSV filter"} hint={simpleNoidaImport ? "This importer only accepts rows for the existing Noida city." : "For schema version 1, select the existing city whose rows should be validated or applied"}>
             <select
               className="glass-select" value={citySlug}
-              onChange={(e) => { setCitySlug(e.target.value); if (e.target.value) setCityName(""); }}
+              disabled={simpleNoidaImport}
+              onChange={(e) => { setCitySlug(e.target.value); if (e.target.value) setCityName(""); setReport(null); }}
             >
-              <option value="">— new city —</option>
-              {cities.map((c) => (
+              {!simpleNoidaImport && <option value="">— new city —</option>}
+              {cities.filter((c) => !simpleNoidaImport || c.slug === "noida").map((c) => (
                 <option key={c.slug} value={c.slug}>{c.name} ({c.stop_count} stops)</option>
               ))}
             </select>
           </Field>
-          <Field label="New city name" hint={citySlug ? "Ignored — an existing city is selected" : ""}>
-            <input
-              className="glass-input" value={cityName} disabled={!!citySlug}
-              onChange={(e) => setCityName(e.target.value)}
-              placeholder="Kanpur"
-            />
-          </Field>
-          <Field label="Fare per km (₹)" hint="Optional — only used when creating a new city">
-            <input
-              className="glass-input" type="number" step="0.25" min="0" value={fare}
-              onChange={(e) => setFare(e.target.value)} placeholder="9"
-            />
-          </Field>
+          {!simpleNoidaImport && (
+            <>
+              <Field label="New city name" hint={citySlug ? "Ignored — an existing city is selected" : ""}>
+                <input
+                  className="glass-input" value={cityName} disabled={!!citySlug}
+                  onChange={(e) => { setCityName(e.target.value); setReport(null); }}
+                  placeholder="Kanpur"
+                />
+              </Field>
+              <Field label="Fare per km (₹)" hint="Optional — only used when creating a new city">
+                <input
+                  className="glass-input" type="number" step="0.25" min="0" value={fare}
+                  onChange={(e) => { setFare(e.target.value); setReport(null); }} placeholder="9"
+                />
+              </Field>
+            </>
+          )}
         </div>
 
         <div className="glass-card-subtle p-4 mt-5">
           <p className="text-xs text-slate-500 font-medium leading-relaxed">
-            <strong className="text-slate-700">Dry run first.</strong> It parses the file and
-            reports the plan without writing anything — you see conflicts, unresolved rows and how
-            many stops already exist before anything changes. Coordinates are never invented: a row
-            with no coordinates is kept as an explicit UNRESOLVED record, and an out-of-range or
-            (0, 0) pair is rejected outright.
+            {simpleNoidaImport ? (
+              <>
+                <strong className="text-slate-700">Required columns:</strong>{" "}
+                <code>city_id, route_id, route_name, route_number, direction_id, stop_sequence, stop_id, stop_name, latitude, longitude</code>.
+                Preview validates complete route directions. Import makes valid Noida routes searchable and preserves each supplied stop sequence.
+              </>
+            ) : (
+              <>
+                <strong className="text-slate-700">Dry run first.</strong> Legacy CSV/XLSX rows may use
+                <code> stop_name,lat,lng </code> with optional <code>route_name,route_code,sequence</code>,
+                or one route per row with a JSON <code>stops_ordered</code> column. Version 1 master CSV
+                rows use one ordered route-stop association per row and are filtered by the selected city.
+                Upload its matching city-qualified GeoJSON. Apply requires a clean Dry Run for the same
+                files and city. Routes stay private and stops provisional until reviewed.
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -477,10 +548,20 @@ function UploadPanel({ cities, onReload, notify }) {
           </p>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-            <Metric label="Rows read" value={report.report?.rows} />
-            <Metric label="Stop instances" value={report.report?.stop_instances} />
-            <Metric label="Unique stops" value={report.report?.unique_names} />
-            <Metric label="Serviceable" value={report.report?.serviceable} />
+            <Metric label={simpleNoidaImport ? "Total rows" : "Rows read"} value={report.report?.rows} />
+            {simpleNoidaImport ? (
+              <>
+                <Metric label="Valid rows" value={report.report?.valid_rows} />
+                <Metric label="Invalid rows" value={report.report?.invalid_rows} />
+                <Metric label="Routes detected" value={report.report?.routes_detected} />
+              </>
+            ) : (
+              <>
+                <Metric label="Stop instances" value={report.report?.stop_instances} />
+                <Metric label="Unique stops" value={report.report?.unique_names} />
+                <Metric label="Serviceable" value={report.report?.serviceable} />
+              </>
+            )}
             {!report.applied && (
               <>
                 <Metric label="Already present" value={report.report?.already_present} />
@@ -489,12 +570,14 @@ function UploadPanel({ cities, onReload, notify }) {
             )}
             {report.applied && (
               <>
-                <Metric label="Created" value={report.report?.created} />
-                <Metric label="Updated" value={report.report?.updated} />
+                <Metric label={simpleNoidaImport ? "Routes imported" : "Created"} value={simpleNoidaImport ? report.report?.routes_imported : report.report?.created} />
+                <Metric label={simpleNoidaImport ? "Stops imported" : "Updated"} value={simpleNoidaImport ? report.report?.stops_imported : report.report?.updated} />
               </>
             )}
-            <Metric label="Conflicts" value={(report.report?.conflicts || []).length} />
-            <Metric label="Unresolved" value={report.report?.unresolved} />
+            {!simpleNoidaImport && <>
+              <Metric label="Conflicts" value={(report.report?.conflicts || []).length} />
+              <Metric label="Unresolved" value={report.report?.unresolved} />
+            </>}
           </div>
 
           {report.report?.status_breakdown && (
@@ -506,15 +589,19 @@ function UploadPanel({ cities, onReload, notify }) {
             </p>
           )}
 
-          <NotesList title="Conflicts (routing is disabled for these)" notes={report.report?.conflicts} />
-          <NotesList title="Errors (rows rejected)" notes={report.errors} />
+          {!simpleNoidaImport && <NotesList title="Conflicts (routing is disabled for these)" notes={report.report?.conflicts} />}
+          <NotesList title="Errors (rows rejected)" notes={report.errors || report.invalid} />
+          <NotesList title="Blocking validation errors" notes={report.blocking_errors} />
           <NotesList title="Warnings (rows kept but not routable)" notes={report.warnings} />
+          <NotesList title="Routes missing source geometry" notes={report.routes_missing_geometry} />
 
           <div className="mt-5 glass-card-subtle p-4">
             <p className="text-xs text-slate-500">
               Target: <strong>{targetLabel}</strong>
-              {report.applied
-                ? " — re-importing is non-destructive: stops are matched on (city, name) so existing trips keep working."
+              {simpleNoidaImport && report.applied
+                ? " — imported route directions are searchable; stop order follows stop_sequence."
+                : report.applied
+                ? " — imported routes remain private; changed or removed stop positions require review before publishing."
                 : " — nothing has been written yet."}
             </p>
           </div>
@@ -548,7 +635,7 @@ function Metric({ label, value }) {
 function NotesList({ title, notes }) {
   if (!notes || notes.length === 0) return null;
   const items = notes.map((n) =>
-  typeof n === "string" ? n : n.error || n.warning || JSON.stringify(n)
+  typeof n === "string" ? n : n.row ? `Row ${n.row}: ${n.reason || n.error || "invalid row"}` : n.error || n.warning || JSON.stringify(n)
 );
   return (
     <div className="mt-4">

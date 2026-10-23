@@ -1,4 +1,5 @@
 from rest_framework import serializers
+import math
 from django.contrib.gis.geos import LineString, Point
 from django.db.models import Q
 from django.utils.text import slugify
@@ -71,7 +72,7 @@ class AdminCitySerializer(serializers.ModelSerializer):
         defaults = {
             "currency": "INR", "fare_per_km": 8, "platform_fee": 0,
             "rounding_rule": "none", "corridor_m": 100,
-            "max_walk_to_stop_m": 1200, "is_active": True,
+            "max_walk_to_stop_m": 3000, "is_active": True,
         }
         for field, default in defaults.items():
             value = getattr(config, field, default) if config else default
@@ -246,6 +247,7 @@ class RouteListSerializer(
             "city",
             "name",
             "route_code",
+            "direction_name",
             "city_name",
             "path",
             "start_name",
@@ -256,7 +258,8 @@ class RouteListSerializer(
         )
 
     def get_stops_count(self, obj):
-        return obj.stops.count() if hasattr(obj, 'stops') else 0
+        membership_count = obj.route_stop_associations.count()
+        return membership_count or obj.stops.count()
 
     def get_path(self, instance):
         if instance.path is None:
@@ -278,7 +281,8 @@ class RouteDetailSerializer(
         read_only=True,
     )
 
-    path = serializers.SerializerMethodField()
+    path = serializers.JSONField(required=False)
+    route_memberships = serializers.SerializerMethodField()
 
     class Meta:
         model = Route
@@ -288,27 +292,67 @@ class RouteDetailSerializer(
             "city",
             "name",
             "route_code",
+            "direction_name",
             "path",
             "start_name",
             "end_name",
             "total_distance_meters",
             "is_public",
             "stops",
+            "route_memberships",
             "schedules",
             "created_at",
             "updated_at",
         )
 
-    def get_path(self, instance):
-        if instance.path is None:
-            return None
-        import json
-        return json.loads(instance.path.geojson)
+    def validate_path(self, value):
+        if not isinstance(value, dict) or value.get("type") != "LineString":
+            raise serializers.ValidationError("Provide a GeoJSON LineString road geometry.")
+        coordinates = value.get("coordinates")
+        if not isinstance(coordinates, list) or len(coordinates) < 2:
+            raise serializers.ValidationError("Road geometry must contain at least two coordinates.")
+        normalized = []
+        for coordinate in coordinates:
+            if not isinstance(coordinate, (list, tuple)) or len(coordinate) != 2:
+                raise serializers.ValidationError("Each road coordinate must be [longitude, latitude].")
+            lon, lat = coordinate
+            if isinstance(lon, bool) or isinstance(lat, bool):
+                raise serializers.ValidationError("Road coordinates must be numeric.")
+            try:
+                lon, lat = float(lon), float(lat)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError("Road coordinates must be numeric.")
+            if not math.isfinite(lon) or not math.isfinite(lat) or not (-180 <= lon <= 180) or not (-90 <= lat <= 90):
+                raise serializers.ValidationError("Road coordinates must be valid longitude/latitude values.")
+            normalized.append((lon, lat))
+        return {"coordinates": normalized}
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        representation['city'] = CitySerializer(instance.city).data
+        if instance.path is None:
+            representation["path"] = None
+        else:
+            import json
+            representation["path"] = json.loads(instance.path.geojson)
+        representation["city"] = CitySerializer(instance.city).data
         return representation
+
+    def validate(self, attrs):
+        if self.instance is None and "path" not in attrs:
+            raise serializers.ValidationError({"path": "Actual road geometry is required to create a route."})
+        return attrs
+
+    def get_route_memberships(self, instance):
+        return [{
+            "id": str(item.stop_id),
+            "association_id": str(item.id),
+            "name": item.stop.name,
+            "aliases": item.stop.aliases,
+            "location": {"type": "Point", "coordinates": [item.stop.location.x, item.stop.location.y]},
+            "order": item.order,
+            "boarding_allowed": item.boarding_allowed and item.stop.boarding_allowed,
+            "alighting_allowed": item.alighting_allowed and item.stop.alighting_allowed,
+        } for item in instance.route_stop_associations.select_related("stop").order_by("order")]
 
     def create(self, validated_data):
         path_data = validated_data.pop('path', None)
@@ -321,6 +365,13 @@ class RouteDetailSerializer(
         if path_data:
             validated_data['path'] = LineString(path_data['coordinates'], srid=4326)
         return super().update(instance, validated_data)
+
+
+class RouteStopMembershipInputSerializer(serializers.Serializer):
+    stop_id = serializers.UUIDField()
+    order = serializers.IntegerField(min_value=0)
+    boarding_allowed = serializers.BooleanField(required=False, default=True)
+    alighting_allowed = serializers.BooleanField(required=False, default=True)
 
 
 class DriverRouteStopSerializer(serializers.ModelSerializer):
@@ -404,6 +455,7 @@ class RouteSearchInputSerializer(serializers.Serializer):
     origin_lng = serializers.FloatField(min_value=-180, max_value=180)
     dest_lat = serializers.FloatField(min_value=-90, max_value=90)
     dest_lng = serializers.FloatField(min_value=-180, max_value=180)
+    city_id = serializers.UUIDField(required=False)
     radius = serializers.IntegerField(required=False, default=5000, min_value=100, max_value=10000)
     role = serializers.ChoiceField(
         choices=("passenger", "driver"),

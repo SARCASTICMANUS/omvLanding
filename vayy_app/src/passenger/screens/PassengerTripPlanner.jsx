@@ -17,7 +17,8 @@ import {
 import { StatusBar } from "expo-status-bar";
 import * as Location from "expo-location";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { getRecentSearches, saveRecentSearch, searchRoutesByLocation } from "../services/passengerService";
+import { getRecentSearches, saveRecentSearch } from "../services/passengerService";
+import { dynamicPreview } from "../../routes/services/routeService";
 import LocationSearch from "../../shared/components/common/LocationSearch";
 import { NOMINATIM_REVERSE } from "../../constants/geocoding";
 
@@ -72,6 +73,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
   const [recentSearches, setRecentSearches] = useState([]);
   const [fetchingRecent, setFetchingRecent] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
   const [locating, setLocating] = useState(false);
   const loading = route?.params?.loading || false;
   const mode = route?.params?.mode || "auto";
@@ -181,6 +183,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
     }
 
     setSearching(true);
+    setSearchError("");
 
     try {
       // Fire-and-forget: saving a recent search must never delay the route
@@ -194,18 +197,29 @@ export default function PassengerTripPlanner({ navigation, route }) {
         destination_lon: destination.lon,
       });
 
-      const trips = await searchRoutesByLocation(
-        pickup.lat,
-        pickup.lon,
-        destination.lat,
-        destination.lon,
-        undefined,
-        { vehicleType: isBike ? "bike" : "auto" },
-      );
+      // Generate the A-to-B road route first; live driver matching happens
+      // after the passenger reaches a suitable stop and raises a hand.
+      const preview = await dynamicPreview({
+        origin: pickup,
+        destination,
+        vehicleType: isBike ? "bike" : "auto",
+        audience: "passenger",
+      });
+      const trips = Array.isArray(preview?.routes) ? preview.routes : [];
 
-      navigation.navigate("PassengerRouteList", { pickup, destination, mode, trips, loading: false });
+      navigation.navigate("PassengerRouteList", {
+        pickup,
+        destination,
+        mode,
+        trips,
+        emptyReason: preview?.emptyReason,
+        emptyMessage: preview?.emptyMessage,
+        loading: false,
+        routePreviewCached: Boolean(preview?.cached),
+      });
     } catch (error) {
       console.error("Search failed:", error);
+      setSearchError(error?.message || "Route search failed. Check your connection and try again.");
     } finally {
       setSearching(false);
     }
@@ -333,6 +347,11 @@ export default function PassengerTripPlanner({ navigation, route }) {
           {searching || loading ? "Searching..." : isBike ? "Search Bike Rides" : "Search Vayy Rides"}
         </Text>
       </TouchableOpacity>
+      {searchError ? (
+        <Text accessibilityRole="alert" style={styles.searchError}>
+          {searchError}
+        </Text>
+      ) : null}
 
       <View style={styles.recentSection}>
         <Text style={styles.recentHeading}>RECENT SEARCHES</Text>
@@ -548,6 +567,11 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "800",
+  },
+  searchError: {
+    color: "#B42318",
+    fontSize: 13,
+    marginTop: 10,
   },
   recentSection: {
     flex: 1,

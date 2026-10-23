@@ -9,7 +9,7 @@ from django.contrib.gis.measure import D
 from django.contrib.gis.db.models.functions import Distance, ClosestPoint, Cast
 from django.contrib.gis.db.models import GeometryField
 
-from transport.models import Route, Stop
+from transport.models import Route, RouteStopAssociation, Stop
 from transport.services.osrm_service import OSRMService
 from operations.services.fare_service import FareService
 from common.constants import VEHICLE_AUTO
@@ -26,6 +26,134 @@ class RouteSearchService:
     WALKING_SPEED_MPS = 1.33  # ~4.8 km/h standard walking speed
 
     @classmethod
+    def find_associated_route_pairs(cls, city_id, pickup_candidates, destination_candidates, limit=30):
+        """Match global stop candidates against ordered route memberships.
+
+        Legacy route-owned Stop rows remain searchable. New memberships point
+        at the existing global Stop row, so discovering a stop never copies it.
+        """
+        endpoint_ids = {stop.pk for stop in (*pickup_candidates, *destination_candidates)}
+        if not endpoint_ids:
+            return []
+
+        memberships_by_stop = defaultdict(list)
+        route_ids = set()
+
+        associations = RouteStopAssociation.objects.filter(
+            route__city_id=city_id,
+            route__is_public=True,
+            stop_id__in=endpoint_ids,
+            stop__city_id=city_id,
+            stop__is_global=True,
+        ).select_related("route", "stop")
+        for item in associations:
+            route_ids.add(item.route_id)
+            memberships_by_stop[item.stop_id].append({
+                "route": item.route,
+                "stop": item.stop,
+                "order": item.order,
+                "boarding_allowed": item.boarding_allowed and item.stop.boarding_allowed,
+                "alighting_allowed": item.alighting_allowed and item.stop.alighting_allowed,
+            })
+
+        legacy_stops = Stop.objects.filter(
+            pk__in=endpoint_ids,
+            route__city_id=city_id,
+            route__is_public=True,
+        ).select_related("route")
+        for stop in legacy_stops:
+            route_ids.add(stop.route_id)
+            memberships_by_stop[stop.pk].append({
+                "route": stop.route,
+                "stop": stop,
+                "order": stop.order,
+                "boarding_allowed": stop.boarding_allowed,
+                "alighting_allowed": stop.alighting_allowed,
+            })
+
+        if not route_ids:
+            return []
+
+        ordered_by_route = defaultdict(list)
+        all_associations = RouteStopAssociation.objects.filter(
+            route_id__in=route_ids,
+            route__city_id=city_id,
+            route__is_public=True,
+            stop__city_id=city_id,
+            stop__is_global=True,
+        ).select_related("route", "stop")
+        for item in all_associations:
+            ordered_by_route[item.route_id].append({
+                "stop": item.stop,
+                "order": item.order,
+                "boarding_allowed": item.boarding_allowed and item.stop.boarding_allowed,
+                "alighting_allowed": item.alighting_allowed and item.stop.alighting_allowed,
+            })
+
+        # Once a route has explicit global-stop memberships, that sequence is
+        # authoritative. Keep legacy route-owned stops as a fallback only.
+        legacy_route_ids = set(route_ids) - set(ordered_by_route)
+        for stop in Stop.objects.filter(route_id__in=legacy_route_ids).select_related("route"):
+            ordered_by_route[stop.route_id].append({
+                "stop": stop,
+                "order": stop.order,
+                "boarding_allowed": stop.boarding_allowed,
+                "alighting_allowed": stop.alighting_allowed,
+            })
+
+        for route_id, rows in ordered_by_route.items():
+            rows.sort(key=lambda row: row["order"])
+
+        pairs = []
+        for pickup in pickup_candidates:
+            for dropoff in destination_candidates:
+                if pickup.pk == dropoff.pk:
+                    continue
+                for from_member in memberships_by_stop.get(pickup.pk, ()):
+                    if not from_member["boarding_allowed"]:
+                        continue
+                    route = from_member["route"]
+                    sequence = ordered_by_route[route.pk]
+                    # A route with cross-table order collisions is not a valid
+                    # ordered direction; do not pick an arbitrary ordering.
+                    orders = [row["order"] for row in sequence]
+                    stop_ids = [row["stop"].pk for row in sequence]
+                    if (
+                        len(orders) != len(set(orders))
+                        or len(stop_ids) != len(set(stop_ids))
+                        or len(sequence) < 2
+                    ):
+                        continue
+                    for to_member in memberships_by_stop.get(dropoff.pk, ()):
+                        if (
+                            to_member["route"].pk != route.pk
+                            or not to_member["alighting_allowed"]
+                            or from_member["order"] >= to_member["order"]
+                        ):
+                            continue
+                        pairs.append({
+                            "route": route,
+                            "pickup_stop": pickup,
+                            "dropoff_stop": dropoff,
+                            "pickup_order": from_member["order"],
+                            "dropoff_order": to_member["order"],
+                            "first_mile_proximity_m": pickup.distance_m.m,
+                            "last_mile_proximity_m": dropoff.distance_m.m,
+                            "stops": sequence,
+                        })
+
+        pairs.sort(key=lambda pair: (
+            pair["first_mile_proximity_m"] + pair["last_mile_proximity_m"],
+            str(pair["route"].pk),
+            pair["pickup_order"],
+            pair["dropoff_order"],
+        ))
+        best_by_route = {}
+        for pair in pairs:
+            best_by_route.setdefault(pair["route"].pk, pair)
+        return list(best_by_route.values())[:max(1, min(int(limit), 100))]
+
+    @classmethod
     def search_routes(
         cls,
         origin_lat: float,
@@ -33,13 +161,14 @@ class RouteSearchService:
         dest_lat: float,
         dest_lng: float,
         radius: int,
+        city_id=None,
     ) -> List[Dict[str, Any]]:
         origin_point = Point(origin_lng, origin_lat, srid=4326)
         dest_point = Point(dest_lng, dest_lat, srid=4326)
         search_radius = D(m=radius)
 
         # 1. Spatial Filtering
-        candidate_pairs = cls._find_candidate_pairs(origin_point, dest_point, search_radius)
+        candidate_pairs = cls._find_candidate_pairs(origin_point, dest_point, search_radius, city_id=city_id)
         if not candidate_pairs:
             return []
 
@@ -52,16 +181,23 @@ class RouteSearchService:
 
     @classmethod
     def _find_candidate_pairs(
-        cls, origin_point: Point, dest_point: Point, search_radius: D
+        cls, origin_point: Point, dest_point: Point, search_radius: D, city_id=None
     ) -> List[Dict[str, Any]]:
         search_radius_m = search_radius.m
 
         # Single spatial query using PostGIS spatial index
+        stop_query = Stop.objects.filter(
+            Q(location__distance_lte=(origin_point, search_radius))
+            | Q(location__distance_lte=(dest_point, search_radius)),
+            route__isnull=False,
+            route__is_public=True,
+            coordinate_status="verified",
+        )
+        if city_id is not None:
+            stop_query = stop_query.filter(route__city_id=city_id)
+
         stops_list = list(
-            Stop.objects.filter(
-                Q(location__distance_lte=(origin_point, search_radius))
-                | Q(location__distance_lte=(dest_point, search_radius))
-            )
+            stop_query
             .annotate(
                 dist_to_origin=Distance("location", origin_point),
                 dist_to_dest=Distance("location", dest_point),
@@ -72,6 +208,8 @@ class RouteSearchService:
                 "order",
                 "location",
                 "name",
+                "boarding_allowed",
+                "alighting_allowed",
                 "dist_to_origin",
                 "dist_to_dest",
                 "cumulative_distance_m",
@@ -101,9 +239,9 @@ class RouteSearchService:
             stop["dist_to_origin_m"] = dist_orig_m
             stop["dist_to_dest_m"] = dist_dest_m
 
-            if dist_orig_m <= search_radius_m:
+            if dist_orig_m <= search_radius_m and stop["boarding_allowed"]:
                 origin_by_route[stop["route_id"]].append(stop)
-            if dist_dest_m <= search_radius_m:
+            if dist_dest_m <= search_radius_m and stop["alighting_allowed"]:
                 dest_by_route[stop["route_id"]].append(stop)
 
         common_route_ids = origin_by_route.keys() & dest_by_route.keys()
@@ -201,7 +339,7 @@ class RouteSearchService:
 
         # Query all stops for top routes
         all_stops_qs = (
-            Stop.objects.filter(route_id__in=top_route_ids)
+            Stop.objects.filter(route_id__in=top_route_ids, coordinate_status="verified")
             .order_by("route_id", "order")
             .values(
                 "route_id",

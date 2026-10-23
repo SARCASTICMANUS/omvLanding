@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from common.constants import (
     JOURNEY_CORRIDOR_RADIUS_M,
+    PASSENGER_HAND_RAISE_RADIUS_M,
     TRIP_STATUS_ACTIVE,
 )
 from tracking.models import HybridLog
@@ -298,8 +299,6 @@ class PassengerRaiseHandSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        from common.constants import PASSENGER_STOP_RADIUS_M
-
         route_id = attrs["route_id"]
         pickup_id = attrs["pickup_stop_id"]
         dropoff_id = attrs["dropoff_stop_id"]
@@ -308,6 +307,20 @@ class PassengerRaiseHandSerializer(serializers.Serializer):
         if not pickup:
             raise serializers.ValidationError(
                 {"pickup_stop_id": "Pickup stop not found."}
+            )
+
+        distance_m = GeoService.haversine_m(
+            attrs["lat"], attrs["lng"], pickup.location.y, pickup.location.x
+        )
+        # Allow centimetre-scale floating point noise at the inclusive limit.
+        if distance_m > PASSENGER_HAND_RAISE_RADIUS_M + 0.01:
+            raise serializers.ValidationError(
+                {
+                    "pickup_stop_id": (
+                        f"You must be within {PASSENGER_HAND_RAISE_RADIUS_M} meters "
+                        "of the stop to raise your hand."
+                    )
+                }
             )
 
         if route_id:
@@ -337,18 +350,6 @@ class PassengerRaiseHandSerializer(serializers.Serializer):
             # Journey-scoped: the hand is raised at a stop, so the passenger has
             # to actually be there. Without this, a passenger anywhere could name
             # any global stop and be served by drivers passing it.
-            distance_m = GeoService.haversine_m(
-                attrs["lat"], attrs["lng"], pickup.location.y, pickup.location.x
-            )
-            if distance_m > PASSENGER_STOP_RADIUS_M:
-                raise serializers.ValidationError(
-                    {
-                        "pickup_stop_id": (
-                            f"You must be within {PASSENGER_STOP_RADIUS_M // 1000} km "
-                            "of the stop to raise your hand."
-                        )
-                    }
-                )
             if dropoff_id and str(dropoff_id) == str(pickup_id):
                 raise serializers.ValidationError(
                     "Pickup and dropoff stops must be different."
