@@ -111,7 +111,6 @@ export function AutoDiscoveryScreen({ navigation }) {
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
-          grayscale
           initialRegion={{
             latitude: MAP_CENTER.latitude,
             longitude: MAP_CENTER.longitude,

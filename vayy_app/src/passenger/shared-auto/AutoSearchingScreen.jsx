@@ -259,7 +259,6 @@ export function AutoSearchingScreen({ navigation, route }) {
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
-          grayscale
           scrollEnabled={true}
           zoomEnabled={true}
           initialViewState={

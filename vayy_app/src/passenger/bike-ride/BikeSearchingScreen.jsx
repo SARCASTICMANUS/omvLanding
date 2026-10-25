@@ -461,7 +461,6 @@ export function BikeSearchingScreen({ navigation, route }) {
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
-          grayscale
           initialViewState={{
             center: currentPosition ? [currentPosition.longitude, currentPosition.latitude] : [80.8, 26.8],
             zoom: 15,

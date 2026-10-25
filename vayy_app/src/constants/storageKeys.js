@@ -16,10 +16,10 @@ export const STORAGE_KEYS = {
   // Notifications that arrived while the app was backgrounded or killed and
   // have not been surfaced in the UI yet.
   pushQueue: "@vayy_push_queue",
-  // Last resolved service city (id + name + centroid + resolvedAt), so the
-  // dynamic-preview call can send an explicit city_id instead of relying on
-  // the backend to guess one from the pickup coordinate.
+  // Cached service-city catalogue and refresh time.
   serviceCity: "@vayy_service_city",
+  // Passenger home's current city selection (automatically detected or manual).
+  selectedServiceCity: "@vayy_selected_service_city",
 };
 
 export default STORAGE_KEYS;

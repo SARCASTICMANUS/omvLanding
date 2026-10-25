@@ -9,11 +9,19 @@ import {
   Image,
   ScrollView,
   Animated,
+  Modal,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { setVehicleMode } from "../../store/slices/vehicleModeSlice";
 import { MaterialIcons } from "@expo/vector-icons";
 import { NOMINATIM_REVERSE } from "../../constants";
+import {
+  clearSelectedServiceCity,
+  loadSelectedServiceCity,
+  loadServiceCities,
+  saveSelectedServiceCity,
+} from "../../routes/services/serviceCityResolver";
+import { findNearestServiceCity } from "../../routes/services/serviceCityMatching";
 
 const AUTO_IMG = require("../../../assets/vayySideAuto.webp");
 const BIKE_IMG = require("../../../assets/vayyPulsureBike.webp");
@@ -83,6 +91,11 @@ export default function PassengerHomeScreen({ navigation }) {
     return String(c);
   })();
   const [currentLoc, setCurrentLoc] = useState(safeCityName);
+  const [cities, setCities] = useState([]);
+  const [selectedCity, setSelectedCity] = useState(null);
+  const [showCityPicker, setShowCityPicker] = useState(false);
+  const [loadingCities, setLoadingCities] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [greeting, setGreeting] = useState("");
   const [subLine, setSubLine] = useState("");
   const [showName, setShowName] = useState(false);
@@ -90,6 +103,9 @@ export default function PassengerHomeScreen({ navigation }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const cursorRef = useRef(new Animated.Value(1)).current;
+  const locatingRef = useRef(false);
+  const manualCityChoiceRef = useRef(false);
+  const citySelectionVersionRef = useRef(0);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -110,26 +126,102 @@ export default function PassengerHomeScreen({ navigation }) {
     return () => pulse.stop();
   }, []);
 
-    const handleGetLocation = useCallback(async () => {
+  const handleGetLocation = useCallback(async ({ forceAuto = false } = {}) => {
+    if (locatingRef.current) return;
+    locatingRef.current = true;
+    const selectionVersion = citySelectionVersionRef.current;
+    if (forceAuto) manualCityChoiceRef.current = false;
+    setLocating(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
-      const loc = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = loc.coords;
+      setLoadingCities(true);
+      let availableCities = [];
       try {
-        const data = await NOMINATIM_REVERSE(latitude, longitude);
-        const placeName =
-          data?.name ||
-          data?.address?.road ||
-          data?.address?.neighbourhood ||
-          data?.display_name?.split(",")?.[0];
-        if (placeName) {
-          setCurrentLoc(placeName);
-          return;
+        availableCities = await loadServiceCities();
+      } catch {}
+      setCities(availableCities);
+      setLoadingCities(false);
+
+      let savedCity = await loadSelectedServiceCity();
+      if (savedCity && availableCities.length &&
+          !availableCities.some((city) => String(city.id) === String(savedCity.id))) {
+        await clearSelectedServiceCity();
+        savedCity = null;
+      }
+      if (savedCity) setSelectedCity(savedCity);
+      const keepManualCity = !forceAuto && savedCity?.source === "manual";
+      if (keepManualCity) manualCityChoiceRef.current = true;
+
+      let coords = null;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          const loc = await Location.getCurrentPositionAsync({});
+          coords = loc?.coords || null;
         }
       } catch {}
-      setCurrentLoc(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+
+      if (coords) {
+        const { latitude, longitude } = coords;
+        let locationData = null;
+        try {
+          locationData = await NOMINATIM_REVERSE(latitude, longitude);
+          const placeName =
+            locationData?.name ||
+            locationData?.address?.road ||
+            locationData?.address?.neighbourhood ||
+            locationData?.display_name?.split(",")?.[0];
+          setCurrentLoc(placeName || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+        } catch {
+          setCurrentLoc(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+        }
+
+        const locationCityName = locationData?.address?.city ||
+          locationData?.address?.town ||
+          locationData?.address?.municipality ||
+          locationData?.address?.city_district;
+        const geocodedCity = availableCities.find((city) =>
+          String(city.name).toLowerCase() === String(locationCityName || "").toLowerCase()
+        );
+        const city = geocodedCity || findNearestServiceCity(latitude, longitude, availableCities);
+        if (city && !manualCityChoiceRef.current && selectionVersion === citySelectionVersionRef.current) {
+          const selected = await saveSelectedServiceCity(city, "auto");
+          if (selectionVersion === citySelectionVersionRef.current && !manualCityChoiceRef.current) {
+            setSelectedCity(selected || city);
+          }
+        } else if (!city && !manualCityChoiceRef.current && selectionVersion === citySelectionVersionRef.current) {
+          await clearSelectedServiceCity();
+          if (selectionVersion === citySelectionVersionRef.current && !manualCityChoiceRef.current) {
+            setSelectedCity(null);
+          }
+        }
+      } else if (!savedCity) {
+        const profileCityName = typeof user?.city === "object"
+          ? user.city?.name || user.city?.city_name
+          : user?.city;
+        const profileCity = availableCities.find((item) =>
+          String(item.name).toLowerCase() === String(profileCityName || "").toLowerCase()
+        );
+        if (profileCity && !manualCityChoiceRef.current && selectionVersion === citySelectionVersionRef.current) {
+          const selected = await saveSelectedServiceCity(profileCity, "auto");
+          if (selectionVersion === citySelectionVersionRef.current && !manualCityChoiceRef.current) {
+            setSelectedCity(selected || profileCity);
+          }
+        }
+      }
     } catch {}
+    finally {
+      setLoadingCities(false);
+      locatingRef.current = false;
+      setLocating(false);
+    }
+  }, [user?.city]);
+
+  const handleSelectCity = useCallback(async (city) => {
+    citySelectionVersionRef.current += 1;
+    manualCityChoiceRef.current = true;
+    const selected = await saveSelectedServiceCity(city, "manual");
+    setSelectedCity(selected || { ...city, source: "manual" });
+    setShowCityPicker(false);
   }, []);
   
   useEffect(() => {
@@ -186,20 +278,31 @@ export default function PassengerHomeScreen({ navigation }) {
 
   const handleAutoSearch = useCallback(() => {
     dispatch(setVehicleMode("AUTO"));
-    navigation.navigate("PassengerTripPlanner");
-  }, [dispatch, navigation]);
+    navigation.navigate("PassengerTripPlanner", {
+      cityId: selectedCity?.id,
+      cityName: selectedCity?.name,
+    });
+  }, [dispatch, navigation, selectedCity]);
 
   const handleBikeBook = useCallback(() => {
     dispatch(setVehicleMode("BIKE"));
-    navigation.navigate("PassengerTripPlanner", { mode: "bike" });
-  }, [dispatch, navigation]);
+    navigation.navigate("PassengerTripPlanner", {
+      mode: "bike",
+      cityId: selectedCity?.id,
+      cityName: selectedCity?.name,
+    });
+  }, [dispatch, navigation, selectedCity]);
 
 
 
   const handleSearchBarPress = useCallback(() => {
     dispatch(setVehicleMode("BIKE"));
-    navigation.navigate("PassengerTripPlanner", { mode: "bike" });
-  }, [dispatch, navigation]);
+    navigation.navigate("PassengerTripPlanner", {
+      mode: "bike",
+      cityId: selectedCity?.id,
+      cityName: selectedCity?.name,
+    });
+  }, [dispatch, navigation, selectedCity]);
 
   return (
     <View style={styles.root}>
@@ -235,11 +338,30 @@ export default function PassengerHomeScreen({ navigation }) {
                 <MaterialIcons name="location-on" size={22} color={WHITE} />
                 <Animated.View style={[styles.locPulse, { opacity: pulseAnim }]} />
               </View>
-              <View style={styles.locTextWrap}>
-                <Text style={styles.locLabel}>Current Location</Text>
-                <Text style={styles.locValue}>{currentLoc}</Text>
-              </View>
-              <TouchableOpacity onPress={handleGetLocation} style={styles.gpsBtn} activeOpacity={0.7}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Choose city. Current city: ${selectedCity?.name || "not selected"}`}
+                activeOpacity={0.8}
+                onPress={() => setShowCityPicker(true)}
+                style={styles.locTextWrap}
+              >
+                <Text style={styles.locLabel}>YOUR CITY · TAP TO CHANGE</Text>
+                <View style={styles.cityValueRow}>
+                  <Text numberOfLines={1} style={styles.locValue}>
+                    {selectedCity?.name || (locating ? "Finding your city…" : "Choose city")}
+                  </Text>
+                  <MaterialIcons name="keyboard-arrow-down" size={20} color={WHITE} />
+                </View>
+                <Text numberOfLines={1} style={styles.locSubValue}>Current location: {currentLoc}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Use my current city"
+                disabled={locating}
+                onPress={() => handleGetLocation({ forceAuto: true })}
+                style={styles.gpsBtn}
+                activeOpacity={0.7}
+              >
                 <View style={styles.gpsGlass} />
                 <MaterialIcons name="my-location" size={18} color={WHITE} />
               </TouchableOpacity>
@@ -284,6 +406,67 @@ export default function PassengerHomeScreen({ navigation }) {
           />
         </ScrollView>
       </Animated.View>
+      <Modal
+        animationType="fade"
+        transparent
+        visible={showCityPicker}
+        onRequestClose={() => setShowCityPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            accessibilityLabel="Close city selector"
+            activeOpacity={1}
+            onPress={() => setShowCityPicker(false)}
+            style={styles.modalBackdrop}
+          />
+          <View style={styles.cityModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Choose your city</Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Close city selector"
+                onPress={() => setShowCityPicker(false)}
+                style={styles.modalClose}
+              >
+                <MaterialIcons name="close" size={22} color={BLACK} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalHint}>Ride availability and routes will use this city.</Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              disabled={locating}
+              onPress={() => {
+                setShowCityPicker(false);
+                handleGetLocation({ forceAuto: true });
+              }}
+              style={styles.useLocationOption}
+            >
+              <MaterialIcons name="my-location" size={19} color={GREEN} />
+              <Text style={styles.useLocationText}>Use my current location</Text>
+              {locating && <Text style={styles.loadingText}>Finding…</Text>}
+            </TouchableOpacity>
+            <ScrollView style={styles.cityList} keyboardShouldPersistTaps="handled">
+              {loadingCities && cities.length === 0 ? (
+                <Text style={styles.loadingText}>Loading cities…</Text>
+              ) : cities.length ? cities.map((city) => (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  key={String(city.id)}
+                  onPress={() => handleSelectCity(city)}
+                  style={styles.cityOption}
+                >
+                  <Text style={styles.cityOptionText}>{city.name}</Text>
+                  {String(selectedCity?.id) === String(city.id) && (
+                    <MaterialIcons name="check-circle" size={20} color={GREEN} />
+                  )}
+                </TouchableOpacity>
+              )) : (
+                <Text style={styles.loadingText}>No service cities are available right now.</Text>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -423,9 +606,20 @@ const styles = StyleSheet.create({
     marginBottom: 1,
   },
   locValue: {
+    flex: 1,
     fontSize: 14,
     color: WHITE,
     fontWeight: "700",
+  },
+  cityValueRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 2,
+  },
+  locSubValue: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 11,
+    marginTop: 1,
   },
   gpsBtn: {
     width: 38,
@@ -443,6 +637,83 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: "rgba(255,255,255,0.18)",
     borderRadius: 12,
+  },
+  modalOverlay: {
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    flex: 1,
+    justifyContent: "center",
+    padding: 22,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  cityModal: {
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    maxHeight: "75%",
+    overflow: "hidden",
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    width: "100%",
+  },
+  modalHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  modalTitle: {
+    color: BLACK,
+    fontSize: 19,
+    fontWeight: "800",
+  },
+  modalClose: {
+    alignItems: "center",
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
+  modalHint: {
+    color: TEXT_SEC,
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  useLocationOption: {
+    alignItems: "center",
+    borderBottomColor: "#E5E7EB",
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    paddingVertical: 14,
+  },
+  useLocationText: {
+    color: GREEN_DARK,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  cityList: {
+    flexShrink: 1,
+    maxHeight: 360,
+    marginBottom: 8,
+  },
+  cityOption: {
+    alignItems: "center",
+    borderBottomColor: "#F1F3F5",
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 48,
+    paddingVertical: 10,
+  },
+  cityOptionText: {
+    color: BLACK,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  loadingText: {
+    color: TEXT_SEC,
+    fontSize: 12,
   },
 
   // ── Search Bar ────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Platform,
@@ -66,6 +66,8 @@ function StopsPanel({ stops, boardingStop, alightingStop }) {
     () => [...stops].sort((a, b) => (Number(a?.order) || 0) - (Number(b?.order) || 0)),
     [stops]
   );
+  const unnamedCount = ordered.filter((stop) => !String(stop?.short_name || stop?.name || stop?.stop_name || "").trim()).length;
+  let unnamedIndex = 0;
 
   return (
     <View style={s.stopsPanel}>
@@ -81,6 +83,8 @@ function StopsPanel({ stops, boardingStop, alightingStop }) {
             ? Number(stop?.order) === Number(alightingStop.order)
             : i === ordered.length - 1;
         const dotColor = isBoarding ? "#009849" : isAlighting ? "#f59e0b" : "#D1D5DB";
+        const stopName = String(stop?.short_name || stop?.name || stop?.stop_name || "").trim()
+          || (unnamedCount === 1 ? "Nearest OMV Stop" : `OMV Stop ${++unnamedIndex}`);
 
         return (
           <View key={String(stop?.id ?? i)} style={s.stopTimelineRow}>
@@ -89,7 +93,7 @@ function StopsPanel({ stops, boardingStop, alightingStop }) {
               {i < ordered.length - 1 && <View style={s.stopTimelineLine} />}
             </View>
             <View style={s.stopTimelineContent}>
-              <Text style={s.stopTimelineName} numberOfLines={1}>{stop?.name || "Stop"}</Text>
+              <Text style={s.stopTimelineName} numberOfLines={1}>{stopName}</Text>
               <Text style={s.stopTimelineEta}>Stop {stop?.order ?? i + 1}</Text>
             </View>
             {isBoarding && (
@@ -285,8 +289,6 @@ export default function PassengerRouteList({ navigation, route }) {
   const destination = initialDestination;
   const [expandedRouteId, setExpandedRouteId] = useState(null);
   const [liveTrips, setLiveTrips] = useState(Array.isArray(trips) ? trips : []);
-  const [searchError, setSearchError] = useState(null);
-  const refreshMatchesRef = useRef(null);
 
   useEffect(() => {
     setLiveTrips(Array.isArray(trips) ? trips : []);
@@ -297,7 +299,6 @@ export default function PassengerRouteList({ navigation, route }) {
   // matching happens after the rider reaches the pickup stop and raises a hand.
   useEffect(() => {
     setLiveTrips(Array.isArray(trips) ? trips : []);
-    setSearchError(null);
   }, [trips]);
 
   /* BEST MATCH: lowest total walk first, then shorter ETA, then lower fare. */
@@ -379,20 +380,23 @@ export default function PassengerRouteList({ navigation, route }) {
         }
         ListEmptyComponent={() => (
           <View style={s.stateCard}>
-            <Text style={s.stateText}>
-              {loading
-                ? "Loading routes..."
-                : searchError
-                  ? searchError
-                  : emptyMessage || "No public routes currently serve both locations. Try another pickup or destination."}
-            </Text>
-            {!loading && searchError ? (
+            {loading ? (
+              <Text style={s.stateText}>Loading routes...</Text>
+            ) : (
+              <>
+                <Text style={s.stateTitle}>{emptyMessage ? "Couldn't build this route" : "No routes found"}</Text>
+                <Text accessibilityRole="alert" style={emptyMessage ? s.errorText : s.stateText}>
+                  {emptyMessage || "No public route currently serves both locations. Try another pickup or destination."}
+                </Text>
+              </>
+            )}
+            {!loading ? (
               <TouchableOpacity
                 style={s.retryButton}
-                onPress={() => refreshMatchesRef.current?.()}
+                onPress={() => navigation.goBack()}
                 activeOpacity={0.85}
               >
-                <Text style={s.retryButtonText}>Try again</Text>
+                <Text style={s.retryButtonText}>Change locations</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -620,8 +624,11 @@ const s = StyleSheet.create({
     borderRadius: 18,
     marginBottom: 12,
     paddingVertical: 40,
+    paddingHorizontal: 24,
   },
+  stateTitle: { color: "#111827", fontSize: 17, fontWeight: "800", marginBottom: 8, textAlign: "center" },
   stateText: { color: "#9CA3AF", fontSize: 15, fontWeight: "600", textAlign: "center" },
+  errorText: { color: "#B42318", fontSize: 14, lineHeight: 20, textAlign: "center" },
   retryButton: {
     backgroundColor: "#009849",
     borderRadius: 10,

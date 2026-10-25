@@ -11,13 +11,13 @@ For the richer scrape, copy the source files to a local data folder and run:
 
     python manage.py import_scraped_city_transport --csv ../data/LkoStops.csv --geojson ../data/routes_20260926_230218.geojson --city Lucknow --dry-run
 
-Review route counts and stop quality first. The admin console's Dynamic Routing
-→ Upload stops accepts the stop/route file and an optional matching GeoJSON file
-in the same upload form. Route groups are imported only when their source
-LineString geometry matches by `route_code`/`route_id` or `route_name`/`name`.
-Without geometry, route groups are reported as unresolved and are not imported
-as routes. Flat stop-only files can still be imported as provisional global
-stops, without route membership.
+Review route counts and stop quality first. The command-line scraped-data
+workflow below requires matching source GeoJSON. The Admin console's Dynamic
+Routing > Upload stops accepts a city master XLSX workbook or a complete v1
+master CSV. The workbook can omit `schema_version`; the importer adds version 1
+when it detects the complete route-master sheet. Without source GeoJSON, its
+route line connects the ordered stop coordinates directly and is approximate,
+not road or rail geometry. Routes remain private until reviewed.
 
 For command-line import, pass the matching geometry file. The importer now
 rejects route groups without matching source geometry rather than drawing a
@@ -47,8 +47,7 @@ schema_version,city_id,city_name,route_id,route_number,route_name,direction_id,d
 ```
 
 Each row is one ordered route-stop association. `schema_version` must be `1`;
-`city_id` is the existing city's `City.slug` (for example, `lucknow`), and a
-city must already exist before Dry Run. Route identity is the tuple
+`city_id` is the city's `City.slug` (for example, `lucknow`). Route identity is the tuple
 `(city_id, route_id, direction_id)`, so equal route IDs or numbers in different
 cities and opposite directions remain separate routes. `stop_id` is the
 source-stable ID for a physical stop within its city; repeated use must retain
@@ -58,19 +57,39 @@ the same name and coordinates. It is not globally shared across cities.
 `true`/`false`, `yes`/`no`, or `1`/`0`. Coordinates are decimal WGS84
 latitude/longitude; missing, invalid, non-finite, out-of-range, and `(0, 0)`
 coordinates are rejected. Each route-direction needs at least two rows with
-unique positive `stop_sequence` values. Source and geometry IDs must be
-preserved from the authoritative dataset; the importer does not create them.
+unique positive `stop_sequence` values. Source IDs should be preserved from the
+authoritative dataset. When GeoJSON is supplied, `route_geometry_id` must
+match it. Without GeoJSON, the importer creates a deterministic geometry ID for
+the approximate stop-sequence line during Apply.
 
-Upload the companion GeoJSON FeatureCollection in the geometry file control.
-It must contain a LineString feature for each selected `(city_id, route_id)`
-with `properties.city_id`, `properties.route_id`, and
-`properties.route_geometry_id`. The same route geometry is used for both
-directions when they share a `route_id`; provide a distinct `route_id` when
-direction-specific geometry differs. Geometry coordinates follow GeoJSON
-`[longitude, latitude]` order. This companion is required for every route
-being applied. The city filter selects one existing city from the master
-file; other cities' valid rows are reported as excluded and can be imported
-later from the same files.
+An XLSX workbook may provide these route-stop rows in a sheet with the complete
+v1 columns except `schema_version`. The importer detects that sheet even when
+it is not active, supplies version `1`, and matches its `city_name` to an
+existing city or creates it on Apply. If the workbook also has a `Stops` sheet with the stop catalogue
+columns, every stop in that sheet is imported, including stops not assigned to
+a route; route-only stops missing from the catalogue are included from the
+route rows. A CSV route master uses its route rows as the stop catalogue.
+Missing global stops are created as provisional. Without GeoJSON, Apply creates
+a stop-sequence LineString from the supplied coordinates and assigns a
+deterministic geometry ID. This is an approximate connector, not road or rail
+geometry; imported routes remain private until an administrator reviews and
+replaces the path with trusted geometry.
+
+When a matching GeoJSON FeatureCollection is supplied through the API, it must
+contain a LineString feature for each selected `(city_id, route_id)` with
+`properties.city_id`, `properties.route_id`, and
+`properties.route_geometry_id`. Geometry coordinates follow GeoJSON
+`[longitude, latitude]` order. Without GeoJSON, the workbook/route-master
+import connects the ordered stop coordinates directly and does not calculate
+road distance. One upload must identify a single city by its `city_name`; the
+importer creates the city on Apply if it does not exist.
+
+Rows with a valid `stop_id` and coordinates but no `stop_name` are retained as
+provisional global stops with a generated `Nearest OMV Stop` or `OMV Stop N`
+label. Legacy `Unnamed stop (<stop_id>)` labels are converted by migration
+`0011`. Boarding and alighting remain disabled until an administrator supplies
+a name and reviews the stop. Rows with missing IDs or invalid coordinates
+still block Apply.
 
 Dry Run is read-only and returns row-level blockers plus a short-lived token
 bound to the selected city and the CSV/GeoJSON content digests. Apply requires

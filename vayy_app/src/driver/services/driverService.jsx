@@ -102,13 +102,16 @@ export const searchDriverRoutes = async (
   _radius = 5000,
   options = {}
 ) => {
-  const { routes } = await dynamicPreview({
+  const preview = await dynamicPreview({
     origin: { lat: originLat, lng: originLng },
     destination: { lat: destLat, lng: destLng },
     vehicleType: options.vehicleType || "bike",
     audience: "driver",
   });
-  return routes;
+  if (!preview.routes.length) {
+    throw new Error(preview.emptyMessage || "No route could be built between these locations. Check that the city has usable global stops.");
+  }
+  return preview.routes;
 };
 
 export const getNearbyPassengers = async (routeId) => {

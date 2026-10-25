@@ -7,6 +7,7 @@ from pathlib import Path
 from transport.services.admin_import_service import (
     MASTER_V1_COLUMNS,
     decode_tabular_upload,
+    normalize_master_stop_rows,
     normalize_master_v1,
     normalize_import_records,
     normalize_noida_route_stop_rows,
@@ -79,6 +80,25 @@ class AdminImportParsingTests(unittest.TestCase):
         bad_boolean[1]["boarding_allowed"] = "maybe"
         _, boolean_errors, _ = normalize_master_v1(bad_boolean, "lucknow")
         self.assertTrue(any("boarding_allowed" in item["reason"] for item in boolean_errors))
+
+    def test_workbook_catalogue_allows_unnamed_stops_and_uses_a_route_name_when_available(self):
+        rows = [{
+            "city_name": "Noida", "stop_id": "osm-node-1", "stop_name": "",
+            "stop_aliases_json": "[]", "latitude": "28.55", "longitude": "77.32",
+            "source_name": "OpenStreetMap", "source_reference": "source:1",
+        }, {
+            "city_name": "Noida", "stop_id": "osm-node-2", "stop_name": "Named stop",
+            "stop_aliases_json": "[]", "latitude": "28.56", "longitude": "77.33",
+            "source_name": "OpenStreetMap", "source_reference": "source:2",
+        }]
+
+        stops, errors, excluded = normalize_master_stop_rows(rows, "Noida")
+
+        self.assertEqual(errors, [])
+        self.assertEqual(excluded, 0)
+        self.assertEqual(stops["osm-node-1"]["name"], "")
+        self.assertEqual(stops["osm-node-1"]["lat"], 28.55)
+        self.assertEqual(stops["osm-node-2"]["name"], "Named stop")
 
     def test_v1_geojson_uses_composite_city_route_key(self):
         payload = {

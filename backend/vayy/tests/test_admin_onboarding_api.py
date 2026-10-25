@@ -325,6 +325,78 @@ class AdminOnboardingAPITests(TestCase):
         self.assertEqual(City.objects.count(), 0)
         self.assertEqual(Route.objects.count(), 0)
 
+    def test_route_master_workbook_imports_all_stops_and_private_routes_without_osrm(self):
+        city = City.objects.create(name="Lucknow")
+        workbook = Workbook()
+        stops_sheet = workbook.active
+        stops_sheet.title = "Stops"
+        stops_sheet.append([
+            "city_name", "stop_id", "stop_name", "stop_aliases_json", "latitude", "longitude",
+            "source_name", "source_reference", "verification_status",
+        ])
+        stops_sheet.append(["Lucknow", "s1", "", "[]", 26.8, 80.9, "fixture", "source:s1", "rejected"])
+        stops_sheet.append(["Lucknow", "s2", "Stop 2", "[]", 26.9, 81.0, "fixture", "source:s2", "verified"])
+        stops_sheet.append(["Lucknow", "s3", "", "[]", 26.85, 80.95, "fixture", "source:s3", "rejected"])
+        stops_sheet.append(["Lucknow", "s4", "", "[]", 26.85, 80.95, "fixture", "source:s4", "rejected"])
+        route_sheet = workbook.create_sheet("Route_Stop_Master")
+        route_sheet.append([
+            "city_id", "city_name", "route_id", "route_name", "route_number",
+            "direction_id", "direction_name", "stop_sequence", "stop_id", "stop_name",
+            "stop_aliases_json", "latitude", "longitude", "boarding_allowed",
+            "alighting_allowed", "route_geometry_id", "source_name", "source_reference",
+        ])
+        route_sheet.append([1, "Lucknow", "osm-r1", "Route 1", "1", "out", "Outbound", 1,
+                            "s1", "Stop 1", "[]", 26.8, 80.9, True, True, "", "fixture", "source:s1"])
+        route_sheet.append([1, "Lucknow", "osm-r1", "Route 1", "1", "out", "Outbound", 2,
+                            "s2", "Stop 2", "[]", 26.9, 81.0, True, True, "", "fixture", "source:s2"])
+        content = io.BytesIO()
+        workbook.save(content)
+        payload = {
+            "file": SimpleUploadedFile(
+                "OMV_LUCKNOW_Stops.xlsx", content.getvalue(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ),
+            "mode": "validate",
+        }
+
+        dry_run = self.client.post(self.url, payload, format="multipart")
+
+        self.assertEqual(dry_run.status_code, 200, dry_run.data)
+        self.assertTrue(dry_run.data["data"]["can_apply"], dry_run.data)
+        self.assertEqual(dry_run.data["data"]["report"]["routes"], 1)
+        self.assertEqual(dry_run.data["data"]["report"]["stops_to_create"], 4)
+        self.assertEqual(dry_run.data["data"]["report"]["unnamed_stops"], 2)
+        self.assertEqual(Route.objects.count(), 0)
+        self.assertEqual(Stop.objects.count(), 0)
+
+        with patch("transport.api.dynamic_admin_views.OSRMService.get_road_path_through") as osrm:
+            result = self.apply_after_dry_run(payload)
+        osrm.assert_not_called()
+
+        self.assertEqual(result.status_code, 201, result.data)
+        route = Route.objects.get(city=city, source_route_id="osm-r1", source_direction_id="out")
+        self.assertFalse(route.is_public)
+        self.assertEqual(route.total_distance_meters, 0)
+        self.assertEqual(list(route.path.coords), [(80.9, 26.8), (81.0, 26.9)])
+        self.assertEqual(route.route_stop_associations.count(), 2)
+        self.assertEqual(Stop.objects.filter(city=city, coordinate_status="provisional").count(), 4)
+        unnamed = Stop.objects.get(city=city, source_stop_id="s3")
+        self.assertEqual("OMV Stop 1", unnamed.name)
+        self.assertFalse(unnamed.boarding_allowed)
+        self.assertFalse(unnamed.alighting_allowed)
+        self.assertEqual(Stop.objects.filter(city=city, location=unnamed.location).count(), 2)
+
+        trusted_geometry = LineString([(80.8, 26.7), (81.1, 27.0)], srid=4326)
+        route.path = trusted_geometry
+        route.route_geometry_id = "reviewed-geojson"
+        route.total_distance_meters = 12345
+        route.save(update_fields=["path", "route_geometry_id", "total_distance_meters", "updated_at"])
+        self.assertEqual(self.apply_after_dry_run(payload).status_code, 201)
+        route.refresh_from_db()
+        self.assertEqual(route.route_geometry_id, "reviewed-geojson")
+        self.assertEqual(route.total_distance_meters, 12345)
+        self.assertEqual(list(route.path.coords), list(trusted_geometry.coords))
+
     def test_repeated_apply_is_idempotent_for_route_and_stop_records(self):
         self.assertEqual(self.apply_after_dry_run(self.route_upload("apply")).status_code, 201)
 

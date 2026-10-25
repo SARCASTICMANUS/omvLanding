@@ -8,6 +8,7 @@ This folder is the canonical home for VAYY engineering and product documentation
 |---|---|---|
 | Whole system | [Project overview](overview.md) | Applications, ownership and shared rules |
 | Handover | [Engineering handover](project-handover.md) | Current checkout, runtime snapshot, route readiness and next steps |
+| Admin import handover | [Stop import and route setup](admin-stop-import-handover.md) | Admin stop creation, route membership, Noida upload status and handoff steps |
 | Architecture | [System overview](architecture/system-overview.md) | Repository responsibilities, data flow and integrations |
 | Engineering rules | [Project mandates](architecture/project-mandates.md) | Geospatial, real-time, caching and consistency rules |
 | Scalability | [Scalability report](architecture/scalability-report.md) | Current scaling risks and staged growth plan |

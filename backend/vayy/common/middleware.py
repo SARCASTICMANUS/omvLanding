@@ -71,13 +71,13 @@ class RequestResponseLoggingMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # Capture request details up-front (body can only be read once).
-        # Skip body reading for multipart/form-data (file uploads) to avoid
-        # consuming the stream before DRF's MultiPartParser can read it.
-        req_body = getattr(request, "body", b"")
-        req_data = {}
         content_type = request.content_type or ""
-        if req_body and "multipart/form-data" not in content_type:
+        is_multipart = content_type.lower().startswith("multipart/form-data")
+        # Reading request.body first triggers Django's default 2.5 MB limit,
+        # rejecting larger file uploads before DRF's multipart parser runs.
+        req_body = b"" if is_multipart else request.body
+        req_data = {}
+        if req_body:
             try:
                 req_data = _sanitize(json.loads(req_body))
             except (json.JSONDecodeError, TypeError):

@@ -106,7 +106,7 @@ class GlobalStopRouteTests(TestCase):
             [reverse.id],
         )
 
-    def test_boarding_alighting_rules_and_duplicate_membership_rows_are_enforced(self):
+    def test_boarding_alighting_rules_and_repeated_stop_visits_are_supported(self):
         self.add_direction()
         RouteStopAssociation.objects.filter(route=self.route, stop=self.pickup).update(boarding_allowed=False)
         pickups, drops = self.candidates()
@@ -117,7 +117,11 @@ class GlobalStopRouteTests(TestCase):
 
         RouteStopAssociation.objects.filter(route=self.route, stop=self.dropoff).update(alighting_allowed=True)
         RouteStopAssociation.objects.create(route=self.route, stop=self.pickup, order=3)
-        self.assertEqual(RouteSearchService.find_associated_route_pairs(self.city.id, pickups, drops), [])
+        pairs = RouteSearchService.find_associated_route_pairs(self.city.id, pickups, drops)
+        self.assertEqual([pair["route"].id for pair in pairs], [self.route.id])
+        self.assertEqual([row["stop"].id for row in pairs[0]["stops"]], [
+            self.pickup.id, self.middle.id, self.dropoff.id, self.pickup.id,
+        ])
 
     def test_unassociated_global_stops_do_not_prove_a_route(self):
         pickups, drops = self.candidates()
@@ -230,6 +234,27 @@ class GlobalStopRouteTests(TestCase):
         self.assertEqual(set(RouteStopAssociation.objects.filter(route_id=route_id).values_list("stop_id", flat=True)),
                          {self.pickup.id, self.dropoff.id})
         self.assertEqual(Stop.objects.filter(city=self.city, is_global=True).count(), 3)
+
+    def test_dynamic_generate_does_not_return_created_when_no_stops_are_walkable(self):
+        user = User.objects.create_user(email="route-generate-empty@test.invalid", password="pw", role="passenger")
+        client = APIClient()
+        client.force_authenticate(user=user)
+        walking = {"distance": 2000, "duration": 1500, "geometry": {"type": "LineString", "coordinates": []}}
+        with patch("transport.api.dynamic_admin_views.OSRMService.route", return_value={
+            "routes": [{"distance": 10000, "duration": 1200,
+                        "geometry": {"type": "LineString", "coordinates": [[80.9002, 26.8002], [80.9001, 26.8998]]}}],
+        }), patch.object(OSRMService, "get_walking_path", return_value=walking):
+            response = client.post("/api/transport/routes/dynamic-generate/", {
+                "city_id": str(self.city.id),
+                "origin": {"lat": self.origin.y, "lng": self.origin.x},
+                "destination": {"lat": self.destination.y, "lng": self.destination.x},
+            }, format="json")
+
+        self.assertEqual(response.status_code, 422, response.data)
+        self.assertEqual(response.data["code"], "NO_WALKABLE_STOPS")
+        self.assertEqual(response.data["data"]["routes"], [])
+        self.assertEqual(Route.objects.count(), 1)
+        self.assertEqual(RouteStopAssociation.objects.count(), 0)
 
     def test_dynamic_preview_validates_coordinates_and_authentication(self):
         user = User.objects.create_user(email="route-invalid@test.invalid", password="pw", role="passenger")
@@ -430,7 +455,7 @@ class GlobalStopRouteTests(TestCase):
         self.assertEqual(response.data["data"]["routes"], [])
         self.assertEqual(response.data["data"]["empty_reason"], "NO_WALKABLE_STOPS")
 
-    def test_admin_ordered_stop_action_reuses_global_records_and_rejects_duplicates(self):
+    def test_admin_ordered_stop_action_reuses_global_records_and_allows_repeated_visits(self):
         admin = User.objects.create_user(email="route-admin@test.invalid", password="pw", role="admin")
         client = APIClient()
         client.force_authenticate(user=admin)
@@ -444,14 +469,17 @@ class GlobalStopRouteTests(TestCase):
         self.assertEqual(RouteStopAssociation.objects.filter(route=self.route).count(), 2)
         self.assertEqual(Stop.objects.filter(city=self.city, is_global=True).count(), 3)
 
-        duplicate = client.put(
+        loop = client.put(
             f"/api/transport/admin/routes/{self.route.id}/ordered-stops/",
-            {"stops": [{"stop_id": str(self.pickup.id), "order": 0}, {"stop_id": str(self.pickup.id), "order": 1}],
-             "path": {"type": "LineString", "coordinates": [[80.9, 26.8], [80.9, 26.9]]}, "total_distance_meters": 12000},
+            {"stops": [
+                {"stop_id": str(self.pickup.id), "order": 0},
+                {"stop_id": str(self.dropoff.id), "order": 1},
+                {"stop_id": str(self.pickup.id), "order": 2},
+             ], "path": {"type": "LineString", "coordinates": [[80.9, 26.8], [80.9, 26.9], [80.9, 26.8]]}, "total_distance_meters": 12000},
             format="json",
         )
-        self.assertEqual(duplicate.status_code, 400)
-        self.assertEqual(RouteStopAssociation.objects.filter(route=self.route).count(), 2)
+        self.assertEqual(loop.status_code, 200, loop.data)
+        self.assertEqual(RouteStopAssociation.objects.filter(route=self.route).count(), 3)
 
     def test_admin_creates_route_from_existing_stops_reorders_and_publishes(self):
         admin = User.objects.create_user(email="route-builder@test.invalid", password="pw", role="admin")

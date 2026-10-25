@@ -17,6 +17,10 @@ MASTER_V1_COLUMNS = (
     "boarding_allowed", "alighting_allowed", "route_geometry_id",
     "source_name", "source_reference",
 )
+MASTER_STOP_COLUMNS = (
+    "city_name", "stop_id", "stop_name", "stop_aliases_json",
+    "latitude", "longitude", "source_name", "source_reference",
+)
 
 
 def valid_coordinate(lat, lng):
@@ -45,23 +49,74 @@ def _value(row, *names):
     )
 
 
-def decode_tabular_upload(raw, extension):
-    """Return a list of row dictionaries from CSV, JSON, or Excel bytes."""
+def assign_master_omv_stop_names(records, stop_records, city_id, city_name, existing_names=None):
+    """Fill blank master/Stops-sheet labels consistently for one selected city."""
+    selected_id = str(city_id or "").strip().casefold()
+    selected_name = str(city_name or "").strip().casefold()
+    entries = []
+
+    for row in records:
+        row_city = str(_value(row, "city_id") or "").strip().casefold()
+        stop_id = str(_value(row, "stop_id") or "").strip()
+        if row_city == selected_id and stop_id:
+            entries.append((row, stop_id.casefold()))
+
+    for row in stop_records or []:
+        row_city = str(_value(row, "city_name") or "").strip().casefold()
+        stop_id = str(_value(row, "stop_id") or "").strip()
+        if row_city == selected_name and stop_id:
+            entries.append((row, stop_id.casefold()))
+
+    file_names = {}
+    unnamed_ids = []
+    for row, stop_id in entries:
+        name = str(_value(row, "stop_name") or "").strip()
+        if name:
+            file_names.setdefault(stop_id, name)
+        else:
+            unnamed_ids.append(stop_id)
+
+    known_names = {
+        str(stop_id).strip().casefold(): name
+        for stop_id, name in (existing_names or {}).items()
+        if str(name or "").strip()
+    }
+    known_names.update(file_names)
+    generated_ids = list(dict.fromkeys(
+        stop_id for stop_id in unnamed_ids if stop_id not in known_names
+    ))
+    generated_names = {
+        stop_id: ("Nearest OMV Stop" if len(generated_ids) == 1 else f"OMV Stop {index}")
+        for index, stop_id in enumerate(generated_ids, start=1)
+    }
+    for row, stop_id in entries:
+        if not str(_value(row, "stop_name") or "").strip():
+            row["stop_name"] = known_names.get(stop_id) or generated_names[stop_id]
+
+    return set(generated_ids)
+
+
+def decode_tabular_upload(raw, extension, *, all_sheets=False):
+    """Decode tabular uploads, optionally returning every Excel worksheet."""
     extension = extension.lower().lstrip(".")
     if extension in ("xlsx", "xlsm"):
         from openpyxl import load_workbook
 
         workbook = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
         try:
-            values = list(workbook.active.iter_rows(values_only=True))
-            if not values:
-                return []
-            headers = [_key(value) for value in values[0]]
-            return [
-                {headers[index]: value for index, value in enumerate(row) if index < len(headers)}
-                for row in values[1:]
-                if any(value not in (None, "") for value in row)
-            ]
+            sheets = {}
+            for sheet in workbook.worksheets:
+                values = list(sheet.iter_rows(values_only=True))
+                if not values:
+                    sheets[sheet.title] = []
+                    continue
+                headers = [_key(value) for value in values[0]]
+                sheets[sheet.title] = [
+                    {headers[index]: value for index, value in enumerate(row) if index < len(headers)}
+                    for row in values[1:]
+                    if any(value not in (None, "") for value in row)
+                ]
+            return sheets if all_sheets else sheets.get(workbook.active.title, [])
         finally:
             workbook.close()
 
@@ -115,11 +170,53 @@ def normalize_import_records(records):
     errors = []
     warnings = []
 
-    def point_from(record, sequence, row_number):
-        name = _value(record, "stop_name", "name", "station", "origin", "start_name")
+    def stop_identity(record):
+        stop_id = _value(record, "stop_id", "source_stop_id", "id")
+        if stop_id is not None and str(stop_id).strip():
+            return ("id", str(stop_id).strip().casefold())
         lat = _value(record, "lat", "latitude", "stop_lat")
         lng = _value(record, "lng", "lon", "longitude", "stop_lon", "long")
-        if name is None or lat is None or lng is None:
+        if valid_coordinate(lat, lng):
+            return ("coordinates", round(float(lat), 6), round(float(lng), 6))
+        return None
+
+    source_stops = []
+    for row in records:
+        nested = _value(row, "stops_ordered", "stops")
+        if isinstance(nested, str):
+            try:
+                nested = json.loads(nested)
+            except json.JSONDecodeError:
+                nested = None
+        if isinstance(nested, list):
+            source_stops.extend(stop for stop in nested if isinstance(stop, dict))
+        else:
+            source_stops.append(row)
+
+    known_names = {}
+    unnamed_ids = []
+    for stop in source_stops:
+        identity = stop_identity(stop)
+        if identity is None:
+            continue
+        name = str(_value(stop, "stop_name", "name", "station", "origin", "start_name") or "").strip()
+        if name:
+            known_names.setdefault(identity, name)
+        else:
+            unnamed_ids.append(identity)
+    generated_ids = list(dict.fromkeys(identity for identity in unnamed_ids if identity not in known_names))
+    generated_names = {
+        identity: ("Nearest OMV Stop" if len(generated_ids) == 1 else f"OMV Stop {index}")
+        for index, identity in enumerate(generated_ids, start=1)
+    }
+
+    def point_from(record, sequence, row_number):
+        identity = stop_identity(record)
+        name = str(_value(record, "stop_name", "name", "station", "origin", "start_name") or "").strip()
+        name = name or known_names.get(identity) or generated_names.get(identity)
+        lat = _value(record, "lat", "latitude", "stop_lat")
+        lng = _value(record, "lng", "lon", "longitude", "stop_lon", "long")
+        if not name or lat is None or lng is None:
             errors.append({"row": row_number, "reason": "stop name and latitude/longitude are required"})
             return None
         if not valid_coordinate(lat, lng):
@@ -138,6 +235,9 @@ def normalize_import_records(records):
             "lat": float(lat),
             "lng": float(lng),
             "sequence": order,
+            "generated_name": identity in generated_names,
+            "boarding_allowed": identity not in generated_names,
+            "alighting_allowed": identity not in generated_names,
         }
 
     for row_number, row in enumerate(records, start=2):
@@ -196,6 +296,8 @@ def normalize_import_records(records):
 
     if normalized_routes:
         warnings.append("Routes remain private and their stops provisional until an administrator verifies and publishes them.")
+    if generated_ids:
+        warnings.append(f"Generated OMV stop labels for {len(generated_ids)} unnamed stops; review the labels before publishing routes.")
     return normalized_routes, list(global_stops.values()), errors, warnings
 
 
@@ -222,6 +324,24 @@ def normalize_noida_route_stop_rows(records, city_identifiers):
     groups = {}
     invalid_group_keys = set()
     invalid_row_numbers = set()
+    names_by_stop_id = {}
+    unnamed_stop_ids = []
+    for row in records:
+        stop_id = str(_value(row, "stop_id") or "").strip()
+        if not stop_id:
+            continue
+        stop_name = str(_value(row, "stop_name") or "").strip()
+        if stop_name:
+            names_by_stop_id.setdefault(stop_id.casefold(), stop_name)
+        else:
+            unnamed_stop_ids.append(stop_id.casefold())
+    generated_stop_ids = list(dict.fromkeys(
+        stop_id for stop_id in unnamed_stop_ids if stop_id not in names_by_stop_id
+    ))
+    generated_names = {
+        stop_id: ("Nearest OMV Stop" if len(generated_stop_ids) == 1 else f"OMV Stop {index}")
+        for index, stop_id in enumerate(generated_stop_ids, start=1)
+    }
 
     def row_error(row_number, reason, group_key=None):
         errors.append({"row": row_number, "reason": reason})
@@ -265,6 +385,8 @@ def normalize_noida_route_stop_rows(records, city_identifiers):
         row_values = {}
         for column in ("route_name", "route_number", "stop_id", "stop_name"):
             value = str(values[column] or "").strip()
+            if column == "stop_name" and not value and row_values.get("stop_id"):
+                value = names_by_stop_id.get(row_values["stop_id"].casefold()) or generated_names.get(row_values["stop_id"].casefold(), "")
             if not value:
                 row_error(row_number, f"{column} is required.", group_key)
             row_values[column] = value
@@ -526,12 +648,87 @@ def normalize_master_v1(records, city_filter):
             errors.append({"row": group["row_numbers"][0], "reason": f"route {route_id}/{direction_id} needs at least two stops"})
         if len(sequences) != len(set(sequences)):
             errors.append({"row": group["row_numbers"][0], "reason": f"duplicate stop_sequence in route {route_id}/{direction_id}"})
-        stop_ids = [stop["source_stop_id"] for stop in group["stops"]]
-        if len(stop_ids) != len(set(stop_ids)):
-            errors.append({"row": group["row_numbers"][0], "reason": f"duplicate stop_id in route {route_id}/{direction_id}"})
         group["stops"].sort(key=lambda stop: stop["sequence"])
 
     return groups, errors, excluded_rows
+
+
+def normalize_master_stop_rows(records, city_name_filter):
+    """Validate the workbook's global stop sheet and return stops keyed by source ID."""
+    if not records:
+        raise ValueError("The workbook Stops sheet contains no data rows.")
+
+    headers = {_key(header) for header in records[0]}
+    missing = sorted(set(MASTER_STOP_COLUMNS) - headers)
+    if missing:
+        raise ValueError("Stops sheet is missing columns: " + ", ".join(missing) + ".")
+
+    selected_city = str(city_name_filter or "").strip().casefold()
+    if not selected_city:
+        raise ValueError("The Stops sheet must identify its city in city_name.")
+
+    stops = {}
+    errors = []
+    excluded_rows = 0
+    for row_number, raw in enumerate(records, start=2):
+        row = {_key(key): value for key, value in raw.items()}
+        city_name = str(row.get("city_name") or "").strip()
+        if city_name.casefold() != selected_city:
+            excluded_rows += 1
+            continue
+
+        stop_id = str(row.get("stop_id") or "").strip()
+        name = str(row.get("stop_name") or "").strip()
+        source_name = str(row.get("source_name") or "").strip()
+        source_reference = str(row.get("source_reference") or "").strip()
+        if not stop_id:
+            errors.append({"row": row_number, "reason": "stop_id is required"})
+            continue
+        try:
+            latitude = float(row.get("latitude"))
+            longitude = float(row.get("longitude"))
+            if not valid_coordinate(latitude, longitude):
+                raise ValueError("latitude/longitude are invalid or outside valid bounds")
+            aliases_text = str(row.get("stop_aliases_json") or "").strip()
+            aliases = json.loads(aliases_text) if aliases_text else []
+            if not isinstance(aliases, list) or any(not isinstance(alias, str) or not alias.strip() for alias in aliases):
+                raise ValueError("stop_aliases_json must be a JSON array of non-empty strings")
+            if len(stop_id) > 100 or len(name) > 255:
+                raise ValueError("stop_id must be at most 100 characters and stop_name at most 255")
+            if len(source_name) > 255 or len(source_reference) > 500:
+                raise ValueError("source_name or source_reference exceeds its maximum length")
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            errors.append({"row": row_number, "reason": str(exc)})
+            continue
+
+        item = {
+            "source_stop_id": stop_id,
+            "name": name,
+            "aliases": [alias.strip() for alias in aliases],
+            "lat": latitude,
+            "lng": longitude,
+            "source_name": source_name,
+            "source_reference": source_reference,
+            "row_number": row_number,
+        }
+        previous = stops.get(stop_id)
+        if previous:
+            coordinates_match = (
+                round(latitude, 6), round(longitude, 6)
+            ) == (round(previous["lat"], 6), round(previous["lng"], 6))
+            names_conflict = bool(name and previous["name"] and name.casefold() != previous["name"].casefold())
+            if not coordinates_match or names_conflict:
+                errors.append({"row": row_number, "reason": f"stop_id {stop_id!r} has conflicting name or coordinates"})
+            else:
+                if name and not previous["name"]:
+                    previous["name"] = name
+                previous["aliases"] = list(dict.fromkeys(previous["aliases"] + item["aliases"]))
+            continue
+        stops[stop_id] = item
+
+    if not stops and not errors:
+        errors.append({"row": None, "reason": f"No stop rows found for selected city {city_name_filter!r}."})
+    return stops, errors, excluded_rows
 
 
 def parse_master_v1_geojson(raw):

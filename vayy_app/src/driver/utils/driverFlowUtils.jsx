@@ -17,14 +17,15 @@ const shortPlaceName = (value, fallback = "--") => {
 const firstTruthy = (...values) =>
   values.find((value) => value !== undefined && value !== null && value !== "");
 
-const normalizeStop = (stop, index) => {
+const normalizeStop = (stop, index, fallbackName) => {
   const lat = Number(stop?.lat ?? stop?.latitude ?? stop?.location?.lat ?? stop?.coords?.[1]);
   const lon = Number(stop?.lon ?? stop?.lng ?? stop?.longitude ?? stop?.location?.lon ?? stop?.coords?.[0]);
+  const name = String(stop?.name || stop?.stop_name || stop?.label || stop?.address || "").trim();
 
   return {
     ...stop,
     id: stop?.id || stop?.stop_id || `stop-${index + 1}`,
-    name: stop?.name || stop?.stop_name || stop?.label || stop?.address || `Stop ${index + 1}`,
+    name: name || fallbackName || `OMV Stop ${index + 1}`,
     order: Number.isFinite(Number(stop?.order))
       ? Number(stop.order)
       : Number.isFinite(Number(stop?.sequence))
@@ -43,8 +44,18 @@ export const getOrderedRouteStops = (route) => {
     (Array.isArray(route?.route?.stops) && route.route.stops) ||
     [];
 
+  const unnamedCount = rawStops.filter((stop) =>
+    !String(stop?.name || stop?.stop_name || stop?.label || stop?.address || "").trim()
+  ).length;
+  let unnamedIndex = 0;
   const normalizedStops = rawStops
-    .map((stop, index) => normalizeStop(stop, index))
+    .map((stop, index) => {
+      const unnamed = !String(stop?.name || stop?.stop_name || stop?.label || stop?.address || "").trim();
+      const fallbackName = unnamed
+        ? unnamedCount === 1 ? "Nearest OMV Stop" : `OMV Stop ${++unnamedIndex}`
+        : null;
+      return normalizeStop(stop, index, fallbackName);
+    })
     .sort((a, b) => (Number(a?.order) || 0) - (Number(b?.order) || 0));
 
   if (normalizedStops.length > 0) return normalizedStops;

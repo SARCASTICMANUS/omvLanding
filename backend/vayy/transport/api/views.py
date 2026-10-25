@@ -12,6 +12,7 @@ from rest_framework import serializers, status
 from collections import defaultdict
 from django.db.models import Q
 from django.db import transaction
+from django.db.models.deletion import ProtectedError
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.geos import Point, LineString
 from django.contrib.gis.measure import D
@@ -978,8 +979,6 @@ class AdminRouteViewSet(viewsets.ModelViewSet):
         rows = serializer.validated_data
         stop_ids = [row["stop_id"] for row in rows]
         orders = [row["order"] for row in rows]
-        if len(set(stop_ids)) != len(stop_ids):
-            raise serializers.ValidationError({"stops": "A stop can appear only once in a route direction."})
         if len(set(orders)) != len(orders):
             raise serializers.ValidationError({"stops": "Stop order values must be unique."})
         if orders and sorted(orders) != list(range(min(orders), min(orders) + len(orders))):
@@ -1256,8 +1255,26 @@ class AdminCityViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         city = self.get_object()
+        if city.routes.filter(active_trips__isnull=False).exists():
+            return Response({
+                "success": False,
+                "code": "CITY_HAS_TRIPS",
+                "message": "This city still has trips using its routes. Keep the city to preserve trip history.",
+            }, status=status.HTTP_409_CONFLICT)
+
         city_name = city.name
-        city.delete()
+        try:
+            with transaction.atomic():
+                # RouteStopAssociation protects stops from accidental deletion;
+                # deleting the whole city intentionally removes these memberships first.
+                RouteStopAssociation.objects.filter(route__city=city).delete()
+                city.delete()
+        except ProtectedError:
+            return Response({
+                "success": False,
+                "code": "CITY_STOPS_IN_USE",
+                "message": "Some of this city's stops are still used by another city's routes.",
+            }, status=status.HTTP_409_CONFLICT)
         return Response({"success": True, "message": f"City {city_name} deleted"}, status=status.HTTP_200_OK)
 
 

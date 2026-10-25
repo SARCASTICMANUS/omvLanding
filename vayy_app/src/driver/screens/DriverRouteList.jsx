@@ -203,6 +203,7 @@ function RouteCard({ item, index, pickup, destination, onSelect, expanded, onTog
 export default function DriverRouteList({ navigation, route: routeProp }) {
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [routeError, setRouteError] = useState("");
   const [expandedRouteId, setExpandedRouteId] = useState(null);
   const mode = routeProp?.params?.mode || "bike";
   const pickup = routeProp?.params?.pickup;
@@ -211,6 +212,7 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
   const fetchRoutes = async () => {
     try {
       setLoading(true);
+      setRouteError("");
 
       if (pickup?.lat && pickup?.lon && destination?.lat && destination?.lon) {
         const data = await searchDriverRoutes(pickup.lat, pickup.lon, destination.lat, destination.lon, undefined, { vehicleType: mode });
@@ -225,6 +227,7 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
     } catch (error) {
       console.error("Failed to fetch routes:", error);
       setRoutes([]);
+      setRouteError(error?.message || "Route generation failed. Check the selected locations and try again.");
     } finally {
       setLoading(false);
     }
@@ -300,7 +303,15 @@ export default function DriverRouteList({ navigation, route: routeProp }) {
             )}
             {!loading && normalizedRoutes.length === 0 && (
               <View style={s.stateCard}>
-                <Text style={s.stateText}>No routes found</Text>
+                <Text style={s.stateTitle}>{routeError ? "Couldn't build this route" : "No routes found"}</Text>
+                <Text accessibilityRole="alert" style={routeError ? s.errorText : s.stateText}>
+                  {routeError || "No routes are available for these locations yet."}
+                </Text>
+                {routeError ? (
+                  <TouchableOpacity accessibilityRole="button" onPress={fetchRoutes} style={s.retryButton}>
+                    <Text style={s.retryButtonText}>Try again</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             )}
           </>
@@ -639,6 +650,10 @@ const s = StyleSheet.create({
     paddingVertical: 40,
   },
   stateText: { color: "#9CA3AF", fontSize: 15, fontWeight: "600" },
+  stateTitle: { color: "#111827", fontSize: 17, fontWeight: "800", marginBottom: 8 },
+  errorText: { color: "#B42318", fontSize: 14, lineHeight: 20, textAlign: "center" },
+  retryButton: { backgroundColor: "#009849", borderRadius: 10, marginTop: 16, paddingHorizontal: 22, paddingVertical: 10 },
+  retryButtonText: { color: "#fff", fontSize: 14, fontWeight: "800" },
   bestRow: { alignItems: "center", flexDirection: "row", marginBottom: 12 },
   routeNameText: { color: "#6B7280", flex: 1, fontSize: 12, fontWeight: "600", marginLeft: 4 }
 });

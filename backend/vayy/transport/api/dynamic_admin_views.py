@@ -20,6 +20,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsAdmin
+from common.constants import ROLE_AUTO_DRIVER, ROLE_BIKE_DRIVER
 from transport.api.serializers import RouteDetailSerializer
 from transport.models import City, CityAdminConfiguration, Route, RouteStopAssociation, Stop
 from transport.services.osrm_service import OSRMService
@@ -27,15 +28,20 @@ from transport.services.stop_corridor_graph import find_stop_corridor, haversine
 from transport.services.stop_discovery_service import StopDiscoveryService
 from transport.services.city_config import CITY_CENTROID_MATCH_RADIUS_M, CITY_DEFAULTS
 from transport.services.admin_import_service import (
+    MASTER_V1_COLUMNS,
+    MASTER_STOP_COLUMNS,
     decode_tabular_upload,
+    assign_master_omv_stop_names,
     normalize_import_records,
     normalize_master_v1,
+    normalize_master_stop_rows,
     normalize_noida_route_stop_rows,
     parse_geojson_routes,
     parse_master_v1_geojson,
 )
 
 logger = logging.getLogger(__name__)
+MISSING_STOP_NAME_REASON = "Source stop has no name; generated label needs review."
 IMPORT_TOKEN_SALT = "transport.admin-onboarding.apply.v1"
 IMPORT_TOKEN_MAX_AGE_SECONDS = 1800
 
@@ -86,6 +92,44 @@ def _match_imported_global_stop(city, item):
         location__distance_lte=(point, D(m=1)),
     )[:2])
     return exact[0] if len(exact) == 1 else None
+
+
+def _workbook_stop_indexes(stops):
+    by_source_id = {}
+    by_name = {}
+    for stop in stops:
+        if stop.source_stop_id:
+            by_source_id.setdefault(stop.source_stop_id, []).append(stop)
+        for name in [stop.name, *(str(alias) for alias in stop.aliases or [])]:
+            by_name.setdefault(name.casefold(), []).append(stop)
+    return by_source_id, by_name
+
+
+def _match_workbook_global_stop(by_source_id, by_name, item):
+    """Match a workbook stop without reusing a conflicting source identity."""
+    source_id = item["source_stop_id"]
+    if source_id:
+        identified = by_source_id.get(source_id, [])
+        if len(identified) > 1:
+            return None, f"stop_id {source_id!r} matches multiple existing stops"
+        if identified:
+            stop = identified[0]
+            name_matches = stop.name.casefold() == item["name"].casefold() or any(
+                str(alias).casefold() == item["name"].casefold() for alias in stop.aliases or []
+            ) or (stop.serviceability_reason == MISSING_STOP_NAME_REASON and not item.get("generated_name"))
+            if not name_matches or haversine_m(item["lat"], item["lng"], stop.location.y, stop.location.x) > 1:
+                return None, f"stop_id {source_id!r} conflicts with an existing stop's name or coordinates"
+            return stop, None
+
+    candidates = {
+        stop.pk: stop for stop in by_name.get(item["name"].casefold(), [])
+        if (not source_id or not stop.source_stop_id)
+        and haversine_m(item["lat"], item["lng"], stop.location.y, stop.location.x) <= 1
+    }
+    exact = list(candidates.values())
+    if len(exact) > 1:
+        return None, f"stop {item['name']!r} matches multiple existing stops"
+    return (exact[0], None) if exact else (None, None)
 
 
 class CoordinateSerializer(serializers.Serializer):
@@ -282,12 +326,21 @@ def _route_payload(city, origin, destination, vehicle_type, persist=False, globa
         except Exception:
             continue
     ordered.sort(key=lambda item: item[0])
-    stops = [{"id": str(stop.id), "name": stop.name, "sequence": i + 1, "order": i + 1,
-              "lat": stop.location.y, "lon": stop.location.x, "lng": stop.location.x,
-              "distance_along_route_m": round(float(position) * distance_m, 2),
-              "max_walk_to_stop_m": max_walk_m,
-              "is_boarding_point": True, "pickup_allowed": True}
-             for i, (position, stop) in enumerate(ordered)]
+    unnamed_count = sum(not str(stop.name or "").strip() for _, stop in ordered)
+    unnamed_index = 0
+    stops = []
+    for i, (position, stop) in enumerate(ordered):
+        name = str(stop.name or "").strip()
+        if not name:
+            unnamed_index += 1
+            name = "Nearest OMV Stop" if unnamed_count == 1 else f"OMV Stop {unnamed_index}"
+        stops.append({
+            "id": str(stop.id), "name": name, "sequence": i + 1, "order": i + 1,
+            "lat": stop.location.y, "lon": stop.location.x, "lng": stop.location.x,
+            "distance_along_route_m": round(float(position) * distance_m, 2),
+            "max_walk_to_stop_m": max_walk_m,
+            "is_boarding_point": True, "pickup_allowed": True,
+        })
 
     route_id = None
     if persist:
@@ -325,10 +378,10 @@ def _route_payload(city, origin, destination, vehicle_type, persist=False, globa
 
 
 
-def _corridor_preview_payload(city, origin, destination, vehicle_type, persist=False):
+def _corridor_preview_payload(city, origin, destination, vehicle_type, persist=False, driver_mode=False):
     """Build an OSRM road preview between the best existing global stops."""
     pickup_config = CityAdminConfiguration.objects.filter(city=city, is_active=True).first()
-    pickup_walk_limit_m = pickup_config.max_walk_to_stop_m if pickup_config else 3000
+    pickup_walk_limit_m = (pickup_config.max_walk_to_stop_m if pickup_config else 3000) if not driver_mode else None
     origin_point = Point(origin["lng"], origin["lat"], srid=4326)
     destination_point = Point(destination["lng"], destination["lat"], srid=4326)
     destination_city = _city_for_endpoint(destination_point)
@@ -342,7 +395,7 @@ def _corridor_preview_payload(city, origin, destination, vehicle_type, persist=F
     destination_config = CityAdminConfiguration.objects.filter(
         city=destination_city, is_active=True,
     ).first()
-    destination_walk_limit_m = destination_config.max_walk_to_stop_m if destination_config else 3000
+    destination_walk_limit_m = (destination_config.max_walk_to_stop_m if destination_config else 3000) if not driver_mode else None
     pickup_candidates = StopDiscoveryService.nearby_global_stops(
         city.id, origin_point, pickup_walk_limit_m,
     )
@@ -359,6 +412,11 @@ def _corridor_preview_payload(city, origin, destination, vehicle_type, persist=F
         }, None
 
     if not pickup_candidates or not destination_candidates:
+        if driver_mode:
+            return empty(
+                "NO_GLOBAL_STOPS",
+                "No global stops are available in one or both endpoint cities.",
+            )
         return empty(
             "NO_NEARBY_STOPS",
             "No global stop is within the configured pickup distance for one or both locations.",
@@ -367,6 +425,8 @@ def _corridor_preview_payload(city, origin, destination, vehicle_type, persist=F
     walking_route_found = {"pickup": False, "destination": False}
 
     def best_stop(candidates, point, endpoint, walk_limit_m):
+        if driver_mode:
+            return (candidates[0], None) if candidates else (None, None)
         best = None
         for stop in candidates:
             # Candidates are straight-distance ordered, which is a lower bound
@@ -390,12 +450,17 @@ def _corridor_preview_payload(city, origin, destination, vehicle_type, persist=F
     destination_stop, last_walk = best_stop(
         destination_candidates, destination_point, "destination", destination_walk_limit_m,
     )
-    if not all(walking_route_found.values()):
+    if not driver_mode and not all(walking_route_found.values()):
         return None, Response({
             "success": False, "code": "WALKING_DIRECTIONS_UNAVAILABLE",
             "message": "The road router could not provide a path to nearby stops. Please retry.",
         }, status=status.HTTP_502_BAD_GATEWAY)
     if not pickup_stop or not destination_stop:
+        if driver_mode:
+            return empty(
+                "NO_GLOBAL_STOPS",
+                "No global stops are available in one or both endpoint cities.",
+            )
         return empty(
             "NO_WALKABLE_STOPS",
             "No global stop has a routed access path within the configured pickup distance.",
@@ -418,10 +483,20 @@ def _corridor_preview_payload(city, origin, destination, vehicle_type, persist=F
             "message": "Routing provider returned invalid route geometry.",
         }, status=status.HTTP_502_BAD_GATEWAY)
 
+    unnamed_stop_count = sum(
+        not str(stop.name or "").strip() for stop in (pickup_stop, destination_stop)
+    )
+    unnamed_stop_index = 0
+
     def stop_data(stop, sequence, road_point):
+        nonlocal unnamed_stop_index
         road_lng, road_lat = road_point["lng"], road_point["lat"]
+        name = str(stop.name or "").strip()
+        if not name:
+            unnamed_stop_index += 1
+            name = "Nearest OMV Stop" if unnamed_stop_count == 1 else f"OMV Stop {unnamed_stop_index}"
         return {
-            "id": str(stop.pk), "name": stop.name,
+            "id": str(stop.pk), "name": name,
             # Display the route's OSRM-snapped boarding point while retaining
             # the canonical global-stop location and ID unchanged.
             "lat": road_lat, "lon": road_lng, "lng": road_lng,
@@ -453,11 +528,11 @@ def _corridor_preview_payload(city, origin, destination, vehicle_type, persist=F
                       "duration_is_estimate": last_walk.get("duration_is_estimate", True)} if last_walk else None,
         "first_mile_walk_meters": round(first_walk["distance"], 2) if first_walk else None,
         "last_mile_walk_meters": round(last_walk["distance"], 2) if last_walk else None,
-        "first_mile_proximity_meters": round(pickup_stop.distance_m.m, 1),
-        "last_mile_proximity_meters": round(destination_stop.distance_m.m, 1),
-        "walking_path": first_walk["geometry"],
-        "walking_duration_is_estimate": first_walk.get("duration_is_estimate", True),
-        "walking_profile": first_walk.get("profile", OSRMService.WALKING_PROFILE or OSRMService.DEFAULT_PROFILE),
+        "first_mile_proximity_meters": None if driver_mode else round(pickup_stop.distance_m.m, 1),
+        "last_mile_proximity_meters": None if driver_mode else round(destination_stop.distance_m.m, 1),
+        "walking_path": first_walk["geometry"] if first_walk else None,
+        "walking_duration_is_estimate": first_walk.get("duration_is_estimate", True) if first_walk else None,
+        "walking_profile": first_walk.get("profile", OSRMService.WALKING_PROFILE or OSRMService.DEFAULT_PROFILE) if first_walk else None,
         "walking_directions_available": bool(first_walk and last_walk),
     })
     route_preview.update({
@@ -466,8 +541,8 @@ def _corridor_preview_payload(city, origin, destination, vehicle_type, persist=F
         "dropoff_stop": stops[1],
         "first_mile_walk_meters": round(first_walk["distance"], 2) if first_walk else None,
         "last_mile_walk_meters": round(last_walk["distance"], 2) if last_walk else None,
-        "first_mile_proximity_meters": round(pickup_stop.distance_m.m, 1),
-        "last_mile_proximity_meters": round(destination_stop.distance_m.m, 1),
+        "first_mile_proximity_meters": None if driver_mode else round(pickup_stop.distance_m.m, 1),
+        "last_mile_proximity_meters": None if driver_mode else round(destination_stop.distance_m.m, 1),
         "walking_directions_available": bool(first_walk and last_walk),
     })
     return {
@@ -486,7 +561,10 @@ class DynamicRoutePreviewAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         city = _resolve_city(request, data.get("city_id"), data["origin"])
-        payload, error = _corridor_preview_payload(city, data["origin"], data["destination"], data["vehicle_type"])
+        driver_mode = request.user.role in (ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER)
+        payload, error = _corridor_preview_payload(
+            city, data["origin"], data["destination"], data["vehicle_type"], driver_mode=driver_mode,
+        )
         if error:
             return error
         return Response({"success": True, "message": "Stop-corridor route preview generated.", "data": payload}, status=200)
@@ -498,11 +576,20 @@ class DynamicRouteGenerateAPIView(DynamicRoutePreviewAPIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         city = _resolve_city(request, data.get("city_id"), data["origin"])
+        driver_mode = request.user.role in (ROLE_BIKE_DRIVER, ROLE_AUTO_DRIVER)
         payload, error = _corridor_preview_payload(
             city, data["origin"], data["destination"], data["vehicle_type"], persist=True,
+            driver_mode=driver_mode,
         )
         if error:
             return error
+        if not payload.get("routes"):
+            return Response({
+                "success": False,
+                "code": payload.get("empty_reason") or "ROUTE_NOT_FOUND",
+                "message": payload.get("message") or "No usable route was found between these locations.",
+                "data": payload,
+            }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         return Response({"success": True, "message": "Dynamic route saved.", "data": payload}, status=status.HTTP_201_CREATED)
 
 
@@ -549,26 +636,75 @@ class AdminOnboardingAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
-    def _post_master_v1(self, request, upload, raw, records, geometry_upload, mode):
+    def _post_master_v1(self, request, upload, raw, records, geometry_upload, mode, *, auto_master=False, versionless_master=False, stop_records=None):
         selected_city = str(
             request.data.get("city_slug") or request.data.get("city_id") or ""
         ).strip()
+        city = None
+        if not selected_city and auto_master:
+            city_names = {str(row.get("city_name") or "").strip() for row in records}
+            city_names.discard("")
+            if len(city_names) == 1:
+                city = City.objects.filter(name__iexact=next(iter(city_names))).first()
+                selected_city = city.slug if city else next(iter(city_names))
         if not selected_city:
             return Response({
                 "success": False,
-                "message": "Select an existing city to filter this schema version 1 master CSV.",
+                "message": "This file must contain rows for exactly one city and include its city_name.",
                 "code": "CITY_FILTER_REQUIRED",
             }, status=400)
-        city = City.objects.filter(slug__iexact=selected_city).first()
-        if city is None:
+        if auto_master:
+            city = city or City.objects.filter(name__iexact=selected_city).first()
+            if city is None and (request.data.get("city_slug") or request.data.get("city_id")):
+                city = City.objects.filter(slug__iexact=selected_city).first()
+        else:
+            city = city or City.objects.filter(slug__iexact=selected_city).first()
+        if city is None and not auto_master:
             return Response({
                 "success": False,
                 "message": f"No existing city has slug {selected_city!r}; create the city before importing its rows.",
                 "code": "CITY_NOT_FOUND",
             }, status=404)
 
+        target_city_name = city.name if city else selected_city
+        target_city_slug = city.slug if city else slugify(target_city_name)
+        if city is None:
+            base_slug = target_city_slug or "city"
+            target_city_slug = base_slug
+            suffix = 2
+            while City.objects.filter(slug=target_city_slug).exists():
+                target_city_slug = f"{base_slug}-{suffix}"
+                suffix += 1
+
+        if auto_master:
+            for row in records:
+                city_name = str(row.get("city_name") or "").strip()
+                if versionless_master:
+                    row["schema_version"] = "1"
+                row["city_id"] = target_city_slug if city_name.casefold() == target_city_name.casefold() else slugify(city_name)
+                if not str(row.get("direction_name") or "").strip():
+                    row["direction_name"] = row.get("direction_id") or ""
+                if not geometry_upload:
+                    identity = f"{row.get('city_id') or ''}\0{row.get('route_id') or ''}\0{row.get('direction_id') or ''}"
+                    row["route_geometry_id"] = "stop-sequence-" + hashlib.sha256(identity.encode()).hexdigest()[:32]
+        generate_geometry = auto_master and geometry_upload is None
+        existing_stop_names = {}
+        if city:
+            existing_stop_names = {
+                stop_id.casefold(): name
+                for stop_id, name, reason in Stop.objects.filter(
+                    city=city, is_global=True,
+                ).exclude(source_stop_id="").values_list(
+                    "source_stop_id", "name", "serviceability_reason",
+                )
+                if str(name or "").strip() and reason != MISSING_STOP_NAME_REASON
+            }
+        generated_stop_ids = assign_master_omv_stop_names(
+            records, stop_records, target_city_slug, target_city_name, existing_stop_names,
+        )
+
         try:
-            groups, errors, excluded_rows = normalize_master_v1(records, city.slug)
+            groups, errors, excluded_rows = normalize_master_v1(records, target_city_slug)
         except ValueError as exc:
             return Response({"success": False, "message": str(exc), "code": "MASTER_CSV_SCHEMA_INVALID"}, status=400)
 
@@ -587,21 +723,22 @@ class AdminOnboardingAPIView(APIView):
                 return Response({"success": False, "message": str(exc), "code": "MASTER_GEOJSON_INVALID"}, status=400)
 
         for item in geometry_errors:
-            if item.get("city_id") in (None, city.slug.casefold()):
+            if item.get("city_id") in (None, target_city_slug.casefold()):
                 errors.append({"row": f"GeoJSON:{item['row']}", "reason": item["reason"]})
 
         for (city_id, route_id, direction_id), group in groups.items():
-            if group["city_name"].casefold() != city.name.casefold():
+            if group["city_name"].casefold() != target_city_name.casefold():
                 errors.append({
                     "row": group["row_numbers"][0],
-                    "reason": f"city_name {group['city_name']!r} does not match selected city {city.name!r}",
+                    "reason": f"city_name {group['city_name']!r} does not match file city {target_city_name!r}",
                 })
             geometry = geometries.get((city_id, route_id))
             if geometry is None:
-                errors.append({
-                    "row": group["row_numbers"][0],
-                    "reason": f"missing GeoJSON LineString for city_id={city_id!r}, route_id={route_id!r}",
-                })
+                if not generate_geometry:
+                    errors.append({
+                        "row": group["row_numbers"][0],
+                        "reason": f"missing GeoJSON LineString for city_id={city_id!r}, route_id={route_id!r}",
+                    })
             elif geometry["geometry_id"] != group["route_geometry_id"]:
                 errors.append({
                     "row": group["row_numbers"][0],
@@ -610,18 +747,103 @@ class AdminOnboardingAPIView(APIView):
             else:
                 group["geometry"] = geometry["coordinates"]
 
-        matched_global_stops = 0
-        for group in groups.values():
-            for item in group["stops"]:
-                global_stop = _match_imported_global_stop(city, item)
-                if global_stop is None:
-                    errors.append({
-                        "row": item["row_number"],
-                        "reason": f"stop_id {item['source_stop_id']!r} must match one existing global stop by source ID or exact name and coordinates",
-                    })
-                    continue
-                item["global_stop_id"] = global_stop.pk
-                matched_global_stops += 1
+        stop_candidates = {}
+        stop_excluded_rows = 0
+        matched_stop_ids = {}
+        new_global_stops = {}
+        unmatched_stop_rows = 0
+        unnamed_stop_count = 0
+        if auto_master:
+            if stop_records is not None:
+                try:
+                    stop_candidates, stop_errors, stop_excluded_rows = normalize_master_stop_rows(
+                        stop_records, target_city_name,
+                    )
+                    errors.extend({"row": f"Stops:{item['row']}", "reason": item["reason"]} for item in stop_errors)
+                except ValueError as exc:
+                    return Response({"success": False, "message": str(exc), "code": "MASTER_STOPS_INVALID"}, status=400)
+
+            for group in groups.values():
+                for item in group["stops"]:
+                    if item["source_stop_id"].casefold() in generated_stop_ids:
+                        item["generated_name"] = True
+                        item["boarding_allowed"] = False
+                        item["alighting_allowed"] = False
+                    global_stop = stop_candidates.get(item["source_stop_id"])
+                    if global_stop is None:
+                        stop_candidates[item["source_stop_id"]] = {
+                            "source_stop_id": item["source_stop_id"],
+                            "name": item["name"],
+                            "aliases": item["aliases"],
+                            "lat": item["lat"],
+                            "lng": item["lng"],
+                            "source_name": item["source_name"],
+                            "source_reference": item["source_reference"],
+                            "boarding_allowed": item["boarding_allowed"],
+                            "alighting_allowed": item["alighting_allowed"],
+                            "row_number": item["row_number"],
+                        }
+                        continue
+
+                    current_name = str(global_stop.get("name") or "").strip()
+                    names = {current_name.casefold(), *(alias.casefold() for alias in global_stop["aliases"])} - {""}
+                    name_conflict = bool(current_name and item["name"].casefold() not in names)
+                    coordinate_conflict = haversine_m(
+                        item["lat"], item["lng"], global_stop["lat"], global_stop["lng"],
+                    ) > 1
+                    if name_conflict or coordinate_conflict:
+                        errors.append({
+                            "row": item["row_number"],
+                            "reason": f"route stop_id {item['source_stop_id']!r} conflicts with the Stops sheet name or coordinates",
+                        })
+                    elif not current_name:
+                        global_stop["name"] = item["name"]
+                    global_stop["aliases"] = list(dict.fromkeys(global_stop["aliases"] + item["aliases"]))
+
+            for source_stop_id, item in stop_candidates.items():
+                if source_stop_id.casefold() in generated_stop_ids:
+                    item["generated_name"] = True
+                    item["boarding_allowed"] = False
+                    item["alighting_allowed"] = False
+                    unnamed_stop_count += 1
+
+            existing_stops = list(Stop.objects.filter(city=city, is_global=True).only(
+                "pk", "source_stop_id", "name", "aliases", "location", "serviceability_reason",
+            )) if city else []
+            by_source_id, by_name = _workbook_stop_indexes(existing_stops)
+            unmatched_stop_ids = set()
+            for source_stop_id, item in stop_candidates.items():
+                global_stop, match_error = _match_workbook_global_stop(by_source_id, by_name, item)
+                if match_error:
+                    errors.append({"row": item.get("row_number"), "reason": match_error})
+                    unmatched_stop_ids.add(source_stop_id)
+                elif global_stop is None:
+                    new_global_stops[source_stop_id] = item
+                else:
+                    matched_stop_ids[source_stop_id] = global_stop.pk
+
+            unmatched_stop_rows = sum(
+                item["source_stop_id"] in unmatched_stop_ids
+                for group in groups.values() for item in group["stops"]
+            )
+            for group in groups.values():
+                for item in group["stops"]:
+                    if item["source_stop_id"] in matched_stop_ids:
+                        item["global_stop_id"] = matched_stop_ids[item["source_stop_id"]]
+        else:
+            matched_global_stop_rows = 0
+            for group in groups.values():
+                for item in group["stops"]:
+                    global_stop = _match_imported_global_stop(city, item)
+                    if global_stop is None:
+                        errors.append({
+                            "row": item["row_number"],
+                            "reason": f"stop_id {item['source_stop_id']!r} must match one existing global stop by source ID or exact name and coordinates",
+                        })
+                        unmatched_stop_rows += 1
+                    else:
+                        item["global_stop_id"] = global_stop.pk
+                        matched_global_stop_rows += 1
 
         digest = hashlib.sha256(raw + b"\0" + geometry_raw).hexdigest()
         selected_stop_rows = sum(len(group["stops"]) for group in groups.values())
@@ -637,18 +859,21 @@ class AdminOnboardingAPIView(APIView):
                 "file_sha256": digest,
                 "geometry_file": geometry_upload.name if geometry_upload else None,
             },
-            "city": {"name": city.name, "slug": city.slug, "id": str(city.pk)},
+            "city": {"name": target_city_name, "slug": target_city_slug, "id": str(city.pk) if city else None},
             "report": {
                 "rows": len(records),
                 "selected_city_rows": selected_stop_rows,
                 "excluded_city_rows": excluded_rows,
                 "routes": len(groups),
-                "stop_instances": 0,
-                "global_stop_memberships": matched_global_stops,
-                "global_stops_unmatched": selected_stop_rows - matched_global_stops,
+                "stop_instances": len(stop_candidates) if auto_master else matched_global_stop_rows,
+                "global_stop_memberships": selected_stop_rows - unmatched_stop_rows if auto_master else matched_global_stop_rows,
+                "global_stops_unmatched": unmatched_stop_rows if auto_master else selected_stop_rows - matched_global_stop_rows,
                 "routes_created": 0,
                 "stops_created": 0,
+                "stops_to_create": len(new_global_stops),
+                "route_stop_rows": selected_stop_rows,
                 "stops_updated": 0,
+                "unnamed_stops": unnamed_stop_count if auto_master else 0,
                 "global_stop_memberships_created": 0,
                 "duplicates": 0,
                 "unresolved": len(blocking_errors),
@@ -656,13 +881,16 @@ class AdminOnboardingAPIView(APIView):
             },
             "blocking_errors": blocking_errors[:200],
             "errors": blocking_errors[:200],
-            "warnings": [],
+            "warnings": (
+                (["Route geometry connects the supplied stop coordinates in order; it is an approximate stop-to-stop line, not road geometry. Routes remain private until reviewed."] if generate_geometry else [])
+                + ([f"Generated OMV stop labels for {unnamed_stop_count} unnamed stops; they remain non-boarding until reviewed."] if unnamed_stop_count else [])
+            ),
         }
 
         if mode == "validate":
             if report["can_apply"]:
                 report["apply_token"] = _issue_import_token(
-                    request, city.pk, digest, 1,
+                    request, city.pk if city else f"new:{target_city_slug}", digest, 1,
                 )
             return Response({
                 "success": True,
@@ -681,15 +909,80 @@ class AdminOnboardingAPIView(APIView):
         token_error = _verify_import_token(
             request,
             request.data.get("apply_token"),
-            city.pk,
+            city.pk if city else f"new:{target_city_slug}",
             digest,
             1,
         )
         if token_error:
             return Response({"success": False, "message": token_error, "code": "DRY_RUN_TOKEN_INVALID"}, status=409)
 
+        if generate_geometry:
+            for group in groups.values():
+                group["geometry"] = [(stop["lng"], stop["lat"]) for stop in group["stops"]]
+
         try:
             with transaction.atomic():
+                if city is None:
+                    city_data = {"name": target_city_name, "slug": target_city_slug}
+                    if target_city_slug in CITY_DEFAULTS:
+                        latitude, longitude, state = CITY_DEFAULTS[target_city_slug]
+                        city_data.update(state=state, location=Point(longitude, latitude, srid=4326))
+                    city = City.objects.create(**city_data)
+                    report["city"].update(slug=city.slug, id=str(city.pk))
+                if auto_master:
+                    CityAdminConfiguration.objects.get_or_create(city=city)
+                    existing_stops = list(Stop.objects.select_for_update().filter(
+                        city=city, is_global=True,
+                    ).only("pk", "source_stop_id", "name", "aliases", "location", "serviceability_reason"))
+                    by_source_id, by_name = _workbook_stop_indexes(existing_stops)
+                    stop_ids = {}
+                    stops_to_create = []
+                    for source_stop_id, item in stop_candidates.items():
+                        stop, match_error = _match_workbook_global_stop(by_source_id, by_name, item)
+                        if match_error:
+                            raise ValueError(match_error)
+                        if stop and stop.serviceability_reason == MISSING_STOP_NAME_REASON and not item.get("generated_name"):
+                            stop.name = item["name"]
+                            stop.aliases = item["aliases"]
+                            stop.boarding_allowed = item.get("boarding_allowed", True)
+                            stop.alighting_allowed = item.get("alighting_allowed", True)
+                            stop.serviceability_reason = "Imported stop name from source; provisional until reviewed."
+                            stop.save(update_fields=[
+                                "name", "aliases", "boarding_allowed", "alighting_allowed", "serviceability_reason",
+                            ])
+                            report["report"]["stops_updated"] += 1
+                        if stop is None:
+                            stop = Stop(
+                                city=city,
+                                route=None,
+                                is_global=True,
+                                name=item["name"],
+                                aliases=item["aliases"],
+                                source_stop_id=source_stop_id,
+                                source_name=item["source_name"],
+                                source_reference=item["source_reference"],
+                                boarding_allowed=item.get("boarding_allowed", True),
+                                alighting_allowed=item.get("alighting_allowed", True),
+                                location=Point(item["lng"], item["lat"], srid=4326),
+                                coordinate_status="provisional",
+                                serviceability_reason=(
+                                    MISSING_STOP_NAME_REASON if item.get("generated_name")
+                                    else "Imported route stop; provisional until reviewed."
+                                ),
+                            )
+                            stops_to_create.append(stop)
+                            by_source_id.setdefault(source_stop_id, []).append(stop)
+                            for name in [stop.name, *(str(alias) for alias in stop.aliases or [])]:
+                                by_name.setdefault(name.casefold(), []).append(stop)
+                        stop_ids[source_stop_id] = stop
+
+                    Stop.objects.bulk_create(stops_to_create, batch_size=500)
+                    report["report"]["stops_created"] = len(stops_to_create)
+                    stop_ids = {source_stop_id: stop.pk for source_stop_id, stop in stop_ids.items()}
+                    for group in groups.values():
+                        for item in group["stops"]:
+                            item["global_stop_id"] = stop_ids[item["source_stop_id"]]
+
                 for (city_id, source_route_id, source_direction_id), group in groups.items():
                     route = Route.objects.filter(
                         city=city,
@@ -708,6 +1001,10 @@ class AdminOnboardingAPIView(APIView):
                     is_new = route is None
                     if route is None:
                         route = Route(city=city)
+                    preserve_existing_geometry = (
+                        not is_new and generate_geometry
+                        and not route.route_geometry_id.startswith("stop-sequence-")
+                    )
 
                     route.name = group["route_name"]
                     route.route_code = (group["route_number"] or source_route_id)[:50]
@@ -715,10 +1012,14 @@ class AdminOnboardingAPIView(APIView):
                     route.source_direction_id = source_direction_id
                     route.route_number = group["route_number"]
                     route.direction_name = group["direction_name"]
-                    route.route_geometry_id = group["route_geometry_id"]
+                    if not preserve_existing_geometry:
+                        route.route_geometry_id = group["route_geometry_id"]
                     route.source_name = group["stops"][0]["source_name"]
                     route.source_reference = group["stops"][0]["source_reference"]
-                    route.path = LineString(group["geometry"], srid=4326)
+                    if not preserve_existing_geometry:
+                        route.path = LineString(group["geometry"], srid=4326)
+                    if generate_geometry and not preserve_existing_geometry:
+                        route.total_distance_meters = 0
                     route.start_name = group["stops"][0]["name"]
                     route.end_name = group["stops"][-1]["name"]
                     route.is_public = False
@@ -741,8 +1042,11 @@ class AdminOnboardingAPIView(APIView):
                 report["can_apply"] = False
                 report["stage"] = "applied"
                 report["message"] = (
-                    f"Imported {len(groups)} private routes and {report['report']['global_stop_memberships_created']} memberships to existing global stops into {city.name}."
+                    f"Imported {len(groups)} private routes and {report['report']['global_stop_memberships_created']} stop memberships into {city.name}."
                 )
+        except ValueError as exc:
+            logger.info("Admin schema v1 import changed after Dry Run: %s", exc)
+            return Response({"success": False, "message": str(exc), "code": "MASTER_IMPORT_DATA_CHANGED"}, status=409)
         except Exception:
             logger.exception("Admin schema v1 master import failed; transaction rolled back")
             return Response({
@@ -970,7 +1274,23 @@ class AdminOnboardingAPIView(APIView):
 
         try:
             raw = upload.read()
-            records = decode_tabular_upload(raw, extension)
+            auto_master = False
+            versionless_master = False
+            stop_records = None
+            if extension in ("xlsx", "xlsm"):
+                workbook_sheets = decode_tabular_upload(raw, extension, all_sheets=True)
+                v1_columns_without_version = set(MASTER_V1_COLUMNS) - {"schema_version"}
+                master_sheet = next((sheet_rows for sheet_rows in workbook_sheets.values()
+                    if sheet_rows and v1_columns_without_version.issubset(set(sheet_rows[0]))), None)
+                records = master_sheet if master_sheet is not None else next(iter(workbook_sheets.values()), [])
+                if master_sheet is not None:
+                    versionless_master = "schema_version" not in master_sheet[0]
+                    auto_master = request.FILES.get("geometry_file") is None
+                    stop_records = next((sheet_rows for name, sheet_rows in workbook_sheets.items()
+                        if name.casefold() == "stops" and sheet_rows and
+                        set(MASTER_STOP_COLUMNS).issubset(set(sheet_rows[0]))), None)
+            else:
+                records = decode_tabular_upload(raw, extension)
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError, OSError) as exc:
             return Response({"success": False, "message": str(exc) or "Could not parse the uploaded file."}, status=400)
         except Exception:
@@ -985,7 +1305,9 @@ class AdminOnboardingAPIView(APIView):
             for key in records[0]
         }
         master_headers = {"city_id", "direction_id", "stop_id", "route_geometry_id"}
-        is_master_v1 = "schema_version" in normalized_headers
+        is_complete_master = (set(MASTER_V1_COLUMNS) - {"schema_version"}).issubset(normalized_headers)
+        auto_master = auto_master or versionless_master or (is_complete_master and "schema_version" in normalized_headers)
+        is_master_v1 = "schema_version" in normalized_headers or auto_master
         looks_like_master = bool(normalized_headers.intersection(master_headers))
         if request.data.get("import_format") == "noida_route_stops" and not is_master_v1:
             return self._post_noida_route_stops(request, upload, raw, records, mode)
@@ -998,6 +1320,9 @@ class AdminOnboardingAPIView(APIView):
         if is_master_v1:
             return self._post_master_v1(
                 request, upload, raw, records, request.FILES.get("geometry_file"), mode,
+                auto_master=auto_master,
+                versionless_master=versionless_master,
+                stop_records=stop_records,
             )
 
         try:
@@ -1157,7 +1482,12 @@ class AdminOnboardingAPIView(APIView):
                     Stop.objects.create(
                         city=city, route=None, is_global=True, name=item["name"], location=point,
                         coordinate_status="provisional",
-                        serviceability_reason="Imported named-stop candidate; route membership not supplied.",
+                        boarding_allowed=item["boarding_allowed"],
+                        alighting_allowed=item["alighting_allowed"],
+                        serviceability_reason=(
+                            MISSING_STOP_NAME_REASON if item["generated_name"]
+                            else "Imported named-stop candidate; route membership not supplied."
+                        ),
                     )
                     report["created"] += 1
                 for (route_name, route_code), (points, geometry) in matched_routes.items():
@@ -1183,6 +1513,8 @@ class AdminOnboardingAPIView(APIView):
                             raise ValueError(f"Route stop {point_data['name']!r} no longer matches a global stop; rerun Dry Run.")
                         memberships.append(RouteStopAssociation(
                             route=route, stop=stop, order=point_data["sequence"],
+                            boarding_allowed=point_data["boarding_allowed"],
+                            alighting_allowed=point_data["alighting_allowed"],
                         ))
                     route.route_stop_associations.all().delete()
                     RouteStopAssociation.objects.bulk_create(memberships)

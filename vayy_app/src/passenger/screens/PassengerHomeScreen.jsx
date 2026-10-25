@@ -22,7 +22,6 @@ export default function PassengerHomeScreen({ navigation, mode = "auto" }) {
       <View style={styles.home}>
         <VayyMap
           style={styles.mapBg}
-          grayscale
           initialRegion={{
             latitude: user?.latitude || DEFAULT_CENTER.latitude,
             longitude: user?.longitude || DEFAULT_CENTER.longitude,

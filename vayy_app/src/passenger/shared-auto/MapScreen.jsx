@@ -23,7 +23,6 @@ export function SharedAutoMapScreen({ navigation, route }) {
       <View style={styles.mapPage}>
         <VayyMap
           style={styles.mapBg}
-          grayscale
           initialRegion={{
             latitude: route?.params?.latitude || DEFAULT_CENTER.latitude,
             longitude: route?.params?.longitude || DEFAULT_CENTER.longitude,

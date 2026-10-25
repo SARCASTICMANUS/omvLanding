@@ -353,7 +353,6 @@ export function BikeMapPreRideScreen({ navigation, route }) {
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
-          grayscale
           initialViewState={{
             center: initialCenter,
             zoom: 14,

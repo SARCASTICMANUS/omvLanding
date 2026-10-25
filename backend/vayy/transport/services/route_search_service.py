@@ -114,13 +114,11 @@ class RouteSearchService:
                         continue
                     route = from_member["route"]
                     sequence = ordered_by_route[route.pk]
-                    # A route with cross-table order collisions is not a valid
-                    # ordered direction; do not pick an arbitrary ordering.
+                    # Repeated physical stops are valid on loop routes; only
+                    # duplicate sequence positions make the direction ambiguous.
                     orders = [row["order"] for row in sequence]
-                    stop_ids = [row["stop"].pk for row in sequence]
                     if (
                         len(orders) != len(set(orders))
-                        or len(stop_ids) != len(set(stop_ids))
                         or len(sequence) < 2
                     ):
                         continue

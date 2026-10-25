@@ -147,6 +147,7 @@ export default function Routes() {
   const [isAddingStop, setIsAddingStop] = useState(false);
   const [previews, setPreviews] = useState([]);
   const [selectedPreview, setSelectedPreview] = useState(0);
+  const [previewError, setPreviewError] = useState("");
 
   const [mapLoaded, setMapLoaded] = useState(false);
   const [is3D, setIs3D] = useState(false);
@@ -159,6 +160,7 @@ export default function Routes() {
   const [importTotalRows, setImportTotalRows] = useState(0);
   const [importMapping, setImportMapping] = useState({ name: "", latitude: "", longitude: "", order: "", plusCode: "", nearbyLandmark: "", roadPath: "" });
   const [importRoadPath, setImportRoadPath] = useState([]);
+  const [importRoadPathError, setImportRoadPathError] = useState("");
   const [importRouteName, setImportRouteName] = useState("");
   const [importRouteCode, setImportRouteCode] = useState("");
   const [importPreviewStops, setImportPreviewStops] = useState([]);
@@ -263,8 +265,13 @@ export default function Routes() {
       const curEnd = endRef.current;
       const curStops = stopsRef.current;
       if (isAddingStop && curStart && curEnd) {
-        const s = { lat, lon: lng, name: `Stop ${curStops.length + 1}` };
-        const updated = [...curStops, s];
+        const addedStop = { lat, lon: lng, name: "", generated_name: true };
+        const stopsWithNew = [...curStops, addedStop];
+        const unnamedCount = stopsWithNew.filter((stop) => stop.generated_name).length;
+        let unnamedIndex = 0;
+        const updated = stopsWithNew.map((stop) => stop.generated_name
+          ? { ...stop, name: unnamedCount === 1 ? "Nearest OMV Stop" : `OMV Stop ${++unnamedIndex}` }
+          : stop);
         setStops(updated);
         stopsRef.current = updated;
         setIsAddingStop(false);
@@ -313,6 +320,9 @@ export default function Routes() {
   const fetchPreview = async (s, e, st, sn, en) => {
     if (!s || !e) return;
     const requestId = ++previewRequestRef.current;
+    setPreviewError("");
+    setPreviews([]);
+    setSelectedPreview(0);
     try {
       const res = await api.post("/transport/routes/preview/", {
         start: { lat: s.lat, lon: s.lon, name: sn || "" },
@@ -320,14 +330,17 @@ export default function Routes() {
         stops: (st || []).map((s, i) => ({ lat: s.lat, lon: s.lon, name: s.name, order: i })),
       });
       if (requestId !== previewRequestRef.current) return;
-      setPreviews(Array.isArray(res.data) ? res.data : []);
+      const routePreviews = Array.isArray(res.data) ? res.data : [];
+      setPreviews(routePreviews);
       setSelectedPreview(0);
-      return res.data;
+      if (!routePreviews.length) setPreviewError("The routing service returned no route alternatives for these stops.");
+      return routePreviews;
     } catch (err) {
       if (requestId !== previewRequestRef.current) return;
       setPreviews([]);
       console.error("Route geometry preview failed:", err);
-      alert("Road geometry unavailable: " + (err.response?.data?.message || err.response?.data?.detail || err.message));
+      const reason = err.response?.data?.message || err.response?.data?.detail || err.message || "Road geometry generation failed.";
+      setPreviewError(typeof reason === "string" ? reason : JSON.stringify(reason));
     }
   };
 
@@ -531,11 +544,12 @@ export default function Routes() {
       });
     } catch (err) {
       const reason = err.response?.data?.message || err.response?.data?.detail || err.response?.data;
+      const detail = typeof reason === "string" ? reason : JSON.stringify(reason || err.message);
       if (createdRouteId) {
         await fetchRouteDetail({ id: createdRouteId });
-        alert("The private route draft was created, but its stop order could not be saved. The draft is open so you can retry the stop order.");
+        alert(`The private route draft was created, but its stop order could not be saved. The draft is open so you can retry. Reason: ${detail}`);
       } else {
-        alert("Failed to save route: " + (typeof reason === "string" ? reason : JSON.stringify(reason || err.message)));
+        alert("Failed to save route: " + detail);
       }
     }
     setLoading(false);
@@ -546,7 +560,7 @@ export default function Routes() {
     setStart(null); setEnd(null); setStops([]);
     setRouteName(""); setStartName(""); setEndName("");
     setRouteCode(""); setDirectionName("");
-    setPreviews([]); setSelectedPreview(0);
+    setPreviews([]); setSelectedPreview(0); setPreviewError("");
     setSelectedRoute(null);
     startRef.current = null; endRef.current = null; stopsRef.current = [];
     startNameRef.current = ""; endNameRef.current = "";
@@ -653,6 +667,7 @@ export default function Routes() {
     const file = e.target.files?.[0];
     if (!file) return;
     setImportError("");
+    setImportRoadPathError("");
     setImportStep(1);
     try {
       const { columns, rows, totalRows, meta, error } = await parseFileClientSide(file);
@@ -694,6 +709,7 @@ export default function Routes() {
     if (!importMapping.latitude || !importMapping.longitude) {
       setImportPreviewStops([]);
       setImportRoadPath([]);
+      setImportRoadPathError("");
       return;
     }
     const stops = [];
@@ -705,13 +721,19 @@ export default function Routes() {
       const hasSeq = seqVal !== undefined && seqVal !== null && String(seqVal).trim() !== "" && !isNaN(parseInt(String(seqVal).trim()));
       if (!hasSeq) return;
       let order = parseInt(String(seqVal).trim()) || i;
-      const name = importMapping.name ? (row[importMapping.name] || `Stop ${order}`) : `Stop ${order}`;
+      const name = importMapping.name ? String(row[importMapping.name] || "").trim() : "";
       const plusCode = importMapping.plusCode ? (row[importMapping.plusCode] || "") : "";
       const nearbyLandmark = importMapping.nearbyLandmark ? (row[importMapping.nearbyLandmark] || "") : "";
       stops.push({ lat, lon, name, order, plus_code: plusCode, nearby_landmark: nearbyLandmark });
     });
     stops.sort((a, b) => a.order - b.order);
-    setImportPreviewStops(stops);
+    const unnamedCount = stops.filter((stop) => !String(stop.name || "").trim()).length;
+    let unnamedIndex = 0;
+    const namedStops = stops.map((stop) => ({
+      ...stop,
+      name: stop.name || (unnamedCount === 1 ? "Nearest OMV Stop" : `OMV Stop ${++unnamedIndex}`),
+    }));
+    setImportPreviewStops(namedStops);
 
     let roadPath = [];
     if (importMapping.roadPath) {
@@ -732,10 +754,13 @@ export default function Routes() {
       }
     }
     setImportRoadPath(roadPath);
+    setImportRoadPathError("");
   }, [importRows, importMapping]);
 
   const handleGenerateRoadPath = useCallback(async () => {
     if (importPreviewStops.length < 2) return;
+    setImportRoadPath([]);
+    setImportRoadPathError("");
     try {
       const first = importPreviewStops[0];
       const last = importPreviewStops[importPreviewStops.length - 1];
@@ -749,9 +774,13 @@ export default function Routes() {
       const preview = Array.isArray(data) ? data[0] : data?.path ? data : null;
       if (preview?.path?.length >= 2) {
         setImportRoadPath(preview.path);
+      } else {
+        setImportRoadPathError("The routing service returned no usable road geometry for these stops.");
       }
     } catch (err) {
       console.warn("Road path generation failed, using straight-line preview:", err);
+      const reason = err.response?.data?.message || err.response?.data?.detail || err.message || "Road path generation failed.";
+      setImportRoadPathError(typeof reason === "string" ? reason : JSON.stringify(reason));
     }
   }, [importPreviewStops]);
 
@@ -817,7 +846,9 @@ export default function Routes() {
       });
       const d = res.data?.data || res.data;
       const msg = d.message || "Route imported successfully";
-      const extra = d.road_snapped ? `\nRoad-snapped: ${d.geometry_points} geometry points` : "";
+      const extra = d.road_snapped
+        ? `\nRoad-snapped: ${d.geometry_points} geometry points`
+        : "\nRoad routing was unavailable; the route used straight-line geometry.";
       alert(msg + extra);
       resetImport();
       api.get(`/transport/routes/?city_id=${selectedCity}`).then((r) => {
@@ -840,6 +871,7 @@ export default function Routes() {
     setImportRouteCode("");
     setImportPreviewStops([]);
     setImportRoadPath([]);
+    setImportRoadPathError("");
     setImportError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (map.current) {
@@ -957,6 +989,20 @@ export default function Routes() {
           {tab === "create" && !selectedRoute && (
             <div className="space-y-5">
               {loading && <Loader size="sm" />}
+
+              {previewError && (
+                <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                  <p className="font-semibold">Route preview failed</p>
+                  <p className="mt-1">{previewError}</p>
+                  <button
+                    type="button"
+                    onClick={() => fetchPreview(start, end, stops, startName, endName)}
+                    className="mt-3 rounded-lg bg-red-700 px-4 py-2 font-semibold text-white"
+                  >
+                    Retry route generation
+                  </button>
+                </div>
+              )}
 
               {previews.length > 1 && (
                 <div className="space-y-2">
@@ -1206,7 +1252,7 @@ export default function Routes() {
                   </button>
                 ))}
                 {routeMembershipDraft.map((stop, index) => (
-                  <div key={stop.id} className="flex items-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-xs">
+                  <div key={`${stop.id}-${index}`} className="flex items-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-xs">
                     <span className="flex-1 truncate">{index + 1}. {stop.name}<small className="block text-[10px] text-slate-500">{stop.location?.coordinates?.[1]?.toFixed(5)}, {stop.location?.coordinates?.[0]?.toFixed(5)}</small></span>
                     <button type="button" disabled={index === 0} title="Move up" onClick={() => setRouteMembershipDraft((rows) => {
                       const next = [...rows]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next;
@@ -1468,9 +1514,11 @@ export default function Routes() {
                     </div>
                   ) : (
                     <div className="rounded-lg p-3" style={{ background: "rgba(255,176,32,0.10)", border: "1px solid rgba(255,176,32,0.3)" }}>
-                      <p className="text-[11px] font-semibold text-slate-800">Generating road path...</p>
-                      <p className="text-[11px] text-slate-500">
-                        Routing via OSRM. Fallback: straight line between stops.
+                      <p className="text-[11px] font-semibold text-slate-800">
+                        {importRoadPathError ? "Road path unavailable" : "Generating road path..."}
+                      </p>
+                      <p role={importRoadPathError ? "alert" : undefined} className="text-[11px] text-slate-500">
+                        {importRoadPathError || "Routing via OSRM; the map preview currently joins the supplied stops directly."}
                       </p>
                     </div>
                   )}

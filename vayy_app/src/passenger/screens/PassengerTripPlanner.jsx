@@ -19,6 +19,7 @@ import * as Location from "expo-location";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { getRecentSearches, saveRecentSearch } from "../services/passengerService";
 import { dynamicPreview } from "../../routes/services/routeService";
+import { loadSelectedServiceCity } from "../../routes/services/serviceCityResolver";
 import LocationSearch from "../../shared/components/common/LocationSearch";
 import { NOMINATIM_REVERSE } from "../../constants/geocoding";
 
@@ -75,6 +76,11 @@ export default function PassengerTripPlanner({ navigation, route }) {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [locating, setLocating] = useState(false);
+  const [activeCity, setActiveCity] = useState(
+    route?.params?.cityId
+      ? { id: route.params.cityId, name: route.params.cityName }
+      : null,
+  );
   const loading = route?.params?.loading || false;
   const mode = route?.params?.mode || "auto";
   const isBike = mode === "bike";
@@ -171,6 +177,22 @@ export default function PassengerTripPlanner({ navigation, route }) {
     fetchRecentSearches();
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    loadSelectedServiceCity().then((city) => {
+      if (!active) return;
+      const cityId = route?.params?.cityId ?? city?.id;
+      if (cityId) {
+        setActiveCity({
+          ...(city || {}),
+          id: cityId,
+          name: route?.params?.cityName || city?.name,
+        });
+      }
+    });
+    return () => { active = false; };
+  }, [route?.params?.cityId, route?.params?.cityName]);
+
   const canProceed = useMemo(() => {
     return Boolean(
       pickup?.lat && pickup?.lon && destination?.lat && destination?.lon,
@@ -197,6 +219,8 @@ export default function PassengerTripPlanner({ navigation, route }) {
         destination_lon: destination.lon,
       });
 
+      const savedCity = activeCity?.id ? activeCity : await loadSelectedServiceCity();
+
       // Generate the A-to-B road route first; live driver matching happens
       // after the passenger reaches a suitable stop and raises a hand.
       const preview = await dynamicPreview({
@@ -204,6 +228,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
         destination,
         vehicleType: isBike ? "bike" : "auto",
         audience: "passenger",
+        cityId: route?.params?.cityId ?? savedCity?.id ?? null,
       });
       const trips = Array.isArray(preview?.routes) ? preview.routes : [];
 
@@ -299,6 +324,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
         label="Pickup Stop"
         onSelect={setPickup}
         placeholder="Search pickup location"
+        cityName={activeCity?.name}
         rightAction={
           <TouchableOpacity
             accessibilityLabel="Use current location"
@@ -329,6 +355,7 @@ export default function PassengerTripPlanner({ navigation, route }) {
         label="Destination"
         onSelect={setDestination}
         placeholder="Enter your destination"
+        cityName={activeCity?.name}
         value={destination}
       />
 
@@ -348,9 +375,21 @@ export default function PassengerTripPlanner({ navigation, route }) {
         </Text>
       </TouchableOpacity>
       {searchError ? (
-        <Text accessibilityRole="alert" style={styles.searchError}>
-          {searchError}
-        </Text>
+        <View style={styles.searchErrorCard}>
+          <View style={styles.searchErrorHeading}>
+            <Ionicons name="alert-circle" size={19} color="#B42318" />
+            <Text style={styles.searchErrorTitle}>Couldn't build this route</Text>
+          </View>
+          <Text accessibilityRole="alert" style={styles.searchErrorText}>{searchError}</Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            disabled={searching}
+            onPress={handleNext}
+            style={styles.searchRetryButton}
+          >
+            <Text style={styles.searchRetryText}>{searching ? "Trying again..." : "Try again"}</Text>
+          </TouchableOpacity>
+        </View>
       ) : null}
 
       <View style={styles.recentSection}>
@@ -568,11 +607,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
   },
-  searchError: {
+  searchErrorCard: {
+    backgroundColor: "#FEF3F2",
+    borderColor: "#FDA29B",
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 12,
+    padding: 14,
+  },
+  searchErrorHeading: { alignItems: "center", flexDirection: "row", gap: 8 },
+  searchErrorTitle: { color: "#7A271A", fontSize: 14, fontWeight: "800" },
+  searchErrorText: {
     color: "#B42318",
     fontSize: 13,
-    marginTop: 10,
+    lineHeight: 19,
+    marginTop: 8,
   },
+  searchRetryButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#B42318",
+    borderRadius: 9,
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  searchRetryText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   recentSection: {
     flex: 1,
     paddingTop: 20,

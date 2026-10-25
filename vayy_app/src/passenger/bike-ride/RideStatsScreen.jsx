@@ -300,7 +300,6 @@ export function RideStatsScreen({ navigation, route }) {
           style={styles.mapBg}
           ref={mapRef}
           cameraRef={cameraRef}
-          grayscale
           initialViewState={{
             center: [mapCenter.longitude, mapCenter.latitude],
             zoom: 14,

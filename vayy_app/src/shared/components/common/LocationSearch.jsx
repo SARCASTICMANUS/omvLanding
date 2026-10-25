@@ -43,6 +43,7 @@ function LocationSearch({
   dropdownLift = 90,
   isPickup,
   rightAction,
+  cityName,
 }) {
   const [query, setQuery] = useState(value?.name || value?.display_name || "");
   const [results, setResults] = useState([]);
@@ -69,9 +70,13 @@ function LocationSearch({
 
       try {
         const params = { q: query.trim(), limit: 5, countrycodes: "in" };
+        const geocodeParams = {
+          ...params,
+          q: cityName ? `${query.trim()}, ${cityName}` : query.trim(),
+        };
         const [dbResponse, geoResponse] = await Promise.allSettled([
           api.get(DB_SEARCH_PATH, { params }),
-          api.get(GEOCODE_SEARCH_PATH, { params }),
+          api.get(GEOCODE_SEARCH_PATH, { params: geocodeParams }),
         ]);
         if (!active) return;
 
@@ -96,7 +101,8 @@ function LocationSearch({
         merged.sort((a, b) => {
           const score = (item) => {
             const text = `${item.name || ""} ${item.display_name || ""} ${item.city_name || ""} ${item.address?.city || ""}`.toLocaleLowerCase();
-            return terms.reduce((total, term) => total + Number(text.includes(term)), 0);
+            const cityMatch = cityName && text.includes(cityName.toLocaleLowerCase()) ? 5 : 0;
+            return cityMatch + terms.reduce((total, term) => total + Number(text.includes(term)), 0);
           };
           return score(b) - score(a);
         });
@@ -115,7 +121,7 @@ function LocationSearch({
       active = false;
       clearTimeout(timer);
     };
-  }, [hasSelection, query]);
+  }, [cityName, hasSelection, query]);
 
   const handleSelect = (item) => {
     const next = {

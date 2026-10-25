@@ -1,6 +1,6 @@
 import api, { normalizeApiError } from "../../shared/lib/api";
 import { TRANSPORT } from "../../constants";
-import { normalizeDynamicRoutes } from "./dynamicRouteNormalizer";
+import { extractDynamicRoutePayloads, normalizeDynamicRoutes } from "./dynamicRouteNormalizer";
 import { requireServiceCityId } from "./serviceCityMatching";
 
 // ---- OSRM route generation from nearest global stops ----
@@ -61,6 +61,9 @@ export const dynamicPreview = async ({
       origin: from,
       destination: to,
     });
+    if (extractDynamicRoutePayloads(body).length && !routes.length) {
+      throw new Error("The server returned a route, but the app couldn't display its geometry or stops. Ask an admin to review this route's stop coordinates and route data.");
+    }
     const cached = body?.cached === true || body?.data?.cached === true;
     const responseCityId = body?.data?.city?.id ?? body?.city?.id ?? resolvedCityId;
 

@@ -168,14 +168,15 @@ export const ROAD_LAYERS = new Set([
 
 export function transformStyleToGrayscale(style) {
   if (!style || typeof style !== "object") return style;
-  const layers = style.layers;
-  if (!Array.isArray(layers)) return grayscaleWalk(style);
-  layers.forEach((layer) => {
-    if (!layer || !layer.paint) return;
-    if (ROAD_LAYERS.has(layer.id)) return;
-    layer.paint = grayscaleWalk(layer.paint);
-  });
-  return style;
+  if (!Array.isArray(style.layers)) return grayscaleWalk(style);
+  return {
+    ...style,
+    layers: style.layers.map((layer) =>
+      !layer?.paint || ROAD_LAYERS.has(layer.id)
+        ? layer
+        : { ...layer, paint: grayscaleWalk(layer.paint) }
+    ),
+  };
 }
 
 /**

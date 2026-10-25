@@ -9,7 +9,7 @@ import StatusBadge from "../../shared/components/common/StatusBadge";
 export default function StopRow({ stop, index, totalStops, isActive = false, dark = false }) {
   const isFirst = index === 0;
   const isLast = index === totalStops - 1;
-  const name = stop?.short_name || stop?.name || stop?.stop_name || `Stop ${index + 1}`;
+  const name = String(stop?.short_name || stop?.name || stop?.stop_name || "").trim() || (totalStops === 1 ? "Nearest OMV Stop" : `OMV Stop ${index + 1}`);
   const city = stop?.city || stop?.area || (stop?.name?.split(",")?.[1]?.trim() || "");
   const arrival = stop?.arrival_time || stop?.eta || "--";
   const departure = stop?.departure_time || "--";

@@ -10,6 +10,7 @@ export const MAX_CITY_MATCH_METERS = MAX_AUTOMATIC_CITY_MATCH_METERS;
 
 // Re-check the city list at most this often; deployments change rarely.
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const CACHE_VERSION = 2;
 
 let inflight = null;
 
@@ -51,7 +52,7 @@ function normalizeCities(body) {
       state: row?.state,
       location: parseLocation(row?.location),
     }))
-    .filter((city) => city.id && city.location);
+    .filter((city) => city.id && city.name);
 }
 
 async function readCache() {
@@ -59,7 +60,7 @@ async function readCache() {
     const raw = await AsyncStorage.getItem(STORAGE_KEYS.serviceCity);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed?.resolvedAt) return null;
+    if (parsed?.version !== CACHE_VERSION || !parsed?.resolvedAt) return null;
     if (Date.now() - parsed.resolvedAt > CACHE_TTL_MS) return null;
     return Array.isArray(parsed.cities) && parsed.cities.length ? parsed : null;
   } catch {
@@ -71,14 +72,43 @@ async function writeCache(cities) {
   try {
     await AsyncStorage.setItem(
       STORAGE_KEYS.serviceCity,
-      JSON.stringify({ cities, resolvedAt: Date.now() }),
+      JSON.stringify({ cities, resolvedAt: Date.now(), version: CACHE_VERSION }),
     );
   } catch {
     // A cache write failure must never break route search.
   }
 }
 
-/** Cities with a usable centroid, from cache or the network. */
+export async function loadSelectedServiceCity() {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEYS.selectedServiceCity);
+    const city = raw ? JSON.parse(raw) : null;
+    return city?.id && city?.name ? city : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveSelectedServiceCity(city, source = "manual") {
+  if (!city?.id || !city?.name) return null;
+  const selected = { ...city, source };
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.selectedServiceCity, JSON.stringify(selected));
+  } catch {
+    // Keep the selected city usable for the current session if storage is unavailable.
+  }
+  return selected;
+}
+
+export async function clearSelectedServiceCity() {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEYS.selectedServiceCity);
+  } catch {
+    // A storage failure must not block city detection in the current session.
+  }
+}
+
+/** City catalogue, from cache or the network. Automatic matching skips missing centroids. */
 export async function loadServiceCities({ force = false } = {}) {
   if (!force) {
     const cached = await readCache();
@@ -87,10 +117,18 @@ export async function loadServiceCities({ force = false } = {}) {
 
   if (!inflight) {
     inflight = (async () => {
-      const response = await api.get(TRANSPORT.cities);
-      const cities = normalizeCities(response.data);
-      if (cities.length) await writeCache(cities);
-      return cities;
+      const cities = [];
+      let page = 1;
+      let hasNext = true;
+      while (hasNext) {
+        const response = await api.get(TRANSPORT.cities, { params: { page } });
+        cities.push(...normalizeCities(response.data));
+        hasNext = Boolean(response.data?.next);
+        page += 1;
+      }
+      const uniqueCities = [...new Map(cities.map((city) => [String(city.id), city])).values()];
+      if (uniqueCities.length) await writeCache(uniqueCities);
+      return uniqueCities;
     })().finally(() => {
       inflight = null;
     });
@@ -136,4 +174,11 @@ export async function serviceCityIdFor(lat, lng, options) {
   }
 }
 
-export default { loadServiceCities, resolveServiceCity, serviceCityIdFor };
+export default {
+  loadServiceCities,
+  loadSelectedServiceCity,
+  saveSelectedServiceCity,
+  clearSelectedServiceCity,
+  resolveServiceCity,
+  serviceCityIdFor,
+};

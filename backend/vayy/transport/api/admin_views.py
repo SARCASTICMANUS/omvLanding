@@ -108,7 +108,7 @@ class AdminRouteImportAPIView(APIView):
             stops_data.append({
                 "lat": lat,
                 "lon": lon,
-                "name": s.get("name", f"Stop {i + 1}"),
+                "name": str(s.get("name") or "").strip(),
                 "order": int(s.get("order", i)),
             })
 
@@ -117,6 +117,13 @@ class AdminRouteImportAPIView(APIView):
                 {"success": False, "message": "Need at least 2 valid stops with lat/lon"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        unnamed_count = sum(not stop["name"] for stop in stops_data)
+        unnamed_index = 0
+        for stop in stops_data:
+            if not stop["name"]:
+                unnamed_index += 1
+                stop["name"] = "Nearest OMV Stop" if unnamed_count == 1 else f"OMV Stop {unnamed_index}"
 
         stops_data.sort(key=lambda s: s["order"])
 

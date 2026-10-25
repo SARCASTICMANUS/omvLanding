@@ -216,7 +216,7 @@ const readPoint = (point) => {
   };
 };
 
-const readStop = (stop, index) => {
+const readStop = (stop, index, fallbackName) => {
   const coordinates = Array.isArray(stop?.location?.coordinates) ? stop.location.coordinates : null;
 
   const lat = readNumber(stop?.lat, stop?.latitude, stop?.location?.lat, coordinates?.[1]);
@@ -224,12 +224,13 @@ const readStop = (stop, index) => {
 
   const id = stop?.id ?? stop?.stop_id ?? null;
   const sequence = readNumber(stop?.sequence, stop?.order, index + 1) ?? index + 1;
+  const name = String(stop?.name || stop?.stop_name || stop?.label || stop?.address || "").trim();
 
   return {
     ...stop,
     id,
     stop_id: stop?.stop_id ?? id,
-    name: stop?.name || stop?.stop_name || stop?.label || stop?.address || `Stop ${sequence}`,
+    name: name || fallbackName || `OMV Stop ${sequence}`,
     sequence,
     order: sequence,
     distance_along_route_m: readNumber(stop?.distance_along_route_m, stop?.distance_along_route),
@@ -247,7 +248,17 @@ const readStops = (body, route) => {
     (Array.isArray(route?.stops) && route.stops) ||
     (Array.isArray(body?.route_stops) && body.route_stops) ||
     [];
-  return rawStops.map(readStop); // backend order, never re-sorted
+  const unnamedCount = rawStops.filter((stop) =>
+    !String(stop?.name || stop?.stop_name || stop?.label || stop?.address || "").trim()
+  ).length;
+  let unnamedIndex = 0;
+  return rawStops.map((stop, index) => {
+    const unnamed = !String(stop?.name || stop?.stop_name || stop?.label || stop?.address || "").trim();
+    const fallbackName = unnamed
+      ? unnamedCount === 1 ? "Nearest OMV Stop" : `OMV Stop ${++unnamedIndex}`
+      : null;
+    return readStop(stop, index, fallbackName);
+  }); // backend order, never re-sorted
 };
 
 const readFarePayload = (fare) => {

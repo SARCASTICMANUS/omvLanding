@@ -32,7 +32,7 @@ const VayyMap = forwardRef(function VayyMap(
     pitchEnabled = true,
     rotateEnabled = true,
     zoomControlEnabled,
-    grayscale = false,
+    grayscale = true,
     onPress,
     cameraRef,
     mapRef: mapRefProp,
